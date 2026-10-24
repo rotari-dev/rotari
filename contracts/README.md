@@ -118,7 +118,7 @@ the IDs, this table, and those calls disagree.
 | CORE-4 | A project view is queue-first when idle and run-first when running or interrupted; a job selector looks in the queue first in every state | partial | `TestProjectStates` |
 | CORE-5 | At most one active run and runner per project | conformance | `TestRunningProjectRejectsSecondRunAndDelete`, `TestUnlockRefusesLiveRun` |
 | CORE-6 | Completed runs are immutable; reruns change only their destination run | partial | `TestFilteredRerunCarriesCompletedResults` |
-| CORE-7 | Executors run jobs; run semantics stay in the shared execution path | partial | `TestRunRetrySucceedsWithinOneRun` |
+| CORE-7 | Executors run jobs; run semantics stay in the shared execution path | partial | `TestRunRetrySucceedsWithinOneRun`, `TestSSHExecutorRunsAJob` |
 | RES-1 | Base directory resolution order | conformance | `TestBaseDirResolutionOrder` |
 | RES-2 | Project resolution order and the single-project default for project-scoped commands | partial | `TestProjectResolutionOrder` |
 | RES-3 | Missing projects fail except `check` reports empty, `unlock` without run ID no-ops, and `add`, `import`, `reset` create one | partial | `TestMissingProjectIsAnError`, `TestCheckMissingProjectIsEmptyWithoutCreatingIt`, `TestResetMissingProjectCreatesEmptyQueue`, `TestUnlockMissingProjectIsNoOp`, `TestWaitMissingProjectIsAnError` |

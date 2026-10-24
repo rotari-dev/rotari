@@ -120,7 +120,7 @@ func (ssh SSH) Submit(runDir string, job model.JobSpec, options []string) (JobHa
 }
 
 func (ssh SSH) Wait(runDir string, handle JobHandle) model.JobResult {
-	jobDir, err := state.SafeJoin(runDir, handle.Job.ID)
+	jobDir, err := state.AttemptJobDir(runDir, handle.Job)
 	if err != nil {
 		return model.JobResult{ID: handle.Job.ID, Command: handle.Job.Command, ExitCode: 1, Error: err.Error()}
 	}

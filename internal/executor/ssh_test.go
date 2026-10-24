@@ -92,6 +92,42 @@ env -i PATH=%q:/usr/local/bin:/usr/bin:/bin sh "$ROTARI_SSH_SCRIPT"
 	}
 }
 
+// A run gives each job an attempt ID, and Submit records the job in that
+// attempt's directory; Wait must read it from there too.
+func TestSSHExecutorWaitsForAttemptInItsDirectory(t *testing.T) {
+	binDir := t.TempDir()
+	oldSSHCommandPath := SSHCommandPath
+	SSHCommandPath = filepath.Join(binDir, "ssh")
+	t.Cleanup(func() { SSHCommandPath = oldSSHCommandPath })
+	writeExecutable(t, binDir, "ssh", `#!/bin/sh
+exec sh -s
+`)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+
+	runDir := filepath.Join(t.TempDir(), "runs", "run-1")
+	job := model.JobSpec{
+		ID: "job-1", AttemptID: "att-1", LogMode: model.LogModeSeparate,
+		Command: []string{"sh", "-c", "printf attempt-output"},
+	}
+	ssh := SSH{Store: testStore()}
+	handle, err := ssh.Submit(runDir, job, []string{"builder@example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := ssh.Wait(runDir, handle)
+	if result.ExitCode != 0 || result.Error != "" {
+		t.Fatalf("result = %#v", result)
+	}
+	attemptDir := filepath.Join(runDir, "job-1", "attempts", "att-1")
+	stdout, err := os.ReadFile(filepath.Join(attemptDir, state.StdoutFileName))
+	if err != nil || string(stdout) != "attempt-output" {
+		t.Fatalf("stdout = %q, err = %v", stdout, err)
+	}
+	if _, err := os.Stat(filepath.Join(attemptDir, "status.json")); err != nil {
+		t.Fatalf("attempt status: %v", err)
+	}
+}
+
 func TestSSHExecutorCancelsRemoteProcessGroup(t *testing.T) {
 	binDir := t.TempDir()
 	oldSSHCommandPath := SSHCommandPath
