@@ -22,7 +22,7 @@ version.
 | 01 | Overview: one job needs no rotari, many do | README, Getting started | `01_overview.sh` (Short: `01_short.sh`) | done, 78 s (96 s with the Slurm act), landscape and vertical |
 | 02 | Notifications: desktop, Inbox, Slack | `docs/NOTIFICATIONS.md` | `02_notifications.sh` | done, 35 s |
 | 03 | Outputs: Artifacts, previews, TensorBoard, Files | `docs/OUTPUTS.md` | `03_outputs.sh` | done, 53 s |
-| 04 | Rerunning failures and diagnosis | `docs/RECOVERING.md`, `docs/LOCAL_DIAGNOSIS.md` | | planned (the overview's sweep act) |
+| 04 | Rerunning failures and diagnosis | `docs/RECOVERING.md`, `docs/LOCAL_DIAGNOSIS.md` | `04_recovering.sh` | done, 47 s |
 | 05 | Local, SSH, Slurm | `docs/EXECUTORS.md` | | planned (the overview's Slurm act) |
 | 06 | Arrays, matrices, dependencies | `docs/RUNNING.md` | | planned |
 | 07 | The Web UI across projects, Activity | `docs/WEB.md` | | planned |
@@ -104,7 +104,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 
 | File | Role |
 | --- | --- |
-| `01_overview.sh`, `01_short.sh`, `02_notifications.sh`, `03_outputs.sh` | Make one video each into `out/`; the usual entry points (`defaults.sh` sets their directories) |
+| `01_overview.sh`, `01_short.sh`, `02_notifications.sh`, `03_outputs.sh`, `04_recovering.sh` | Make one video each into `out/`; the usual entry points (`defaults.sh` sets their directories) |
 | `setup.sh TOOLS` | Install Playwright and kokoro-onnx into `.venv`; fetch Chrome, the Kokoro model, and the Slurm image into `TOOLS` |
 | `make-video.sh [--landscape] TOOLS WORK OUT.mp4 [opts]` | Build rotari, capture, and render the overview (vertical without `--landscape`) |
 | `capture.sh` | Enter the namespaces, start Slurm, run `capture.py` |
@@ -120,6 +120,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 | `capture-web.sh [--display]` | Enter the namespaces and a namespace-owned `/`, with Xvfb, D-Bus, and dunst when asked, and run a capture script |
 | `capture_notifications.py`, `render_notifications.py` | Video 02 (the capture needs Xvfb, dunst, google-chrome) |
 | `capture_outputs.py`, `render_outputs.py` | Video 03 (a headless browser is enough) |
+| `capture_recovering.py`, `render_recovering.py` | Video 04 (a headless browser is enough) |
 | `assets/slack/` | Slack screenshots of one capture's webhook message, for video 02 |
 | `newroot.sh`, `dunstrc` | A namespace-owned `/` for `--allow-exec`; the desktop notification style |
 | `tts_samples.py`, `fixture/tts_train.py` | Kokoro clips and the fake TTS job that "produces" them |
@@ -136,6 +137,7 @@ scripts/promo-video/01_overview.sh        # out/01_overview.mp4
 scripts/promo-video/01_short.sh           # out/01_short.mp4 (vertical, for Shorts)
 scripts/promo-video/02_notifications.sh   # out/02_notifications.mp4 (needs Xvfb)
 scripts/promo-video/03_outputs.sh         # out/03_outputs.mp4
+scripts/promo-video/04_recovering.sh      # out/04_recovering.mp4
 scripts/promo-video/01_short.sh --with-slurm          # include the Slurm act
 scripts/promo-video/01_short.sh --voice am_michael    # another narrator
 scripts/promo-video/03_outputs.sh --preview 20 45     # PNGs in the work directory
@@ -307,6 +309,22 @@ scripts/promo-video/03_outputs.sh
   TensorBoard comes from `.venv` on `PATH`, and its settings side pane is
   closed before the shot. The confirmation shows "Runs as root@workstation":
   the namespace's user.
+
+### Recovering (04)
+
+The overview's 48-run sweep (`fixture/sweep.sh`) fails 8 tasks for two
+causes. `rotari show` groups them by cause (its `show:` and `retry:` command
+lines are left out of the terminal; the run page shows them), the run page's
+Failure causes card shows the same, and one job's Diagnosis dialog gives the
+evidence and next step, worked out locally. Then `sed` fixes the batch limit,
+`retry --dry-run` lists the 8 jobs that would run, and `retry` reruns them
+with the 40 successes carried forward; the new run's jobs table shows
+`success (carried)` beside the two reruns' plain `success`.
+
+- The Diagnosis dialog is captured in an 820×588 CSS px window instead of
+  1100×782, so its text is larger in the same frame.
+- Caption changes inside a terminal scene are timed to the line they describe
+  (`shown()` in `render_recovering.py`), not to fixed seconds.
 
 ## Next steps
 
