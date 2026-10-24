@@ -13,6 +13,7 @@ and OUT/webhook/*.json: the Slack payloads rotari sent, received by a local
 recorder instead of Slack (send-webhook.py delivers them later).
 """
 
+import ctypes
 import http.server
 import json
 import os
@@ -133,6 +134,31 @@ def x11grab(name, seconds, fps=10):
     )
 
 
+def x_click(x, y):
+    """Click the Xvfb screen at device pixel (x, y) through XTEST.
+
+    Chrome keeps keyboard focus in the address bar after a navigation, which
+    shows the URL selected; a real click in the page moves focus there.
+    Playwright's clicks go to the page and leave the address bar focused.
+    """
+    xlib = ctypes.CDLL("libX11.so.6")
+    xtst = ctypes.CDLL("libXtst.so.6")
+    xlib.XOpenDisplay.restype = ctypes.c_void_p
+    xlib.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    for f in (xlib.XFlush, xlib.XCloseDisplay):
+        f.argtypes = [ctypes.c_void_p]
+    xtst.XTestFakeMotionEvent.argtypes = [ctypes.c_void_p] + [ctypes.c_int] * 3 + [ctypes.c_ulong]
+    xtst.XTestFakeButtonEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_ulong]
+    display = xlib.XOpenDisplay(os.environ["DISPLAY"].encode())
+    if not display:
+        raise SystemExit("x_click: cannot open the display")
+    xtst.XTestFakeMotionEvent(display, -1, x, y, 0)
+    xtst.XTestFakeButtonEvent(display, 1, 1, 0)
+    xtst.XTestFakeButtonEvent(display, 1, 0, 0)
+    xlib.XFlush(display)
+    xlib.XCloseDisplay(display)
+
+
 def grabbed(name, fps=10):
     files = sorted(os.listdir(f"{OUT}/web/{name}"))
     return [[round(i / fps, 3), f"web/{name}/{f}"] for i, f in enumerate(files)]
@@ -147,7 +173,8 @@ def main():
     # Hook: checking on a run by hand, again and again.
     t = S.term("wait", f"{HOME}/tts")
     S.sh(
-        "nohup python train.py --out outputs/exp0414_lr3e-4_bs16 > train.log 2>&1 &",
+        # -u: write each line as it is printed, as tail expects.
+        "nohup python -u train.py --out outputs/exp0414_lr3e-4_bs16 > train.log 2>&1 &",
         cwd=f"{HOME}/tts",
     )
     # Python and matplotlib take a few seconds to start; wait for epoch 1.
@@ -224,6 +251,9 @@ def main():
             rid = S.runs_of("tts")[-1]
             page.goto(f"{BASE}/project/tts/run/{rid}")
             page.wait_for_timeout(1200)
+            # An empty spot right of the run's title.
+            x_click(1900, 330)
+            page.wait_for_timeout(300)
             toggle = page.locator("#notify-toggle")
             if "on" not in toggle.inner_text().lower().split()[-1:]:
                 toggle.click()
