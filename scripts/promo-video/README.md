@@ -7,19 +7,23 @@ UI screen in a video comes from those runs. They are a production aid, not
 part of rotari or its tests.
 
 All videos have English narration by Kokoro TTS (voice `af_heart`), burned-in
-subtitles, and an `.srt` beside the video, and no music. The short is
-vertical (1080×1920) for promotion; feature videos are landscape (1920×1080),
-one per documentation page, linked from that page.
+subtitles, and an `.srt` beside the video, and no music. Every video's main
+version is landscape (1920×1080): the overview for the README and Getting
+started, and one feature video per documentation page, linked from that page.
+Vertical (1080×1920) versions are only for YouTube Shorts, made from a
+landscape video's story; so far the overview has one, `01_short.sh`. A Short's
+description links are not clickable, so set its Related video to the landscape
+version.
 
 ## Episodes and documentation
 
-| # | Video | Page it accompanies | Script | State (2026-10-24) |
+| # | Video | Page it accompanies | Script | State (2026-10-25) |
 | --- | --- | --- | --- | --- |
-| 01 | The short: one job needs no rotari, many do | README, Getting started | `01_short.sh` | done, 78 s (96 s with the Slurm act) |
+| 01 | Overview: one job needs no rotari, many do | README, Getting started | `01_overview.sh` (Short: `01_short.sh`) | done, 78 s (96 s with the Slurm act), landscape and vertical |
 | 02 | Notifications: desktop, Inbox, Slack | `docs/NOTIFICATIONS.md` | `02_notifications.sh` | written, not yet captured in landscape |
 | 03 | Outputs: Artifacts, previews, TensorBoard, Files | `docs/OUTPUTS.md` | `03_outputs.sh` | done, 53 s |
-| 04 | Rerunning failures and diagnosis | `docs/RECOVERING.md`, `docs/LOCAL_DIAGNOSIS.md` | | planned (the short's sweep act) |
-| 05 | Local, SSH, Slurm | `docs/EXECUTORS.md` | | planned (the short's Slurm act) |
+| 04 | Rerunning failures and diagnosis | `docs/RECOVERING.md`, `docs/LOCAL_DIAGNOSIS.md` | | planned (the overview's sweep act) |
+| 05 | Local, SSH, Slurm | `docs/EXECUTORS.md` | | planned (the overview's Slurm act) |
 | 06 | Arrays, matrices, dependencies | `docs/RUNNING.md` | | planned |
 | 07 | The Web UI across projects, Activity | `docs/WEB.md` | | planned |
 | 08 | History and comparison (lineage) | `docs/INSPECT.md` | | planned |
@@ -28,7 +32,7 @@ one per documentation page, linked from that page.
 `docs/OUTPUTS.md` was split out of `docs/INSPECT.md` so that video 03 has one
 page to accompany.
 
-## The short (01)
+## The overview (01)
 
 ### Message
 
@@ -100,13 +104,13 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 
 | File | Role |
 | --- | --- |
-| `01_short.sh`, `02_notifications.sh`, `03_outputs.sh` | Make one video each into `out/`; the usual entry points (`defaults.sh` sets their directories) |
+| `01_overview.sh`, `01_short.sh`, `02_notifications.sh`, `03_outputs.sh` | Make one video each into `out/`; the usual entry points (`defaults.sh` sets their directories) |
 | `setup.sh TOOLS` | Install Playwright and kokoro-onnx into `.venv`; fetch Chrome, the Kokoro model, and the Slurm image into `TOOLS` |
-| `make-video.sh TOOLS WORK OUT.mp4 [opts]` | Build rotari, capture, and render the short |
+| `make-video.sh [--landscape] TOOLS WORK OUT.mp4 [opts]` | Build rotari, capture, and render the overview (vertical without `--landscape`) |
 | `capture.sh` | Enter the namespaces, start Slurm, run `capture.py` |
 | `capture.py` | Run the scenario; record terminal sessions and Web UI screenshots |
 | `slurm-up.sh` | Start slurmdbd, slurmctld, and slurmd from the image; write client wrappers |
-| `render.py`, `player.html` | The short's scene timeline, and the HTML player every video renders through (portrait or landscape) |
+| `render.py`, `player.html` | The overview's scene timeline (layout from the capture), and the HTML player every video renders through (portrait or landscape) |
 | `renderer.py` | Shared rendering: options, narration, player page, frames into ffmpeg |
 | `common.py` | Shared capture helpers: commands, terminal sessions (`Term`), Web UI frames |
 | `narration.py` | Kokoro TTS clips, scene fitting, the audio track, and subtitles |
@@ -128,7 +132,8 @@ first use, build rotari, capture, narrate, render) and writes
 `scripts/promo-video/out/NN_name.mp4` with an `.srt` beside it:
 
 ```sh
-scripts/promo-video/01_short.sh           # out/01_short.mp4
+scripts/promo-video/01_overview.sh        # out/01_overview.mp4
+scripts/promo-video/01_short.sh           # out/01_short.mp4 (vertical, for Shorts)
 scripts/promo-video/02_notifications.sh   # out/02_notifications.mp4 (needs Xvfb)
 scripts/promo-video/03_outputs.sh         # out/03_outputs.mp4
 scripts/promo-video/01_short.sh --with-slurm          # include the Slurm act
@@ -142,7 +147,7 @@ when `go` is not on `PATH` or in `/usr/local/go/bin`. Options after the
 script name go to the episode's renderer. `out/` is not tracked.
 
 Underneath, `setup.sh TOOLS` prepares the tools, and `make-video.sh` (the
-short) and `make-episode.sh` (feature videos) capture and render one video
+overview, `--landscape` or vertical) and `make-episode.sh` (feature videos) capture and render one video
 into a given path:
 
 ```sh
@@ -213,6 +218,13 @@ so nothing outside `WORK` changes and nothing private reaches the screen:
   Full-page shots pan between page positions that `capture.py` records
   (`logs.json` `offsets_*`). `SQUEUE_FORMAT` narrows `squeue` for the split
   screen. The pipeline run's jobs table is narrowed through its Columns menu.
+- **Layouts:** `capture.py` takes the layout and records it with the
+  viewport in `logs.json`, and `render.py` renders whichever the capture was
+  made for: the vertical capture uses a 600×810 CSS px browser and 52 terminal
+  columns, the landscape one 1100×782 and 70. Terminals show their latest
+  lines when the output is taller than the frame, as `submit4` is in
+  landscape; the optional Slurm act stacks its two terminals in the frame's
+  column there.
 - **Fonts:** the player's IBM Plex faces are embedded as data URIs, and
   `render.py` stops if any face fails to load instead of rendering in a
   fallback font. Chrome's `FontFace` API refuses `file://` font URLs.
@@ -301,4 +313,4 @@ scripts/promo-video/03_outputs.sh
 - Capture video 02 in landscape on a host with Xvfb, dunst, and
   google-chrome, then refresh `assets/slack/` from its run.
 - Videos 04 to 09 (see [Episodes and documentation](#episodes-and-documentation)):
-  04 and 05 can reuse the short's sweep and Slurm acts in landscape.
+  04 and 05 can reuse the overview's sweep and Slurm acts.

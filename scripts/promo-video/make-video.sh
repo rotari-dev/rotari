@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Build rotari, capture the material, and render the promo short.
 #
-#   make-video.sh TOOLS WORK OUT.mp4 [RENDER_OPTIONS...]
+#   make-video.sh [--landscape] TOOLS WORK OUT.mp4 [RENDER_OPTIONS...]
 #
-# TOOLS comes from setup.sh. WORK holds the capture (WORK/capture) and the
+# Without --landscape the video is the vertical short (1080x1920); with it,
+# the landscape overview (1920x1080). TOOLS comes from setup.sh. WORK holds the capture (WORK/capture) and the
 # fake home directory the jobs ran in (WORK/home); it is replaced on every
 # run. The video is narrated with Kokoro TTS and subtitled, with OUT.srt
 # beside it. RENDER_OPTIONS go to render.py, for example --with-slurm (which
@@ -14,8 +15,13 @@
 # go binary when it is not on PATH.
 set -euo pipefail
 
+landscape=()
+if [[ "${1:-}" == --landscape ]]; then
+    landscape=(--landscape)
+    shift
+fi
 if [[ $# -lt 3 ]]; then
-    echo "usage: $0 TOOLS WORK OUT.mp4 [RENDER_OPTIONS...]" >&2
+    echo "usage: $0 [--landscape] TOOLS WORK OUT.mp4 [RENDER_OPTIONS...]" >&2
     exit 2
 fi
 here=$(cd "$(dirname "$0")" && pwd)
@@ -43,5 +49,5 @@ done
 
 rm -rf "$work/home" "$work/capture"
 export PYTHON=${PYTHON:-$repo/.venv/bin/python} PLAYWRIGHT_BROWSERS_PATH="$tools/pw"
-"$here/capture.sh" "$work" "$work/rotari" ${sandbox:+"$sandbox"} </dev/null
+"$here/capture.sh" "${landscape[@]}" "$work" "$work/rotari" ${sandbox:+"$sandbox"} </dev/null
 "$PYTHON" "$here/render.py" "$work/capture" "$repo" "$out" --narration "$tools/kokoro" "$@"
