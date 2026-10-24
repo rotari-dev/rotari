@@ -20,7 +20,7 @@ version.
 | # | Video | Page it accompanies | Script | State (2026-10-25) |
 | --- | --- | --- | --- | --- |
 | 01 | Overview: one job needs no rotari, many do | README, Getting started | `01_overview.sh` (Short: `01_short.sh`) | done, 78 s (96 s with the Slurm act), landscape and vertical |
-| 02 | Notifications: desktop, Inbox, Slack | `docs/NOTIFICATIONS.md` | `02_notifications.sh` | written, not yet captured in landscape |
+| 02 | Notifications: desktop, Inbox, Slack | `docs/NOTIFICATIONS.md` | `02_notifications.sh` | captured, 35 s; Slack shots still from an older run |
 | 03 | Outputs: Artifacts, previews, TensorBoard, Files | `docs/OUTPUTS.md` | `03_outputs.sh` | done, 53 s |
 | 04 | Rerunning failures and diagnosis | `docs/RECOVERING.md`, `docs/LOCAL_DIAGNOSIS.md` | | planned (the overview's sweep act) |
 | 05 | Local, SSH, Slurm | `docs/EXECUTORS.md` | | planned (the overview's Slurm act) |
