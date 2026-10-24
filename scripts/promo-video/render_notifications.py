@@ -1,28 +1,69 @@
 """Render the notifications episode (landscape): know the moment a run ends.
 
-    render_notifications.py CAPTURE_DIR REPO_DIR OUT.mp4 --slack DIR
+    render_notifications.py CAPTURE_DIR REPO_DIR OUT.mp4 --slack DIR --slack-font TTF
                       [--narration KOKORO_DIR [--voice VOICE] [--speed X]]
                       [--preview SECONDS...]
 
 Builds the scene timeline from capture_notifications.py's material and renders
 it with renderer.py. It accompanies docs/NOTIFICATIONS.md. DIR holds two screenshots taken in Slack of the run's
 webhook message: notification.png (the desktop notification) and
-message.png (the message, cropped to it).
+message.png (the message, cropped to it). The screenshots were taken of one
+capture's run, so the run ID in message.png is redrawn with the capture's own,
+in Lato (TTF, Slack's typeface) at the size and place measured on that image.
 """
 
 import json
+import re
 import shutil
 from pathlib import Path
 
 import renderer
-from PIL import Image, ImageChops, ImageStat
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageStat
 
-ARGS = renderer.options(
-    lambda parser: parser.add_argument(
-        "--slack", required=True, metavar="DIR", help="Slack screenshots"
+
+def slack_options(parser):
+    parser.add_argument("--slack", required=True, metavar="DIR", help="Slack screenshots")
+    parser.add_argument(
+        "--slack-font", required=True, metavar="TTF", help="Lato Regular, for the run ID"
     )
-)
+
+
+ARGS = renderer.options(slack_options)
 CAP = ARGS.capture_dir
+
+# Where the run ID's value sits in assets/slack/message.png (1492x425), and how
+# it is drawn there; measure again when the screenshot is replaced.
+RUN_ID = {
+    "size": (1492, 425),
+    "clear": (198, 284, 900, 326),
+    "at": (200, 286),
+    "font_px": 30,
+    "background": (27, 29, 32),
+    "color": (209, 210, 211),
+}
+
+
+def set_run_id(path):
+    """Redraw message.png's run ID with the one the capture's webhook sent."""
+    payload = sorted(Path(f"{CAP}/webhook").glob("*.json"))
+    if not payload:
+        raise SystemExit(f"{CAP}/webhook: no recorded webhook payload")
+    blocks = json.loads(payload[-1].read_text())["blocks"]
+    text = "\n".join(b["text"]["text"] for b in blocks if "text" in b)
+    found = re.search(r"^\*run id:\* (\S+)$", text, re.M)
+    if not found:
+        raise SystemExit(f"{payload[-1]}: no run id")
+    image = Image.open(path).convert("RGB")
+    if image.size != RUN_ID["size"]:
+        raise SystemExit(
+            f"{path} is {image.size[0]}x{image.size[1]}, not the measured "
+            f"{RUN_ID['size'][0]}x{RUN_ID['size'][1]}; measure RUN_ID again"
+        )
+    draw = ImageDraw.Draw(image)
+    draw.rectangle(RUN_ID["clear"], fill=RUN_ID["background"])
+    font = ImageFont.truetype(ARGS.slack_font, RUN_ID["font_px"])
+    draw.text(RUN_ID["at"], found.group(1), font=font, fill=RUN_ID["color"])
+    image.save(path)
 
 
 def notified_at(frames):
@@ -51,6 +92,7 @@ def timeline():
     slack.mkdir(exist_ok=True)
     for name in ("notification.png", "message.png"):
         shutil.copy(Path(ARGS.slack) / name, slack / name)
+    set_run_id(slack / "message.png")
 
     def term(name, title, captions, speed=1.0, extra=0.6, **more):
         t = terms[name]

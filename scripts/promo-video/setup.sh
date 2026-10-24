@@ -3,10 +3,11 @@
 #
 #   setup.sh [--with-slurm] TOOLS
 #
-#   .venv           Playwright, kokoro-onnx, and soundfile, installed into the
+#   .venv           Playwright, kokoro-onnx, soundfile, and Pillow, installed into the
 #                   repository's virtual environment (PYTHON overrides it)
 #   TOOLS/pw        Chrome Headless Shell for that Playwright version
 #   TOOLS/kokoro    Kokoro-82M TTS model and voices (ONNX, about 350 MB)
+#   TOOLS/fonts     Lato Regular, Slack's typeface, for video 02's run ID
 #   TOOLS/slurm-sb  with --with-slurm: the Slurm image used by
 #                   scheduler-integration.sh, unpacked by singularity, with a
 #                   setgroups shim preloaded (for make-video.sh --with-slurm)
@@ -37,8 +38,8 @@ kokoro_onnx_version=0.6.1
 kokoro_models=https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0
 slurm_image=docker://giovtorres/docker-centos7-slurm:latest
 
-packages=("playwright==$playwright_version" "kokoro-onnx==$kokoro_onnx_version" soundfile)
-if ! "$python" -c "import playwright, kokoro_onnx, soundfile" 2>/dev/null; then
+packages=("playwright==$playwright_version" "kokoro-onnx==$kokoro_onnx_version" soundfile pillow)
+if ! "$python" -c "import playwright, kokoro_onnx, soundfile, PIL" 2>/dev/null; then
     if command -v uv >/dev/null; then
         uv pip install --native-tls --python "$python" "${packages[@]}"
     else
@@ -53,6 +54,13 @@ for file in kokoro-v1.0.onnx voices-v1.0.bin; do
         mv "$tools/kokoro/$file.part" "$tools/kokoro/$file"
     fi
 done
+
+mkdir -p "$tools/fonts"
+if [[ ! -s "$tools/fonts/Lato-Regular.ttf" ]]; then
+    curl -fsSL -o "$tools/fonts/Lato-Regular.ttf.part" \
+        https://github.com/google/fonts/raw/main/ofl/lato/Lato-Regular.ttf
+    mv "$tools/fonts/Lato-Regular.ttf.part" "$tools/fonts/Lato-Regular.ttf"
+fi
 
 read -r revision browser_version < <(
     "$python" <<'EOF'

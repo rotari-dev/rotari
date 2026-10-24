@@ -20,7 +20,7 @@ version.
 | # | Video | Page it accompanies | Script | State (2026-10-25) |
 | --- | --- | --- | --- | --- |
 | 01 | Overview: one job needs no rotari, many do | README, Getting started | `01_overview.sh` (Short: `01_short.sh`) | done, 78 s (96 s with the Slurm act), landscape and vertical |
-| 02 | Notifications: desktop, Inbox, Slack | `docs/NOTIFICATIONS.md` | `02_notifications.sh` | captured, 35 s; Slack shots still from an older run |
+| 02 | Notifications: desktop, Inbox, Slack | `docs/NOTIFICATIONS.md` | `02_notifications.sh` | done, 35 s |
 | 03 | Outputs: Artifacts, previews, TensorBoard, Files | `docs/OUTPUTS.md` | `03_outputs.sh` | done, 53 s |
 | 04 | Rerunning failures and diagnosis | `docs/RECOVERING.md`, `docs/LOCAL_DIAGNOSIS.md` | | planned (the overview's sweep act) |
 | 05 | Local, SSH, Slurm | `docs/EXECUTORS.md` | | planned (the overview's Slurm act) |
@@ -166,7 +166,8 @@ PLAYWRIGHT_BROWSERS_PATH="$TOOLS/pw" .venv/bin/python \
 ```
 
 For a feature video, run its `render_*.py` on `$PROMO_WORK/NN_name/capture`
-the same way (video 02 also takes `--slack scripts/promo-video/assets/slack`).
+the same way (video 02 also takes `--slack scripts/promo-video/assets/slack
+--slack-font "$PROMO_TOOLS/fonts/Lato-Regular.ttf"`).
 
 Requirements: Linux with unprivileged user namespaces, `ffmpeg` with libx264,
 `curl`, `unzip`, Go, and the repository's `.venv` (created with uv; `setup.sh`
@@ -254,7 +255,6 @@ lists it, and Slack gets the webhook message ("Away from your desk?").
 
 ```sh
 scripts/promo-video/02_notifications.sh
-.venv/bin/python scripts/promo-video/send-webhook.py "$PROMO_WORK/02_notifications/capture"
 ```
 
 - **Desktop notification:** `capture-web.sh --display` starts Xvfb
@@ -275,9 +275,13 @@ scripts/promo-video/02_notifications.sh
   `[webhook] url` of `~/.config/rotari/notifications.toml` without printing
   it. Screenshots taken in Slack then (the desktop notification, without the
   pointer over it, and the message, cropped above the input box) replace
-  `assets/slack/`. Every capture makes a new run ID, so a regenerated video
-  matches the screenshots only after this. A Slack screen is never drawn by
-  the pipeline itself.
+  `assets/slack/`; the current ones show run `20261023-085534-04f4dc00`.
+  Every capture makes a new run ID, so `render_notifications.py` redraws the
+  run ID in its copy of `message.png` with the one the capture's webhook
+  sent, in Lato (Slack's typeface, fetched by `setup.sh`) at the size and
+  place in `RUN_ID`, measured by fitting the old ID; nothing else in the
+  shots changes. New screenshots need `RUN_ID` measured again; the renderer
+  stops when the image size differs from the measured one.
 
 ### Outputs (03)
 
@@ -310,7 +314,5 @@ scripts/promo-video/03_outputs.sh
   quiet background music.
 - The run page job timeline's axis labels overlap at narrow widths and are
   visible in the video; see `development/ISSUES.md`.
-- Capture video 02 in landscape on a host with Xvfb, dunst, and
-  google-chrome, then refresh `assets/slack/` from its run.
 - Videos 04 to 09 (see [Episodes and documentation](#episodes-and-documentation)):
   04 and 05 can reuse the overview's sweep and Slurm acts.
