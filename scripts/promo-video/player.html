@@ -33,7 +33,9 @@ body { background: radial-gradient(1200px 900px at 50% -10%, #1a2433 0%, var(--b
 .tab { padding: 8px 16px; border-radius: 10px 10px 0 0; font-size: 24px; color: var(--muted); }
 .tab.on { background: #1b2635; color: var(--text); }
 .term { position: absolute; top: 64px; left: 0; right: 0; bottom: 0; padding: 22px 26px;
-  font: 400 30px/1.36 PlexMono, monospace; white-space: pre-wrap; word-break: break-all; overflow: hidden; }
+  font: 400 30px/1.36 PlexMono, monospace; white-space: pre-wrap;
+  /* Wrap long lines at spaces where possible, inside a word only when it is too long. */
+  overflow-wrap: anywhere; overflow: hidden; }
 .term.small { font-size: 26px; }
 .term .p { color: var(--green); font-weight: 500; }
 .term .c { display: inline-block; width: 0.6em; height: 1.15em; vertical-align: -0.2em; background: var(--text); }

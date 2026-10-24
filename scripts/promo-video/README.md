@@ -23,7 +23,7 @@ version.
 | 02 | Notifications: desktop, Inbox, Slack | `docs/NOTIFICATIONS.md` | `02_notifications.sh` | done, 35 s |
 | 03 | Outputs: Artifacts, previews, TensorBoard, Files | `docs/OUTPUTS.md` | `03_outputs.sh` | done, 53 s |
 | 04 | Rerunning failures and diagnosis | `docs/RECOVERING.md`, `docs/LOCAL_DIAGNOSIS.md` | `04_recovering.sh` | done, 47 s |
-| 05 | Local, SSH, Slurm | `docs/EXECUTORS.md` | | planned (the overview's Slurm act) |
+| 05 | Local, SSH, Slurm | `docs/EXECUTORS.md` | `05_executors.sh` | done, 33 s |
 | 06 | Arrays, matrices, dependencies | `docs/RUNNING.md` | | planned |
 | 07 | The Web UI across projects, Activity | `docs/WEB.md` | | planned |
 | 08 | History and comparison (lineage) | `docs/INSPECT.md` | | planned |
@@ -104,7 +104,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 
 | File | Role |
 | --- | --- |
-| `01_overview.sh`, `01_short.sh`, `02_notifications.sh`, `03_outputs.sh`, `04_recovering.sh` | Make one video each into `out/`; the usual entry points (`defaults.sh` sets their directories) |
+| `01_overview.sh`, `01_short.sh`, `02_notifications.sh`, `03_outputs.sh`, `04_recovering.sh`, `05_executors.sh` | Make one video each into `out/`; the usual entry points (`defaults.sh` sets their directories) |
 | `setup.sh TOOLS` | Install Playwright and kokoro-onnx into `.venv`; fetch Chrome, the Kokoro model, and the Slurm image into `TOOLS` |
 | `make-video.sh [--landscape] TOOLS WORK OUT.mp4 [opts]` | Build rotari, capture, and render the overview (vertical without `--landscape`) |
 | `capture.sh` | Enter the namespaces, start Slurm, run `capture.py` |
@@ -121,6 +121,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 | `capture_notifications.py`, `render_notifications.py` | Video 02 (the capture needs Xvfb, dunst, google-chrome) |
 | `capture_outputs.py`, `render_outputs.py` | Video 03 (a headless browser is enough) |
 | `capture_recovering.py`, `render_recovering.py` | Video 04 (a headless browser is enough) |
+| `capture_executors.py`, `render_executors.py`, `ssh-up.sh` | Video 05 (needs the Slurm image and openssh-server); `ssh-up.sh` starts the SSH host `gpu-box` in the capture namespace |
 | `assets/slack/` | Slack screenshots of one capture's webhook message, for video 02 |
 | `newroot.sh`, `dunstrc` | A namespace-owned `/` for `--allow-exec`; the desktop notification style |
 | `tts_samples.py`, `fixture/tts_train.py` | Kokoro clips and the fake TTS job that "produces" them |
@@ -138,6 +139,7 @@ scripts/promo-video/01_short.sh           # out/01_short.mp4 (vertical, for Shor
 scripts/promo-video/02_notifications.sh   # out/02_notifications.mp4 (needs Xvfb)
 scripts/promo-video/03_outputs.sh         # out/03_outputs.mp4
 scripts/promo-video/04_recovering.sh      # out/04_recovering.mp4
+scripts/promo-video/05_executors.sh       # out/05_executors.mp4 (needs singularity once)
 scripts/promo-video/01_short.sh --with-slurm          # include the Slurm act
 scripts/promo-video/01_short.sh --voice am_michael    # another narrator
 scripts/promo-video/03_outputs.sh --preview 20 45     # PNGs in the work directory
@@ -326,11 +328,38 @@ with the 40 successes carried forward; the new run's jobs table shows
 - Caption changes inside a terminal scene are timed to the line they describe
   (`shown()` in `render_recovering.py`), not to fixed seconds.
 
+### Executors (05)
+
+A pipeline's three steps run by hand first, each its own way (`nohup` here,
+`sbatch` and `squeue` for Slurm, `ssh` to a lab GPU box), then go to rotari
+as one run with `-e local`, `-e slurm`, and `-e ssh`; the run page's jobs
+table, narrowed to hosts and executor and sorted by executor, shows
+workstation, gpu-node01, and gpu-box.
+
+- **Machines:** `capture_executors.py` starts `slurm-up.sh` (gpu-node01) and
+  `ssh-up.sh` (gpu-box) inside the namespace; both share `/home/me`, as a
+  cluster's home would. `ssh-up.sh` runs the system's sshd in its own UTS
+  namespace on 127.0.0.2. Only uid 0 is mapped, so the passwd file it mounts
+  names uid 0 `me` and gives sshd's privilege separation user uid 0 too;
+  `/run/sshd` is replaced by an empty directory the namespace owns, the Slurm
+  image's setgroups shim is preloaded, and nscd's socket is hidden so names
+  resolve from the mounted `/etc/hosts`.
+- **Run page:** captured at 900×645 CSS px so the jobs table is larger. Its
+  columns are set through the Columns menu's `localStorage` choices, since
+  each menu click re-renders the menu.
+- **SSH status:** until it finishes, an SSH job shows as `unknown` on the run
+  page (`development/ISSUES.md`), so the live scene ends just before the SSH
+  step is submitted. Capturing this video found that every SSH job in a run
+  failed as "job is not running"; fixed in `ffb8c62b`.
+
 ## Next steps
 
+- Rework 01 once the feature videos are done: it goes into failure causes and
+  retry in as much detail as 04 (the user's feedback, 2026-10-25); the
+  overview should instead touch many features briefly and point to the
+  feature videos.
 - Listen to the narration and adjust wording, voice, or speed; consider
   quiet background music.
 - The run page job timeline's axis labels overlap at narrow widths and are
   visible in the video; see `development/ISSUES.md`.
-- Videos 04 to 09 (see [Episodes and documentation](#episodes-and-documentation)):
-  04 and 05 can reuse the overview's sweep and Slurm acts.
+- Videos 06 to 09 (see [Episodes and documentation](#episodes-and-documentation)).

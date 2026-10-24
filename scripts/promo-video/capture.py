@@ -29,7 +29,7 @@ HOME = "/home/me"
 PORT = 18789
 # The browser viewport (CSS px) and terminal columns that fill each layout's
 # frame: 1000x1350 px in the vertical video, 1270x910 px in the landscape one.
-VIEW, COLUMNS = {
+VIEW, TERM_COLUMNS = {
     "portrait": ({"width": 600, "height": 810}, "52"),
     "landscape": ({"width": 1100, "height": 782}, "70"),
 }[LAYOUT]
@@ -41,7 +41,7 @@ ENV = {
     "USER": "me",
     "LOGNAME": "me",
     "TERM": "xterm-256color",
-    "COLUMNS": COLUMNS,
+    "COLUMNS": TERM_COLUMNS,
     "LC_ALL": "C",
     "TZ": "UTC",
     "ROTARI_MASTERDIR": f"{HOME}/.rotari-master",
