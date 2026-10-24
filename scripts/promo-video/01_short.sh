@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Make the short ("You don't need rotari for one job") into out/01_short.mp4.
+# Make the vertical short ("You don't need rotari for one job") into
+# out/01_short.mp4, for YouTube Shorts. 01_overview.sh is the landscape version.
 #
 #   scripts/promo-video/01_short.sh [RENDER_OPTIONS...]
 #

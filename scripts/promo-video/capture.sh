@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
 # Capture material for the rotari promo short.
 #
-#   capture.sh WORK ROTARI_STATIC_BINARY [SLURM_SANDBOX]
+#   capture.sh [--landscape] WORK ROTARI_STATIC_BINARY [SLURM_SANDBOX]
 #
 # Runs capture.py in user, UTS, mount, network and PID namespaces: host name
 # "workstation", WORK/home mounted at /home/me, a private network with only
 # loopback and a dummy IPv4 address, and, given SLURM_SANDBOX, a one-node
 # Slurm cluster started by slurm-up.sh for the optional Slurm act. Everything
 # in the namespace stops when capture.py exits.
-# Output lands in WORK/capture. PYTHON names an interpreter with Playwright
+# --landscape captures for the landscape video. Output lands in WORK/capture. PYTHON names an interpreter with Playwright
 # (default python3), and PLAYWRIGHT_BROWSERS_PATH where its Chrome is.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
+layout=portrait
+if [[ "${1:-}" == --landscape ]]; then
+    layout=landscape
+    shift
+fi
 work=$(mkdir -p "$1" && cd "$1" && pwd)
 rotari=$(realpath "$2")
 sandbox=${3:+$(realpath "$3")}
@@ -29,5 +34,5 @@ exec unshare --user --map-root-user --uts --mount --net --pid --fork --mount-pro
     if [ -n "$4" ]; then
         "$2/slurm-up.sh" "$4" /home/me/sbin >"$1/slurm-up.log" 2>&1
     fi
-    "$5" "$2/capture.py" "$2/fixture" "$1/capture" "$3"
-' _ "$work" "$here" "$rotari" "$sandbox" "${PYTHON:-python3}"
+    "$5" "$2/capture.py" "$2/fixture" "$1/capture" "$3" "$6"
+' _ "$work" "$here" "$rotari" "$sandbox" "${PYTHON:-python3}" "$layout"

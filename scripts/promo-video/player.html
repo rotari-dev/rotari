@@ -71,9 +71,11 @@ body { background: radial-gradient(1200px 900px at 50% -10%, #1a2433 0%, var(--b
 [data-layout="landscape"] body { background: radial-gradient(1400px 900px at 20% -20%, #1a2433 0%, var(--bg) 60%); }
 [data-layout="landscape"] .caption { left: 70px; right: auto; width: 480px; top: 0; bottom: 130px;
   height: auto; align-items: center; font-size: 58px; }
+[data-layout="landscape"] .frame { left: 600px; right: 50px; }
 [data-layout="landscape"] .frame.main { left: 600px; right: 50px; top: 50px; bottom: 120px; }
 [data-layout="landscape"] .term { font-size: 28px; }
 [data-layout="landscape"] .sub { left: 600px; right: 50px; bottom: 18px; height: 90px; font-size: 30px; }
+[data-layout="landscape"] .sub.wide { left: 50px; }
 [data-layout="landscape"] .title { padding: 0 160px; }
 [data-layout="landscape"] .title div { font-size: 116px; }
 [data-layout="landscape"] .logo svg { width: 700px; }
@@ -152,6 +154,11 @@ async function render(t) {
     html = caption(s.captions, lt) +
       `<div class="frame main"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><div class="tabs">${tabs}</div></div>` +
       `<div class="term">${termHTML(s.tabs[i].events, (lt - i * per) * (s.speed || 1))}</div></div>`;
+  } else if (s.kind === "split" && document.documentElement.dataset.layout === "landscape") {
+    // Stacked in the frame's column, each labelled in its title bar.
+    html = caption(s.captions, lt) +
+      termFrame(50, 590, `${s.top.label} · ${s.top.title}`, s.top.events, vt, true) +
+      termFrame(520, 120, `${s.bottom.label} · ${s.bottom.title}`, s.bottom.events, vt, true);
   } else if (s.kind === "split") {
     html = caption(s.captions, lt) +
       `<div class="split-label" style="top:440px">${s.top.label}</div>` + termFrame(490, 1010, s.top.title, s.top.events, vt, true) +
@@ -171,9 +178,13 @@ async function render(t) {
   }
   // Narration subtitle in the band below the frame: [from, to, text] in scene time.
   if (s.sub && lt >= s.sub[0] && lt <= s.sub[1] + 0.2) {
-    html += `<div class="sub">${esc(s.sub[2])}</div>`;
+    // Title and logo scenes have no frame, so their subtitle spans the width.
+    const wide = s.kind === "title" || s.kind === "logo";
+    html += `<div class="sub${wide ? " wide" : ""}">${esc(s.sub[2])}</div>`;
   }
   document.getElementById("stage").innerHTML = html;
+  // Like a real terminal, show the latest lines when the output overflows.
+  for (const term of document.querySelectorAll(".term")) term.scrollTop = term.scrollHeight;
   document.getElementById("stage").style.opacity = ease(lt / 0.25) * (1 - ease((lt - s.dur + 0.15) / 0.15));
   const img = document.querySelector(".web img");
   if (img) {

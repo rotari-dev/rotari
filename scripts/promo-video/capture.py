@@ -5,6 +5,11 @@ namespaces: the host name is "workstation", /home/me is WORK/home, and, when a
 Slurm sandbox is given, a one-node Slurm cluster (gpu-node01) runs from it.
 Without Slurm the Act 3 material is skipped.
 
+    capture.py FIXTURE OUT ROTARI [portrait|landscape]
+
+The layout (default portrait) sets the browser viewport and the terminal width
+to fit the video's frame; render.py reads it back from OUT/logs.json.
+
 Writes OUT/terminals.json, OUT/web.json, OUT/logs.json and OUT/web/<scene>/*.png.
 """
 
@@ -19,9 +24,15 @@ from common import Session, only, section
 from playwright.sync_api import sync_playwright
 
 FIXTURE, OUT, ROTARI = sys.argv[1:4]
+LAYOUT = sys.argv[4] if len(sys.argv) > 4 else "portrait"
 HOME = "/home/me"
 PORT = 18789
-VIEW = {"width": 600, "height": 810}
+# The browser viewport (CSS px) and terminal columns that fill each layout's
+# frame: 1000x1350 px in the vertical video, 1270x910 px in the landscape one.
+VIEW, COLUMNS = {
+    "portrait": ({"width": 600, "height": 810}, "52"),
+    "landscape": ({"width": 1100, "height": 782}, "70"),
+}[LAYOUT]
 PROJECTS = ["asr", "tts", "vision", "nlp"]
 
 ENV = {
@@ -30,7 +41,7 @@ ENV = {
     "USER": "me",
     "LOGNAME": "me",
     "TERM": "xterm-256color",
-    "COLUMNS": "52",
+    "COLUMNS": COLUMNS,
     "LC_ALL": "C",
     "TZ": "UTC",
     "ROTARI_MASTERDIR": f"{HOME}/.rotari-master",
@@ -89,7 +100,8 @@ def setup():
 
 def main():
     setup()
-    terms, frames, logs = [], {}, {}
+    terms, frames = [], {}
+    logs = {"layout": LAYOUT, "view": VIEW}
 
     # Act 0: one job is fine in a terminal.
     t = S.term("one", f"{HOME}/llm")

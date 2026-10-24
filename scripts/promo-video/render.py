@@ -1,4 +1,4 @@
-"""Render the rotari promo short ("You don't need rotari for one job").
+"""Render the rotari overview ("You don't need rotari for one job").
 
     render.py CAPTURE_DIR REPO_DIR OUT.mp4 [--with-slurm]
               [--narration KOKORO_DIR [--voice VOICE] [--speed X]]
@@ -6,7 +6,8 @@
 
 Builds the scene timeline from capture.py's material, writes
 CAPTURE_DIR/player.html from player.html, steps it frame by frame in headless
-Chrome, and pipes the frames to ffmpeg (1080x1920, 30 fps). With
+Chrome, and pipes the frames to ffmpeg at 30 fps: 1080x1920 when the capture
+was made for the vertical short, 1920x1080 for the landscape overview. With
 --narration, each scene's `say` line is spoken by Kokoro TTS (models in
 KOKORO_DIR), scenes stretch to fit their lines, the lines are burned in as
 subtitles, and OUT.srt is written beside the video. With --preview, writes
@@ -25,6 +26,10 @@ ARGS = renderer.options(
     )
 )
 CAP = ARGS.capture_dir
+LOGS = json.loads(Path(f"{CAP}/logs.json").read_text())
+# Captures from before the landscape overview have neither key.
+LAYOUT = LOGS.get("layout", "portrait")
+VIEW = LOGS.get("view", {"width": 600, "height": 810})
 
 
 def timeline():
@@ -33,7 +38,7 @@ def timeline():
 
     terms = {t["name"]: t for t in load("terminals.json")}
     web = load("web.json")
-    logs = load("logs.json")
+    logs = LOGS
 
     def term(name, title, captions, speed=1.0, extra=0.6, say=None, say_at=None):
         t = terms[name]
@@ -59,13 +64,15 @@ def timeline():
             "captions": captions,
             "pan": pan,
             "panCss": css,
-            "cssWidth": 600,
+            "cssWidth": VIEW["width"],
             "say": say,
             **({"sayAt": say_at} if say_at is not None else {}),
         }
 
     # Full-page shots pan between page positions recorded by capture.py; the
-    # frame shows 810 CSS px of a 600 px wide page.
+    # frame shows about a viewport's height of the page, so a pan that ends at
+    # a position puts it near the frame's bottom edge.
+    shown = VIEW["height"] - 20
     sweep, retry = logs["offsets_sweep_done"], logs["offsets_retry"]
     if ARGS.with_slurm and "offsets_pipeline" not in logs:
         sys.exit(f"--with-slurm: {CAP} has no Slurm act; capture with Slurm first")
@@ -109,7 +116,7 @@ def timeline():
                 "pipeline",
                 4.0,
                 [[0, "One run, two machines.<br><em>workstation + gpu-node01</em>"]],
-                pan=[[0.4, pipe["cards"] - 16], [2.4, pipe["jobs_bottom"] - 790]],
+                pan=[[0.4, pipe["cards"] - 16], [2.4, pipe["jobs_bottom"] - shown]],
                 css=True,
                 say="One run, two machines.",
             ),
@@ -203,7 +210,7 @@ def timeline():
             "sweep_done",
             5.0,
             [[0, "Rotari groups them by cause,<br><em>with a fix for each.</em>"]],
-            pan=[[0.5, sweep["cards"] - 16], [3.6, sweep["timeline"] - 790]],
+            pan=[[0.5, sweep["cards"] - 16], [3.6, sweep["timeline"] - shown]],
             css=True,
             say="Rotari groups the failures by cause, and suggests a fix for each.",
         ),
@@ -242,4 +249,4 @@ def timeline():
     return scenes
 
 
-renderer.main(ARGS, timeline())
+renderer.main(ARGS, timeline(), layout=LAYOUT)
