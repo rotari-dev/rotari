@@ -51,6 +51,7 @@ body { background: radial-gradient(1200px 900px at 50% -10%, #1a2433 0%, var(--b
 .logo svg { width: 760px; height: auto; }
 .logo .tag { font-size: 54px; font-weight: 500; color: var(--muted); text-align: center; line-height: 1.25; }
 .logo .url { font: 500 40px PlexMono, monospace; color: var(--accent); }
+.logo .also { font-size: 34px; color: var(--muted); text-align: center; }
 .logo .install { font: 400 28px PlexMono, monospace; color: var(--text); background: var(--panel);
   border: 2px solid var(--line); border-radius: 16px; padding: 18px 26px; }
 .shots { position: absolute; left: 40px; right: 40px; top: 470px; display: flex; flex-direction: column;
@@ -156,7 +157,8 @@ async function render(t) {
     html = `<div class="logo"><div style="${fadeIn(lt, 0, 0.6)}">${logoSVG}</div>` +
       `<div class="tag" style="${fadeIn(lt, 0.6)}">${s.tagline}</div>` +
       (s.install ? `<div class="install" style="${fadeIn(lt, 1.0)}">${esc(s.install)}</div>` : "") +
-      (s.url ? `<div class="url" style="${fadeIn(lt, 1.3)}">${s.url}</div>` : "") + `</div>`;
+      (s.url ? `<div class="url" style="${fadeIn(lt, 1.3)}">${s.url}</div>` : "") +
+      (s.also ? `<div class="also" style="${fadeIn(lt, 1.8)}">${s.also}</div>` : "") + `</div>`;
   } else if (s.kind === "term") {
     html = caption(s.captions, lt) + termFrame(null, null, s.title, s.events, vt);
     // fontSize sets the terminal's font size in px, such as for a wide scene

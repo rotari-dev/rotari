@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
-# Make the overview, a quick tour of rotari (landscape), into
-# out/01_overview.mp4.
+# Make the overview (landscape) into out/01_overview.mp4.
 #
 #   scripts/promo-video/01_overview.sh [RENDER_OPTIONS...]
 #
-# One job needs no rotari; research is many. Then a few seconds of each
-# feature video: projects on one page (07), a grid (06), local and Slurm
-# (05), notifications (02), failures and retry (04), outputs (03), and a
-# coding agent's runs (09). The tour reuses those videos' captures in
-# PROMO_WORK, so make them first (02 needs a display; 05 the Slurm image);
-# this script captures only 01's own opening terminal, then renders.
-# RENDER_OPTIONS go to render_tour.py. PROMO_TOOLS and PROMO_WORK as for
-# 01_short.sh.
+# One job needs no rotari; research is many projects in many tabs, and with
+# rotari they are on one page; then failures grouped by cause and a retry of
+# only them (from 04's capture), and an end card naming the other features.
+# It reuses 04's capture in PROMO_WORK, so make 04 first; this script
+# captures only 01's own material, then renders. RENDER_OPTIONS go to
+# render_tour.py. PROMO_TOOLS and PROMO_WORK as for 01_short.sh.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)

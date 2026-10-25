@@ -411,22 +411,22 @@ that through the agent's notes, so it was dropped.
 
 ### Overview (01)
 
-`01_overview.sh` (`render_tour.py`) tells the story first, then tours the
-features. Act 1, from 01's own capture and narrated line by line: one job is
-fine in a terminal, so you don't need rotari; but research is never one job,
-so you hop between terminal tabs until something breaks; with rotari you
-submit from any directory and see every project on one page, failures at a
-glance. Act 2 passes through the features, about two seconds each with a
-short caption and line, borrowed from the feature videos' captures in
-`PROMO_WORK`: the grid's timeline (06), local and Slurm (05), the desktop
-notification (02), failures by cause and the retried run (04), TensorBoard
-(03), `rotari jobs` (08), and the agent's run page (09); then the GitHub
-link. Make those episodes first; 02's capture needs a display, so it may
-come from another host (copy `PROMO_WORK/02_notifications`). A first tour
-gave every feature its own sentence and read as disconnected; the story act
-and the quick pass fixed that (the user's feedback, 2026-10-25). The
-vertical Short, `01_short.sh`, still tells the older story through to the
-sweep and retry.
+`01_overview.sh` (`render_tour.py`) carries one message: research is many
+jobs, and rotari puts them in one place. From 01's own capture, narrated
+line by line: one job is fine in a terminal, so you don't need rotari; but
+research is never one job, so you hop between terminal tabs until something
+breaks; with rotari you submit from any directory and see every project on
+one page, failures at a glance. Then one payoff, from 04's capture: the
+failures grouped by cause, and a retry that reruns only them. The end card
+names the other features (Slurm, notifications, outputs, the terminal,
+coding agents) in a muted line without narration; each has its own video.
+It needs 01's and 04's captures in `PROMO_WORK`.
+
+Two tours came first (2026-10-25): every feature with its own sentence read
+as disconnected, and a quick pass at two seconds a feature still left
+nothing understood, so the overview keeps one story and one payoff (the
+user's feedback). The vertical Short, `01_short.sh`, still tells the older
+story through to the sweep and retry.
 
 ### Agents (09)
 
