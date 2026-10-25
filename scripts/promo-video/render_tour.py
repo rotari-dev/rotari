@@ -1,14 +1,16 @@
-"""Render the overview (landscape): a quick tour of rotari, one scene per feature.
+"""Render the overview (landscape): the story, then a quick tour of the features.
 
     render_tour.py WORK_DIR REPO_DIR OUT.mp4
                    [--narration KOKORO_DIR [--voice VOICE] [--speed X]]
                    [--preview SECONDS...]
 
-WORK_DIR is PROMO_WORK, holding the episodes' captures as
-WORK_DIR/NN_name/capture: the overview borrows a few seconds from each
-feature video (02 to 07, and 09) and its opening terminal from 01's own
-capture, so those episodes are captured first. The player page is written to
-WORK_DIR/tour; it reaches the episodes' frames by absolute file URL.
+Act 1 tells the story from 01's own capture: one job needs no rotari, but
+research is many projects in many terminal tabs, and with rotari they all
+show on one page. Act 2 passes through the features: a couple of seconds of
+each feature video's capture (06, 05, 02, 04, 03, 08, 09), each with a short
+caption and line. WORK_DIR is PROMO_WORK, holding the captures as
+WORK_DIR/NN_name/capture, so those episodes are captured first. The player
+page is written to WORK_DIR/tour; it reaches the frames by absolute file URL.
 """
 
 import json
@@ -19,6 +21,9 @@ from PIL import Image, ImageChops, ImageStat
 
 import renderer
 
+# Seconds per shot of the tour.
+SHOT = 2.0
+
 ARGS = renderer.options()
 WORK = os.path.abspath(ARGS.capture_dir)
 EPISODES = {
@@ -28,7 +33,7 @@ EPISODES = {
     "recover": "04_recovering",
     "executors": "05_executors",
     "grid": "06_grid",
-    "webui": "07_webui",
+    "terminal": "08_terminal",
     "agents": "09_agents",
 }
 
@@ -110,85 +115,96 @@ def timeline():
     finish = c["notify"].web["finish"]
     at = notified_at(c["notify"], finish)
     finish = [[t - (at - 1.0), u] for t, u in finish if t >= at - 1.0]
-    # 06: the grid's live timeline, faster.
-    grid_speed = 2.0
     recover = c["recover"].logs
+    one = c["one"].terms
+
+    def shot(scene, caption, say):
+        """A tour shot: scene for SHOT seconds, or as long as its short line."""
+        return {**scene, "dur": SHOT, "captions": [[0, caption]], "say": say}
 
     return [
+        # Act 1, the story: one job needs no rotari; research is many jobs.
         term(
             "one",
             "one",
-            [[0, "One job?<br><em>A terminal is enough.</em>"]],
+            [[0, "One job?"]],
             title="~/llm",
-            extra=0.8,
-            say="One job? A terminal is enough.",
-            sayAt=1.4,
+            extra=1.0,
+            say="One job? Watching it in a terminal is enough.",
+            sayAt=1.6,
         ),
         {
             "kind": "title",
             "dur": 2.6,
-            "lines": [["But research", "", 0], ["isn't one job.", "soft", 0.35]],
-            "say": "But research is never one job.",
+            "lines": [["You don't", "", 0], ["need rotari.", "hl", 0.35]],
+            "say": "You don't need rotari.",
         },
-        web(
-            "webui",
-            "home",
-            3.6,
-            [[0, "Every project,<br><em>one page.</em>"]],
-            say="Every project, on one page.",
+        {
+            "kind": "title",
+            "dur": 2.6,
+            "lines": [["But research", "", 0], ["isn't one job.", "soft", 0.35]],
+            "say": "But research is never just one job.",
+        },
+        {
+            "kind": "tabs",
+            "dur": 7.2,
+            "speed": 1.6,
+            "tabs": [
+                {"title": d, "events": one[f"tab-{d}"]["events"]}
+                for d in ("asr", "tts", "vision", "nlp")
+            ],
+            "captions": [
+                [0, "4 projects.<br>4 directories. 4 tabs."],
+                [3.6, "Something broke.<br><em>Which tab was it?</em>"],
+            ],
+            "say": "Each project lives in its own directory. So you hop between "
+            "terminal tabs, and somewhere, something broke.",
+        },
+        term(
+            "one",
+            "submit4",
+            [[0, "With rotari, submit<br>from any directory…"]],
+            speed=2.6,
+            extra=0.4,
+            say="With rotari, you submit from any directory,",
+            sayAt=4.6,
         ),
         web(
-            "grid",
-            "live",
-            c["grid"].web["live"][-1][0] / grid_speed + 0.3,
-            [[0, "A whole grid,<br><em>in one run.</em>"]],
-            speed=grid_speed,
-            say="A whole grid of runs, in order, in one command.",
+            "one",
+            "projects",
+            8.0,
+            [
+                [0, "…and see every project<br>on one page."],
+                [3.8, "Vision failed.<br><em>You see it at a glance.</em>"],
+            ],
+            speed=15 / 8.0,
+            say="and every project shows up on one page. "
+            "You see what failed at a glance.",
         ),
-        web(
-            "executors",
-            "done",
-            3.6,
-            [[0, "Here or on Slurm,<br><em>the same way.</em>"]],
-            say="Here or on Slurm, the same way.",
+        # Act 2, the tour: each feature in passing, a short line each.
+        shot(web("grid", "live", 0, [], speed=4.0), "Sweeps and pipelines", "From there: sweeps and pipelines."),
+        shot(web("executors", "done", 0, []), "Here or on Slurm", "Here, or on Slurm."),
+        shot(web("notify", "finish", 0, [], frames=finish), "Told when it ends", "Told when it ends."),
+        shot(
+            page("recover", "failed_run", 0, [], recover["offsets_failed_run"]["cards"] - 16),
+            "Failures, by cause",
+            "Failures, grouped by cause.",
         ),
-        web(
-            "notify",
-            "finish",
-            3.8,
-            [[0, "Know the moment<br><em>it ends.</em>"]],
-            frames=finish,
-            say="Know the moment it ends.",
+        shot(
+            page("recover", "retry_run", 0, [], recover["offsets_retry_run"]["jobs"] - 60),
+            "Rerun only what failed",
+            "Rerun only what failed.",
         ),
-        page(
-            "recover",
-            "failed_run",
-            3.6,
-            [[0, "Failures,<br><em>grouped by cause.</em>"]],
-            recover["offsets_failed_run"]["cards"] - 16,
-            say="Failures, grouped by cause,",
+        shot(web("outputs", "tb_board", 0, []), "Outputs, one click away", "Outputs, one click away."),
+        shot(
+            term("terminal", "jobs", [], title="me@login01: ~/sweep", speed=2.5, wide=True, fontSize=28),
+            "All of it in the terminal, too",
+            "All of it in the terminal, too.",
         ),
-        page(
-            "recover",
-            "retry_run",
-            3.4,
-            [[0, "Rerun only<br><em>what failed.</em>"]],
-            recover["offsets_retry_run"]["jobs"] - 60,
-            say="and rerun only what failed.",
-        ),
-        web(
-            "outputs",
-            "tb_board",
-            3.6,
-            [[0, "Outputs,<br><em>one click away.</em>"]],
-            say="Your outputs, one click away.",
-        ),
-        web(
-            "agents",
-            "run",
-            3.8,
-            [[0, "What your agent did,<br><em>and why.</em>"]],
-            say="And when your coding agent runs the experiments, you can see what it did, and why.",
+        shot(
+            web("agents", "run", 0, []),
+            "Your agent's runs, on the record",
+            "And your coding agent's runs, on the record.",
         ),
         {
             "kind": "logo",

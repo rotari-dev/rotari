@@ -411,15 +411,22 @@ that through the agent's notes, so it was dropped.
 
 ### Overview (01)
 
-`01_overview.sh` makes a quick tour: 01's own opening terminal ("One job? A
-terminal is enough."), then a few seconds borrowed from each feature video's
-capture in `PROMO_WORK` (07 All projects, 06 the grid's timeline, 05 local
-and Slurm, 02 the desktop notification, 04 failure causes and the retried
-run, 03 TensorBoard, 09 the agent's run page), ending on the GitHub link
-(`render_tour.py`). Make those episodes first; 02's capture needs a display,
-so it may come from another host (copy `PROMO_WORK/02_notifications`). The
-old story (projects, the 48-run sweep, causes, retry) remains the vertical
-Short's, `01_short.sh`, until the Short is cut from the tour.
+`01_overview.sh` (`render_tour.py`) tells the story first, then tours the
+features. Act 1, from 01's own capture and narrated line by line: one job is
+fine in a terminal, so you don't need rotari; but research is never one job,
+so you hop between terminal tabs until something breaks; with rotari you
+submit from any directory and see every project on one page, failures at a
+glance. Act 2 passes through the features, about two seconds each with a
+short caption and line, borrowed from the feature videos' captures in
+`PROMO_WORK`: the grid's timeline (06), local and Slurm (05), the desktop
+notification (02), failures by cause and the retried run (04), TensorBoard
+(03), `rotari jobs` (08), and the agent's run page (09); then the GitHub
+link. Make those episodes first; 02's capture needs a display, so it may
+come from another host (copy `PROMO_WORK/02_notifications`). A first tour
+gave every feature its own sentence and read as disconnected; the story act
+and the quick pass fixed that (the user's feedback, 2026-10-25). The
+vertical Short, `01_short.sh`, still tells the older story through to the
+sweep and retry.
 
 ### Agents (09)
 
@@ -449,10 +456,8 @@ could already run (the user's feedback, 2026-10-25).
 
 ## Next steps
 
-- Rework 01 once the feature videos are done: it goes into failure causes and
-  retry in as much detail as 04 (the user's feedback, 2026-10-25); the
-  overview should instead touch many features briefly and point to the
-  feature videos.
+- Cut a vertical Short from the tour (01_overview) to replace `01_short.sh`;
+  the Short still tells the older story.
 - Listen to the narration and adjust wording, voice, or speed; consider
   quiet background music.
 - The run page job timeline's axis labels overlap at narrow widths and are
