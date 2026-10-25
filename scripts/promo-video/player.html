@@ -156,6 +156,9 @@ async function render(t) {
       (s.url ? `<div class="url" style="${fadeIn(lt, 1.3)}">${s.url}</div>` : "") + `</div>`;
   } else if (s.kind === "term") {
     html = caption(s.captions, lt) + termFrame(null, null, s.title, s.events, vt);
+    // fontSize sets the terminal's font size in px, such as for a wide scene
+    // whose output fits a larger font than the default.
+    if (s.fontSize) html = html.replace('class="term"', `class="term" style="font-size:${s.fontSize}px"`);
     if (s.wide) html = `<div class="wide-scene">${html}</div>`;
   } else if (s.kind === "tabs") {
     const per = s.dur / s.tabs.length;
