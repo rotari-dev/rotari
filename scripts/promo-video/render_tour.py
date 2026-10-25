@@ -1,41 +1,28 @@
-"""Render the overview (landscape): the story, then a quick tour of the features.
+"""Render the overview (landscape): one story, from many jobs to one place.
 
     render_tour.py WORK_DIR REPO_DIR OUT.mp4
                    [--narration KOKORO_DIR [--voice VOICE] [--speed X]]
                    [--preview SECONDS...]
 
-Act 1 tells the story from 01's own capture: one job needs no rotari, but
-research is many projects in many terminal tabs, and with rotari they all
-show on one page. Act 2 passes through the features: a couple of seconds of
-each feature video's capture (06, 05, 02, 04, 03, 08, 09), each with a short
-caption and line. WORK_DIR is PROMO_WORK, holding the captures as
-WORK_DIR/NN_name/capture, so those episodes are captured first. The player
-page is written to WORK_DIR/tour; it reaches the frames by absolute file URL.
+From 01's own capture: one job needs no rotari, but research is many
+projects in many terminal tabs where something breaks, and with rotari they
+all show on one page. Then one payoff from 04's capture: the failures grouped
+by cause, and a retry that reruns only them. The end card names the other
+features without narration; each has its own video. WORK_DIR is PROMO_WORK,
+holding the captures as WORK_DIR/NN_name/capture, so 01's and 04's are made
+first. The player page is written to WORK_DIR/tour; it reaches the frames by
+absolute file URL.
 """
 
 import json
 import os
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageStat
-
 import renderer
-
-# Seconds per shot of the tour.
-SHOT = 2.0
 
 ARGS = renderer.options()
 WORK = os.path.abspath(ARGS.capture_dir)
-EPISODES = {
-    "one": "01_overview",
-    "notify": "02_notifications",
-    "outputs": "03_outputs",
-    "recover": "04_recovering",
-    "executors": "05_executors",
-    "grid": "06_grid",
-    "terminal": "08_terminal",
-    "agents": "09_agents",
-}
+EPISODES = {"one": "01_overview", "recover": "04_recovering"}
 
 
 class Capture:
@@ -60,20 +47,6 @@ class Capture:
         }
 
 
-def notified_at(cap, frames):
-    """Seconds into 02's recording when the desktop notification appears."""
-    path = lambda url: url[len("file://") :]
-    first = Image.open(path(frames[0][1])).convert("L")
-    width, height = first.size
-    box = (width // 3, 0, width, height // 3)
-    first = first.crop(box)
-    for t, url in frames:
-        frame = Image.open(path(url)).convert("L").crop(box)
-        if ImageStat.Stat(ImageChops.difference(first, frame)).mean[0] > 12:
-            return t
-    raise SystemExit("no desktop notification in 02's recording")
-
-
 def timeline():
     c = {name: Capture(name) for name in EPISODES}
 
@@ -89,10 +62,10 @@ def timeline():
             **more,
         }
 
-    def web(cap, scene, dur, captions, frames=None, **more):
+    def web(cap, scene, dur, captions, **more):
         return {
             "kind": "web",
-            "frames": frames or c[cap].web[scene],
+            "frames": c[cap].web[scene],
             "dur": dur,
             "captions": captions,
             **more,
@@ -111,16 +84,8 @@ def timeline():
             **more,
         )
 
-    # 02: from a second before the desktop notification arrives.
-    finish = c["notify"].web["finish"]
-    at = notified_at(c["notify"], finish)
-    finish = [[t - (at - 1.0), u] for t, u in finish if t >= at - 1.0]
     recover = c["recover"].logs
     one = c["one"].terms
-
-    def shot(scene, caption, say):
-        """A tour shot: scene for SHOT seconds, or as long as its short line."""
-        return {**scene, "dur": SHOT, "captions": [[0, caption]], "say": say}
 
     return [
         # Act 1, the story: one job needs no rotari; research is many jobs.
@@ -181,36 +146,30 @@ def timeline():
             say="and every project shows up on one page. "
             "You see what failed at a glance.",
         ),
-        # Act 2, the tour: each feature in passing, a short line each.
-        shot(web("grid", "live", 0, [], speed=4.0), "Sweeps and pipelines", "From there: sweeps and pipelines."),
-        shot(web("executors", "done", 0, []), "Here or on Slurm", "Here, or on Slurm."),
-        shot(web("notify", "finish", 0, [], frames=finish), "Told when it ends", "Told when it ends."),
-        shot(
-            page("recover", "failed_run", 0, [], recover["offsets_failed_run"]["cards"] - 16),
-            "Failures, by cause",
-            "Failures, grouped by cause.",
+        # Act 3, one payoff: something broke, so rerun only that.
+        page(
+            "recover",
+            "failed_run",
+            4.0,
+            [[0, "Failures,<br><em>grouped by cause.</em>"]],
+            recover["offsets_failed_run"]["cards"] - 16,
+            say="When something fails, rotari groups the failures by cause, "
+            "with a fix for each.",
         ),
-        shot(
-            page("recover", "retry_run", 0, [], recover["offsets_retry_run"]["jobs"] - 60),
-            "Rerun only what failed",
-            "Rerun only what failed.",
-        ),
-        shot(web("outputs", "tb_board", 0, []), "Outputs, one click away", "Outputs, one click away."),
-        shot(
-            term("terminal", "jobs", [], title="me@login01: ~/sweep", speed=2.5, wide=True, fontSize=28),
-            "All of it in the terminal, too",
-            "All of it in the terminal, too.",
-        ),
-        shot(
-            web("agents", "run", 0, []),
-            "Your agent's runs, on the record",
-            "And your coding agent's runs, on the record.",
+        term(
+            "recover",
+            "retry_run",
+            [[0, "Rerun only<br><em>what failed.</em>"]],
+            title="~/llm-sweep",
+            extra=0.8,
+            say="Fix it, and rerun only what failed. Everything that succeeded stays as it is.",
         ),
         {
             "kind": "logo",
-            "dur": 5.0,
+            "dur": 6.0,
             "tagline": "Spend your time on research,<br>not on babysitting jobs.",
             "url": "github.com/rotari-dev/rotari",
+            "also": "Also: Slurm · notifications · outputs · the terminal · coding agents",
             "say": "Rotari. Spend your time on research, not on babysitting jobs.",
         },
     ]
