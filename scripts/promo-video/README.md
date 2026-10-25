@@ -23,7 +23,7 @@ version.
 | 02 | Notifications: desktop, Inbox, Slack | `docs/NOTIFICATIONS.md` | `02_notifications.sh` | done, 35 s |
 | 03 | Outputs: Artifacts, previews, TensorBoard, Files | `docs/OUTPUTS.md` | `03_outputs.sh` | done, 53 s |
 | 04 | Rerunning failures and diagnosis | `docs/RECOVERING.md`, `docs/LOCAL_DIAGNOSIS.md` | `04_recovering.sh` | done, 47 s |
-| 05 | Local, SSH, Slurm | `docs/EXECUTORS.md` | `05_executors.sh` | done, 33 s |
+| 05 | Local and Slurm | `docs/EXECUTORS.md` | `05_executors.sh` | done, 37 s |
 | 06 | Arrays, matrices, dependencies | `docs/RUNNING.md` | `06_grid.sh` | done, 44 s |
 | 07 | The Web UI across projects, Activity | `docs/WEB.md` | `07_webui.sh` | done, 34 s |
 | 08 | History and comparison (lineage) | `docs/INSPECT.md` | `08_lineage.sh` | done, 39 s |
@@ -125,7 +125,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 | `capture_webui.py`, `render_webui.py` | Video 07 (a headless browser is enough) |
 | `capture_lineage.py`, `render_lineage.py` | Video 08 (a headless browser is enough) |
 | `capture_agents.py`, `render_agents.py` | Video 09 (a headless browser is enough) |
-| `capture_executors.py`, `render_executors.py`, `ssh-up.sh` | Video 05 (needs the Slurm image and openssh-server); `ssh-up.sh` starts the SSH host `gpu-box` in the capture namespace |
+| `capture_executors.py`, `render_executors.py` | Video 05 (needs the Slurm image) |
 | `assets/slack/` | Slack screenshots of one capture's webhook message, for video 02 |
 | `newroot.sh`, `dunstrc` | A namespace-owned `/` for `--allow-exec`; the desktop notification style |
 | `tts_samples.py`, `fixture/tts_train.py` | Kokoro clips and the fake TTS job that "produces" them |
@@ -338,27 +338,23 @@ with the 40 successes carried forward; the new run's jobs table shows
 
 ### Executors (05)
 
-A pipeline's three steps run by hand first, each its own way (`nohup` here,
-`sbatch` and `squeue` for Slurm, `ssh` to a lab GPU box), then go to rotari
-as one run with `-e local`, `-e slurm`, and `-e ssh`; the run page's jobs
-table, narrowed to hosts and executor and sorted by executor, shows
-workstation, gpu-node01, and gpu-box.
+A pipeline's three steps run by hand first, each waiting for the one before
+(`./prep.sh` here, `sbatch` and `squeue` until training runs on Slurm,
+`./eval.sh` here), then go to rotari as one run with `-e local` and
+`-e slurm` and dependencies; the run page's jobs table, narrowed to hosts,
+executor, and start time and sorted by start time, shows workstation,
+gpu-node01, and workstation. SSH is left out: it is rarely used where Slurm
+is (the user's call, 2026-10-25).
 
-- **Machines:** `capture_executors.py` starts `slurm-up.sh` (gpu-node01) and
-  `ssh-up.sh` (gpu-box) inside the namespace; both share `/home/me`, as a
-  cluster's home would. `ssh-up.sh` runs the system's sshd in its own UTS
-  namespace on 127.0.0.2. Only uid 0 is mapped, so the passwd file it mounts
-  names uid 0 `me` and gives sshd's privilege separation user uid 0 too;
-  `/run/sshd` is replaced by an empty directory the namespace owns, the Slurm
-  image's setgroups shim is preloaded, and nscd's socket is hidden so names
-  resolve from the mounted `/etc/hosts`.
+- **Machines:** `capture_executors.py` starts `slurm-up.sh` (gpu-node01),
+  which shares `/home/me` with the workstation as a cluster's home would.
 - **Run page:** captured at 900×645 CSS px so the jobs table is larger. Its
   columns are set through the Columns menu's `localStorage` choices, since
-  each menu click re-renders the menu.
-- **SSH status:** until it finishes, an SSH job shows as `unknown` on the run
-  page (`development/ISSUES.md`), so the live scene ends just before the SSH
-  step is submitted. Capturing this video found that every SSH job in a run
-  failed as "job is not running"; fixed in `ffb8c62b`.
+  each menu click re-renders the menu; sorting by a header scrolls the table
+  sideways, so the capture scrolls it back.
+- An earlier version also ran a step over SSH, against an sshd started in the
+  namespace; capturing it found that every SSH job in a run failed as "job is
+  not running" (fixed in `ffb8c62b`).
 
 ### Grid (06)
 
