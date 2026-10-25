@@ -26,13 +26,16 @@ version.
 | 05 | Local and Slurm | `docs/EXECUTORS.md` | `05_executors.sh` | done, 37 s |
 | 06 | Arrays, matrices, dependencies | `docs/RUNNING.md` | `06_grid.sh` | done, 44 s |
 | 07 | The Web UI across projects, Activity | `docs/WEB.md` | `07_webui.sh` | done, 34 s |
-| 08 | History and comparison (lineage) | `docs/INSPECT.md` | `08_lineage.sh` | done, 39 s |
+| 08 | Inspecting runs from a terminal: jobs, show, logs | `docs/INSPECT.md` | `08_terminal.sh` | done, 44 s |
 | 09 | Coding agents: what yours did, and why | `rotari guide`, `docs/MCP.md`, `docs/INSPECT.md` | `09_agents.sh` | done, 39 s |
 
 `docs/OUTPUTS.md` was split out of `docs/INSPECT.md` so that video 03 has one
 page to accompany.
 
-## The overview (01)
+## The Short's story (01_short.sh)
+
+The vertical Short, and the overview before it became a tour (see
+[Overview (01)](#overview-01)), tell this story.
 
 ### Message
 
@@ -104,7 +107,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 
 | File | Role |
 | --- | --- |
-| `01_overview.sh`, `01_short.sh`, `02_notifications.sh`, `03_outputs.sh`, `04_recovering.sh`, `05_executors.sh`, `06_grid.sh`, `07_webui.sh`, `08_lineage.sh`, `09_agents.sh` | Make one video each into `out/`; the usual entry points (`defaults.sh` sets their directories) |
+| `01_overview.sh`, `01_short.sh`, `02_notifications.sh`, `03_outputs.sh`, `04_recovering.sh`, `05_executors.sh`, `06_grid.sh`, `07_webui.sh`, `08_terminal.sh`, `09_agents.sh` | Make one video each into `out/`; the usual entry points (`defaults.sh` sets their directories) |
 | `setup.sh TOOLS` | Install Playwright and kokoro-onnx into `.venv`; fetch Chrome, the Kokoro model, and the Slurm image into `TOOLS` |
 | `make-video.sh [--landscape] TOOLS WORK OUT.mp4 [opts]` | Build rotari, capture, and render the overview (vertical without `--landscape`) |
 | `capture.sh` | Enter the namespaces, start Slurm, run `capture.py` |
@@ -114,7 +117,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 | `renderer.py` | Shared rendering: options, narration, player page, frames into ffmpeg |
 | `common.py` | Shared capture helpers: commands, terminal sessions (`Term`), Web UI frames |
 | `narration.py` | Kokoro TTS clips, scene fitting, the audio track, and subtitles |
-| `fixture/` | Fake jobs: `train.py`, per-project `train.sh`, `sweep.sh`, `prep.sh`, `train-gpu.sh`, `eval.sh`, and per-episode `grid/`, `webui/`, `lineage/`, `tune/` (with the agent's session) |
+| `fixture/` | Fake jobs: `train.py`, per-project `train.sh`, `sweep.sh`, `prep.sh`, `train-gpu.sh`, `eval.sh`, and per-episode `grid/`, `webui/`, `terminal/`, `tune/` (with the agent's session) |
 | `fullpage.py` | Framing aid: full-page screenshots of a captured state, run in a namespace |
 | `make-episode.sh [--display] TOOLS WORK OUT.mp4 CAPTURE.py RENDER.py` | Build rotari, capture, and render one feature video |
 | `capture-web.sh [--display]` | Enter the namespaces and a namespace-owned `/`, with Xvfb, D-Bus, and dunst when asked, and run a capture script |
@@ -123,7 +126,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 | `capture_recovering.py`, `render_recovering.py` | Video 04 (a headless browser is enough) |
 | `capture_grid.py`, `render_grid.py` | Video 06 (a headless browser is enough) |
 | `capture_webui.py`, `render_webui.py` | Video 07 (a headless browser is enough) |
-| `capture_lineage.py`, `render_lineage.py` | Video 08 (a headless browser is enough) |
+| `capture_terminal.py`, `render_terminal.py` | Video 08 (no browser) |
 | `capture_agents.py`, `render_agents.py` | Video 09 (a headless browser is enough); it replays `fixture/tune/session.sh` |
 | `capture_executors.py`, `render_executors.py` | Video 05 (needs the Slurm image) |
 | `assets/slack/` | Slack screenshots of one capture's webhook message, for video 02 |
@@ -146,7 +149,7 @@ scripts/promo-video/04_recovering.sh      # out/04_recovering.mp4
 scripts/promo-video/05_executors.sh       # out/05_executors.mp4 (needs singularity once)
 scripts/promo-video/06_grid.sh            # out/06_grid.mp4
 scripts/promo-video/07_webui.sh           # out/07_webui.mp4
-scripts/promo-video/08_lineage.sh         # out/08_lineage.mp4
+scripts/promo-video/08_terminal.sh        # out/08_terminal.mp4
 scripts/promo-video/09_agents.sh          # out/09_agents.mp4
 scripts/promo-video/01_short.sh --with-slurm          # include the Slurm act
 scripts/promo-video/01_short.sh --voice am_michael    # another narrator
@@ -388,21 +391,35 @@ exhausted" in both state directories, which finds asr's and tts's.
   also matched "All projects". A diagnosis condition offers the diagnosis
   names in a select instead of a text box.
 
-### Lineage (08)
+### Terminal (08)
 
-A six-run sweep (`fixture/lineage/`) in a git repository ran twice off
-camera, each from a commit and with a note: batch 128 (two tasks out of GPU
-memory), then batch 64 (memory fits, another task diverges). `rotari
-lineage` lists the history (NOTE and CODE columns) and compares the two runs
-(fixed 2, newly failing 1, each cause, the source change); a third commit
-fixes the learning rate, runs with a note, adds the conclusion with `rotari
-note`, and lists the history again. The browser shows the last run's page
-with its notes.
+The other feature videos lean on the Web UI; this one shows what is there on
+a cluster's login node with no browser (the user's call, 2026-10-25). An
+eight-seed sweep (`fixture/terminal/train.sh`: seed 3 runs out of GPU
+memory, seed 6 diverges, seed 8 trains for 40 s) runs in the background
+after a finished run of another project. `rotari jobs` (every project),
+`rotari show -p sweep` from `Jobs:` to the failures by cause, `show --logs
+--tail 1` (each job's last line, its result), `show --failed-logs --tail
+2`, and `show --job-name 'train[8]' --follow` (recorded with
+`Term.live`, under `timeout`). The log views keep each job's `=== Job:`
+line and its log lines, without the working directory, command, and log
+path under it. `jobs` (93 columns) and `show` (154) are wide scenes at
+28 px and 19 px.
 
-- The lineage tables are wider than the frame column, so these terminal
-  scenes are `wide`: the player puts the caption in a band across the top
-  and the frame across the whole width at 17 px (at 18 px the last history
-  row wraps). The project header above `Runs (oldest first):` is left out.
+An earlier 08 showed `rotari lineage` comparing a sweep's runs; 09 covers
+that through the agent's notes, so it was dropped.
+
+### Overview (01)
+
+`01_overview.sh` makes a quick tour: 01's own opening terminal ("One job? A
+terminal is enough."), then a few seconds borrowed from each feature video's
+capture in `PROMO_WORK` (07 All projects, 06 the grid's timeline, 05 local
+and Slurm, 02 the desktop notification, 04 failure causes and the retried
+run, 03 TensorBoard, 09 the agent's run page), ending on the GitHub link
+(`render_tour.py`). Make those episodes first; 02's capture needs a display,
+so it may come from another host (copy `PROMO_WORK/02_notifications`). The
+old story (projects, the 48-run sweep, causes, retry) remains the vertical
+Short's, `01_short.sh`, until the Short is cut from the tour.
 
 ### Agents (09)
 

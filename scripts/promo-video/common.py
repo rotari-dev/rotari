@@ -105,11 +105,15 @@ class Term:
         self.output(out, keep=keep, line_s=line_s)
         return out
 
-    def live(self, line, cps=28):
-        """Run a command and emit its output lines at the times they appear."""
+    def live(self, line, cps=28, real=None, keep=None):
+        """Run a command and emit its output lines at the times they appear.
+
+        real is the command actually run in place of line, such as one under
+        timeout; keep, if given, decides line by line which lines are shown.
+        """
         self.type(line, cps=cps)
         p = subprocess.Popen(
-            ["bash", "-c", line],
+            ["bash", "-c", real or line],
             cwd=self.cwd,
             env=self.session.env,
             stdout=subprocess.PIPE,
@@ -118,6 +122,8 @@ class Term:
         )
         start, base = time.time(), self.t
         for ln in p.stdout:
+            if keep is not None and not keep(ln.rstrip("\n")):
+                continue
             self.t = base + (time.time() - start)
             self.emit(ln)
         p.wait()
