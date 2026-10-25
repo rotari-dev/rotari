@@ -25,9 +25,9 @@ version.
 | 04 | Rerunning failures and diagnosis | `docs/RECOVERING.md`, `docs/LOCAL_DIAGNOSIS.md` | `04_recovering.sh` | done, 47 s |
 | 05 | Local, SSH, Slurm | `docs/EXECUTORS.md` | `05_executors.sh` | done, 33 s |
 | 06 | Arrays, matrices, dependencies | `docs/RUNNING.md` | `06_grid.sh` | done, 44 s |
-| 07 | The Web UI across projects, Activity | `docs/WEB.md` | | planned |
-| 08 | History and comparison (lineage) | `docs/INSPECT.md` | | planned |
-| 09 | AI agents (CLI guide, MCP) | `docs/MCP.md` | | planned |
+| 07 | The Web UI across projects, Activity | `docs/WEB.md` | `07_webui.sh` | done, 34 s |
+| 08 | History and comparison (lineage) | `docs/INSPECT.md` | `08_lineage.sh` | done, 39 s |
+| 09 | AI agents (CLI guide, MCP) | `docs/MCP.md` | `09_agents.sh` | done, 44 s |
 
 `docs/OUTPUTS.md` was split out of `docs/INSPECT.md` so that video 03 has one
 page to accompany.
@@ -104,7 +104,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 
 | File | Role |
 | --- | --- |
-| `01_overview.sh`, `01_short.sh`, `02_notifications.sh`, `03_outputs.sh`, `04_recovering.sh`, `05_executors.sh`, `06_grid.sh` | Make one video each into `out/`; the usual entry points (`defaults.sh` sets their directories) |
+| `01_overview.sh`, `01_short.sh`, `02_notifications.sh`, `03_outputs.sh`, `04_recovering.sh`, `05_executors.sh`, `06_grid.sh`, `07_webui.sh`, `08_lineage.sh`, `09_agents.sh` | Make one video each into `out/`; the usual entry points (`defaults.sh` sets their directories) |
 | `setup.sh TOOLS` | Install Playwright and kokoro-onnx into `.venv`; fetch Chrome, the Kokoro model, and the Slurm image into `TOOLS` |
 | `make-video.sh [--landscape] TOOLS WORK OUT.mp4 [opts]` | Build rotari, capture, and render the overview (vertical without `--landscape`) |
 | `capture.sh` | Enter the namespaces, start Slurm, run `capture.py` |
@@ -114,7 +114,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 | `renderer.py` | Shared rendering: options, narration, player page, frames into ffmpeg |
 | `common.py` | Shared capture helpers: commands, terminal sessions (`Term`), Web UI frames |
 | `narration.py` | Kokoro TTS clips, scene fitting, the audio track, and subtitles |
-| `fixture/` | Fake jobs: `train.py`, per-project `train.sh`, `sweep.sh`, `prep.sh`, `train-gpu.sh`, `eval.sh`, and the grid's `grid/` |
+| `fixture/` | Fake jobs: `train.py`, per-project `train.sh`, `sweep.sh`, `prep.sh`, `train-gpu.sh`, `eval.sh`, and per-episode `grid/`, `webui/`, `lineage/` |
 | `fullpage.py` | Framing aid: full-page screenshots of a captured state, run in a namespace |
 | `make-episode.sh [--display] TOOLS WORK OUT.mp4 CAPTURE.py RENDER.py` | Build rotari, capture, and render one feature video |
 | `capture-web.sh [--display]` | Enter the namespaces and a namespace-owned `/`, with Xvfb, D-Bus, and dunst when asked, and run a capture script |
@@ -122,6 +122,9 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 | `capture_outputs.py`, `render_outputs.py` | Video 03 (a headless browser is enough) |
 | `capture_recovering.py`, `render_recovering.py` | Video 04 (a headless browser is enough) |
 | `capture_grid.py`, `render_grid.py` | Video 06 (a headless browser is enough) |
+| `capture_webui.py`, `render_webui.py` | Video 07 (a headless browser is enough) |
+| `capture_lineage.py`, `render_lineage.py` | Video 08 (a headless browser is enough) |
+| `capture_agents.py`, `render_agents.py` | Video 09 (a headless browser is enough) |
 | `capture_executors.py`, `render_executors.py`, `ssh-up.sh` | Video 05 (needs the Slurm image and openssh-server); `ssh-up.sh` starts the SSH host `gpu-box` in the capture namespace |
 | `assets/slack/` | Slack screenshots of one capture's webhook message, for video 02 |
 | `newroot.sh`, `dunstrc` | A namespace-owned `/` for `--allow-exec`; the desktop notification style |
@@ -142,6 +145,9 @@ scripts/promo-video/03_outputs.sh         # out/03_outputs.mp4
 scripts/promo-video/04_recovering.sh      # out/04_recovering.mp4
 scripts/promo-video/05_executors.sh       # out/05_executors.mp4 (needs singularity once)
 scripts/promo-video/06_grid.sh            # out/06_grid.mp4
+scripts/promo-video/07_webui.sh           # out/07_webui.mp4
+scripts/promo-video/08_lineage.sh         # out/08_lineage.mp4
+scripts/promo-video/09_agents.sh          # out/09_agents.mp4
 scripts/promo-video/01_short.sh --with-slurm          # include the Slurm act
 scripts/promo-video/01_short.sh --voice am_michael    # another narrator
 scripts/promo-video/03_outputs.sh --preview 20 45     # PNGs in the work directory
@@ -366,6 +372,55 @@ runs at once, then the report; the matrix card, opened by its toggle and
 captured at 600×430 so its table reads, shows 3/3 in every LR × BS cell, and
 `show --job-name report --tail 4` shows the report's output.
 
+### Web UI (07)
+
+Four projects in their own directories (`fixture/webui/train.sh`, whose
+`OUTCOME` picks how a job ends): asr, vision, and nlp in the default state
+directory, tts in a workspace with its own (`rotari init`). Their history is
+made off camera; nlp's training is still running. The terminal runs `ls` and
+`rotari web` (its own start-up lines, on the default port); the browser
+(960×688) shows All projects, Activity's calendar and Where you worked, Job
+activity, and a History search for jobs whose diagnosis is "CUDA/GPU memory
+exhausted" in both state directories, which finds asr's and tts's.
+
+- Runs cannot be dated in the past (rotari reads the clock itself), so
+  Activity shows one busy day; its per-project time lanes are too narrow to
+  read and stay out of the video.
+- History search's controls are found by class (`history-search-scope-basedir`,
+  `history-search-field`, `history-search-word`) or exact option text;
+  Playwright's `has_text` matches case-insensitive substrings, so "Projects"
+  also matched "All projects". A diagnosis condition offers the diagnosis
+  names in a select instead of a text box.
+
+### Lineage (08)
+
+A six-run sweep (`fixture/lineage/`) in a git repository ran twice off
+camera, each from a commit and with a note: batch 128 (two tasks out of GPU
+memory), then batch 64 (memory fits, another task diverges). `rotari
+lineage` lists the history (NOTE and CODE columns) and compares the two runs
+(fixed 2, newly failing 1, each cause, the source change); a third commit
+fixes the learning rate, runs with a note, adds the conclusion with `rotari
+note`, and lists the history again. The browser shows the last run's page
+with its notes.
+
+- The lineage tables are wider than the frame column, so these terminal
+  scenes are `wide`: the player puts the caption in a band across the top
+  and the frame across the whole width at 17 px (at 18 px the last history
+  row wraps). The project header above `Runs (oldest first):` is left out.
+
+### Agents (09)
+
+No agent runs: the video shows what one reads and runs. `rotari guide | head
+-n 30` (a wide scene at 24 px; the guide is written 80 columns wide), then,
+on the lineage episode's sweep, `run --async --note`, `wait
+--until-failure` (from where it returns), `lineage RUN_ID` (its `show:` and
+`retry:` lines left out), a fix, `retry --note`, `cat results.md` (made by
+the capture from the run's logs) and `rotari note RUN_ID "$(cat
+results.md)"`. The run report, opened with Select all and Report and
+captured at 680×487, shows that note's table; the terminal ends on
+`.vscode/mcp.json` for `rotari mcp`. The captions say what the guide has an
+agent do, not that an agent did it.
+
 ## Next steps
 
 - Rework 01 once the feature videos are done: it goes into failure causes and
@@ -376,4 +431,3 @@ captured at 600×430 so its table reads, shows 3/3 in every LR × BS cell, and
   quiet background music.
 - The run page job timeline's axis labels overlap at narrow widths and are
   visible in the video; see `development/ISSUES.md`.
-- Videos 07 to 09 (see [Episodes and documentation](#episodes-and-documentation)).
