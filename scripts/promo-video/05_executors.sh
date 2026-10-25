@@ -3,12 +3,11 @@
 #
 #   scripts/promo-video/05_executors.sh [RENDER_OPTIONS...]
 #
-# Accompanies docs/EXECUTORS.md: a pipeline's steps run by hand on three
-# machines, then as one rotari run with -e local, -e slurm, and -e ssh.
+# Accompanies docs/EXECUTORS.md: a pipeline's steps run by hand, here and on
+# Slurm, waiting for each, then as one rotari run with -e local and -e slurm.
 # Prepares the tools on first use (with the Slurm image, which needs
 # singularity or apptainer), then builds rotari, captures (a headless browser
-# is enough, plus openssh-server for the SSH host), and renders. PROMO_TOOLS
-# and PROMO_WORK as for 01_short.sh.
+# is enough), and renders. PROMO_TOOLS and PROMO_WORK as for 01_short.sh.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 . "$here/defaults.sh"
