@@ -412,21 +412,24 @@ that through the agent's notes, so it was dropped.
 ### Overview (01)
 
 `01_overview.sh` (`render_tour.py`) carries one message: research is many
-jobs, and rotari puts them in one place. From 01's own capture, narrated
-line by line: one job is fine in a terminal, so you don't need rotari; but
-research is never one job, so you hop between terminal tabs until something
-breaks; with rotari you submit from any directory and see every project on
-one page, failures at a glance. Then one payoff, from 04's capture: the
-failures grouped by cause, and a retry that reruns only them. The end card
-names the other features (Slurm, notifications, outputs, the terminal,
-coding agents) in a muted line without narration; each has its own video.
-It needs 01's and 04's captures in `PROMO_WORK`.
+jobs, and rotari puts what you look at every day in one place. From 01's own
+capture, narrated line by line: one job is fine in a terminal, so you don't
+need rotari; but research is never one job, so you hop between terminal tabs
+until something breaks; with rotari you submit from any directory, see every
+project on one page, and open the broken job's log right there (`capture.py`
+records it at 680×487 CSS px so it reads). Then past runs, by day on
+Activity's calendar and through History search (07's capture), and the jobs'
+outputs previewed in the browser, a plot and then audio in the Table viewer
+(03's). The end card names the other features (sweeps, Slurm, notifications,
+retries, the terminal, coding agents) in a muted line without narration;
+each has its own video. It needs 01's, 03's, and 07's captures in
+`PROMO_WORK`.
 
-Two tours came first (2026-10-25): every feature with its own sentence read
-as disconnected, and a quick pass at two seconds a feature still left
-nothing understood, so the overview keeps one story and one payoff (the
-user's feedback). The vertical Short, `01_short.sh`, still tells the older
-story through to the sweep and retry.
+Earlier versions (2026-10-25): two tours of every feature read as
+disconnected or left nothing understood, and a version whose payoff was
+failure causes and retry stressed what matters more to agents than to people
+(the user's feedback). The vertical Short, `01_short.sh`, still tells the
+older story through to the sweep and retry.
 
 ### Agents (09)
 

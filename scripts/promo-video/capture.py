@@ -257,6 +257,21 @@ def main():
             wide.goto(base + "/")
             wide.wait_for_timeout(1500)
             S.record(wide, frames, "projects_end", 1)
+
+            # The project that broke: its job's log, in a smaller window with
+            # the frame's shape so that the log reads.
+            rid_vision = S.runs_of("vision")[-1]
+            close = b.new_page(
+                viewport={"width": 680, "height": 487},
+                device_scale_factor=2,
+                color_scheme="dark",
+            )
+            close.goto(f"{base}/project/vision/run/{rid_vision}")
+            close.wait_for_selector("table.runs")
+            close.wait_for_timeout(1200)
+            close.get_by_role("button", name="Log", exact=True).first.click()
+            close.wait_for_timeout(1500)
+            S.record(close, frames, "vision_log", 0.5, fps=4)
             b.close()
     finally:
         web.terminate()
