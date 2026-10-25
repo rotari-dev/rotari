@@ -24,7 +24,7 @@ version.
 | 03 | Outputs: Artifacts, previews, TensorBoard, Files | `docs/OUTPUTS.md` | `03_outputs.sh` | done, 53 s |
 | 04 | Rerunning failures and diagnosis | `docs/RECOVERING.md`, `docs/LOCAL_DIAGNOSIS.md` | `04_recovering.sh` | done, 47 s |
 | 05 | Local, SSH, Slurm | `docs/EXECUTORS.md` | `05_executors.sh` | done, 33 s |
-| 06 | Arrays, matrices, dependencies | `docs/RUNNING.md` | | planned |
+| 06 | Arrays, matrices, dependencies | `docs/RUNNING.md` | `06_grid.sh` | done, 44 s |
 | 07 | The Web UI across projects, Activity | `docs/WEB.md` | | planned |
 | 08 | History and comparison (lineage) | `docs/INSPECT.md` | | planned |
 | 09 | AI agents (CLI guide, MCP) | `docs/MCP.md` | | planned |
@@ -104,7 +104,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 
 | File | Role |
 | --- | --- |
-| `01_overview.sh`, `01_short.sh`, `02_notifications.sh`, `03_outputs.sh`, `04_recovering.sh`, `05_executors.sh` | Make one video each into `out/`; the usual entry points (`defaults.sh` sets their directories) |
+| `01_overview.sh`, `01_short.sh`, `02_notifications.sh`, `03_outputs.sh`, `04_recovering.sh`, `05_executors.sh`, `06_grid.sh` | Make one video each into `out/`; the usual entry points (`defaults.sh` sets their directories) |
 | `setup.sh TOOLS` | Install Playwright and kokoro-onnx into `.venv`; fetch Chrome, the Kokoro model, and the Slurm image into `TOOLS` |
 | `make-video.sh [--landscape] TOOLS WORK OUT.mp4 [opts]` | Build rotari, capture, and render the overview (vertical without `--landscape`) |
 | `capture.sh` | Enter the namespaces, start Slurm, run `capture.py` |
@@ -114,13 +114,14 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 | `renderer.py` | Shared rendering: options, narration, player page, frames into ffmpeg |
 | `common.py` | Shared capture helpers: commands, terminal sessions (`Term`), Web UI frames |
 | `narration.py` | Kokoro TTS clips, scene fitting, the audio track, and subtitles |
-| `fixture/` | Fake jobs: `train.py`, per-project `train.sh`, `sweep.sh`, `prep.sh`, `train-gpu.sh` |
+| `fixture/` | Fake jobs: `train.py`, per-project `train.sh`, `sweep.sh`, `prep.sh`, `train-gpu.sh`, `eval.sh`, and the grid's `grid/` |
 | `fullpage.py` | Framing aid: full-page screenshots of a captured state, run in a namespace |
 | `make-episode.sh [--display] TOOLS WORK OUT.mp4 CAPTURE.py RENDER.py` | Build rotari, capture, and render one feature video |
 | `capture-web.sh [--display]` | Enter the namespaces and a namespace-owned `/`, with Xvfb, D-Bus, and dunst when asked, and run a capture script |
 | `capture_notifications.py`, `render_notifications.py` | Video 02 (the capture needs Xvfb, dunst, google-chrome) |
 | `capture_outputs.py`, `render_outputs.py` | Video 03 (a headless browser is enough) |
 | `capture_recovering.py`, `render_recovering.py` | Video 04 (a headless browser is enough) |
+| `capture_grid.py`, `render_grid.py` | Video 06 (a headless browser is enough) |
 | `capture_executors.py`, `render_executors.py`, `ssh-up.sh` | Video 05 (needs the Slurm image and openssh-server); `ssh-up.sh` starts the SSH host `gpu-box` in the capture namespace |
 | `assets/slack/` | Slack screenshots of one capture's webhook message, for video 02 |
 | `newroot.sh`, `dunstrc` | A namespace-owned `/` for `--allow-exec`; the desktop notification style |
@@ -140,6 +141,7 @@ scripts/promo-video/02_notifications.sh   # out/02_notifications.mp4 (needs Xvfb
 scripts/promo-video/03_outputs.sh         # out/03_outputs.mp4
 scripts/promo-video/04_recovering.sh      # out/04_recovering.mp4
 scripts/promo-video/05_executors.sh       # out/05_executors.mp4 (needs singularity once)
+scripts/promo-video/06_grid.sh            # out/06_grid.mp4
 scripts/promo-video/01_short.sh --with-slurm          # include the Slurm act
 scripts/promo-video/01_short.sh --voice am_michael    # another narrator
 scripts/promo-video/03_outputs.sh --preview 20 45     # PNGs in the work directory
@@ -352,6 +354,18 @@ workstation, gpu-node01, and gpu-box.
   step is submitted. Capturing this video found that every SSH job in a run
   failed as "job is not running"; fixed in `ffb8c62b`.
 
+### Grid (06)
+
+Twelve training runs (two learning rates × two batch sizes × three seeds)
+after one preparation step, then a report (`fixture/grid/`): first by hand
+with nested loops, polling `ls results | wc -l`, and running the report;
+then as `--job-name prep`, a `--matrix LR=… --matrix BS=… --array 1-3`
+job that `--depends-on prep`, and a report that `--depends-on-finished
+train`. The run page's job timeline (900×645 CSS px) shows prep, the twelve
+runs at once, then the report; the matrix card, opened by its toggle and
+captured at 600×430 so its table reads, shows 3/3 in every LR × BS cell, and
+`show --job-name report --tail 4` shows the report's output.
+
 ## Next steps
 
 - Rework 01 once the feature videos are done: it goes into failure causes and
@@ -362,4 +376,4 @@ workstation, gpu-node01, and gpu-box.
   quiet background music.
 - The run page job timeline's axis labels overlap at narrow widths and are
   visible in the video; see `development/ISSUES.md`.
-- Videos 06 to 09 (see [Episodes and documentation](#episodes-and-documentation)).
+- Videos 07 to 09 (see [Episodes and documentation](#episodes-and-documentation)).
