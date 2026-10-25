@@ -16,6 +16,7 @@ import (
 func TestSlackWebhookEncoder(t *testing.T) {
 	input := notification.Payload{Events: []notification.PayloadEvent{{Event: notification.JobFinished, Fields: []notification.Field{
 		{Name: "project", Value: "demo"}, {Name: "job_name", Value: "train"}, {Name: "job_status", Value: "failed"}, {Name: "diagnosis_suggestion", Value: "inspect logs"},
+		{Name: "link", Value: "https://rotari.example.test/project/demo/run/run-1?job_id=job-1"},
 	}}}}
 	encoded, err := (slackWebhookEncoder{}).Encode(input)
 	if err != nil {
@@ -27,6 +28,9 @@ func TestSlackWebhookEncoder(t *testing.T) {
 	}
 	if !strings.Contains(payload.Blocks[0].Text.Text, "*diagnosis suggestion:* inspect logs") {
 		t.Fatalf("slack payload text = %q", payload.Blocks[0].Text.Text)
+	}
+	if !strings.Contains(payload.Blocks[0].Text.Text, "<https://rotari.example.test/project/demo/run/run-1?job_id=job-1|View>") {
+		t.Fatalf("Slack message has no job link: %q", payload.Blocks[0].Text.Text)
 	}
 }
 
@@ -45,6 +49,15 @@ func TestTeamsWebhookEncoder(t *testing.T) {
 	if payload.Sections[0].ActivityTitle != "rotari run finished: failed" || len(payload.Sections[0].Facts) != 3 {
 		t.Fatalf("Teams section = %#v", payload.Sections[0])
 	}
+	input.Events[0].Fields = append(input.Events[0].Fields, notification.Field{Name: "link", Value: "https://rotari.example.test/project/demo/run/run-1"})
+	encoded, err = (teamsWebhookEncoder{}).Encode(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload = encoded.(teamsWebhookPayload)
+	if len(payload.Sections[0].Actions) != 1 || payload.Sections[0].Actions[0].Targets[0].URI != "https://rotari.example.test/project/demo/run/run-1" {
+		t.Fatalf("Teams action = %#v", payload.Sections[0].Actions)
+	}
 }
 
 func TestDiscordWebhookEncoder(t *testing.T) {
@@ -61,6 +74,15 @@ func TestDiscordWebhookEncoder(t *testing.T) {
 	}
 	if len(payload.Embeds[0].Fields) != 3 || payload.Embeds[0].Fields[2].Value != "1" {
 		t.Fatalf("Discord fields = %#v", payload.Embeds[0].Fields)
+	}
+	input.Events[0].Fields = append(input.Events[0].Fields, notification.Field{Name: "link", Value: "https://rotari.example.test/project/demo/run/run-1"})
+	encoded, err = (discordWebhookEncoder{}).Encode(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload = encoded.(discordWebhookPayload)
+	if payload.Embeds[0].URL != "https://rotari.example.test/project/demo/run/run-1" {
+		t.Fatalf("Discord embed URL = %q", payload.Embeds[0].URL)
 	}
 }
 
@@ -79,7 +101,7 @@ func testWebhookBatch(t *testing.T, status string) notification.Batch {
 }
 
 func TestWebhookPayloadHonorsSelectedFields(t *testing.T) {
-	payload := notification.NewPayload(testWebhookBatch(t, "failed"), []string{"job_name", "job_status", "run_status", "failure_count"})
+	payload := notification.NewPayload(testWebhookBatch(t, "failed"), []string{"job_name", "job_status", "run_status", "failure_count"}, "")
 	if len(payload.Events) != 3 {
 		t.Fatalf("payload = %#v", payload)
 	}
@@ -107,11 +129,15 @@ func TestSendWebhookBatchPostsEncodedPayload(t *testing.T) {
 
 	settings := notification.Defaults().Webhook
 	settings.URL = server.URL
+	settings.WebURL = "https://rotari.example.test"
 	settings.Format = "slack"
 	sendWebhookBatch(settings, testWebhookBatch(t, "failed"))
 
 	if requests != 1 || received.Text != "rotari run finished: failed" || len(received.Blocks) != 3 {
 		t.Fatalf("requests = %d, payload = %#v", requests, received)
+	}
+	if !strings.Contains(received.Blocks[1].Text.Text, "?job_id=bad|View>") {
+		t.Fatalf("Slack job event has no direct job link: %q", received.Blocks[1].Text.Text)
 	}
 }
 

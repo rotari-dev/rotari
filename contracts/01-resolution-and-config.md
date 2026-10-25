@@ -327,8 +327,10 @@ Implemented by [internal/config/layers.go](../internal/config/layers.go),
   instead of being ignored.
 - `[webhook]` and `[browser]` accept the same settings but hold independent
   values: `job_failure`, `job_success`, `run_failure`, `run_success`, `fields`,
-  and `max_jobs`, plus `url` and `format` for webhooks. `link` is valid only
-  for `[browser]`. `ROTARI_WEBHOOK_URL` overrides `webhook.url`.
+  and `max_jobs`, plus `url`, `web_url`, and `format` for webhooks. `link`
+  selects click navigation for browser notifications or an absolute event URL
+  for webhooks; webhook links are omitted when `web_url` is empty.
+  `ROTARI_WEBHOOK_URL` overrides `webhook.url`.
 - A run resolves its webhook settings when it starts and snapshots the file
   with its other configs, so later edits do not change that run. `rotari web`
   reads browser settings for its own basedir and serves per-project settings

@@ -831,7 +831,7 @@ setTimeout(() => {
 			const payload = notificationConfigReads === 1
 				? { path: '', targets: [{ location: 'basedir', path: '/state/notifications.toml' }] }
 				: { path: '/state/notifications.toml', url_set: true, fields: [], settings: {
-					webhook: { format: 'json', job_failure: true, job_success: false, run_failure: true, run_success: true, max_jobs: 20, fields: [] },
+					webhook: { format: 'json', web_url: 'https://rotari.example.test', job_failure: true, job_success: false, run_failure: true, run_success: true, max_jobs: 20, fields: [] },
 					browser: { job_failure: true, job_success: false, run_failure: true, run_success: true, max_jobs: 10, fields: [] },
 				} };
 			return { ok: true, text: async () => JSON.stringify(payload) };
@@ -895,6 +895,10 @@ setTimeout(() => {
 		const webhookURLLabel = webhookURL.closest('.notification-webhook-url-label');
 		if (!webhookURLLabel || webhookURLLabel.lastElementChild !== webhookURL || !webhookURLLabel.classList.contains('notification-webhook-url-label')) process.exit(56);
 		if (notificationForm.querySelector('.notification-webhook-format-label').textContent.trim() !== 'Webhook format jsonslackteamsdiscord') process.exit(57);
+		const webURL = notificationForm.elements['webhook-web-url'];
+		if (!webURL || webURL.value !== 'https://rotari.example.test') process.exit(70);
+		const useCurrentWebURL = notificationForm.querySelector('.notification-web-base-url-control button');
+		if (!useCurrentWebURL || useCurrentWebURL.type !== 'button') process.exit(72);
 		const eventCheckbox = notificationForm.querySelector('input[type="checkbox"]');
 		if (notificationForm.classList.contains('dirty') || [...notificationForm.querySelectorAll('fieldset')].some(fieldset => fieldset.classList.contains('dirty'))) process.exit(45);
 		const initialChecked = eventCheckbox.checked;
@@ -904,9 +908,20 @@ setTimeout(() => {
 		eventCheckbox.checked = initialChecked;
 		eventCheckbox.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
 		if (notificationForm.classList.contains('dirty') || [...notificationForm.querySelectorAll('fieldset')].some(fieldset => fieldset.classList.contains('dirty'))) process.exit(47);
+		webURL.value = '';
+		useCurrentWebURL.click();
+		if (webURL.value !== 'http://127.0.0.1/') process.exit(73);
+		dom.window.history.pushState({}, '', '/_basedir/basedir-id/project/default');
+		useCurrentWebURL.click();
+		if (webURL.value !== 'http://127.0.0.1/_basedir/basedir-id/') process.exit(74);
+		dom.window.history.pushState({}, '', '/project/default/run/run-1');
+		webURL.value = 'https://rotari.example.test';
+		webURL.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		if (notificationForm.classList.contains('dirty')) process.exit(75);
 		const submitNotificationForm = async () => notificationForm.onsubmit({ preventDefault() {} });
 		await submitNotificationForm();
 		if (notificationSaveRequests.at(-1).change_webhook_url !== false) process.exit(49);
+		if (notificationSaveRequests.at(-1).settings.webhook.web_url !== 'https://rotari.example.test') process.exit(71);
 		const urlToClear = notificationForm.elements['webhook-url'];
 		urlToClear.value = '';
 		urlToClear.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
@@ -1847,6 +1862,22 @@ func TestNotificationConfigEditorCanScrollWithinModal(t *testing.T) {
 	} {
 		if !strings.Contains(webStylesCSS, marker) {
 			t.Fatalf("notification config editor scrolling is missing %q", marker)
+		}
+	}
+}
+
+func TestNotificationWebURLLabelWrapsAboveItsInput(t *testing.T) {
+	for _, marker := range []string{
+		".notification-web-base-url-label {",
+		"flex-direction: column;",
+		"align-items: stretch;",
+		"white-space: normal;",
+		".notification-web-base-url-label input[name=\"webhook-web-url\"] {",
+		"width: 100%;",
+		"min-width: 0;",
+	} {
+		if !strings.Contains(webStylesCSS, marker) {
+			t.Fatalf("notification Web URL layout is missing %q", marker)
 		}
 	}
 }
@@ -2934,6 +2965,7 @@ func TestWebNotificationConfigGenerateReadAndSave(t *testing.T) {
 	path := filepath.Join(baseDir, notification.FileName)
 	settings := notification.Defaults()
 	settings.Webhook.URL = "https://example.invalid/secret"
+	settings.Webhook.WebURL = "https://rotari.example.invalid/prefix"
 	data, err := notification.Marshal(settings)
 	if err != nil {
 		t.Fatal(err)
@@ -2965,7 +2997,7 @@ func TestWebNotificationConfigGenerateReadAndSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Settings.Webhook.URL != "https://example.invalid/secret" || !updated.Settings.Browser.JobSuccess {
+	if updated.Settings.Webhook.URL != "https://example.invalid/secret" || updated.Settings.Webhook.WebURL != "https://rotari.example.invalid/prefix" || !updated.Settings.Browser.JobSuccess {
 		t.Fatalf("updated settings = %#v", updated.Settings)
 	}
 

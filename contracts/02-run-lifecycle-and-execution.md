@@ -1233,7 +1233,7 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
 
 ## External integrations
 
-- Notifications are configured only by `notifications.toml`, resolved from the
+- **NOT-1** Notifications are configured only by `notifications.toml`, resolved from the
   first scope that has one: project, then basedir, then the global config
   directory. Scopes are not merged. `ROTARI_WEBHOOK_URL` overrides
   `webhook.url` so the endpoint can stay out of the file. A run resolves its
@@ -1248,8 +1248,10 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   the pending batch immediately. `webhook.fields` selects the reported fields
   from the shared vocabulary ([implementation](../internal/notification/payload.go),
   [tests](../internal/notification/event_test.go)) and `webhook.max_jobs`
-  bounds the listed jobs;
-  `link` is browser-only. `webhook.format` selects the generic rotari JSON
+  bounds the listed jobs. When `webhook.web_url` is set, the selected `link`
+  field opens the matching run and, for job events, focuses that job in the
+  Web UI; service-specific encoders provide a clickable link. `webhook.format`
+  selects the generic rotari JSON
   payload or a supported service-specific payload. Delivery errors are warnings
   and do not change run status; rotari keeps no delivery ledger and does not
   retry.

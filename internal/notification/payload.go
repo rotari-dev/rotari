@@ -2,6 +2,7 @@ package notification
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -25,7 +26,7 @@ type Payload struct {
 	OmittedJobs   int            `json:"omitted_jobs,omitempty"`
 }
 
-func NewPayload(batch Batch, selected []string) Payload {
+func NewPayload(batch Batch, selected []string, webURL string) Payload {
 	payload := Payload{SchemaVersion: batch.SchemaVersion, CreatedAt: batch.CreatedAt, OmittedJobs: batch.OmittedJobs}
 	successes, failures := 0, 0
 	for _, event := range batch.Events {
@@ -44,14 +45,14 @@ func NewPayload(batch Batch, selected []string) Payload {
 	for _, event := range batch.Events {
 		fields := make([]Field, 0, len(selected))
 		for _, name := range selected {
-			fields = append(fields, eventFields(event, name, successes, failures)...)
+			fields = append(fields, eventFields(event, name, successes, failures, webURL)...)
 		}
 		payload.Events = append(payload.Events, PayloadEvent{Event: event.Kind, Fields: fields})
 	}
 	return payload
 }
 
-func eventFields(event Event, name string, successes, failures int) []Field {
+func eventFields(event Event, name string, successes, failures int, webURL string) []Field {
 	add := func(value any, present bool) []Field {
 		if !present {
 			return nil
@@ -62,6 +63,9 @@ func eventFields(event Event, name string, successes, failures int) []Field {
 		return add(event.ExitCode, true)
 	}
 	switch name {
+	case "link":
+		value := eventLink(webURL, event)
+		return add(value, value != "")
 	case "project":
 		return add(event.Project, event.Project != "")
 	case "run_id":
@@ -133,6 +137,24 @@ func eventFields(event Event, name string, successes, failures int) []Field {
 		return diagnosisFields(result.Diagnoses, name)
 	}
 	return nil
+}
+
+func eventLink(webURL string, event Event) string {
+	if webURL == "" || event.Project == "" || event.RunID == "" {
+		return ""
+	}
+	base, err := url.Parse(webURL)
+	if err != nil {
+		return ""
+	}
+	base.Path = strings.TrimRight(base.Path, "/") +
+		"/project/" + event.Project + "/run/" + event.RunID
+	if event.Kind == JobFinished && event.Job != nil && event.Job.ID != "" {
+		query := base.Query()
+		query.Set("job_id", event.Job.ID)
+		base.RawQuery = query.Encode()
+	}
+	return base.String()
 }
 
 func diagnosisFields(diagnoses []model.RuleDiagnosis, name string) []Field {

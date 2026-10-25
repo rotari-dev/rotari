@@ -23,7 +23,8 @@ func TestParseRejectsUnknownSettingsAndFields(t *testing.T) {
 	for _, data := range []string{
 		"[browser]\nunknown = true\n",
 		"[browser]\nfields = [\"unknown\"]\n",
-		"[webhook]\nfields = [\"link\"]\n",
+		"[webhook]\nweb_url = \"javascript:alert(1)\"\n",
+		"[webhook]\nweb_url = \"https://user:pass@example.invalid/rotari\"\n",
 	} {
 		if _, err := Parse([]byte(data)); err == nil {
 			t.Fatalf("Parse(%q) succeeded", data)
@@ -91,12 +92,16 @@ func TestDefaultNotificationFieldsIncludeRunAndAttemptIDs(t *testing.T) {
 		if selected["job_id"] {
 			t.Errorf("%s default fields unexpectedly include job_id: %v", channel, fields)
 		}
+		if channel == "webhook" && !selected["link"] {
+			t.Errorf("%s default fields do not include link: %v", channel, fields)
+		}
 	}
 }
 
 func TestMarshalRoundTripsSettings(t *testing.T) {
 	want := Defaults()
 	want.Webhook.URL = "https://example.invalid/hook?token=secret"
+	want.Webhook.WebURL = "https://rotari.example.invalid/rotari"
 	want.Browser.JobSuccess = true
 	data, err := Marshal(want)
 	if err != nil {
@@ -106,7 +111,7 @@ func TestMarshalRoundTripsSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Webhook.URL != want.Webhook.URL || !got.Browser.JobSuccess {
+	if got.Webhook.URL != want.Webhook.URL || got.Webhook.WebURL != want.Webhook.WebURL || !got.Browser.JobSuccess {
 		t.Fatalf("settings = %#v", got)
 	}
 }

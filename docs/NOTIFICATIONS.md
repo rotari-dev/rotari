@@ -118,6 +118,7 @@ The `[webhook]` section controls outbound notifications:
 [webhook]
 url = "https://example.invalid/hook"
 format = "json"
+web_url = "https://rotari.example.com"
 job_failure = true
 job_success = false
 run_failure = true
@@ -125,6 +126,15 @@ run_success = true
 fields = ["project", "run_id", "run_name", "run_status", "job_name", "attempt_id", "job_status", "exit_code", "success_count", "failure_count", "duration", "diagnosis_name", "diagnosis_suggestion"]
 max_jobs = 20
 ```
+
+Set `web_url` to the base URL where the corresponding project is served by
+`rotari web`. Job notifications include a direct link that opens the run and
+focuses the matching job; run-completion notifications open the run. If the
+project is served under a basedir mount or reverse-proxy path, include that
+prefix in `web_url`. The default `webhook.fields` includes `link`; remove it
+to omit links, or leave `web_url` empty to disable link generation. In the Web
+UI notification settings, **Use current Web URL** fills the field from the
+currently open Rotari Web address, including a basedir mount when present.
 
 A job is reported once after its retries end. Blocked jobs and jobs cancelled
 before they start are failures. Events within ten seconds of the first pending
@@ -143,9 +153,12 @@ Create a Slack app, enable **Incoming Webhooks**, and use its URL:
 [webhook]
 url = "https://hooks.slack.com/services/T.../B.../..."
 format = "slack"
+web_url = "https://rotari.example.com"
 ```
 
-The message uses Slack Block Kit and displays the configured fields.
+The message uses Slack Block Kit and displays the configured fields. When
+`web_url` is set, each event includes an **Open in Rotari** link to its run or
+the exact job row.
 
 ### Microsoft Teams
 
@@ -224,8 +237,10 @@ not apply to an event are omitted, and multiple diagnoses produce repeated
 diagnosis fields. The event type, payload schema version, and creation time are
 always present in generic JSON.
 
-Browser and Webhook notifications share the following vocabulary. Only `link`
-is browser-only and is rejected in `[webhook].fields`.
+Browser and Webhook notifications share the following vocabulary. In browser
+notifications, `link` enables click navigation to a run. In Webhook
+notifications, `link` includes the URL generated from `webhook.web_url` in the
+selected output fields.
 
 | Category | Fields |
 | --- | --- |
@@ -234,7 +249,7 @@ is browser-only and is rejected in `[webhook].fields`.
 | Time | `started_at`, `finished_at`, `duration` |
 | Execution | `executor`, `hosts`, `working_directory`, `command` |
 | Diagnosis | `diagnosis_status`, `diagnosis_name`, `diagnosis_evidence`, `diagnosis_suggestion`, `diagnosis_rules`, `diagnosis_outdated` |
-| Navigation | `link` (browser only) |
+| Navigation | `link` |
 
 `working_directory`, `command`, and `diagnosis_evidence` can contain sensitive
 or lengthy values, so they are disabled by default. Environment variables and

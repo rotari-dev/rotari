@@ -89,6 +89,7 @@ A rule in the pages of this directory gets an ID by starting with
 | `CAN` | "Cancellation" in [02-run-lifecycle-and-execution.md](02-run-lifecycle-and-execution.md#cancellation) |
 | `LOG` | "Job logs" in [02-run-lifecycle-and-execution.md](02-run-lifecycle-and-execution.md#job-logs) |
 | `RUN` | "Run lifecycle" in [02-run-lifecycle-and-execution.md](02-run-lifecycle-and-execution.md#run-lifecycle) |
+| `NOT` | "External integrations" in [02-run-lifecycle-and-execution.md](02-run-lifecycle-and-execution.md#external-integrations) |
 | `CLI` | "CLI presentation" in [03-server-and-command-interfaces.md](03-server-and-command-interfaces.md#cli-presentation) |
 | `MCP` | "MCP tools" in [03-server-and-command-interfaces.md](03-server-and-command-interfaces.md#mcp-tools) |
 | `COORD` | "Shared-state coordination" in [04-coordination-and-safety.md](04-coordination-and-safety.md#shared-state-coordination) |
@@ -212,6 +213,7 @@ the IDs, this table, and those calls disagree.
 | RUN-17 | A run records its interface (`cli`, `mcp`) and only an explicitly given actor label (`--actor`, `ROTARI_ACTOR`), shown by `show`, `lineage`, `runs --json`, MCP, and the Web | conformance | `TestRunRecordsHowItWasStarted` |
 | RUN-18 | `copy --to-project` and Web `to_project` copy into another project, creating it; copied jobs carry no origin and are unfinished, so `run` and `retry` there execute them | conformance | `TestCopyIntoAnotherProject` |
 | RUN-19 | `run --to-project` and `retry --to-project` start a run in another project from a saved run's selected jobs, executing all of them and carrying nothing; neither queue changes | conformance | `TestRetryInAnotherProject` |
+| NOT-1 | Webhook notifications can link to the matching run and exact job in the Web UI when `webhook.web_url` is configured | conformance | `TestWebhookJobNotificationLinksToExactJob` |
 | CLI-1 | `check --json` reports the same project state, run identifier, queue count, lock, and runnable result as the human-readable `check` output | partial | `TestCLIFlagPairCheckObservability`, `TestCheckJSONMatchesText` |
 | CLI-2 | Human-readable `jobs` columns keep their visible start positions aligned across rows; ANSI color sequences do not count toward column width | conformance | `TestJobsTableKeepsVisibleColumnsAligned` |
 | CLI-3 | All command options shared by CLI, environment, and config use the same source precedence | conformance | `TestCLIOptionPrecedence` |
