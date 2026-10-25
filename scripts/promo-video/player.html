@@ -110,7 +110,10 @@ function termHTML(events, t) {
   }
   const typing = events.some(([at]) => at <= t && at > t - 0.15);
   const blink = typing || Math.floor(t * 2) % 2 === 0;
-  return esc(s).replace(/\x01(.*?)\x02/g, '<span class="p">$1</span>') + (blink ? '<span class="c"></span>' : "");
+  // A blinked-off cursor keeps its place: alone on the last line, removing it
+  // would shorten the text and shift a scrolled terminal by a line.
+  return esc(s).replace(/\x01(.*?)\x02/g, '<span class="p">$1</span>') +
+    '<span class="c"' + (blink ? "" : ' style="visibility:hidden"') + "></span>";
 }
 
 function fadeIn(lt, delay = 0, dur = 0.35) {
