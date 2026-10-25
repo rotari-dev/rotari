@@ -154,7 +154,7 @@ func sendWebhookBatch(settings notification.WebhookSettings, batch notification.
 		printErrorf("WARNING: invalid %s URL", envWebhookURL)
 		return
 	}
-	payload := notification.NewPayload(batch, settings.Fields)
+	payload := notification.NewPayload(batch, settings.Fields, settings.WebURL)
 	encoder, ok := webhookEncoders[normalizeWebhookFormat(settings.Format)]
 	if !ok {
 		printErrorf("WARNING: unsupported webhook format %q", settings.Format)

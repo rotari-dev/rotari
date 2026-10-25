@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -51,6 +52,7 @@ type ChannelSettings struct {
 type WebhookSettings struct {
 	ChannelSettings
 	URL    string `json:"url,omitempty"`
+	WebURL string `json:"web_url,omitempty"`
 	Format string `json:"format"`
 }
 
@@ -76,6 +78,7 @@ type rawChannel struct {
 type rawWebhook struct {
 	rawChannel
 	URL    *string `toml:"url"`
+	WebURL *string `toml:"web_url"`
 	Format *string `toml:"format"`
 }
 
@@ -89,7 +92,7 @@ func Defaults() Settings {
 		Webhook: WebhookSettings{
 			ChannelSettings: ChannelSettings{
 				JobFailure: true, RunFailure: true, RunSuccess: true, MaxJobs: 20,
-				Fields: []string{"project", "run_id", "run_name", "run_status", "job_name", "attempt_id", "job_status", "exit_code", "success_count", "failure_count", "duration", "diagnosis_name", "diagnosis_suggestion"},
+				Fields: []string{"project", "run_id", "run_name", "run_status", "job_name", "attempt_id", "job_status", "exit_code", "success_count", "failure_count", "duration", "diagnosis_name", "diagnosis_suggestion", "link"},
 			},
 			Format: "json",
 		},
@@ -114,6 +117,9 @@ func Parse(data []byte) (Settings, error) {
 	applyChannel(&settings.Browser, raw.Browser)
 	if raw.Webhook.URL != nil {
 		settings.Webhook.URL = *raw.Webhook.URL
+	}
+	if raw.Webhook.WebURL != nil {
+		settings.Webhook.WebURL = *raw.Webhook.WebURL
 	}
 	if raw.Webhook.Format != nil {
 		settings.Webhook.Format = *raw.Webhook.Format
@@ -181,14 +187,15 @@ func validate(settings Settings) error {
 	if settings.Webhook.Format != "json" && settings.Webhook.Format != "slack" && settings.Webhook.Format != "teams" && settings.Webhook.Format != "discord" {
 		return fmt.Errorf("invalid webhook format %q", settings.Webhook.Format)
 	}
+	if settings.Webhook.WebURL != "" {
+		parsed, err := url.Parse(settings.Webhook.WebURL)
+		if err != nil || !parsed.IsAbs() || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return fmt.Errorf("webhook web_url must be an absolute HTTP or HTTPS URL without credentials, query, or fragment")
+		}
+	}
 	for name, channel := range map[string]ChannelSettings{"webhook": settings.Webhook.ChannelSettings, "browser": settings.Browser} {
 		if err := validateChannel(name, channel); err != nil {
 			return err
-		}
-	}
-	for _, field := range settings.Webhook.Fields {
-		if field == "link" {
-			return fmt.Errorf("webhook field %q is browser-only", field)
 		}
 	}
 	return nil
@@ -235,6 +242,8 @@ func Marshal(settings Settings) ([]byte, error) {
 	output.WriteString(strconv.Quote(settings.Webhook.URL))
 	output.WriteString("\nformat = ")
 	output.WriteString(strconv.Quote(settings.Webhook.Format))
+	output.WriteString("\nweb_url = ")
+	output.WriteString(strconv.Quote(settings.Webhook.WebURL))
 	output.WriteByte('\n')
 	writeChannel(settings.Webhook.ChannelSettings)
 	output.WriteString("\n[browser]\n")

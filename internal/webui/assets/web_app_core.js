@@ -130,6 +130,12 @@ function appURL(path) {
     ? "/_basedir/" + mountedBasedirID + path
     : path;
 }
+function currentWebBaseURL() {
+  const parts = location.pathname.split("/").filter(Boolean);
+  const mount =
+    parts[0] === "_basedir" ? "/" + parts.slice(0, 2).join("/") : "";
+  return new URL(mount + "/", location.origin).href;
+}
 const nativeFetch = window.fetch.bind(window);
 window.fetch = function (input, options) {
   if (typeof input === "string" && input.startsWith("/")) input = appURL(input);
@@ -1258,7 +1264,29 @@ async function showNotificationConfig() {
     const formatLabel = document.createElement("label");
     formatLabel.className = "notification-webhook-format-label";
     formatLabel.append("Webhook format ", format);
-    webhookExtras.append(formatLabel, urlLabel);
+    const webURL = document.createElement("input");
+    webURL.type = "url";
+    webURL.name = "webhook-web-url";
+    webURL.value = settings.webhook.web_url || "";
+    webURL.placeholder = "https://rotari.example.com";
+    webURL.title =
+      "Base URL for links to matching runs and jobs in the Rotari Web UI";
+    webURL.oninput = () => updateNotificationConfigDirty(form);
+    const webURLLabel = document.createElement("label");
+    webURLLabel.className =
+      "notification-webhook-url-label notification-web-base-url-label";
+    webURLLabel.append("Rotari Web URL ", webURL);
+    const webURLControl = document.createElement("div");
+    webURLControl.className = "notification-web-base-url-control";
+    const useCurrentWebURL = document.createElement("button");
+    useCurrentWebURL.type = "button";
+    useCurrentWebURL.textContent = "Use current Web URL";
+    useCurrentWebURL.onclick = () => {
+      webURL.value = currentWebBaseURL();
+      webURL.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    webURLControl.append(webURLLabel, useCurrentWebURL);
+    webhookExtras.append(formatLabel, urlLabel, webURLControl);
     const webhook = notificationChannelEditor(
       "webhook",
       settings.webhook,
@@ -1278,6 +1306,7 @@ async function showNotificationConfig() {
       save.disabled = true;
       const webhookSettings = readNotificationChannel(form, "webhook");
       webhookSettings.format = format.value;
+      webhookSettings.web_url = webURL.value;
       const webhookURLChanged = url.value !== savedWebhookURLMessage;
       const saveResponse = await fetch("/api/save-notification-config", {
         method: "POST",

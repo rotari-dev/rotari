@@ -713,6 +713,23 @@ section {
   gap: 8px;
   white-space: nowrap;
 }
+.notification-web-base-url-control {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.notification-web-base-url-label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  white-space: normal;
+}
+.notification-web-base-url-label input[name="webhook-web-url"] {
+  width: 100%;
+  min-width: 0;
+}
 .config-generator p {
   margin: 0 0 16px;
 }
