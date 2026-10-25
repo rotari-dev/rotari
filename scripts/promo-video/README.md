@@ -27,7 +27,7 @@ version.
 | 06 | Arrays, matrices, dependencies | `docs/RUNNING.md` | `06_grid.sh` | done, 44 s |
 | 07 | The Web UI across projects, Activity | `docs/WEB.md` | `07_webui.sh` | done, 34 s |
 | 08 | History and comparison (lineage) | `docs/INSPECT.md` | `08_lineage.sh` | done, 39 s |
-| 09 | AI agents (CLI guide, MCP) | `docs/MCP.md` | `09_agents.sh` | done, 44 s |
+| 09 | Coding agents: what yours did, and why | `rotari guide`, `docs/MCP.md`, `docs/INSPECT.md` | `09_agents.sh` | done, 39 s |
 
 `docs/OUTPUTS.md` was split out of `docs/INSPECT.md` so that video 03 has one
 page to accompany.
@@ -114,7 +114,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 | `renderer.py` | Shared rendering: options, narration, player page, frames into ffmpeg |
 | `common.py` | Shared capture helpers: commands, terminal sessions (`Term`), Web UI frames |
 | `narration.py` | Kokoro TTS clips, scene fitting, the audio track, and subtitles |
-| `fixture/` | Fake jobs: `train.py`, per-project `train.sh`, `sweep.sh`, `prep.sh`, `train-gpu.sh`, `eval.sh`, and per-episode `grid/`, `webui/`, `lineage/` |
+| `fixture/` | Fake jobs: `train.py`, per-project `train.sh`, `sweep.sh`, `prep.sh`, `train-gpu.sh`, `eval.sh`, and per-episode `grid/`, `webui/`, `lineage/`, `tune/` (with the agent's session) |
 | `fullpage.py` | Framing aid: full-page screenshots of a captured state, run in a namespace |
 | `make-episode.sh [--display] TOOLS WORK OUT.mp4 CAPTURE.py RENDER.py` | Build rotari, capture, and render one feature video |
 | `capture-web.sh [--display]` | Enter the namespaces and a namespace-owned `/`, with Xvfb, D-Bus, and dunst when asked, and run a capture script |
@@ -124,7 +124,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 | `capture_grid.py`, `render_grid.py` | Video 06 (a headless browser is enough) |
 | `capture_webui.py`, `render_webui.py` | Video 07 (a headless browser is enough) |
 | `capture_lineage.py`, `render_lineage.py` | Video 08 (a headless browser is enough) |
-| `capture_agents.py`, `render_agents.py` | Video 09 (a headless browser is enough) |
+| `capture_agents.py`, `render_agents.py` | Video 09 (a headless browser is enough); it replays `fixture/tune/session.sh` |
 | `capture_executors.py`, `render_executors.py` | Video 05 (needs the Slurm image) |
 | `assets/slack/` | Slack screenshots of one capture's webhook message, for video 02 |
 | `newroot.sh`, `dunstrc` | A namespace-owned `/` for `--allow-exec`; the desktop notification style |
@@ -406,16 +406,29 @@ with its notes.
 
 ### Agents (09)
 
-No agent runs: the video shows what one reads and runs. `rotari guide | head
--n 30` (a wide scene at 24 px; the guide is written 80 columns wide), then,
-on the lineage episode's sweep, `run --async --note`, `wait
---until-failure` (from where it returns), `lineage RUN_ID` (its `show:` and
-`retry:` lines left out), a fix, `retry --note`, `cat results.md` (made by
-the capture from the run's logs) and `rotari note RUN_ID "$(cat
-results.md)"`. The run report, opened with Select all and Report and
-captured at 680×487, shows that note's table; the terminal ends on
-`.vscode/mcp.json` for `rotari mcp`. The captions say what the guide has an
-agent do, not that an agent did it.
+The video takes the side of the person who asked an agent to do the work:
+what did it run, why, and what did it find? Its material is a real session.
+On 2026-10-25 Claude Code (the agent maintaining these scripts) was asked to
+tune the sweep in `fixture/tune/` ("make all six seeds pass and find the
+batch size and learning rate with the lowest eval loss; use rotari and read
+`rotari guide` first"). It read the guide and made four runs, each with
+`--note` on why and `rotari note` afterwards on what it showed: the
+baseline (two OOMs, one NaN), batch 64 alone (fixes the OOMs), lr 3e-4
+(fixes the NaN, lowers the loss), and lr 1e-4 (worse), ending with a
+Markdown table of every seed under every setting. `fixture/tune/session.sh`
+keeps the commands that changed state, in order and with the notes as
+written; the run IDs it read from output are looked up instead, and its
+read-only commands are left out. The capture replays it with
+`ROTARI_ACTOR=claude-code`, so the run page says "Started by: cli ·
+claude-code".
+
+The video shows `rotari lineage -p sweep` (a wide scene at 15 px, since
+its rows with the NOTE column are 192 columns), the first two runs compared
+(20 px, where the notes show the agent's reasoning), the last run's page
+and report (680×487 CSS px), and `cat AGENTS.md`, the one line that asks an
+agent to use rotari this way. An earlier version showed `rotari guide` and
+the commands an agent would run; it read as a list of commands any agent
+could already run (the user's feedback, 2026-10-25).
 
 ## Next steps
 

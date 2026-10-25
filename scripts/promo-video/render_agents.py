@@ -1,13 +1,14 @@
-"""Render the agents episode (landscape): the CLI guide, notes, and MCP.
+"""Render the agents episode (landscape): what your agent did, and why.
 
     render_agents.py CAPTURE_DIR REPO_DIR OUT.mp4
                      [--narration KOKORO_DIR [--voice VOICE] [--speed X]]
                      [--preview SECONDS...]
 
 Builds the scene timeline from capture_agents.py's material and renders it
-with renderer.py. It accompanies docs/MCP.md and `rotari guide`. No agent
-appears: the captions say what an agent reads and which commands the guide
-has it use, which ran for real.
+with renderer.py: the runs Claude Code made while tuning a sweep, as the
+person who asked it reads them. It accompanies `rotari guide`, docs/MCP.md,
+and docs/INSPECT.md (Notes on runs). The lineage tables are wider than the
+frame column, so their scenes are wide terminals.
 """
 
 import json
@@ -25,91 +26,70 @@ def timeline():
     }
     web = json.loads(Path(f"{CAP}/web.json").read_text())
 
-    def typed(name, command):
-        """Seconds into terminal name when the prompt for command appears."""
-        prompt = "\x01$ \x02"
-        text, prompt_at = "", None
-        for at, piece in terms[name]["events"]:
-            text = text[:-1] if piece == "\b" else text + piece
-            line = text.split("\n")[-1]
-            if line == prompt:
-                prompt_at = at
-            elif line.startswith(prompt + command):
-                return prompt_at
-        raise SystemExit(f"{name}: never typed {command!r}")
-
-    def term(name, title, captions, speed=1.0, extra=0.8, **more):
+    def term(name, captions, speed=1.0, extra=1.6, **more):
         t = terms[name]
         return {
             "kind": "term",
-            "title": title,
+            "title": "~/sweep",
             "events": t["events"],
             "speed": speed,
             "dur": t["duration"] / speed + extra,
-            "captions": [[at / speed, text] for at, text in captions],
+            "captions": captions,
             **more,
         }
 
     return [
         {
             "kind": "title",
-            "dur": 3.0,
-            "lines": [["Your coding agent", "", 0], ["runs experiments too.", "soft", 0.35]],
-            "say": "Your coding agent runs experiments too.",
+            "dur": 3.4,
+            "lines": [["Your agent ran", "", 0], ["four experiments.", "", 0.3], ["What did it do?", "soft", 0.8]],
+            "say": "You asked your coding agent to tune a sweep. It ran four experiments. "
+            "What did it do, and why?",
         },
         term(
-            "guide",
-            "~/sweep",
-            [[0, "One command<br><em>teaches it the rules.</em>"]],
-            extra=2.0,
-            # The guide is written 80 columns wide.
+            "history",
+            [[0, "Every run it made,<br><em>and why it made it.</em>"]],
             wide=True,
-            fontSize=24,
-            say="One command gives it the rules: start runs in the background, "
-            "wait for them, leave notes, and read summaries before logs.",
+            # One history row per line: with its NOTE column it is 192 columns.
+            fontSize=15,
+            say="rotari keeps every run it made, with the note it left on why: "
+            "the baseline, a smaller batch, a lower learning rate, "
+            "and a check that lower still isn't better.",
         ),
         term(
-            "run",
-            "~/sweep",
-            [
-                [0, "Run with a note,<br><em>in the background.</em>"],
-                [typed("run", "rotari wait"), "Back at the<br><em>first failure.</em>"],
-                [typed("run", "rotari lineage"), "A summary,<br><em>not a wall of logs.</em>"],
-            ],
-            speed=1.3,
-            say="Run in the background with a note, and come back at the first failure, "
-            "with its cause and a fix. The summary stays short, however many jobs fail.",
-        ),
-        term(
-            "fix",
-            "~/sweep",
-            [
-                [0, "Fix, retry,<br><em>with a note.</em>"],
-                [typed("fix", "cat results.md"), "Leave the results<br><em>for the next reader.</em>"],
-            ],
-            speed=1.3,
-            say="Fix it, retry with a note, and leave the results as a table "
-            "for whoever reads the run next, person or agent.",
+            "why",
+            [[0, "Its reasoning,<br><em>from one run to the next.</em>"]],
+            wide=True,
+            # Larger than a wide scene's default: the notes wrap as prose.
+            fontSize=20,
+            extra=2.4,
+            say="Compare two runs to follow its reasoning: what failed, what it concluded, "
+            "what it tried next, and what that fixed.",
         ),
         {
             "kind": "web",
-            "frames": web["report"],
+            "frames": web["run"],
             "dur": 3.6,
-            "captions": [[0, "In the run report<br><em>for you, too.</em>"]],
-            "say": "You'll find it in the run report, too.",
+            "captions": [[0, "Started by the agent,<br><em>noted by the agent.</em>"]],
+            "say": "Each run is marked as started by the agent,",
+        },
+        {
+            "kind": "web",
+            "frames": web["report"],
+            "dur": 4.0,
+            "captions": [[0, "…down to<br><em>what it found.</em>"]],
+            "say": "and the last one carries what it found, as a table.",
         },
         term(
-            "mcp",
-            "~/sweep",
-            [[0, "No shell?<br><em>An MCP server.</em>"]],
-            extra=1.4,
-            say="And for agents without a shell, rotari has an MCP server.",
+            "agents",
+            [[0, "All it took:<br><em>one line in AGENTS.md.</em>"]],
+            say="All it took was one line in your agent's instructions.",
         ),
         {
             "kind": "logo",
             "dur": 4.0,
-            "tagline": "For coding agents: rotari guide",
-            "url": "rotari-dev.github.io/rotari/docs/MCP/",
+            "tagline": "Your agent's experiments, on the record",
+            "url": "github.com/rotari-dev/rotari",
             "say": "Rotari.",
         },
     ]

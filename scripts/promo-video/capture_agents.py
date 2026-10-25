@@ -1,13 +1,16 @@
-"""Capture material for the agents episode: the CLI guide, notes, and MCP.
+"""Capture material for the agents episode: what your agent did, and why.
 
 Run through `capture-web.sh WORK ROTARI SAMPLES capture_agents.py` (no
-display needed). No agent runs here: the terminal shows what a coding agent
-reads (`rotari guide`) and the commands the guide has it use, run for real
-on the lineage episode's sweep in a git repository: `run --async --note`,
-`wait --until-failure`, `lineage RUN_ID`, then a fix, `retry --note`, and a
-concluding note with a Markdown table of the results. A headless Chrome
-(680x487 CSS px at scale 2) records the run's report with that note, and the
-terminal ends on the VS Code entry that starts `rotari mcp`.
+display needed). fixture/tune/session.sh holds the commands Claude Code ran
+on 2026-10-25 when asked to tune a sweep with rotari after reading `rotari
+guide`: four runs, each started with a note on why and noted afterwards with
+what it showed, ending with a table of results. The capture replays them in
+~/sweep with ROTARI_ACTOR=claude-code, off camera, then shows them as the
+person who asked would read them: `rotari lineage` (history with notes),
+a comparison of the first two runs (the agent's reasoning between them), the
+last run's page and report (Started by, notes, the results table), and the
+one line in AGENTS.md that set it up. A headless Chrome draws the Web UI at
+680x487 CSS px (scale 2) so the notes read in the frame.
 
     capture_agents.py FIXTURE OUT ROTARI SAMPLES
 
@@ -17,14 +20,13 @@ OUT/web/<scene>/*.png.
 
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-from common import Session, only, section
+from common import Session, section
 from playwright.sync_api import sync_playwright
 
 FIXTURE, OUT, ROTARI, SAMPLES = sys.argv[1:5]
@@ -32,7 +34,7 @@ HOME = "/home/me"
 EXP = f"{HOME}/sweep"
 PORT = 18807
 BASE = f"http://127.0.0.1:{PORT}"
-VIEW = {"width": 900, "height": 645}
+VIEW = {"width": 680, "height": 487}
 
 ENV = {
     "PATH": f"{HOME}/.local/bin:/usr/bin:/bin",
@@ -51,90 +53,44 @@ ENV = {
     "GIT_COMMITTER_EMAIL": "me@example.com",
 }
 S = Session(ENV, HOME, OUT, workdir=EXP)
-
-# Leave out the long show: and retry: command lines under each failure cause.
-def BRIEF(lines):
-    return [ln for ln in lines if not ln.lstrip().startswith(("show:", "retry:"))]
-
-
-MCP_JSON = """{
-  "servers": {
-    "rotari": {
-      "type": "stdio",
-      "command": "rotari",
-      "args": ["mcp"]
-    }
-  }
-}
-"""
+# The history table; the project header above it is left out.
+LINEAGE = section("Runs (oldest first)")
 
 
 def setup():
     os.makedirs(f"{HOME}/.local/bin", exist_ok=True)
     shutil.copy(ROTARI, f"{HOME}/.local/bin/rotari")
-    os.makedirs(f"{EXP}/.vscode", exist_ok=True)
-    for f in ("train.sh", "config.sh"):
-        shutil.copy(f"{FIXTURE}/lineage/{f}", EXP)
-    Path(f"{EXP}/.vscode/mcp.json").write_text(MCP_JSON)
+    os.makedirs(EXP, exist_ok=True)
+    for f in ("train.sh", "config.sh", "AGENTS.md"):
+        shutil.copy(f"{FIXTURE}/tune/{f}", EXP)
     shutil.rmtree(OUT, ignore_errors=True)
     os.makedirs(f"{OUT}/web")
-    S.sh("git init -q && git add . && git commit -qm 'sweep: batch 128, lr 1e-3'")
-
-
-def results_table(run_id):
-    """A Markdown table of each task's final loss, from the run's logs."""
-    logs = S.sh(f"rotari show -r {run_id} --logs --tail 1 --no-pager").stdout
-    rows = sorted(set(re.findall(r"task (\d+): eval_loss=([0-9.]+)", logs)), key=lambda r: int(r[0]))
-    return "| task | eval loss |\n| --- | --- |\n" + "".join(
-        f"| train[{task}] | {loss} |\n" for task, loss in rows
+    # The agent's session, as it ran it.
+    r = subprocess.run(
+        ["sh", f"{FIXTURE}/tune/session.sh"],
+        cwd=EXP,
+        env={**ENV, "ROTARI_ACTOR": "claude-code"},
+        capture_output=True,
+        text=True,
     )
+    Path(f"{OUT}/session.log").write_text(r.stdout + r.stderr)
 
 
 def main():
     setup()
     terms, frames, logs = [], {}, {"view": VIEW}
+    runs = S.runs_of("sweep")
+    if len(runs) != 4:
+        raise SystemExit(f"the agent's session made {len(runs)} runs, not 4")
 
-    t = S.term("guide")
-    t.run("rotari guide | head -n 30", line_s=0.03)
+    t = S.term("history")
+    t.run("rotari lineage -p sweep", keep=LINEAGE, line_s=0.06)
     terms.append(t)
-
-    t = S.term("run")
-    t.run("rotari add -p sweep --job-name train --array 1-6 ./train.sh", keep=only("added"))
-    t.run(
-        "rotari run -p sweep --async --note 'baseline: batch 128'",
-        keep=only("=== Run started", "Project:"),
-    )
-    # From where wait returns: the run's failures so far, grouped by cause.
-    logs["wait"] = t.run(
-        "rotari wait sweep --until-failure",
-        keep=lambda lines: BRIEF(section("Run ", ("To keep waiting",))(lines)),
-        line_s=0.06,
-    )
-    first = S.runs_of("sweep")[-1]
-    S.wait_idle("sweep")
-    logs["lineage"] = t.run(
-        f"rotari lineage {first}",
-        keep=lambda lines: BRIEF(section("Summary", ("Origins",))(lines)),
-        cps=60,
-        line_s=0.05,
-    )
+    t = S.term("why")
+    t.run(f"rotari lineage -p sweep {runs[0]} {runs[1]}", cps=60, line_s=0.06)
     terms.append(t)
-
-    t = S.term("fix")
-    t.run("sed -i 's/BATCH=128/BATCH=64/' config.sh && git commit -qam 'batch 64'")
-    t.run(
-        "rotari retry -p sweep --note 'batch 64 to fit in GPU memory'",
-        keep=only("Submitted", "Excluded", "Summary", "Carried"),
-        line_s=0.08,
-    )
-    second = S.runs_of("sweep")[-1]
-    Path(f"{EXP}/results.md").write_text(results_table(second))
-    t.run("cat results.md", line_s=0.05)
-    t.run(f'rotari note {second} "$(cat results.md)"', cps=60)
-    terms.append(t)
-
-    t = S.term("mcp")
-    t.run("cat .vscode/mcp.json", line_s=0.04)
+    t = S.term("agents")
+    t.run("cat AGENTS.md")
     terms.append(t)
 
     web = subprocess.Popen(
@@ -148,28 +104,21 @@ def main():
     try:
         with sync_playwright() as p:
             b = p.chromium.launch(args=["--no-sandbox"])
-            # The report is drawn in a smaller window with the frame's shape,
-            # so its notes table comes out larger.
-            page = b.new_page(
-                viewport={"width": 680, "height": 487},
-                device_scale_factor=2,
-                color_scheme="dark",
-            )
-            page.goto(f"{BASE}/project/sweep/run/{second}")
+            page = b.new_page(viewport=VIEW, device_scale_factor=2, color_scheme="dark")
+            page.goto(f"{BASE}/project/sweep/run/{runs[-1]}")
             page.wait_for_selector("table.runs")
             page.wait_for_timeout(1200)
-            # The run report covers the selected jobs.
+            S.record(page, frames, "run", 0.5, fps=4)
+            # The run report covers the selected jobs; its notes come first.
             page.get_by_role("button", name="Select all").first.click()
             page.wait_for_timeout(300)
             page.get_by_role("button", name="Report").first.click()
             page.wait_for_timeout(1500)
-            # The notes, with the results table, at the top of the report.
             page.locator("#output-modal h2", has_text="Notes").first.evaluate(
                 "e => e.scrollIntoView({block: 'start'})"
             )
             page.wait_for_timeout(500)
             S.record(page, frames, "report", 0.5, fps=4)
-            page.screenshot(path=f"{OUT}/report_full.png", full_page=True)
             b.close()
     finally:
         web.terminate()

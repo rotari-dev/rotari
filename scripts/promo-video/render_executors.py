@@ -90,7 +90,7 @@ def timeline():
         {
             "kind": "logo",
             "dur": 4.0,
-            "tagline": "Executors: local, Slurm, PBS, LSF, SGE",
+            "tagline": "Executors: local, SSH, Slurm, PBS, LSF, SGE",
             "url": "rotari-dev.github.io/rotari/docs/EXECUTORS/",
             "say": "Rotari.",
         },
