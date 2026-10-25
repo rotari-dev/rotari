@@ -4,10 +4,11 @@
 #   scripts/promo-video/01_overview.sh [RENDER_OPTIONS...]
 #
 # One job needs no rotari; research is many projects in many tabs, and with
-# rotari they are on one page; then failures grouped by cause and a retry of
-# only them (from 04's capture), and an end card naming the other features.
-# It reuses 04's capture in PROMO_WORK, so make 04 first; this script
-# captures only 01's own material, then renders. RENDER_OPTIONS go to
+# rotari they are on one page, with the broken job's log a click away; then
+# past runs on the calendar and in search (07's capture), outputs previewed
+# in the browser (03's), and an end card naming the other features. It
+# reuses 03's and 07's captures in PROMO_WORK, so make those first; this
+# script captures only 01's own material, then renders. RENDER_OPTIONS go to
 # render_tour.py. PROMO_TOOLS and PROMO_WORK as for 01_short.sh.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)

@@ -6,10 +6,12 @@
 
 From 01's own capture: one job needs no rotari, but research is many
 projects in many terminal tabs where something breaks, and with rotari they
-all show on one page. Then one payoff from 04's capture: the failures grouped
-by cause, and a retry that reruns only them. The end card names the other
-features without narration; each has its own video. WORK_DIR is PROMO_WORK,
-holding the captures as WORK_DIR/NN_name/capture, so 01's and 04's are made
+all show on one page, with the broken job's log a click away. Then the rest
+of what a person does every day, in one place: past runs on Activity's
+calendar and in History search (07's capture) and the jobs' outputs
+previewed in the browser (03's). The end card names the other features
+without narration; each has its own video. WORK_DIR is PROMO_WORK, holding
+the captures as WORK_DIR/NN_name/capture, so 01's, 03's, and 07's are made
 first. The player page is written to WORK_DIR/tour; it reaches the frames by
 absolute file URL.
 """
@@ -22,7 +24,7 @@ import renderer
 
 ARGS = renderer.options()
 WORK = os.path.abspath(ARGS.capture_dir)
-EPISODES = {"one": "01_overview", "recover": "04_recovering"}
+EPISODES = {"one": "01_overview", "outputs": "03_outputs", "webui": "07_webui"}
 
 
 class Capture:
@@ -71,20 +73,6 @@ def timeline():
             **more,
         }
 
-    def page(cap, scene, dur, captions, top, **more):
-        """A full-page shot from cap, shown from page position top (CSS px)."""
-        return web(
-            cap,
-            scene,
-            dur,
-            captions,
-            pan=[[0, top]],
-            panCss=True,
-            cssWidth=c[cap].logs.get("view", {"width": 1100})["width"],
-            **more,
-        )
-
-    recover = c["recover"].logs
     one = c["one"].terms
 
     return [
@@ -146,30 +134,51 @@ def timeline():
             say="and every project shows up on one page. "
             "You see what failed at a glance.",
         ),
-        # Act 3, one payoff: something broke, so rerun only that.
-        page(
-            "recover",
-            "failed_run",
+        # Then what you do every day, now in one place: logs, past runs, outputs.
+        web(
+            "one",
+            "vision_log",
             4.0,
-            [[0, "Failures,<br><em>grouped by cause.</em>"]],
-            recover["offsets_failed_run"]["cards"] - 16,
-            say="When something fails, rotari groups the failures by cause, "
-            "with a fix for each.",
+            [[0, "Its log,<br><em>one click away.</em>"]],
+            say="Open its log right there, whichever project it belongs to.",
         ),
-        term(
-            "recover",
-            "retry_run",
-            [[0, "Rerun only<br><em>what failed.</em>"]],
-            title="~/llm-sweep",
-            extra=0.8,
-            say="Fix it, and rerun only what failed. Everything that succeeded stays as it is.",
+        web(
+            "webui",
+            "activity",
+            3.4,
+            [[0, "Every run,<br><em>by day.</em>"]],
+            say="Find any run again, by day on a calendar,",
+        ),
+        web(
+            "webui",
+            "search_results",
+            3.6,
+            [[0, "Search your<br><em>whole history.</em>"]],
+            say="or by searching your whole history.",
+        ),
+        web(
+            "outputs",
+            "loss",
+            3.2,
+            [[0, "See what<br><em>your jobs wrote.</em>"]],
+            say="And see what your jobs wrote: plots,",
+        ),
+        web(
+            "outputs",
+            "pane",
+            4.6,
+            [[0, "Plots, audio, tables,<br><em>in the browser.</em>"]],
+            # The frames start as playback starts.
+            sfx=[0.0, f"{c['outputs'].dir}/sample.wav"],
+            say="audio, and tables, right in the browser.",
+            sayAt=2.4,
         ),
         {
             "kind": "logo",
             "dur": 6.0,
             "tagline": "Spend your time on research,<br>not on babysitting jobs.",
             "url": "github.com/rotari-dev/rotari",
-            "also": "Also: Slurm · notifications · outputs · the terminal · coding agents",
+            "also": "Also: sweeps · Slurm · notifications · retries · the terminal · coding agents",
             "say": "Rotari. Spend your time on research, not on babysitting jobs.",
         },
     ]
