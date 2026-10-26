@@ -2,7 +2,8 @@
 """Synchronize the Getting started guide into the GitHub README.
 
 GitHub strips iframes, so a YouTube player the guide embeds for the docs site
-becomes the video's thumbnail, linked to the video, in the README.
+becomes the video's thumbnail in the README, linked to the docs site's Videos
+page, where every video plays in place.
 """
 
 from __future__ import annotations
@@ -18,9 +19,9 @@ README_LINK_REPLACEMENT = r"](docs/\1"
 YOUTUBE_EMBED = re.compile(
     r'<iframe src="https://www\.youtube-nocookie\.com/embed/([\w-]+)" title="([^"]*)"[^>]*></iframe>'
 )
+VIDEOS_PAGE = "https://rotari-dev.github.io/rotari/docs/VIDEOS/"
 YOUTUBE_THUMBNAIL = (
-    r"[![\2](https://img.youtube.com/vi/\1/maxresdefault.jpg)]"
-    r"(https://www.youtube.com/watch?v=\1)"
+    rf"[![\2](https://img.youtube.com/vi/\1/maxresdefault.jpg)]({VIDEOS_PAGE})"
 )
 
 
