@@ -1,6 +1,6 @@
 # Recovering failed runs
 
-Video: [See why runs failed, and rerun only what failed](https://www.youtube.com/watch?v=l0IVMpNbphs) (47 s).
+<iframe src="https://www.youtube-nocookie.com/embed/l0IVMpNbphs" title="See why runs failed, and rerun only what failed" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
 When a run ends with failed or unfinished jobs, start a new run that executes
 only those jobs again. Successful jobs are not executed again; their results

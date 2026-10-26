@@ -1,6 +1,6 @@
 # Notifications
 
-Video: [Know the moment a run ends](https://www.youtube.com/watch?v=LCco7Tl-z3g) (34 s).
+<iframe src="https://www.youtube-nocookie.com/embed/LCco7Tl-z3g" title="Know the moment a run ends" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
 Rotari supports local in-page and browser desktop notifications and outbound Webhook
 notifications. Both channels are configured in `notifications.toml` and use
