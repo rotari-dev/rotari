@@ -1,5 +1,7 @@
 # Inspecting runs and jobs
 
+Video: [Inspect your runs from the terminal](https://www.youtube.com/watch?v=7_QMY5S7Vp0) (44 s).
+
 Checking status and logs, run readiness, and execution history.
 
 ## Inspect
@@ -424,6 +426,8 @@ cause as `show` does, and reports their source-run origins, including `new`
 for jobs without an origin.
 
 ### Notes on runs
+
+Video: [What did your AI coding agent run, and why?](https://www.youtube.com/watch?v=spA3-LQAJXk) (39 s), with an agent's notes on its runs.
 
 A note says why a run was made or what its results showed, for whoever reads
 the runs later, person or agent. Give the reason when the run starts, and

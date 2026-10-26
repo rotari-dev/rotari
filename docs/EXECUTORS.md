@@ -1,5 +1,7 @@
 # Executors and schedulers
 
+Video: [One pipeline, here and on Slurm](https://www.youtube.com/watch?v=yR6Yfw9IaSg) (37 s).
+
 Running jobs locally, over SSH, or on Slurm, PBS, LSF, or Sun Grid Engine.
 
 ## Choosing an executor

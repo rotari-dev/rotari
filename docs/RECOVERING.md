@@ -1,5 +1,7 @@
 # Recovering failed runs
 
+Video: [See why runs failed, and rerun only what failed](https://www.youtube.com/watch?v=l0IVMpNbphs) (47 s).
+
 When a run ends with failed or unfinished jobs, start a new run that executes
 only those jobs again. Successful jobs are not executed again; their results
 and output carry forward to the new run. If you add jobs with a script and

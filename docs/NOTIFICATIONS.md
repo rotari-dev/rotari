@@ -1,5 +1,7 @@
 # Notifications
 
+Video: [Know the moment a run ends](https://www.youtube.com/watch?v=LCco7Tl-z3g) (34 s).
+
 Rotari supports local in-page and browser desktop notifications and outbound Webhook
 notifications. Both channels are configured in `notifications.toml` and use
 the same event and field vocabulary, while keeping independent settings.
