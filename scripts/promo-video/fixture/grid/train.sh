@@ -9,4 +9,4 @@ case "$BS" in 16) base=$((base + 3)) ;; esac
 sleep "$((seed + 1)).$((BS / 4))"
 loss="0.$((base + seed))"
 echo "final loss=$loss"
-echo "$loss lr=$LR bs=$BS seed=$seed" > "results/lr$LR-bs$BS-seed$seed.txt"
+echo "$loss lr=$LR bs=$BS seed=$seed" >"results/lr$LR-bs$BS-seed$seed.txt"

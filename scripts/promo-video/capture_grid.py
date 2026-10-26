@@ -120,7 +120,9 @@ def main():
                 cps=40,
                 keep=only("added"),
             )
-            t.run("rotari run -p grid --async", keep=only("=== Run started", "Project:"))
+            t.run(
+                "rotari run -p grid --async", keep=only("=== Run started", "Project:")
+            )
             terms.append(t)
             rid = S.runs_of("grid")[-1]
             page.goto(f"{BASE}/project/grid/run/{rid}")
@@ -146,7 +148,9 @@ def main():
             panel.locator(".matrix-toggle").click()
             close.wait_for_timeout(800)
             # Below the sticky header bar.
-            panel.evaluate("e => window.scrollTo(0, e.getBoundingClientRect().top + scrollY - 70)")
+            panel.evaluate(
+                "e => window.scrollTo(0, e.getBoundingClientRect().top + scrollY - 70)"
+            )
             close.wait_for_timeout(300)
             S.record(close, frames, "matrix", 0.5, fps=4)
             b.close()
@@ -157,7 +161,9 @@ def main():
     t = S.term("report")
     t.run(
         "rotari show -p grid --job-name report --tail 4",
-        keep=lambda lines: lines[lines.index(next(ln for ln in lines if ln.startswith("report:"))):],
+        keep=lambda lines: lines[
+            lines.index(next(ln for ln in lines if ln.startswith("report:"))) :
+        ],
     )
     terms.append(t)
     logs["show"] = S.sh("rotari show -p grid").stdout

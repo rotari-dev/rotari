@@ -55,9 +55,13 @@ def timeline():
             "byhand",
             "~/grid",
             [
-                [0, "2 learning rates × 2 batch sizes<br><em>× 3 seeds, by hand.</em>"],
+                # The caption is shown on screen: a multiplication sign, not the letter x.
+                [0, "2 learning rates × 2 batch sizes<br><em>× 3 seeds, by hand.</em>"],  # noqa: RUF001
                 [typed("byhand", "ls results | wc -l"), "Done yet?"],
-                [typed("byhand", "./report.sh"), "Then remember<br><em>the report.</em>"],
+                [
+                    typed("byhand", "./report.sh"),
+                    "Then remember<br><em>the report.</em>",
+                ],
             ],
             speed=1.3,
             say="Two learning rates, two batch sizes, three seeds: twelve runs, "

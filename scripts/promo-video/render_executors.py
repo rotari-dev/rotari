@@ -66,7 +66,10 @@ def timeline():
             "~/pipeline",
             [
                 [0, "With rotari,<br><em>add each step the same way.</em>"],
-                [typed("pipeline", "rotari run -p pipeline --async"), "One command<br><em>runs them all.</em>"],
+                [
+                    typed("pipeline", "rotari run -p pipeline --async"),
+                    "One command<br><em>runs them all.</em>",
+                ],
             ],
             speed=1.3,
             say="With rotari, each step is added the same way; only the executor changes. "

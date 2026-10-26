@@ -22,9 +22,14 @@ from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageStat
 
 
 def slack_options(parser):
-    parser.add_argument("--slack", required=True, metavar="DIR", help="Slack screenshots")
     parser.add_argument(
-        "--slack-font", required=True, metavar="TTF", help="Lato Regular, for the run ID"
+        "--slack", required=True, metavar="DIR", help="Slack screenshots"
+    )
+    parser.add_argument(
+        "--slack-font",
+        required=True,
+        metavar="TTF",
+        help="Lato Regular, for the run ID",
     )
 
 
@@ -50,7 +55,7 @@ def set_run_id(path):
         raise SystemExit(f"{CAP}/webhook: no recorded webhook payload")
     blocks = json.loads(payload[-1].read_text())["blocks"]
     text = "\n".join(b["text"]["text"] for b in blocks if "text" in b)
-    found = re.search(r"^\*run id:\* (\S+)$", text, re.M)
+    found = re.search(r"^\*run id:\* (\S+)$", text, re.MULTILINE)
     if not found:
         raise SystemExit(f"{payload[-1]}: no run id")
     image = Image.open(path).convert("RGB")
