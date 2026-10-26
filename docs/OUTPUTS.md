@@ -1,5 +1,7 @@
 # Outputs and artifacts
 
+Video: [See what your runs wrote](https://www.youtube.com/watch?v=-6ZoQojlcrU) (53 s).
+
 A run's outputs are the files its jobs write: checkpoints, plots, audio,
 tables, logs for experiment trackers. Rotari records where each job's outputs
 are, so the Web UI can list them with the job, preview them, open the

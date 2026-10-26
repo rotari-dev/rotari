@@ -1,5 +1,7 @@
 # Web UI
 
+Video: [Every project and past run in one Web UI](https://www.youtube.com/watch?v=UjoVz2AfFSw) (33 s).
+
 `rotari web` serves a status UI for your runs: job state, logs, history across
 projects, artifacts, and config. It is a separate process from `rotari run`.
 Closing or stopping it never affects runs; it only stops the commands it

@@ -128,6 +128,8 @@ and job cancellation](FAQ.md#client-control-and-job-cancellation).
 
 ## Array and matrix jobs
 
+Video: [A 12-run grid in three lines](https://www.youtube.com/watch?v=i3qGGA4vKOY) (44 s), with arrays, matrices, and dependencies.
+
 Add an array with a numeric range or a comma-separated task list:
 
 ```sh
