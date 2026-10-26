@@ -9,6 +9,7 @@ LSF, or Sun Grid Engine cluster while keeping commands, results, and logs togeth
 ## Start here
 
 - [Getting started](GETTING_STARTED.md): installation and the first run.
+- [Videos](VIDEOS.md): short videos of each feature, made from real runs.
 - [Concepts](CONCEPTS.md): projects, queues, runs, IDs, and state.
 - [Running and controlling jobs](RUNNING.md): define jobs, start and wait for
   runs, and control arrays, dependencies, retries, timeouts, and interruptions.
