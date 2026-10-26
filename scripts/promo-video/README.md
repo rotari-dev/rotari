@@ -133,6 +133,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 | `newroot.sh`, `dunstrc` | A namespace-owned `/` for `--allow-exec`; the desktop notification style |
 | `tts_samples.py`, `fixture/tts_train.py` | Kokoro clips and the fake TTS job that "produces" them |
 | `send-webhook.py` | Post the Slack payloads a capture recorded to your real webhook |
+| `youtube.md`, `youtube_text.py` | Each video's YouTube title and description (with chapters where YouTube shows them); `youtube_text.py` writes them to `out/NAME.txt` |
 
 ## Making a video
 
