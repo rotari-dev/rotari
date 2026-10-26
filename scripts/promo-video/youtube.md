@@ -190,9 +190,9 @@ with Kokoro TTS.
 
 ## 09_agents
 
-Title: What did your coding agent run, and why? | rotari
+Title: What did your AI coding agent run, and why? | rotari
 
-You asked your coding agent to tune a sweep, and it ran four experiments.
+You asked your AI coding agent to tune a sweep, and it ran four experiments.
 With rotari you can follow what it did: every run with the note it left on
 why, its reasoning from one run to the next, each run marked as started by
 the agent, and its conclusion as a table of results. All it took was one line
