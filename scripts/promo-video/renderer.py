@@ -1,10 +1,12 @@
-"""Turn a scene timeline into the vertical video, shared by the episode scripts.
+"""Turn a scene timeline into a video, shared by the episode scripts.
 
 An episode script builds a list of scenes for player.html and calls
 `main(timeline)`; this module parses the common options, narrates, writes
 CAPTURE_DIR/player.html, steps it frame by frame in headless Chrome, and pipes
-the frames to ffmpeg at 30 fps: 1080x1920 for the portrait short, 1920x1080
-for the landscape feature videos.
+the frames to ffmpeg at 30 fps. The layout is 1080x1920 for the portrait
+short and 1920x1080 for the landscape videos, drawn at --scale (default 2,
+so 2160x3840 and 3840x2160: YouTube gives 4K uploads a better codec and
+bitrate, which keeps small text sharp even when watched at 1080p).
 """
 
 import argparse
@@ -36,6 +38,13 @@ def options(extra=None):
     )
     parser.add_argument("--speed", type=float, default=1.0, help="speech speed")
     parser.add_argument("--preview", type=float, nargs="+", metavar="SECONDS")
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=2,
+        help="pixels per layout pixel (default 2: 3840x2160 or 2160x3840, "
+        "which YouTube encodes far sharper than 1080p; 1 for 1080p)",
+    )
     if extra:
         extra(parser)
     args = parser.parse_args()
@@ -89,7 +98,9 @@ def main(args, scenes, layout="portrait"):
 
     with sync_playwright() as p:
         b = p.chromium.launch(args=["--no-sandbox", "--allow-file-access-from-files"])
-        page = b.new_page(viewport={"width": width, "height": height})
+        page = b.new_page(
+            viewport={"width": width, "height": height}, device_scale_factor=args.scale
+        )
         page.goto(f"file://{cap}/player.html")
         # Load every face before the first frame, and stop rather than render
         # in a fallback font.

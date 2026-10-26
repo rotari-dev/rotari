@@ -161,7 +161,7 @@ def timeline():
             "dur": 6.0,
             "tagline": "Spend your time on research,<br>not on babysitting jobs.",
             "url": "github.com/rotari-dev/rotari",
-            "also": "Also: calendar & history search · sweeps · Slurm · notifications · coding agents",
+            "also": "Also: calendar & history search · sweeps · Slurm · notifications · AI coding agents",
             "say": "Rotari. Spend your time on research, not on babysitting jobs.",
         },
     ]
