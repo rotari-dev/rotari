@@ -26,7 +26,7 @@ The [documentation site](https://rotari-dev.github.io/rotari/docs/) covers insta
 
 <!-- BEGIN GETTING STARTED -->
 
-[![All your runs in one place](https://img.youtube.com/vi/vb_Mt4BkH80/maxresdefault.jpg)](https://www.youtube.com/watch?v=vb_Mt4BkH80)
+[![All your runs in one place](https://img.youtube.com/vi/vb_Mt4BkH80/maxresdefault.jpg)](https://rotari-dev.github.io/rotari/docs/VIDEOS/)
 
 ## Manage jobs, logs, and outputs in one place
 
