@@ -411,25 +411,27 @@ that through the agent's notes, so it was dropped.
 
 ### Overview (01)
 
-`01_overview.sh` (`render_tour.py`) carries one message: research is many
-jobs, and rotari puts what you look at every day in one place. From 01's own
-capture, narrated line by line: one job is fine in a terminal, so you don't
-need rotari; but research is never one job, so you hop between terminal tabs
-until something breaks; with rotari you submit from any directory, see every
-project on one page, and open the broken job's log right there (`capture.py`
-records it at 680×487 CSS px so it reads). Then past runs, by day on
-Activity's calendar and through History search (07's capture), and the jobs'
-outputs previewed in the browser, a plot and then audio in the Table viewer
-(03's). The end card names the other features (sweeps, Slurm, notifications,
-retries, the terminal, coding agents) in a muted line without narration;
-each has its own video. It needs 01's, 03's, and 07's captures in
-`PROMO_WORK`.
+`01_overview.sh` (`render_tour.py`) tells one story and follows one failure
+through, all from 01's own capture: one job is fine in a terminal, so you
+don't need rotari; but research is never one job, so you hop between
+terminal tabs until something breaks; with rotari you submit from any
+directory and see every project on one page, where vision stands out as
+failed. Its log, opened right on the page, says why (the dataset path in
+`train.conf` is wrong); `sed` fixes the path and `rotari retry -p vision`
+reruns just that project; then the loss plot it writes (`fixture/vision_plot.py`,
+found by artifact discovery in the script) opens from the job's Artifacts.
+The log and the plot are captured at 680×487 CSS px so they read. The end
+card names the other features (calendar and history search, sweeps, Slurm,
+notifications, coding agents) in a muted line without narration; each has
+its own video.
 
-Earlier versions (2026-10-25): two tours of every feature read as
-disconnected or left nothing understood, and a version whose payoff was
-failure causes and retry stressed what matters more to agents than to people
-(the user's feedback). The vertical Short, `01_short.sh`, still tells the
-older story through to the sweep and retry.
+Earlier versions (2026-10-25 and 26): tours of every feature read as
+disconnected or left nothing understood; a payoff of failure causes and
+retry stressed what matters more to agents than to people; and logs, the
+calendar, search, and outputs as separate scenes still did not connect, so
+the overview now follows the one failure from its log to its fix and its
+output (the user's feedback). The vertical Short, `01_short.sh`, still tells
+the older story through to the sweep and retry.
 
 ### Agents (09)
 

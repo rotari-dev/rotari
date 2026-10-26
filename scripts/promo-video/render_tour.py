@@ -4,16 +4,15 @@
                    [--narration KOKORO_DIR [--voice VOICE] [--speed X]]
                    [--preview SECONDS...]
 
-From 01's own capture: one job needs no rotari, but research is many
-projects in many terminal tabs where something breaks, and with rotari they
-all show on one page, with the broken job's log a click away. Then the rest
-of what a person does every day, in one place: past runs on Activity's
-calendar and in History search (07's capture) and the jobs' outputs
-previewed in the browser (03's). The end card names the other features
-without narration; each has its own video. WORK_DIR is PROMO_WORK, holding
-the captures as WORK_DIR/NN_name/capture, so 01's, 03's, and 07's are made
-first. The player page is written to WORK_DIR/tour; it reaches the frames by
-absolute file URL.
+All from 01's own capture, following one failure through: one job needs no
+rotari, but research is many projects in many terminal tabs where something
+breaks; with rotari they all show on one page, where the broken project
+stands out; its log says why, a fixed path and a rerun of just that project
+mend it, and the plot it then writes opens in the browser. The end card
+names the other features without narration; each has its own video.
+WORK_DIR is PROMO_WORK, holding the capture as
+WORK_DIR/01_overview/capture. The player page is written to WORK_DIR/tour; it
+reaches the frames by absolute file URL.
 """
 
 import json
@@ -24,7 +23,7 @@ import renderer
 
 ARGS = renderer.options()
 WORK = os.path.abspath(ARGS.capture_dir)
-EPISODES = {"one": "01_overview", "outputs": "03_outputs", "webui": "07_webui"}
+EPISODES = {"one": "01_overview"}
 
 
 class Capture:
@@ -134,51 +133,35 @@ def timeline():
             say="and every project shows up on one page. "
             "You see what failed at a glance.",
         ),
-        # Then what you do every day, now in one place: logs, past runs, outputs.
+        # Then follow the failure through: why, the fix, and what it made.
         web(
             "one",
             "vision_log",
             4.0,
-            [[0, "Its log,<br><em>one click away.</em>"]],
-            say="Open its log right there, whichever project it belongs to.",
+            [[0, "Why?<br><em>Its log, right there.</em>"]],
+            say="Why? Its log is right there: the dataset path is wrong.",
+        ),
+        term(
+            "one",
+            "vision_fix",
+            [[0, "Fix it,<br><em>rerun just that.</em>"]],
+            title="~/vision",
+            extra=0.8,
+            say="Fix the path, and rerun just that project.",
         ),
         web(
-            "webui",
-            "activity",
-            3.4,
-            [[0, "Every run,<br><em>by day.</em>"]],
-            say="Find any run again, by day on a calendar,",
-        ),
-        web(
-            "webui",
-            "search_results",
-            3.6,
-            [[0, "Search your<br><em>whole history.</em>"]],
-            say="or by searching your whole history.",
-        ),
-        web(
-            "outputs",
-            "loss",
-            3.2,
-            [[0, "See what<br><em>your jobs wrote.</em>"]],
-            say="And see what your jobs wrote: plots,",
-        ),
-        web(
-            "outputs",
-            "pane",
-            4.6,
-            [[0, "Plots, audio, tables,<br><em>in the browser.</em>"]],
-            # The frames start as playback starts.
-            sfx=[0.0, f"{c['outputs'].dir}/sample.wav"],
-            say="audio, and tables, right in the browser.",
-            sayAt=2.4,
+            "one",
+            "vision_plot",
+            4.0,
+            [[0, "Then see<br><em>what it made.</em>"]],
+            say="Then see what it made, right in the browser.",
         ),
         {
             "kind": "logo",
             "dur": 6.0,
             "tagline": "Spend your time on research,<br>not on babysitting jobs.",
             "url": "github.com/rotari-dev/rotari",
-            "also": "Also: sweeps · Slurm · notifications · retries · the terminal · coding agents",
+            "also": "Also: calendar & history search · sweeps · Slurm · notifications · coding agents",
             "say": "Rotari. Spend your time on research, not on babysitting jobs.",
         },
     ]
