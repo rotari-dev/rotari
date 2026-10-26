@@ -26,7 +26,7 @@ The [documentation site](https://rotari-dev.github.io/rotari/docs/) covers insta
 
 <!-- BEGIN GETTING STARTED -->
 
-<iframe src="https://www.youtube-nocookie.com/embed/vb_Mt4BkH80" title="All your runs in one place" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
+[![All your runs in one place](https://img.youtube.com/vi/vb_Mt4BkH80/maxresdefault.jpg)](https://www.youtube.com/watch?v=vb_Mt4BkH80)
 
 ## Manage jobs, logs, and outputs in one place
 
