@@ -8,7 +8,9 @@ part of rotari or its tests.
 
 All videos have English narration by Kokoro TTS (voice `af_heart`), burned-in
 subtitles, and an `.srt` beside the video, and no music. Every video's main
-version is landscape (1920×1080): the overview for the README and Getting
+version is landscape (1920×1080 layout, rendered at 3840×2160 with the
+renderer's default `--scale 2`, since YouTube encodes 4K uploads far sharper
+than 1080p ones): the overview for the README and Getting
 started, and one feature video per documentation page, linked from that page.
 Vertical (1080×1920) versions are only for YouTube Shorts, made from a
 landscape video's story; so far the overview has one, `01_short.sh`. A Short's
