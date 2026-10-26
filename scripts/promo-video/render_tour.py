@@ -139,23 +139,25 @@ def timeline():
             "one",
             "vision_log",
             4.0,
-            [[0, "Why?<br><em>Its log, right there.</em>"]],
-            say="Why? Its log is right there: the dataset path is wrong.",
+            [[0, "Open a job's log<br><em>from the Web UI.</em>"]],
+            say="Something failed? You can open its log right from the Web UI. "
+            "Here, it says the dataset path is wrong.",
         ),
         term(
             "one",
             "vision_fix",
-            [[0, "Fix it,<br><em>rerun just that.</em>"]],
+            [[0, "Fix it, then rerun<br><em>only what failed.</em>"]],
             title="~/vision",
             extra=0.8,
-            say="Fix the path, and rerun just that project.",
+            say="Fix it, and one command reruns only the jobs that failed.",
         ),
         web(
             "one",
             "vision_plot",
             4.0,
-            [[0, "Then see<br><em>what it made.</em>"]],
-            say="Then see what it made, right in the browser.",
+            [[0, "Check the outputs:<br><em>images, audio, tables.</em>"]],
+            say="And you can check what your jobs wrote, even images and audio, "
+            "right in the browser.",
         ),
         {
             "kind": "logo",
