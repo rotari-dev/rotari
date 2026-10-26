@@ -128,7 +128,7 @@ and job cancellation](FAQ.md#client-control-and-job-cancellation).
 
 ## Array and matrix jobs
 
-Video: [A 12-run grid in three lines](https://www.youtube.com/watch?v=i3qGGA4vKOY) (44 s), with arrays, matrices, and dependencies.
+<iframe src="https://www.youtube-nocookie.com/embed/i3qGGA4vKOY" title="A 12-run grid in three lines" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
 Add an array with a numeric range or a comma-separated task list:
 

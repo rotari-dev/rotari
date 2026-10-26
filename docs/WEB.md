@@ -1,6 +1,6 @@
 # Web UI
 
-Video: [Every project and past run in one Web UI](https://www.youtube.com/watch?v=UjoVz2AfFSw) (33 s).
+<iframe src="https://www.youtube-nocookie.com/embed/UjoVz2AfFSw" title="Every project and past run in one Web UI" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
 `rotari web` serves a status UI for your runs: job state, logs, history across
 projects, artifacts, and config. It is a separate process from `rotari run`.

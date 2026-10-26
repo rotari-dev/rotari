@@ -1,6 +1,6 @@
 # MCP server (experimental)
 
-Video: [What did your AI coding agent run, and why?](https://www.youtube.com/watch?v=spA3-LQAJXk) (39 s), with an agent using the CLI as `rotari guide` describes.
+<iframe src="https://www.youtube-nocookie.com/embed/spA3-LQAJXk" title="What did your AI coding agent run, and why?" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
 rotari includes an experimental MCP server, `rotari mcp`, for agents that
 cannot run shell commands. Agents that can should use the `rotari` CLI, as

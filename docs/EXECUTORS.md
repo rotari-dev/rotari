@@ -1,6 +1,6 @@
 # Executors and schedulers
 
-Video: [One pipeline, here and on Slurm](https://www.youtube.com/watch?v=yR6Yfw9IaSg) (37 s).
+<iframe src="https://www.youtube-nocookie.com/embed/yR6Yfw9IaSg" title="One pipeline, here and on Slurm" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
 Running jobs locally, over SSH, or on Slurm, PBS, LSF, or Sun Grid Engine.
 
