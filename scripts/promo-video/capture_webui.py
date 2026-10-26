@@ -149,7 +149,9 @@ def main():
                 label="tts/.rotari-state"
             )
             page.wait_for_timeout(500)
-            page.locator("select:has(option:text-is('Jobs'))").select_option(label="Jobs")
+            page.locator("select:has(option:text-is('Jobs'))").select_option(
+                label="Jobs"
+            )
             page.locator("select.history-search-field").first.select_option(
                 label="Job · Diagnosis"
             )

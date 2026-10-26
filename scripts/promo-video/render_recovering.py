@@ -109,7 +109,10 @@ def timeline():
             "~/llm-sweep",
             [
                 [0, "Fix the batch size."],
-                [shown("retry", "dry run"), "Preview the retry:<br><em>only the 8 run.</em>"],
+                [
+                    shown("retry", "dry run"),
+                    "Preview the retry:<br><em>only the 8 run.</em>",
+                ],
             ],
             extra=1.0,
             say="Fix the batch size, and preview the retry. "
@@ -120,7 +123,10 @@ def timeline():
             "~/llm-sweep",
             [
                 [0, "Retry."],
-                [shown("retry_run", "  Submitted"), "8 rerun.<br><em>40 carried forward.</em>"],
+                [
+                    shown("retry_run", "  Submitted"),
+                    "8 rerun.<br><em>40 carried forward.</em>",
+                ],
             ],
             extra=0.8,
             say="Retry. The forty that succeeded carry forward; they don't run again.",

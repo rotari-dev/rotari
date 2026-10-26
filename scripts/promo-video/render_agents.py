@@ -42,7 +42,11 @@ def timeline():
         {
             "kind": "title",
             "dur": 3.4,
-            "lines": [["Your agent ran", "", 0], ["four experiments.", "", 0.3], ["What did it do?", "soft", 0.8]],
+            "lines": [
+                ["Your agent ran", "", 0],
+                ["four experiments.", "", 0.3],
+                ["What did it do?", "soft", 0.8],
+            ],
             "say": "You asked your AI coding agent to tune a sweep. It ran four experiments. "
             "What did it do, and why?",
         },

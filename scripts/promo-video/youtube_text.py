@@ -35,7 +35,7 @@ def unwrap(description):
 out = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE / "out"
 out.mkdir(exist_ok=True)
 
-sections = re.split(r"^## ", (HERE / "youtube.md").read_text(), flags=re.M)[1:]
+sections = re.split(r"^## ", (HERE / "youtube.md").read_text(), flags=re.MULTILINE)[1:]
 for section in sections:
     name, body = section.split("\n", 1)
     found = re.match(r"\s*Title: (.+)\n", body)

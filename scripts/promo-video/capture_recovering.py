@@ -145,7 +145,9 @@ def main():
             t.run("sed -i 's/max_batch=128/max_batch=64/' sweep.conf")
             logs["dry_run"] = t.run(
                 "rotari retry -p llm-sweep --dry-run",
-                keep=lambda lines: [ln for ln in lines if not ln.startswith("revision=")],
+                keep=lambda lines: [
+                    ln for ln in lines if not ln.startswith("revision=")
+                ],
             )
             terms.append(t)
             t = S.term("retry_run")

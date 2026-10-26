@@ -147,8 +147,15 @@ def x_click(x, y):
     xlib.XOpenDisplay.argtypes = [ctypes.c_char_p]
     for f in (xlib.XFlush, xlib.XCloseDisplay):
         f.argtypes = [ctypes.c_void_p]
-    xtst.XTestFakeMotionEvent.argtypes = [ctypes.c_void_p] + [ctypes.c_int] * 3 + [ctypes.c_ulong]
-    xtst.XTestFakeButtonEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_ulong]
+    xtst.XTestFakeMotionEvent.argtypes = (
+        [ctypes.c_void_p] + [ctypes.c_int] * 3 + [ctypes.c_ulong]
+    )
+    xtst.XTestFakeButtonEvent.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_ulong,
+    ]
     display = xlib.XOpenDisplay(os.environ["DISPLAY"].encode())
     if not display:
         raise SystemExit("x_click: cannot open the display")

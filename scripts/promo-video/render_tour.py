@@ -37,7 +37,8 @@ class Capture:
                 f"(scripts/promo-video/{EPISODES[name]}.sh)"
             )
         self.terms = {
-            t["name"]: t for t in json.loads(Path(f"{self.dir}/terminals.json").read_text())
+            t["name"]: t
+            for t in json.loads(Path(f"{self.dir}/terminals.json").read_text())
         }
         self.logs = json.loads(Path(f"{self.dir}/logs.json").read_text())
         web = json.loads(Path(f"{self.dir}/web.json").read_text())

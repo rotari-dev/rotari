@@ -24,14 +24,23 @@ def timeline():
     web = json.loads(Path(f"{CAP}/web.json").read_text())
 
     def webscene(name, dur, captions, **more):
-        return {"kind": "web", "frames": web[name], "dur": dur, "captions": captions, **more}
+        return {
+            "kind": "web",
+            "frames": web[name],
+            "dur": dur,
+            "captions": captions,
+            **more,
+        }
 
     start = terms["start"]
     return [
         {
             "kind": "title",
             "dur": 2.8,
-            "lines": [["Many projects.", "", 0], ["Where did that run go?", "soft", 0.35]],
+            "lines": [
+                ["Many projects.", "", 0],
+                ["Where did that run go?", "soft", 0.35],
+            ],
             "say": "Many projects, in many directories. Where did that run go?",
         },
         {

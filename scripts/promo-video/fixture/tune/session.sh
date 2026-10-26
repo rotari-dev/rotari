@@ -31,7 +31,7 @@ rotari add -p sweep --job-name train --array 1-6 -- ./train.sh
 rotari run -p sweep --async --note "lr 1e-4: does a lower learning rate help further?"
 rotari wait sweep --quiet
 
-cat > results.md <<'TABLE'
+cat >results.md <<'TABLE'
 Best: **batch 64, lr 3e-4** (eval_loss 0.413-0.428, all seeds pass). Config set back to it.
 
 | job | b128 lr1e-3 | b64 lr1e-3 | b64 lr3e-4 | b64 lr1e-4 |

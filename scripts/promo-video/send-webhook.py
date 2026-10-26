@@ -19,8 +19,8 @@ config = Path(
     sys.argv[2] if len(sys.argv) > 2 else "~/.config/rotari/notifications.toml"
 )
 text = config.expanduser().read_text()
-section = re.search(r"^\[webhook\]\s*$(.*?)(?=^\[|\Z)", text, re.M | re.S)
-url = section and re.search(r'^\s*url\s*=\s*"([^"]+)"', section.group(1), re.M)
+section = re.search(r"^\[webhook\]\s*$(.*?)(?=^\[|\Z)", text, re.MULTILINE | re.DOTALL)
+url = section and re.search(r'^\s*url\s*=\s*"([^"]+)"', section.group(1), re.MULTILINE)
 if not url:
     sys.exit(f"{config}: no [webhook] url")
 payloads = sorted((capture / "webhook").glob("*.json"))
