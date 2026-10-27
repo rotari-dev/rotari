@@ -19,13 +19,11 @@ import shutil
 import subprocess
 import sys
 import time
-from pathlib import Path
 
 from common import Session, only, section
 from playwright.sync_api import sync_playwright
 
 FIXTURE, OUT, ROTARI = sys.argv[1:4]
-REPO = str(Path(__file__).resolve().parents[2])
 LAYOUT = sys.argv[4] if len(sys.argv) > 4 else "portrait"
 HOME = "/home/me"
 PORT = 18789
@@ -48,10 +46,6 @@ ENV = {
     "TZ": "UTC",
     "ROTARI_MASTERDIR": f"{HOME}/.rotari-master",
     "ROTARI_RUN_LOCAL_CONCURRENCY": "12",
-    # The vision project plots its loss with matplotlib from the repository's
-    # virtual environment.
-    "PLOT_PYTHON": f"{REPO}/.venv/bin/python",
-    "MPLCONFIGDIR": f"{HOME}/.cache/matplotlib",
     # Narrow squeue columns so its output fits half a vertical frame.
     "SQUEUE_FORMAT": "%.5i %.4P %.10j %.5u %.2t %.5M %R",
 }
@@ -96,10 +90,6 @@ def setup():
     shutil.copy(f"{FIXTURE}/train.py", f"{HOME}/llm")
     for d in PROJECTS:
         shutil.copy(f"{FIXTURE}/train.sh", f"{HOME}/{d}")
-    # vision's dataset is in ~/datasets, but its config points elsewhere.
-    Path(f"{HOME}/vision/train.conf").write_text("data=data/imagenet/train\n")
-    shutil.copy(f"{FIXTURE}/vision_plot.py", f"{HOME}/vision/plot.py")
-    os.makedirs(f"{HOME}/datasets/imagenet/train", exist_ok=True)
     for f in ("sweep.sh", "sweep.conf"):
         shutil.copy(f"{FIXTURE}/{f}", f"{HOME}/llm-sweep")
     for f in ("prep.sh", "train-gpu.sh"):
@@ -267,44 +257,6 @@ def main():
             wide.goto(base + "/")
             wide.wait_for_timeout(1500)
             S.record(wide, frames, "projects_end", 1)
-
-            # The project that broke: its job's log, in a smaller window with
-            # the frame's shape so that the log reads.
-            rid_vision = S.runs_of("vision")[-1]
-            close = b.new_page(
-                viewport={"width": 680, "height": 487},
-                device_scale_factor=2,
-                color_scheme="dark",
-            )
-            close.goto(f"{base}/project/vision/run/{rid_vision}")
-            close.wait_for_selector("table.runs")
-            close.wait_for_timeout(1200)
-            close.get_by_role("button", name="Log", exact=True).first.click()
-            close.wait_for_timeout(1500)
-            S.record(close, frames, "vision_log", 0.5, fps=4)
-
-            # Fix the dataset path, rerun just vision, and see what it made.
-            t = S.term("vision_fix", f"{HOME}/vision")
-            t.run("cat train.conf")
-            t.run("sed -i 's#data/imagenet#../datasets/imagenet#' train.conf")
-            t.run(
-                "rotari retry -p vision",
-                keep=only("Submitted", "progress", "Summary"),
-                line_s=0.1,
-            )
-            terms.append(t)
-            rid_fixed = S.runs_of("vision")[-1]
-            close.goto(f"{base}/project/vision/run/{rid_fixed}")
-            close.wait_for_selector("table.runs")
-            close.wait_for_timeout(1200)
-            # The job's Artifacts list the plot its script writes.
-            close.get_by_role("button", name="Artifacts").first.click()
-            close.wait_for_timeout(1200)
-            modal = close.locator("#output-modal")
-            modal.get_by_text("outputs/loss.png", exact=True).first.click()
-            close.wait_for_timeout(1500)
-            modal.locator("img").last.scroll_into_view_if_needed()
-            S.record(close, frames, "vision_plot", 0.5, fps=4)
             b.close()
     finally:
         web.terminate()
