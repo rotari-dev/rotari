@@ -2,7 +2,9 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -503,6 +505,72 @@ func TestTableViewListsADirectory(t *testing.T) {
 	}
 	if recorder := f.viewerGet(t, options, "api/rows", "data.csv", url.Values{"sep": {","}, "view": {"files"}}); recorder.Code != http.StatusBadRequest {
 		t.Errorf("a directory's parameter on a file = %d", recorder.Code)
+	}
+}
+
+// rotari tableview serves one path; a directory's child names a file or
+// directory under it, read under the same root.
+func TestTableViewHandlerServesOnePath(t *testing.T) {
+	data, outside := t.TempDir(), t.TempDir()
+	write(t, filepath.Join(data, "list.csv"), "x\n1\n")
+	write(t, filepath.Join(data, "sub", "more.csv"), "y\n2\n")
+	write(t, filepath.Join(outside, "other.csv"), "z\n3\n")
+	if _, err := TableViewHandler(filepath.Join(data, "missing.csv")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("missing path = %v", err)
+	}
+	get := func(handler http.Handler, target string) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		return recorder
+	}
+	info := func(handler http.Handler, child string) tableViewInfo {
+		t.Helper()
+		recorder := get(handler, "/api/info?"+url.Values{"child": {child}}.Encode())
+		var info tableViewInfo
+		if err := json.Unmarshal(recorder.Body.Bytes(), &info); err != nil {
+			t.Fatalf("info of %q = %d %s", child, recorder.Code, recorder.Body)
+		}
+		return info
+	}
+
+	directory, err := TableViewHandler(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info(directory, ""); got.Kind != "directory" || got.Name != data {
+		t.Fatalf("directory = %+v", got)
+	}
+	if got := info(directory, "sub"); got.Kind != "directory" || got.Name != data+"/sub" {
+		t.Fatalf("child directory = %+v", got)
+	}
+	if got := info(directory, "sub/more.csv"); got.Kind != "file" || got.Name != data+"/sub/more.csv" || got.Separator != "," {
+		t.Fatalf("child file = %+v", got)
+	}
+	for child, status := range map[string]int{
+		"../" + filepath.Base(outside) + "/other.csv": http.StatusBadRequest,
+		filepath.Join(outside, "other.csv"):           http.StatusBadRequest,
+		"sub/../list.csv":                             http.StatusBadRequest,
+		"missing.csv":                                 http.StatusNotFound,
+	} {
+		if recorder := get(directory, "/api/info?"+url.Values{"child": {child}}.Encode()); recorder.Code != status {
+			t.Errorf("child %s = %d %s, want %d", child, recorder.Code, recorder.Body, status)
+		}
+	}
+	for _, asset := range []string{"/web_tokens.css", "/web_fonts.css"} {
+		if recorder := get(directory, asset); recorder.Code != http.StatusOK || !strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/css") || recorder.Body.Len() == 0 {
+			t.Fatalf("%s = %d %v", asset, recorder.Code, recorder.Header())
+		}
+	}
+
+	file, err := TableViewHandler(filepath.Join(data, "list.csv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info(file, ""); got.Kind != "file" || got.Size != int64(len("x\n1\n")) {
+		t.Fatalf("file = %+v", got)
+	}
+	if recorder := get(file, "/api/info?child=list.csv"); recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "child applies only to a directory") {
+		t.Fatalf("a file's child = %d %s", recorder.Code, recorder.Body)
 	}
 }
 
