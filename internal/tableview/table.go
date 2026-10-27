@@ -2,6 +2,7 @@ package tableview
 
 import (
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -92,6 +93,9 @@ type Row struct {
 	Media  map[int]*Media `json:"media,omitempty"`
 	// Directory is the relative path of an expandable directory row.
 	Directory string `json:"directory,omitempty"`
+	// Tables lists a directory's path cells, by column, that name a table
+	// file (IsTableFile), which the viewer can open on its own.
+	Tables []int `json:"tables,omitempty"`
 }
 
 // Page reads the rows a query selects.
@@ -149,6 +153,9 @@ func (table *Table) Page(query Query) (Page, error) {
 			// any cell.
 			if table.directory && (row.Directory != "" || cell >= len(columns) || columns[cell].Type != TypePath) {
 				continue
+			}
+			if table.directory && value != "" && IsTableFile(path.Base(value)) {
+				row.Tables = append(row.Tables, cell)
 			}
 			if ref := mediaRef(value); ref != "" {
 				if row.Media == nil {

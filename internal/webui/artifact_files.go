@@ -194,12 +194,21 @@ func (s site) resolveArtifactRequest(baseDir string, query url.Values) (resolved
 		return resolvedArtifact{}, fmt.Errorf("%w: %s is outside the allowed roots (the job's working directory, the basedir's parent, and --artifact-root)", errNotServed, entry.Path)
 	}
 	if child := query.Get("child"); child != "" {
-		if filepath.IsAbs(child) || filepath.Clean(child) != child || child == ".." || strings.HasPrefix(child, ".."+string(filepath.Separator)) || strings.ContainsRune(child, 0) {
-			return resolvedArtifact{}, fmt.Errorf("child must be a relative path inside the directory")
+		if err := checkChild(child); err != nil {
+			return resolvedArtifact{}, err
 		}
 		relative = filepath.Join(relative, child)
 	}
 	return resolvedArtifact{servedArtifact: servedArtifact{root: root, relative: relative}, listing: listing, entry: entry, roots: roots}, nil
+}
+
+// checkChild refuses a child path that is not a clean relative path inside
+// its directory.
+func checkChild(child string) error {
+	if filepath.IsAbs(child) || filepath.Clean(child) != child || child == ".." || strings.HasPrefix(child, ".."+string(filepath.Separator)) || strings.ContainsRune(child, 0) {
+		return fmt.Errorf("child must be a relative path inside the directory")
+	}
+	return nil
 }
 
 // basedirParentEntry is artifactBasedirParentEntry for an existing run of

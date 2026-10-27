@@ -327,3 +327,37 @@ func TestDirectoryStaysUnderItsRoot(t *testing.T) {
 		t.Error("a directory symlink was expanded")
 	}
 }
+
+// A directory's path cells that name a table file are marked, in both
+// views; media and other files are not. Groups sort as text, so .TSV
+// comes before .csv.
+func TestDirectoryMarksTableFiles(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"a.csv", "a.wav", "b.TSV", "notes.md", "sub/c.scp"} {
+		writeFile(t, filepath.Join(root, filepath.FromSlash(name)), "x\n")
+	}
+	target := Target{Path: root, Roots: []string{root}}
+	tables := func(listing Listing) map[string][]int {
+		table, err := OpenDirectory(target, listing)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, err := table.Page(Query{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		marked := map[string][]int{}
+		for _, row := range page.Rows {
+			if row.Tables != nil {
+				marked[row.Cells[0]] = row.Tables
+			}
+		}
+		return marked
+	}
+	if got := tables(Listing{Expanded: []string{"sub"}}); !reflect.DeepEqual(got, map[string][]int{"a.csv": {0}, "b.TSV": {0}, "sub/c.scp": {0}}) {
+		t.Errorf("files = %v", got)
+	}
+	if got := tables(Listing{View: ViewStems, Group: GroupExtension}); !reflect.DeepEqual(got, map[string][]int{"a": {2}, "b": {1}}) {
+		t.Errorf("stems = %v", got)
+	}
+}

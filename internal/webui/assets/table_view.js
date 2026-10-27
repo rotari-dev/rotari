@@ -843,7 +843,9 @@ function tableCell(row, index) {
         )
       : row.media && row.media[index]
         ? mediaCell(row.media[index])
-        : cellContent(text, rows.columns[index]);
+        : row.tables && row.tables.includes(index)
+          ? tableFileCell(text)
+          : cellContent(text, rows.columns[index]);
   if (info.kind !== "directory" || view.listing !== "files" || index !== 0)
     return content;
   const depth = (row.directory || text).split("/").length - 1;
@@ -873,6 +875,36 @@ function openRowButton(row) {
         "Open row",
       )
     : null;
+}
+
+// tableURL is the viewer's page for a table file a directory's cell names,
+// as the child of the directory this page shows.
+function tableURL(ref) {
+  const query = new URLSearchParams(sourceQuery);
+  const parent = query.get("child");
+  query.set("child", parent ? parent + "/" + ref : ref);
+  return "?" + query.toString();
+}
+
+// tableFileCell is a directory's path to a table file, which opens in a
+// Table viewer of its own in a new tab.
+function tableFileCell(ref) {
+  return el(
+    "span",
+    { className: "tv-media" },
+    el("span", { className: "tv-media-path" }, ref),
+    el(
+      "a",
+      {
+        className: "tv-open-table",
+        href: tableURL(ref),
+        target: "_blank",
+        rel: "noopener",
+        title: "Open " + ref + " in a new Table viewer",
+      },
+      "Open table",
+    ),
+  );
 }
 
 // cellContent is a cell that names no media: a path of a stems view's

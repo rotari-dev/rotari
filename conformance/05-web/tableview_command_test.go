@@ -50,6 +50,9 @@ func TestTableViewCommandServesOnePath(t *testing.T) {
 	if r := e.HTTPGet(base + "/api/media?" + url.Values{"ref": {"wav/a.wav"}}.Encode()); r.Status != 200 || r.Body != "RIFF" {
 		t.Fatalf("media = (%d, %q)", r.Status, r.Body)
 	}
+	if r := e.HTTPGet(base + "/api/info?child=list.csv"); r.Status != 400 || !strings.Contains(r.Body, "child applies only to a directory") {
+		t.Fatalf("a file's child = (%d, %s)", r.Status, r.Body)
+	}
 	for _, ref := range []string{filepath.Join(outside, "b.wav"), "../outside/b.wav"} {
 		if r := e.HTTPGet(base + "/api/media?" + url.Values{"ref": {ref}}.Encode()); r.Status != 403 {
 			t.Fatalf("%s = (%d, %q)", ref, r.Status, r.Body)
@@ -67,6 +70,31 @@ func TestTableViewCommandServesOnePath(t *testing.T) {
 	checkTableViewExpansion(t, func(route string, extra url.Values) support.HTTPResult {
 		return e.HTTPDo("GET", base+"/api/"+route+"?"+extra.Encode(), map[string]string{"Authorization": "Bearer secret-token"}, "")
 	})
+	// A table file in it is marked, and opens as its child, read under the
+	// same root; a child cannot leave it.
+	authorized := func(route string, query url.Values) support.HTTPResult {
+		return e.HTTPDo("GET", base+"/api/"+route+"?"+query.Encode(), map[string]string{"Authorization": "Bearer secret-token"}, "")
+	}
+	if r := authorized("rows", url.Values{"pattern": {"*.csv"}}); !strings.Contains(r.Body, `"cells":["list.csv"`) || !strings.Contains(r.Body, `"tables":[0]`) {
+		t.Fatalf("table files = (%d, %s)", r.Status, r.Body)
+	}
+	if r := authorized("info", url.Values{"child": {"list.csv"}}); r.Status != 200 || !strings.Contains(r.Body, `"kind":"file"`) || !strings.Contains(r.Body, `/list.csv"`) {
+		t.Fatalf("child info = (%d, %s)", r.Status, r.Body)
+	}
+	if r := authorized("rows", url.Values{"child": {"list.csv"}, "sep": {","}}); !strings.Contains(r.Body, `"ref":"wav/a.wav","properties"`) || !strings.Contains(r.Body, `"error":"Not shown: outside the allowed roots"`) {
+		t.Fatalf("child rows = (%d, %s)", r.Status, r.Body)
+	}
+	if r := authorized("media", url.Values{"child": {"list.csv"}, "ref": {"wav/a.wav"}}); r.Status != 200 || r.Body != "RIFF" {
+		t.Fatalf("child media = (%d, %q)", r.Status, r.Body)
+	}
+	if err := os.Symlink(filepath.Join(outside, "other.csv"), filepath.Join(data, "link.csv")); err != nil {
+		t.Fatal(err)
+	}
+	for child, status := range map[string]int{"../outside/other.csv": 400, filepath.Join(outside, "other.csv"): 400, "wav/../list.csv": 400, "link.csv": 403, "missing.csv": 404} {
+		if r := authorized("info", url.Values{"child": {child}}); r.Status != status {
+			t.Fatalf("child %s = (%d, %s), want %d", child, r.Status, r.Body, status)
+		}
+	}
 
 	if r := e.Rotari("tableview", "--port", "0", filepath.Join(e.Root, "missing.csv")); r.Code != 1 || !strings.Contains(r.Stderr, "cannot view") {
 		t.Fatalf("missing path = %s", r)

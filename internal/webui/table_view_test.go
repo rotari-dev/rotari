@@ -693,6 +693,23 @@ if ([...table.slice(0, 3)].join() !== '68,1,84' || [...table.slice(255 * 3)].joi
 	}
 }
 
+// A directory's table file opens in a Table viewer of its own, as the
+// directory's child, in a new tab.
+func TestTableViewOpensTableFilesInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	write(t, filepath.Join(f.work, "eval", "scores.csv"), "id,score\nu1,0.5\n")
+	write(t, filepath.Join(f.work, "eval", "u1.wav"), "RIFF")
+	runTableViewScript(t, testOptions(f.baseDir, false), f, "wd", "#pattern=eval%2F*&expanded=eval", `
+  await until('files', () => document.querySelector('#tv-table a.tv-open-table'));
+  const links = [...document.querySelectorAll('#tv-table a.tv-open-table')];
+  if (links.length !== 1 || links[0].target !== '_blank') fail('links', document.getElementById('tv-table').innerHTML);
+  const opened = new window.URL(links[0].href);
+  if (opened.pathname !== window.location.pathname || opened.searchParams.get('child') !== 'eval/scores.csv' || opened.searchParams.get('entry') !== 'wd' || opened.hash) fail('href', links[0].href);
+  const info = await (await window.fetch('api/info' + opened.search)).json();
+  if (info.kind !== 'file' || !info.name.endsWith('/eval/scores.csv')) fail('opened info', JSON.stringify(info));
+`)
+}
+
 // A file of more than one channel offers its channels and their mix for the
 // plots; jsdom cannot decode audio, so the page gets a stand-in decoder.
 func TestTableViewChoosesAChannelInBrowser(t *testing.T) {

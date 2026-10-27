@@ -161,6 +161,17 @@ func TestWebTableViewerReadsArtifacts(t *testing.T) {
 		!strings.Contains(r.Body, `"cells":["a","","a.wav"]`) || !strings.Contains(r.Body, `"cells":["data","data.tsv",""]`) {
 		t.Fatalf("working directory stems = (%d, %s)", r.Status, r.Body)
 	}
+	// A directory marks the paths of table files, which open as its child:
+	// a table whose media resolve from its own directory.
+	if r := wd("/tableview/api/rows", url.Values{"view": {"stems"}, "pattern": {"{a.wav,data.tsv,link.tsv}"}}); !strings.Contains(r.Body, `"cells":["data","data.tsv",""],"tables":[1]`) || strings.Count(r.Body, `"tables"`) != 2 {
+		t.Fatalf("table files = (%d, %s)", r.Status, r.Body)
+	}
+	if r := wd("/tableview/api/info", url.Values{"child": {"media.csv"}}); r.Status != 200 || !strings.Contains(r.Body, `"kind":"file"`) || !strings.Contains(r.Body, `/media.csv"`) {
+		t.Fatalf("child info = (%d, %s)", r.Status, r.Body)
+	}
+	if r := wd("/tableview/api/rows", url.Values{"child": {"media.csv"}, "sep": {","}, "base": {"file"}}); !strings.Contains(r.Body, `"ref":"a.wav","base":"file","properties":{"format":"WAV PCM"`) {
+		t.Fatalf("child rows = (%d, %s)", r.Status, r.Body)
+	}
 	if r := wd("/tableview/api/rows", url.Values{"sep": {","}}); r.Status == 200 {
 		t.Fatalf("a file's separator was accepted for a directory: %s", r.Body)
 	}

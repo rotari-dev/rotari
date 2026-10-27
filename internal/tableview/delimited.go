@@ -6,9 +6,25 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 )
+
+// TablePatterns are the base names of the files the viewer offers to read
+// as tables; any delimited file can be read when named directly.
+var TablePatterns = []string{"*.csv", "*.CSV", "*.tsv", "*.TSV", "*.tab", "*.psv", "*.txt", "*.scp", "*.lst", "*.list", "*.dat"}
+
+// IsTableFile reports whether a file of base name name is one TablePatterns
+// offers as a table.
+func IsTableFile(name string) bool {
+	for _, pattern := range TablePatterns {
+		if matched, _ := filepath.Match(pattern, name); matched {
+			return true
+		}
+	}
+	return false
+}
 
 // Format is how a delimited file splits into rows and cells: records
 // separated by newlines and cells by Separator, with double quotes around a
