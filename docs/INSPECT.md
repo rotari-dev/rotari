@@ -353,7 +353,7 @@ the last 100 lines. Either way it keeps at most 12000 characters.
 
 What a job writes, and how to list, preview, and open it, including the
 run's **Files** view, launching TensorBoard or Jupyter Lab, and the Table
-viewer, is described in [Outputs and artifacts](OUTPUTS.md).
+viewer, is described in [Web UI: Artifacts](WEB.md#artifacts).
 
 ### Interrupted runs
 

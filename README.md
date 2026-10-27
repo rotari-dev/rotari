@@ -280,7 +280,7 @@ rotari web --allow-exec
 
 `--allow-exec` also lets the UI launch TensorBoard, Jupyter, and other
 registered commands against artifacts; see
-[Launching commands on artifacts](docs/OUTPUTS.md#launching-commands-on-artifacts).
+[Launching commands](docs/WEB.md#launching-commands).
 
 See the [web demo](https://rotari-dev.github.io/rotari/) for a read-only UI
 using generated example data. For remote access, authentication, and read-only

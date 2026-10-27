@@ -23,7 +23,7 @@ version.
 | --- | --- | --- | --- | --- |
 | 01 | Overview: every run on the cluster, recorded in one place | README, Getting started | `01_overview.sh` (Short: `01_short.sh`, an older story) | done, 47 s |
 | 02 | Notifications: desktop, Inbox, Slack | `docs/NOTIFICATIONS.md` | `02_notifications.sh` | done, 35 s |
-| 03 | Outputs: Artifacts, previews, TensorBoard, Files | `docs/OUTPUTS.md` | `03_outputs.sh` | done, 53 s |
+| 03 | Outputs: Artifacts, previews, TensorBoard, Files | `docs/WEB.md` (Artifacts) | `03_outputs.sh` | done, 53 s |
 | 04 | Rerunning failures and diagnosis | `docs/RECOVERING.md`, `docs/LOCAL_DIAGNOSIS.md` | `04_recovering.sh` | done, 47 s |
 | 05 | Local and Slurm | `docs/EXECUTORS.md` | `05_executors.sh` | done, 37 s |
 | 06 | Arrays, matrices, dependencies | `docs/RUNNING.md` | `06_grid.sh` | done, 44 s |
@@ -31,8 +31,7 @@ version.
 | 08 | Inspecting runs from a terminal: jobs, show, logs | `docs/INSPECT.md` | `08_terminal.sh` | done, 44 s |
 | 09 | Coding agents: what yours did, and why | `rotari guide`, `docs/MCP.md`, `docs/INSPECT.md` | `09_agents.sh` | done, 39 s |
 
-`docs/OUTPUTS.md` was split out of `docs/INSPECT.md` so that video 03 has one
-page to accompany.
+Video 03 accompanies the Artifacts section of `docs/WEB.md`.
 
 ## The Short's story (01_short.sh)
 

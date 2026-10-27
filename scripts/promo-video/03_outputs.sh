@@ -3,9 +3,9 @@
 #
 #   scripts/promo-video/03_outputs.sh [RENDER_OPTIONS...]
 #
-# Accompanies docs/OUTPUTS.md: a job's Artifacts, previews, TensorBoard on its
-# tb/ directory, and the run's Files view comparing every experiment in
-# TensorBoard. Prepares the tools on first use, then builds rotari, captures
+# Accompanies the Artifacts section of docs/WEB.md: a job's Artifacts,
+# previews, TensorBoard on its tb/ directory, and the run's Files view
+# comparing every experiment in TensorBoard. Prepares the tools on first use, then builds rotari, captures
 # (a headless browser is enough), and renders. PROMO_TOOLS and PROMO_WORK as
 # for 01_short.sh.
 set -euo pipefail

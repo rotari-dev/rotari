@@ -5,7 +5,7 @@
                       [--preview SECONDS...]
 
 Builds the scene timeline from capture_outputs.py's material and renders it
-with renderer.py. It accompanies docs/OUTPUTS.md.
+with renderer.py. It accompanies the Artifacts section of docs/WEB.md.
 """
 
 import json
@@ -109,7 +109,7 @@ def timeline():
             "kind": "logo",
             "dur": 4.0,
             "tagline": "Outputs and artifacts",
-            "url": "rotari-dev.github.io/rotari/docs/OUTPUTS/",
+            "url": "rotari-dev.github.io/rotari/docs/WEB/",
             "say": "Rotari.",
         },
     ]
