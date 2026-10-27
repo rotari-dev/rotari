@@ -5,8 +5,9 @@
                        [--preview SECONDS...] [--scale N]
 
 Builds the scene timeline from capture_overview.py's material and renders it
-with renderer.py. One message: hand rotari your usual commands, and every run
-is recorded and seen in one place. Thirty slurm-N.out files nobody can tell
+with renderer.py. It opens on one job, which needs no rotari, and research,
+which is never one job. Then one message: hand rotari your usual commands,
+and every run is recorded and seen in one place. Thirty slurm-N.out files nobody can tell
 apart; the same script handed to rotari for Slurm; every project and the
 sweep's jobs in the Web UI; a failed job's log; the fix and a retry of only
 the failed jobs; and the end card naming the other features.
@@ -44,7 +45,7 @@ def timeline():
         t = terms[name]
         return {
             "kind": "term",
-            "title": "me@login01: ~/resnet",
+            "title": more.pop("title", "me@login01: ~/resnet"),
             "events": t["events"],
             "dur": t["duration"] + extra,
             "captions": captions,
@@ -61,6 +62,26 @@ def timeline():
         }
 
     return [
+        # One job needs no rotari; research is never one job.
+        term(
+            "one",
+            [[0, "One job?"]],
+            title="me@login01: ~/llm",
+            say="One job? Watching it in a terminal is enough.",
+            sayAt=1.6,
+        ),
+        {
+            "kind": "title",
+            "dur": 2.6,
+            "lines": [["You don't", "", 0], ["need rotari.", "hl", 0.35]],
+            "say": "You don't need rotari.",
+        },
+        {
+            "kind": "title",
+            "dur": 2.6,
+            "lines": [["But research", "", 0], ["isn't one job.", "soft", 0.35]],
+            "say": "But research is never just one job.",
+        },
         term(
             "before",
             [

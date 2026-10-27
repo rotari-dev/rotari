@@ -10,15 +10,16 @@ the scene times the renderer prints; check them again after a video changes.
 
 Title: Every run on your cluster, recorded in one place | rotari
 
-On a cluster you submit dozens of jobs, and a week later you can't tell which
-slurm-N.out was which, which one failed, or why. Hand rotari the same
+One job? Watching it in a terminal is enough, and you don't need rotari. But
+research is never just one job: on a cluster you submit dozens, and a week
+later you can't tell which slurm-N.out was which, which one failed, or why. Hand rotari the same
 commands: it submits them to Slurm and records every run. See every project
 and job in one place, open any job's log from the Web UI, and after a fix,
 rerun only the jobs that failed with one command.
 
-0:00 Dozens of jobs: which one was which?
-0:15 Every run, in one place
-0:28 Fix it, and rerun only what failed
+0:00 One job, or dozens?
+0:26 Every run, in one place
+0:40 Fix it, and rerun only what failed
 
 rotari is an open-source tool for managing and running jobs: submit commands
 from any directory, run them here or on Slurm, and see every project's runs,

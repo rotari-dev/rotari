@@ -3,7 +3,8 @@
 Run through `capture-web.sh WORK ROTARI SAMPLES capture_overview.py` (no
 display needed) with PROMO_SLURM_SB naming the Slurm sandbox from
 `setup.sh --with-slurm`. slurm-up.sh starts a one-node Slurm cluster
-(gpu-node01) sharing /home/me. Off camera, thirty jobs are submitted to it by
+(gpu-node01) sharing /home/me. On camera first, one training run in a
+terminal, which needs no rotari. Off camera, thirty jobs are submitted to it by
 hand with sbatch, as last week's work, leaving thirty slurm-N.out files in
 ~/resnet, and another project, bert, has a finished run. On camera: those
 files, then a ResNet sweep (three learning rates by two batch sizes) handed
@@ -72,6 +73,10 @@ TO_JOBS = """(() => {
 def setup():
     os.makedirs(f"{HOME}/.local/bin", exist_ok=True)
     shutil.copy(ROTARI, f"{HOME}/.local/bin/rotari")
+    # The opening: one training run in a terminal, with python on PATH.
+    os.symlink("/usr/bin/python3", f"{HOME}/.local/bin/python")
+    os.makedirs(f"{HOME}/llm", exist_ok=True)
+    shutil.copy(f"{FIXTURE}/train.py", f"{HOME}/llm")
     os.makedirs(EXP, exist_ok=True)
     os.makedirs(f"{HOME}/bert", exist_ok=True)
     for f in ("train.sh", "train.conf"):
@@ -105,6 +110,11 @@ def setup():
 def main():
     setup()
     terms, frames, logs = [], {}, {"view": VIEW}
+
+    # One job is fine in a terminal.
+    t = S.term("one", f"{HOME}/llm")
+    t.live("python train.py")
+    terms.append(t)
 
     # The problem: a directory full of slurm-N.out, and which one was which?
     t = S.term("before")
