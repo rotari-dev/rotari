@@ -1691,10 +1691,6 @@ pre,
   min-height: 0;
   padding: 3px 8px;
 }
-/* The working directory row a job's Launch opened Artifacts at. */
-.artifact-row-focus > td {
-  background: var(--surface-2);
-}
 .artifact-action {
   white-space: nowrap;
 }

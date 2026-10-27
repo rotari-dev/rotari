@@ -188,24 +188,17 @@ func TestWebLaunchWorkingDirectoryWithoutCandidatesInBrowser(t *testing.T) {
   if (rows.length !== 1 || rows[0].children[1].textContent !== '.') fail('working directory row', document.getElementById('artifact-view').innerHTML);
   await wait(300);
   if (JSON.stringify(launchers(rows[0])) !== '["Table viewer","Count"]') fail('working directory buttons', launchers(rows[0]));
-
-  // A run page's Launch opens Artifacts at the working directory's row of
-  // buttons.
-  window.HTMLElement.prototype.scrollIntoView = () => {};
-  await window.launchOnWorkingDirectory('default', runID, 'job-1', '');
-  await wait(300);
-  const focused = document.querySelector('#artifact-view tr.artifact-row-focus');
-  if (!focused || focused.dataset.entry !== 'wd') fail('Launch focus', document.getElementById('artifact-view').innerHTML);
-  if (JSON.stringify(launchers(focused)) !== '["Table viewer","Count"]') fail('Launch buttons', launchers(focused));
 `)
-	// A working directory missing on the Web server's host is explained.
+	// A working directory missing on the Web server's host is listed as
+	// missing, with nothing to open or launch on.
 	if err := stateinternal.WriteJSON(filepath.Join(attemptDir, stateinternal.ArtifactsFileName), artifact.Record{Version: 7, WorkingDirectory: filepath.Join(f.work, "gone")}); err != nil {
 		t.Fatal(err)
 	}
 	runLaunchBrowserScript(t, options, f, `
-  await window.launchOnWorkingDirectory('default', runID, 'job-2', '');
-  const reason = document.querySelector('#artifact-view .launch-reason')?.textContent || '';
-  if (!reason.includes(work + '/gone is missing on the Web server') || document.querySelector('.artifact-row-focus')) fail('missing working directory', document.getElementById('artifact-view').innerHTML);
+  await window.showArtifacts('default', runID, 'job-2', '');
+  await wait(300);
+  const row = document.querySelector('#artifact-view tr[data-entry="wd"]');
+  if (!row || row.children[0].textContent !== 'missing' || row.querySelector('.artifact-open') || launchers(row).length) fail('missing working directory', document.getElementById('artifact-view').innerHTML);
 `)
 }
 

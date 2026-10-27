@@ -2146,27 +2146,9 @@ function runJobActions(q, run, runID, j) {
       esc(artifactAttemptID) +
       "')\">Artifacts</button>"
     : '<button class="view-artifacts"' + notStarted + ">Artifacts</button>";
-  // Launch opens the same attempt's Artifacts at its working directory's
-  // row of commands, where a tracker's default store usually is.
-  const launchAvailable =
-    launcherAvailability && launcherAvailability.available;
-  const launch = !launchAvailable
-    ? ""
-    : artifactsReady
-      ? '<button class="launch-job" onclick="launchOnWorkingDirectory(' +
-        jsArg(q.project_name) +
-        "," +
-        jsArg(logRun) +
-        "," +
-        jsArg(logJob) +
-        "," +
-        jsArg(artifactAttemptID) +
-        ')">Launch</button>'
-      : '<button class="launch-job"' + notStarted + ">Launch</button>";
   return actionsCell([
     viewLog,
     artifacts,
-    launch,
     diagnosisControl,
     notesControl,
     '<button class="job-ai" title="Prepare job report"' +

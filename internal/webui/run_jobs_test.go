@@ -10,9 +10,10 @@ import (
 // A run's jobs table shows each command under its job name, leaves out
 // columns that are the same for every job until the Columns menu turns them
 // on, starts with Job ID hidden, offers a copy of each host and path value,
-// and ends each row with all its actions as buttons, without a menu, Launch
-// among them where launching is available, as the toolbar has a button per
-// command for the directory holding the basedir. The toolbar and the run's sections around
+// and ends each row with all its actions as buttons, without a menu, with no
+// Launch of its own, whether or not launching is available: Artifacts has
+// the launch buttons, as the toolbar's Files does for the directory holding
+// the basedir. The toolbar and the run's sections around
 // it keep the viewer's choices.
 func TestWebRunJobsTable(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
@@ -100,25 +101,21 @@ setTimeout(async () => {
     window.sortTable(table(), 'duration', 'job');
     assert.equal(table().querySelector('tbody tr').dataset.jobId, 'b', 'Duration does not sort by seconds');
 
-    // Actions come last, all in the row: Log, Artifacts, Launch where
-    // launching is available, Diagnosis only on the failed job, Notes
-    // (disabled without notes), Report, and Path.
+    // Actions come last, all in the row: Log, Artifacts, Diagnosis only on
+    // the failed job, Notes (disabled without notes), Report, and Path.
     const actions = id => row(id).lastElementChild;
     assert(actions('a').classList.contains('actions'));
     const labels = id => [...actions(id).querySelectorAll('.action-buttons > button')].map(b => b.textContent);
-    assert.deepEqual(labels('a'), ['Log', 'Artifacts', 'Launch', 'Notes', 'Report', 'Path']);
+    assert.deepEqual(labels('a'), ['Log', 'Artifacts', 'Notes', 'Report', 'Path']);
     assert(actions('a').querySelector('.view-notes').disabled, 'Notes without notes is not disabled');
-    assert.deepEqual(labels('b'), ['Log', 'Artifacts', 'Launch', 'Diagnosis', 'Notes', 'Report', 'Path']);
-    assert.deepEqual(labels('c'), ['Log', 'Artifacts', 'Launch', 'Notes (1)', 'Report', 'Path']);
-    // A running job offers Artifacts and Launch for its current attempt; a
-    // job that has not started shows both disabled with the reason.
+    assert.deepEqual(labels('b'), ['Log', 'Artifacts', 'Diagnosis', 'Notes', 'Report', 'Path']);
+    assert.deepEqual(labels('c'), ['Log', 'Artifacts', 'Notes (1)', 'Report', 'Path']);
+    // A running job offers Artifacts for its current attempt; a job that has
+    // not started shows it disabled with the reason.
     const actionButton = (id, cls) => actions(id).querySelector('.' + cls);
     assert.equal(actionButton('d', 'view-artifacts').disabled, false);
     assert(actionButton('d', 'view-artifacts').getAttribute('onclick').includes(run.jobs[3].attempt_id), 'Artifacts of a running job is not its attempt');
-    assert(actionButton('d', 'launch-job').getAttribute('onclick').includes(run.jobs[3].attempt_id), 'Launch of a running job is not its attempt');
-    for (const cls of ['view-artifacts', 'launch-job']) {
-      assert(actionButton('e', cls).disabled && actionButton('e', cls).title === 'Job has not started yet', cls + ' of a pending job is not disabled');
-    }
+    assert(actionButton('e', 'view-artifacts').disabled && actionButton('e', 'view-artifacts').title === 'Job has not started yet', 'Artifacts of a pending job is not disabled');
     assert(!actions('a').querySelector('details'), 'a row still has a menu');
     // The toolbar has one Files button for the directory holding the
     // basedir, whose rows have the launch buttons.
@@ -128,7 +125,7 @@ setTimeout(async () => {
     launchers = { available: false };
     await window.loadLauncherAvailability();
     window.render();
-    assert.deepEqual(labels('a'), ['Log', 'Artifacts', 'Notes', 'Report', 'Path'], 'Launch offered where launching is unavailable');
+    assert.deepEqual(labels('a'), ['Log', 'Artifacts', 'Notes', 'Report', 'Path'], 'actions changed where launching is unavailable');
     assert.deepEqual(toolbarFiles().map(b => b.textContent), ['Files'], 'Files needs no launching');
     launchers = { available: true };
     await window.loadLauncherAvailability();
