@@ -91,7 +91,7 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 
 ## Artifacts
 
-<iframe src="https://www.youtube-nocookie.com/embed/-6ZoQojlcrU" title="See what your runs wrote" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
+<iframe src="https://www.youtube-nocookie.com/embed/XlSJfi8HCCM" title="See what your runs wrote" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
 Rotari records the paths each job's definition names (arguments, `--env` and
 matrix values, redirections, and paths in the config files and scripts it

@@ -1,6 +1,6 @@
 # Getting started
 
-<iframe src="https://www.youtube-nocookie.com/embed/vb_Mt4BkH80" title="All your runs in one place" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
+<iframe src="https://www.youtube-nocookie.com/embed/esewA3o1G4o" title="Every run on your cluster, recorded in one place" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
 ## Manage jobs, logs, and outputs in one place
 
