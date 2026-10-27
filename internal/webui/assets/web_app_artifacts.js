@@ -375,6 +375,17 @@ async function renderArtifactPreview(index, child, type) {
       method: "HEAD",
     },
   );
+  // Many text files have no extension, or one not listed; Open as text
+  // reads it as one, and a binary file is refused. A static export holds
+  // no text for such files.
+  const openAsText =
+    typeof staticArtifactFileURL === "function"
+      ? ""
+      : '<button type="button" class="artifact-open-text" onclick="loadArtifactText(' +
+        jsArg(index) +
+        "," +
+        jsArg(child) +
+        ",'start')\">Open as text</button>";
   setArtifactPreview(
     header +
       (response.ok
@@ -384,7 +395,8 @@ async function renderArtifactPreview(index, child, type) {
           ) +
           ", modified " +
           esc(response.headers.get("Last-Modified") || "-") +
-          ".</p>"
+          ".</p>" +
+          openAsText
         : '<p class="meta">' +
           esc(
             "Failed to open: " +

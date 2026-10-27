@@ -202,7 +202,7 @@ func snapshotTableView(source tableViewSource) (staticTableView, map[string]stri
 // copyStaticTableViewMedia copies a media file, opened under the source's
 // roots, into a static snapshot, and returns its size.
 func copyStaticTableViewMedia(target tableview.Target, path, destination string) (int64, error) {
-	file, err := target.OpenMedia(path)
+	file, err := target.Open(path)
 	if err != nil {
 		return 0, err
 	}

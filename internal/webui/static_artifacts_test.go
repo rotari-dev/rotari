@@ -107,6 +107,8 @@ setTimeout(async () => {
 
     await window.openArtifact(entries['model.pt'], '', 'file');
     if (!preview().textContent.includes('No preview for this file type. 9 B')) fail('no preview', preview().textContent);
+    // The export holds no text for it, so it offers none.
+    if (preview().querySelector('.artifact-open-text')) fail('Open as text in a static export');
 
     await window.openArtifact(entries['many'], '', 'directory');
     if (preview().querySelectorAll('tbody tr').length !== 200) fail('directory');

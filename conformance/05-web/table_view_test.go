@@ -172,6 +172,16 @@ func TestWebTableViewerReadsArtifacts(t *testing.T) {
 	if r := wd("/tableview/api/rows", url.Values{"child": {"media.csv"}, "sep": {","}, "base": {"file"}}); !strings.Contains(r.Body, `"ref":"a.wav","base":"file","properties":{"format":"WAV PCM"`) {
 		t.Fatalf("child rows = (%d, %s)", r.Status, r.Body)
 	}
+	// Any file under the roots reads as text, a page at a time; a binary
+	// file, one outside the roots, and a symlink leaving them are refused.
+	if r := wd("/tableview/api/text", url.Values{"ref": {"media.csv"}}); r.Status != 200 || !strings.Contains(r.Body, `"text":"audio\na.wav\n`) || !strings.Contains(r.Body, `"start":0`) {
+		t.Fatalf("text = (%d, %s)", r.Status, r.Body)
+	}
+	for ref, status := range map[string]int{"a.wav": 400, filepath.Join(outside, "secret.tsv"): 403, "../outside.tsv": 403, "link.tsv": 403, "missing.txt": 404} {
+		if r := wd("/tableview/api/text", url.Values{"ref": {ref}}); r.Status != status {
+			t.Fatalf("text of %s = (%d, %s), want %d", ref, r.Status, r.Body, status)
+		}
+	}
 	if r := wd("/tableview/api/rows", url.Values{"sep": {","}}); r.Status == 200 {
 		t.Fatalf("a file's separator was accepted for a directory: %s", r.Body)
 	}

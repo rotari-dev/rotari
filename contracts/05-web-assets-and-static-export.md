@@ -701,7 +701,9 @@ integer, and floating dtypes; object arrays are pickles and their values are
 never read. Files are
 streamed without a size limit; text is served 64 KiB at a time on line
 boundaries, from the start or, for `.log` and `.txt` in the UI, from the end,
-and a file with a NUL byte is not text. A directory lists its immediate
+and a file with a NUL byte is not text. The live UI offers **Open as text**
+for a file of no previewed type, such as one without an extension, reading
+it from the start; a static export offers no such button. A directory lists its immediate
 children, directories first and then by name, 200 per page, reading at most
 100,000 names. `--artifact-root` must name a directory and is rejected with
 `--static-dir`; static exports contain listings but no file contents unless
@@ -712,8 +714,8 @@ covered by `TestWebPreviewsArtifactsUnderAllowedRoots` and
 `TestWebServesArtifactsOnlyFromTrustedRecords` in
 [conformance/05-web/artifacts_test.go](../conformance/05-web/artifacts_test.go).
 The Table viewer (WEB-19) also serves, inline with the same headers, the
-image, audio, and video files a served table's cells name, only under the
-same roots; the ownership rule is `artifactRecordsTrust` in
+image, audio, and video files a served table's cells name, and any such
+file as text pages, only under the same roots; the ownership rule is `artifactRecordsTrust` in
 [internal/webui/artifact_trust.go](../internal/webui/artifact_trust.go).
 Opening an entry, including a directory child, scrolls to the rendered preview
 below the listing; loading additional pages does not scroll it. This browser
@@ -957,6 +959,11 @@ in typed columns: a filter on a duration takes seconds or `m:ss`, on a size
 a binary suffix such as `10M`, and on a time compares RFC 3339 text.
 Directory rows carry `directory` (the full relative path), a path cell ending
 in `/`, and modification time, but no media properties or file size.
+`/tableview/api/text?ref=&base=` reads any file a path names, resolved and
+refused as for media but of any type, as text pages the way
+`/api/artifact-text` does (`from`, `offset`, 64 KiB on line boundaries, a
+NUL byte refusing it); a directory's page opens a path cell that names no
+media or directory that way, in a pane.
 In either view a row's `tables` lists its path cells naming a table file
 (by the base-name patterns Launch with offers the viewer for), which the
 page links to a viewer of its own in a new tab: the same query with
@@ -1004,6 +1011,7 @@ the page checked by `TestTableViewPagesInBrowser` and
 `TestTableViewFiltersInBrowser`, `TestTableViewShowsMediaInBrowser`,
 `TestTableViewExpandsDirectoriesInBrowser`, `TestTableViewGroupsStemsInBrowser`, `TestTableViewOpensFilesInPanesInBrowser`,
 `TestTableViewMovesTabsAndLinksPanesInBrowser`,
+`TestTableViewOpensTableFilesInBrowser`, `TestTableViewShowsTextFilesInBrowser`,
 `TestTableViewChoosesAChannelInBrowser`, `TestChannelSamplesMixesChannels`, and
 `TestSpectrogramFindsATone`, and the row's link by
 `TestLaunchWithOpensTheTableViewerInBrowser` in

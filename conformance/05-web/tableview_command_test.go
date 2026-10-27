@@ -90,6 +90,16 @@ func TestTableViewCommandServesOnePath(t *testing.T) {
 	if err := os.Symlink(filepath.Join(outside, "other.csv"), filepath.Join(data, "link.csv")); err != nil {
 		t.Fatal(err)
 	}
+	// Any file under the root reads as text; a binary one, and one outside
+	// or through a symlink leaving it, are refused.
+	if r := authorized("text", url.Values{"ref": {"list.csv"}}); r.Status != 200 || !strings.Contains(r.Body, `"text":"audio\nwav/a.wav\n`) {
+		t.Fatalf("text = (%d, %s)", r.Status, r.Body)
+	}
+	for ref, status := range map[string]int{"link.csv": 403, "../outside/other.csv": 403, filepath.Join(outside, "other.csv"): 403} {
+		if r := authorized("text", url.Values{"ref": {ref}}); r.Status != status {
+			t.Fatalf("text of %s = (%d, %s), want %d", ref, r.Status, r.Body, status)
+		}
+	}
 	for child, status := range map[string]int{"../outside/other.csv": 400, filepath.Join(outside, "other.csv"): 400, "wav/../list.csv": 400, "link.csv": 403, "missing.csv": 404} {
 		if r := authorized("info", url.Values{"child": {child}}); r.Status != status {
 			t.Fatalf("child %s = (%d, %s), want %d", child, r.Status, r.Body, status)

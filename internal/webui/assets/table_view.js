@@ -843,8 +843,10 @@ function tableCell(row, index) {
         )
       : row.media && row.media[index]
         ? mediaCell(row.media[index])
-        : row.tables && row.tables.includes(index)
-          ? tableFileCell(text)
+        : info.kind === "directory" &&
+            rows.columns[index].type === "path" &&
+            text
+          ? fileCell(text, row.tables && row.tables.includes(index))
           : cellContent(text, rows.columns[index]);
   if (info.kind !== "directory" || view.listing !== "files" || index !== 0)
     return content;
@@ -886,24 +888,36 @@ function tableURL(ref) {
   return "?" + query.toString();
 }
 
-// tableFileCell is a directory's path to a table file, which opens in a
-// Table viewer of its own in a new tab.
-function tableFileCell(ref) {
+// fileCell is a directory's path to a file that is not media, which opens
+// as text in the active pane; a table file also opens in a Table viewer of
+// its own in a new tab.
+function fileCell(ref, table) {
   return el(
     "span",
     { className: "tv-media" },
-    el("span", { className: "tv-media-path" }, ref),
     el(
-      "a",
+      "button",
       {
-        className: "tv-open-table",
-        href: tableURL(ref),
-        target: "_blank",
-        rel: "noopener",
-        title: "Open " + ref + " in a new Table viewer",
+        type: "button",
+        className: "tv-media-path tv-link-button tv-text-file",
+        title: "Open as text in the active pane",
+        onclick: () => openMedia({ kind: "text", ref }),
       },
-      "Open table",
+      ref,
     ),
+    table
+      ? el(
+          "a",
+          {
+            className: "tv-open-table",
+            href: tableURL(ref),
+            target: "_blank",
+            rel: "noopener",
+            title: "Open " + ref + " in a new Table viewer",
+          },
+          "Open table",
+        )
+      : null,
   );
 }
 

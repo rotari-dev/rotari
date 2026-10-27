@@ -18,6 +18,7 @@ func TestWebArtifactPreviewInBrowser(t *testing.T) {
 	}
 	f := newArtifactFixture(t)
 	write(t, filepath.Join(f.work, "many", "it's.txt"), "quoted name")
+	write(t, filepath.Join(f.work, "NOTES"), "no extension\n")
 	server := httptest.NewServer(Handler(testOptions(f.baseDir, false)))
 	defer server.Close()
 	script := `
@@ -149,6 +150,15 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   await window.openArtifact(entries['model.pt'], '', 'file');
   if (!view.querySelector('.artifact-preview').textContent.includes('No preview for this file type. 9 B')) fail('no preview', view.querySelector('.artifact-preview').textContent);
+  // A file of no listed type opens as text on request; a binary one is
+  // refused.
+  view.querySelector('.artifact-open-text').click();
+  await wait(100);
+  if (!view.querySelector('.artifact-preview').textContent.includes('Failed to open: binary file')) fail('binary as text', view.querySelector('.artifact-preview').textContent);
+  await window.openArtifact('wd', 'NOTES', 'file');
+  view.querySelector('.artifact-open-text').click();
+  await wait(100);
+  if (view.querySelector('.artifact-text')?.textContent !== 'no extension\n') fail('text without an extension', view.querySelector('.artifact-preview').innerHTML);
   process.exit(0);
 })().catch(error => fail('error', error.stack));
 `

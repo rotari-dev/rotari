@@ -710,6 +710,38 @@ func TestTableViewOpensTableFilesInBrowser(t *testing.T) {
 `)
 }
 
+// A directory's file that is not media opens as text in the active pane,
+// whatever its name, a page at a time; a binary file says so.
+func TestTableViewShowsTextFilesInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	long := strings.Repeat("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde\n", 1500)
+	write(t, filepath.Join(f.work, "notes", "README"), "no extension\n")
+	write(t, filepath.Join(f.work, "notes", "config.yaml"), "lr: 0.1\n")
+	write(t, filepath.Join(f.work, "notes", "long.log"), long)
+	write(t, filepath.Join(f.work, "notes", "model.pt"), "PK\x00\x01torch")
+	runTableViewScript(t, testOptions(f.baseDir, false), f, "wd", "#pattern=notes%2F*&expanded=notes", `
+  await until('files', () => document.querySelectorAll('#tv-table .tv-text-file').length === 4);
+  const open = name => [...document.querySelectorAll('#tv-table .tv-text-file')].find(button => button.textContent === 'notes/' + name).click();
+  const view = () => document.querySelector('.tv-pane-active .tv-tab-view');
+  const shown = async (what, check) => { await until(what, () => view() && check(view())); return view(); };
+  open('README');
+  await shown('README', v => v.querySelector('.tv-text')?.textContent === 'no extension\n');
+  if (document.querySelector('.tv-pane-active .tv-tab-kind').textContent !== 'text') fail('tab kind');
+  open('config.yaml');
+  await shown('yaml', v => v.textContent.includes('notes/config.yaml') && v.querySelector('.tv-text')?.textContent === 'lr: 0.1\n');
+  // A long file loads more on demand.
+  open('long.log');
+  let v = await shown('first page', v => v.querySelector('.tv-text')?.textContent.length > 0);
+  const more = [...v.querySelectorAll('button')].find(button => button.textContent === 'Load more');
+  if (!more || more.hidden || v.querySelector('.tv-text').textContent.length >= `+strconv.Itoa(len(long))+`) fail('first page', v.querySelector('.tv-analysis-status').textContent);
+  more.click();
+  await shown('second page', v => v.querySelector('.tv-text').textContent.length === `+strconv.Itoa(len(long))+`);
+  if (!more.hidden || v.querySelector('.tv-analysis-status').textContent) fail('whole file');
+  open('model.pt');
+  await shown('binary', v => v.querySelector('.tv-analysis-status').textContent === 'Cannot show as text: binary file: download it instead');
+`)
+}
+
 // A file of more than one channel offers its channels and their mix for the
 // plots; jsdom cannot decode audio, so the page gets a stand-in decoder.
 func TestTableViewChoosesAChannelInBrowser(t *testing.T) {

@@ -22,7 +22,7 @@ import (
 // content request does; the page passes it through to its API requests and
 // adds its own parameters (sep and header for a file; view, pattern, expanded, group,
 // suffix_sep, and incomplete for a directory; filters, sort, desc, offset,
-// limit, base, and for a cell's media, ref).
+// limit, base, and for a cell's media or text, ref).
 
 //go:embed assets/table_view.html
 var tableViewHTML string
@@ -130,6 +130,15 @@ func (view tableView) handler() http.Handler {
 			return
 		}
 		serveTableViewMedia(writer, request, source, query.Get("base"), query.Get("ref"))
+	})
+	mux.HandleFunc("GET /api/text", func(writer http.ResponseWriter, request *http.Request) {
+		query := request.URL.Query()
+		source, err := view.resolve(query)
+		if err != nil {
+			writeArtifactError(writer, err)
+			return
+		}
+		serveTableViewText(writer, source, query)
 	})
 	mux.HandleFunc("GET /api/describe", func(writer http.ResponseWriter, request *http.Request) {
 		query := request.URL.Query()
@@ -267,7 +276,7 @@ func serveTableViewMedia(writer http.ResponseWriter, request *http.Request, sour
 		writeArtifactError(writer, err)
 		return
 	}
-	file, err := source.target.OpenMedia(path)
+	file, err := source.target.Open(path)
 	if err != nil {
 		writeArtifactError(writer, err)
 		return
@@ -285,6 +294,39 @@ func serveTableViewMedia(writer http.ResponseWriter, request *http.Request, sour
 	noStore(writer)
 	writer.Header().Set(headerContentType, tableview.MediaTypes[strings.ToLower(filepath.Ext(path))])
 	http.ServeContent(writer, request, "", info.ModTime(), file)
+}
+
+// serveTableViewText returns one page of any file a cell names as text, as
+// an artifact's text is read: ref and base name it as for media, and from
+// and offset choose the page. A binary file is refused.
+func serveTableViewText(writer http.ResponseWriter, source tableViewSource, query url.Values) {
+	path, err := source.target.ResolvePath(source.directory, query.Get("base"), query.Get("ref"))
+	if err != nil {
+		writeArtifactError(writer, err)
+		return
+	}
+	file, err := source.target.Open(path)
+	if err != nil {
+		writeArtifactError(writer, err)
+		return
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		writeArtifactError(writer, err)
+		return
+	}
+	if !info.Mode().IsRegular() {
+		writeWebError(writer, fmt.Errorf("%s is not a regular file", query.Get("ref")))
+		return
+	}
+	page, err := readTextPage(file, info.Size(), query.Get("from"), query.Get("offset"))
+	if err != nil {
+		writeWebError(writer, err)
+		return
+	}
+	noStore(writer)
+	writeWebJSON(writer, page)
 }
 
 // tableViewSort reads sort, a column counted from 0, and desc=1.
