@@ -136,6 +136,10 @@ rotari web --allow-exec
   can write it.
 - Commands run as you, with all your file permissions.
 
+Without `--allow-exec`, Artifacts says which commands a restart with it could
+run on the artifact, including built-ins whose program is not installed, or
+why the launcher file would stop it from starting.
+
 See [Launcher commands](CONFIGURATION.md#launcher-commands) and
 [Security model](SECURITY.md#launching-services-and-commands).
 

@@ -122,16 +122,16 @@ func (s site) launchAvailability(kind launcher.TargetKind, name string) launchAv
 	if path == "" {
 		path = "the launcher file in rotari's global config directory"
 	}
-	register := "Register commands in " + path + "; `rotari config --launchers` writes a template there."
+	signIn := " Sign in with user name `rotari` and the token it prints (or ROTARI_WEB_AUTH_TOKEN)."
 	switch {
 	case !s.AllowControl:
 		return launchAvailability{Path: s.LauncherFile,
-			Reason: "Launching is disabled: this server is read-only.",
-			Hint:   "Restart rotari web without --allow-control=false and with --allow-exec; launching also requires job control. " + register}
+			Reason: "Launching is disabled: this server is read-only, and launching requires job control.",
+			Hint:   "Restart with `rotari web --allow-exec`, without --allow-control=false." + signIn + " " + s.restartedLaunchers(path, kind, name)}
 	case s.Launches == nil:
 		return launchAvailability{Path: s.LauncherFile,
 			Reason: "Launching is disabled on this server.",
-			Hint:   "Restart with `rotari web --allow-exec`, which requires signing in with a token (printed at startup unless ROTARI_WEB_AUTH_TOKEN is set). " + register}
+			Hint:   "Restart with `rotari web --allow-exec`." + signIn + " " + s.restartedLaunchers(path, kind, name)}
 	case len(s.Launches.Registry.Commands) == 0:
 		return launchAvailability{Path: s.Launches.Registry.Path,
 			Reason: "No commands are registered.",
@@ -173,6 +173,40 @@ func (s site) launchAvailability(kind launcher.TargetKind, name string) launchAv
 		availability.User = current.Username
 	}
 	return availability
+}
+
+// restartedLaunchers says what `rotari web --allow-exec` would launch on a
+// target of kind named name (any target when kind is empty), loading the
+// launcher file as a restarted server would, or why it would refuse to start.
+// Built-in commands need no launcher file, so the file is offered only for
+// adding commands.
+func (s site) restartedLaunchers(path string, kind launcher.TargetKind, name string) string {
+	register := "Add your own commands in " + path + "; `rotari config --launchers` writes a template there."
+	if s.LauncherFile == "" {
+		return register
+	}
+	registry, err := launcher.LoadRegistry(s.LauncherFile)
+	if err != nil {
+		return fmt.Sprintf("It would refuse to start until the launcher file is fixed (Settings → Launcher config): %v.", err)
+	}
+	var names []string
+	for _, command := range registry.Commands {
+		if !acceptsTarget(command, kind, name) {
+			continue
+		}
+		if unavailable := command.Unavailable(); unavailable != "" {
+			names = append(names, command.Name+" (not installed: "+unavailable+")")
+		} else {
+			names = append(names, command.Name)
+		}
+	}
+	switch {
+	case len(names) == 0 && kind == "":
+		return "It would have no commands to run. " + register
+	case len(names) == 0:
+		return "No command it would load accepts this " + string(kind) + ". " + register
+	}
+	return "It could then run " + strings.Join(names, ", ") + "; the built-in ones need no launcher file. " + register
 }
 
 // webViewer is a viewer the Web UI provides itself: it opens an artifact in
