@@ -142,37 +142,6 @@ async function fillArtifactLaunchButtons(container) {
   }
 }
 
-// launchOnWorkingDirectory opens a job's Artifacts and points at the
-// commands for its working directory, the `.` row; when that row cannot be
-// launched on, the view says why instead.
-async function launchOnWorkingDirectory(queue, run, job, attemptID) {
-  await showArtifacts(queue, run, job, attemptID);
-  const row = artifactView().querySelector(
-    'tr[data-entry="' + WORKING_DIRECTORY_ENTRY + '"]',
-  );
-  if (row && row.querySelector(".artifact-launchers")) {
-    row.classList.add("artifact-row-focus");
-    row.scrollIntoView({ block: "nearest" });
-    return;
-  }
-  const listing = selectedArtifacts.listing;
-  if (!listing) return;
-  const note = document.createElement("p");
-  note.className = "launch-reason";
-  note.textContent = !listing.working_directory_type
-    ? "This attempt recorded no working directory to launch on."
-    : listing.working_directory_type !== "directory"
-      ? "The working directory " +
-        listing.working_directory +
-        " is " +
-        listing.working_directory_type +
-        " on the Web server's host, so nothing can be launched on it."
-      : "The working directory " +
-        listing.working_directory +
-        " is not served here, so nothing can be launched on it.";
-  artifactView().prepend(note);
-}
-
 function basedirParent() {
   const base = state.base_dir.replace(/\/+$/, "");
   return base.slice(0, base.lastIndexOf("/")) || "/";

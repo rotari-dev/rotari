@@ -490,8 +490,8 @@ Yes. TensorBoard, Jupyter Lab, MLflow, Aim, and Streamlit are built in, and
 commands you register in your global
 `launchers.toml` appear too, as a button per command in each row of a job's
 Artifacts, of the run page's **Files** view of the directory holding the
-basedir, and of the directories opened from them (a job's **Launch** button
-opens its Artifacts at the working directory's row), when
+basedir, and of the directories opened from them (a job's working
+directory is the first row of its Artifacts), when
 `rotari web --allow-exec` is running; the browser cannot send any other
 command. A command whose program is not installed is shown disabled. See
 [Launching commands](WEB.md#launching-commands).
