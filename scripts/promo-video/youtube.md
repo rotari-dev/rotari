@@ -74,7 +74,7 @@ browse whole directories, such as the experiment directory.
 0:26 TensorBoard from the row
 0:35 Directories, too
 
-Outputs and artifacts: https://rotari-dev.github.io/rotari/docs/OUTPUTS/
+Outputs and artifacts: https://rotari-dev.github.io/rotari/docs/WEB/#artifacts
 GitHub: https://github.com/rotari-dev/rotari
 
 Everything on screen comes from real runs of rotari. Narration is synthesized

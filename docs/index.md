@@ -16,9 +16,8 @@ LSF, or Sun Grid Engine cluster while keeping commands, results, and logs togeth
 - [Recovering failed runs](RECOVERING.md): rerun failed jobs, optionally after editing them.
 - [Executors and schedulers](EXECUTORS.md): local, SSH, Slurm, PBS, LSF, and SGE execution backends.
 - [Inspecting runs and jobs](INSPECT.md): status, logs, run readiness, and history.
-- [Outputs and artifacts](OUTPUTS.md): list, preview, and open what jobs
-  write, and launch TensorBoard or Jupyter Lab on it.
-- [Web UI](WEB.md): modes, options, remote access, and launching commands.
+- [Web UI](WEB.md): modes, remote access, and previewing what jobs write or
+  opening TensorBoard and Jupyter Lab on it.
 
 The repository [README](https://github.com/rotari-dev/rotari) provides the
 project overview; installation and quick start instructions are maintained in

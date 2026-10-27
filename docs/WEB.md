@@ -81,45 +81,92 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 - **Control** (not in read-only mode): copy, change, remove, cancel, and clear
   jobs, and **Create queue** or **Append to queue**, which a separate
   `rotari run` executes.
-- **Artifacts:** preview recorded files and directories, download files, and
-  open CSV/TSV files in the Table viewer, which works without `--allow-exec`.
-  See [Artifacts](OUTPUTS.md#artifacts) and
-  [Viewing tables](OUTPUTS.md#viewing-tables).
+- **Artifacts:** preview and download what jobs wrote, open tables, and
+  launch TensorBoard and other viewers on it; see [Artifacts](#artifacts).
 - **Config:** **Generate config** and **View config** edit one config source at
   a time; see [Configuration](CONFIGURATION.md).
 - **Notifications:** the in-page inbox and optional desktop popups; see
   [Notifications](NOTIFICATIONS.md#browser-notifications).
 - **Theme:** `Settings` selects Light, Dark, or System.
 
-## Launching commands
+## Artifacts
 
-With `--allow-exec`, the UI can run TensorBoard, Jupyter Lab, MLflow, Aim,
-Streamlit, and the commands in your global `launchers.toml`, against an
-artifact. Use the command buttons in the rows of a job's Artifacts or of the
-run toolbar's **Files** view; **Launches** lists and stops them.
+<iframe src="https://www.youtube-nocookie.com/embed/-6ZoQojlcrU" title="See what your runs wrote" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
-Start it with:
+Rotari records the paths each job's definition names (arguments, `--env` and
+matrix values, redirections, and paths in the config files and scripts it
+reads), without running the job. Paths built at runtime are missed; declare
+them with `rotari add --artifact PATH`, which may use
+`$ROTARI_ARRAY_TASK_ID`, `$ROTARI_JOB_DIR`, and the job's variables.
+`rotari show -j JOB --artifacts` lists them in a terminal.
+
+In the Web UI, a job's **Artifacts** button lists them, while the job runs
+too. Files can be previewed (images, audio, video, NumPy arrays, tables,
+text) or downloaded, and directories opened. The first row, `.`, is the
+job's working directory, where trackers such as MLflow and Aim write by
+default. The run toolbar's **Files** opens the experiment directory around
+`.rotari-state`, where jobs can share one TensorBoard log directory or
+tracker store.
+
+Only files under the job's working directory or the directory holding the
+basedir are served, and only when no other user can write the project's
+state; `--artifact-root DIR` allows more. See
+[Security model](SECURITY.md#artifact-files-and-static-exports).
+
+### Launching commands
+
+With `rotari web --allow-exec`, each row of Artifacts and **Files** has a
+button per command that accepts it: TensorBoard, Jupyter Lab, MLflow, Aim,
+Streamlit, and the commands in your global `launchers.toml`
+(`rotari config --launchers` writes a template). The UI shows what will run
+before **Launch**; a service such as TensorBoard then opens through the Web
+UI's own port, so it needs no extra SSH forward. **Launches** in the top bar
+lists and stops them. Closing the page does not stop a launch; stopping
+`rotari web` does.
 
 ```sh
 export ROTARI_WEB_AUTH_TOKEN=...      # optional; otherwise one is generated and printed
 rotari web --allow-exec
 ```
 
-What is different about this mode, in brief:
+- A token is required even on `127.0.0.1`; sign in with the user name
+  `rotari`.
+- The browser only names a registered command and an artifact; the command
+  text comes from `launchers.toml`, which rotari refuses unless no other user
+  can write it.
+- Commands run as you, with all your file permissions.
 
-- The browser names a registered command and an artifact; command text,
-  working directory, and mode come only from `launchers.toml`, which rotari
-  refuses unless no other user can write it.
-- A token is required even on `127.0.0.1`, and requests must have an
-  acceptable `Host` and, for POST, `Origin`.
-- Commands run as you with your file permissions; the artifact roots limit
-  what can be selected, not what a command does.
+See [Launcher commands](CONFIGURATION.md#launcher-commands) and
+[Security model](SECURITY.md#launching-services-and-commands).
 
-The details are not repeated here:
-[Launching commands on artifacts](OUTPUTS.md#launching-commands-on-artifacts)
-for use, [Launcher commands](CONFIGURATION.md#launcher-commands) for the file,
-and [Security model](SECURITY.md) for the guarantees and
-limits, including the loopback port a launched service listens on.
+### Experiment trackers
+
+Rotari does not read tracker metrics; it lets you open a tracker on what the
+job wrote. Choose **Aim** on the `.` row, or open `mlflow.db` in it and choose
+**MLflow (SQLite)**. For a store shared by the run's jobs, use **Files**.
+
+To link a tracker run back to rotari, tag it with `ROTARI_RUN_ID`,
+`ROTARI_JOB_ID`, and `ROTARI_ATTEMPT_ID` from the job's environment. Avoid one
+SQLite `mlflow.db` written by many parallel jobs on NFS; use a file store,
+one store per job, or a tracking server.
+
+### Viewing tables
+
+A table file (`.csv`, `.tsv`, `.scp`, and similar) or a directory has a
+**Table viewer** button, available without `--allow-exec`. It pages through
+files with millions of rows and offers filters, sorting, and per-column
+statistics (**Describe**) over the whole file. A cell holding the path of an
+image, audio, or video file opens it in a pane above the table, with a
+waveform and spectrogram for audio. For a directory, **Group by stem** puts
+`ref/u1.wav`, `hyp/u1.wav`, and `plots/u1.png` in one row to compare outputs
+and find missing ones. The URL keeps the view, so a link can be shared.
+
+`rotari tableview PATH` opens the same viewer outside any project:
+
+```sh
+rotari tableview metadata.csv
+rotari tableview eval/ --port 8090
+```
 
 ## Static export
 

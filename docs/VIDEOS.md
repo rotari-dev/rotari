@@ -27,7 +27,7 @@ experiment compared in one TensorBoard.
 
 <iframe src="https://www.youtube-nocookie.com/embed/-6ZoQojlcrU" title="See what your runs wrote" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
-See [Outputs and artifacts](OUTPUTS.md).
+See [Web UI: Artifacts](WEB.md#artifacts).
 
 ## See why runs failed, and rerun only what failed
 
