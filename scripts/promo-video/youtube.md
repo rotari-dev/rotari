@@ -67,12 +67,12 @@ Title: See what your runs wrote: plots, audio, TensorBoard in the browser | rota
 
 A training run writes plots, audio samples, and TensorBoard logs. rotari lists
 each job's outputs, previews a plot or plays a sample in the browser, starts
-TensorBoard from the row after showing you what it will run, and opens the
-whole experiment directory to compare every run in one TensorBoard.
+TensorBoard from the row after showing you what it will run, and lets you
+browse whole directories, such as the experiment directory.
 
 0:00 A job's outputs, previewed
 0:26 TensorBoard from the row
-0:39 Compare every experiment
+0:35 Directories, too
 
 Outputs and artifacts: https://rotari-dev.github.io/rotari/docs/OUTPUTS/
 GitHub: https://github.com/rotari-dev/rotari

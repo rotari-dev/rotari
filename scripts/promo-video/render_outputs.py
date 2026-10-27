@@ -92,30 +92,18 @@ def timeline():
         ),
         webscene("tb_ready", 1.0, [[0, "…then open it."]]),
         webscene("tb_board", 3.0, [[0, "…then open it."]], say="Then open it."),
-        # The run's Files view of the experiment directory.
+        # Directories, too: the run's Files view of the experiment directory.
         webscene(
             "files",
             3.6,
-            [[0, "Files: the whole<br><em>experiment directory.</em>"]],
-            say="The run's Files view opens the whole experiment directory,",
+            [[0, "Directories, too:<br><em>the whole experiment.</em>"]],
+            say="You can browse directories too, such as the whole experiment directory,",
         ),
         webscene(
             "files_outputs",
-            3.0,
+            3.4,
             [[0, "Every experiment's<br><em>outputs.</em>"]],
             say="with every experiment's outputs.",
-        ),
-        webscene(
-            "all_confirm",
-            2.2,
-            [[0, "Launch TensorBoard<br><em>on all of them,</em>"]],
-            say="Launch TensorBoard on all of them,",
-        ),
-        webscene(
-            "all_board",
-            4.0,
-            [[0, "…and compare<br><em>every run.</em>"]],
-            say="and compare every run.",
         ),
         {
             "kind": "logo",
