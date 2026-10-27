@@ -157,6 +157,42 @@ func TestLaunchAvailabilityExplainsHowToEnable(t *testing.T) {
 	}
 }
 
+// Without --allow-exec, the hint names what a restarted server would launch,
+// built-ins included, and says when it would refuse the launcher file.
+func TestLaunchAvailabilityNamesRestartedCommands(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rotari", launcher.FileName)
+	options := testOptions(t.TempDir(), true)
+	options.LauncherFile = path
+	t.Setenv("PATH", t.TempDir())
+	hint := func(query string) string {
+		t.Helper()
+		return decodeBody[launchAvailability](t, serveJSON(t, Handler(options), http.MethodGet, "/api/launchers"+query, "")).Hint
+	}
+
+	got := hint("")
+	for _, want := range []string{"rotari web --allow-exec", "TensorBoard (not installed: tensorboard was not found on PATH)", "Streamlit", "built-in ones need no launcher file", "Add your own commands in " + path} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("hint = %q, want %q", got, want)
+		}
+	}
+	if got := hint("?kind=file&name=app.py"); !strings.Contains(got, "run Streamlit (") || strings.Contains(got, "TensorBoard") {
+		t.Fatalf("hint for app.py = %q, want only Streamlit", got)
+	}
+	if got := hint("?kind=file&name=data.bin"); !strings.Contains(got, "No command it would load accepts this file.") {
+		t.Fatalf("hint for data.bin = %q", got)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("[[launcher]]\nname = \"Plot\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := hint(""); !strings.Contains(got, "It would refuse to start until the launcher file is fixed") || strings.Contains(got, "TensorBoard") {
+		t.Fatalf("hint with an invalid file = %q", got)
+	}
+}
+
 func TestLaunchRunsRegisteredCommandOnArtifact(t *testing.T) {
 	f := newArtifactFixture(t)
 	options := launchOptions(t, f.baseDir,
