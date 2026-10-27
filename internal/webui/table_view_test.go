@@ -411,6 +411,16 @@ func TestTableViewDescribesAndServesMedia(t *testing.T) {
 			t.Errorf("%s from %q = %d %s, want %d", test.ref, test.base, recorder.Code, recorder.Body, test.status)
 		}
 	}
+	// A directory is neither media nor text, even named like media.
+	if err := os.MkdirAll(filepath.Join(f.baseDir, "audio", "frames.wav"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, route := range []string{"api/media", "api/text"} {
+		recorder := f.viewerGet(t, options, route, "data.csv", url.Values{"ref": {"audio/frames.wav"}})
+		if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "audio/frames.wav is not a regular file") {
+			t.Errorf("%s of a directory = %d %s", route, recorder.Code, recorder.Body)
+		}
+	}
 }
 
 func TestTableViewShowsMediaInBrowser(t *testing.T) {
@@ -487,6 +497,9 @@ func TestTableViewListsADirectory(t *testing.T) {
 		if recorder := f.viewerGet(t, options, "api/rows", "many", extra); recorder.Code != http.StatusBadRequest {
 			t.Errorf("%v = %d %s", extra, recorder.Code, recorder.Body)
 		}
+	}
+	if recorder := f.viewerGet(t, options, "api/rows", "many", url.Values{"incomplete": {"yes"}}); recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "incomplete must be 1 or 0") {
+		t.Errorf("incomplete=yes = %d %s", recorder.Code, recorder.Body)
 	}
 	if recorder := f.viewerGet(t, options, "api/rows", "data.csv", url.Values{"sep": {","}, "view": {"files"}}); recorder.Code != http.StatusBadRequest {
 		t.Errorf("a directory's parameter on a file = %d", recorder.Code)
