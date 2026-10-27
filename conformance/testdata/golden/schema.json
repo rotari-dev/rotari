@@ -2190,6 +2190,10 @@
         {
           "name": "auth-token",
           "value_name": "TOKEN"
+        },
+        {
+          "name": "static-dir",
+          "value_name": "DIR"
         }
       ],
       "name": "tableview"

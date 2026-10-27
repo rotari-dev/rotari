@@ -160,11 +160,18 @@ func (view tableView) handler() http.Handler {
 }
 
 func (view tableView) page() string {
+	return tableViewPage(view.stylesheets, "")
+}
+
+// tableViewPage is the viewer's page, linking stylesheets before its own
+// and running scripts, a static snapshot's, before its own.
+func tableViewPage(stylesheets []string, scripts string) string {
 	var links strings.Builder
-	for _, href := range view.stylesheets {
+	for _, href := range stylesheets {
 		links.WriteString(`<link rel="stylesheet" href="` + html.EscapeString(href) + `" />`)
 	}
-	return strings.Replace(tableViewHTML, "__ROTARI_STYLESHEETS__", links.String(), 1)
+	page := strings.Replace(tableViewHTML, "__ROTARI_STYLESHEETS__", links.String(), 1)
+	return strings.Replace(page, "__ROTARI_STATIC_SCRIPTS__", scripts, 1)
 }
 
 // tableViewInfo is the /api/info response: what the page shows before any
@@ -178,6 +185,9 @@ type tableViewInfo struct {
 	// Separator is the one a file's extension suggests.
 	Separator string           `json:"separator,omitempty"`
 	Bases     []tableview.Base `json:"bases"`
+	// Static, set only in a static snapshot, says what the page cannot
+	// change there.
+	Static string `json:"static,omitempty"`
 }
 
 func tableViewInfoOf(source tableViewSource) (tableViewInfo, error) {
@@ -358,19 +368,10 @@ const TableViewPort = DefaultPort + 1
 // and design tokens its page links. It reads only under that directory, or
 // the file's: the only root, and the only base media paths resolve from.
 func TableViewHandler(path string) (http.Handler, error) {
-	absolute, err := filepath.Abs(path)
+	source, err := commandTableViewSource(path)
 	if err != nil {
 		return nil, err
 	}
-	info, err := os.Stat(absolute)
-	if err != nil {
-		return nil, err
-	}
-	root := absolute
-	if !info.IsDir() {
-		root = filepath.Dir(absolute)
-	}
-	source := tableViewSource{target: tableview.Target{Path: absolute, Roots: []string{root}}, directory: info.IsDir(), name: path}
 	view := tableView{
 		resolve:     func(url.Values) (tableViewSource, error) { return source, nil },
 		stylesheets: []string{"/web_fonts.css", "/web_tokens.css"},
@@ -387,4 +388,22 @@ func TableViewHandler(path string) (http.Handler, error) {
 		_, _ = writer.Write([]byte(webTokensCSS))
 	})
 	return mux, nil
+}
+
+// commandTableViewSource is the source rotari tableview names: path, read
+// only under that directory, or the file's.
+func commandTableViewSource(path string) (tableViewSource, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return tableViewSource{}, err
+	}
+	info, err := os.Stat(absolute)
+	if err != nil {
+		return tableViewSource{}, err
+	}
+	root := absolute
+	if !info.IsDir() {
+		root = filepath.Dir(absolute)
+	}
+	return tableViewSource{target: tableview.Target{Path: absolute, Roots: []string{root}}, directory: info.IsDir(), name: path}, nil
 }

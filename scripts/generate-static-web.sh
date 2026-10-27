@@ -120,4 +120,10 @@ SCRIPT
 echo "generating static pages in ${output_dir}..."
 # Export every project, not only the one ROTARI_PROJECT_NAME selects.
 env -u ROTARI_PROJECT_NAME "${binary}" web --static-dir "${output_dir}" --static-artifact-contents
+
+# A Table viewer snapshot of an evaluation table whose cells name WAV files,
+# published at tableview/. It comes after the export, which replaces
+# output_dir.
+python3 "${script_dir}/demo_tableview.py" "${work_dir}/tableview"
+"${binary}" tableview --static-dir "${output_dir}/tableview" "${work_dir}/tableview/utterances.csv"
 echo "done"

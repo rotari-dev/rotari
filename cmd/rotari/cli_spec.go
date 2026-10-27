@@ -466,7 +466,8 @@ var cliCommandSpecs = []cliCommandSpec{
 		Flags: []cliFlagSpec{
 			{Name: "host", Description: "HTTP listen host", ValueName: "HOST", CommandLineOnly: true},
 			{Name: "port", Description: "HTTP listen port; without it, the next free port after the default", ValueName: "PORT", CommandLineOnly: true},
-			{Name: "auth-token", Description: "require this token in Authorization: Bearer or X-Rotari-Token; prefer ROTARI_WEB_AUTH_TOKEN for secrets", ValueName: "TOKEN"},
+			{Name: "auth-token", Description: "require this token in Authorization: Bearer or X-Rotari-Token; prefer ROTARI_WEB_AUTH_TOKEN for secrets; cannot be combined with --static-dir", ValueName: "TOKEN"},
+			{Name: "static-dir", Description: "write a static snapshot of the Table viewer for a delimited file (up to 10,000 rows, with its media files up to 10 MiB each, 100 MiB in all) instead of serving; filters, the separator, and the header row are fixed; cannot be combined with --host, --port, or --auth-token", ValueName: "DIR", CommandLineOnly: true},
 		},
 	},
 	{

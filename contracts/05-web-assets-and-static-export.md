@@ -1020,6 +1020,32 @@ in [internal/webui/table_view.go](../internal/webui/table_view.go); covered by
 `TestTableViewCommandServesOnePath` in
 [conformance/05-web/tableview_command_test.go](../conformance/05-web/tableview_command_test.go).
 
+**WEB-22** `rotari tableview --static-dir DIR FILE` writes a static snapshot
+of the Table viewer for one delimited file instead of serving, reading under
+the file's directory as WEB-20 does. The file is read with the separator its
+extension suggests and a header row; the snapshot embeds every row (at most
+10,000, more fail), each column's ascending and descending order, and
+Describe over the whole file, and copies each media file its cells name
+that the live viewer would show (at most 10 MiB each and 100 MiB in all, or
+the export fails) into `media/`, and prints how many rows and media files,
+and how many bytes of them, it wrote. The page is named by the file's base name,
+not its path. `table_view_static.js` answers the page's `api/info`,
+`api/rows` (paging and sorting), and `api/describe` from the snapshot and
+links media cells to their copies; the page disables the separator, header,
+and media-base controls and shows the reason in place of the filter form,
+and a request with filters, another separator or header, or another base
+answers 400 with the reason. `--host`, `--port`, and `--auth-token` (also
+from `ROTARI_WEB_AUTH_TOKEN`) are refused with `--static-dir`, as is a
+directory, and an output directory that contains the file, since the export
+replaces it. Implemented by `GenerateStaticTableView` in
+[internal/webui/table_view_static.go](../internal/webui/table_view_static.go)
+and `table_view_static.js`; covered by
+`TestTableViewCommandWritesAStaticSnapshot` in
+[conformance/05-web/tableview_command_test.go](../conformance/05-web/tableview_command_test.go),
+with the page checked by `TestStaticTableViewInBrowser` and the refusals by
+`TestStaticTableViewRefuses` in
+[internal/webui/table_view_static_test.go](../internal/webui/table_view_static_test.go).
+
 ## Editing rules
 
 - Edit HTML, CSS, and JavaScript in `internal/webui/assets/`, not in `webui.go`.

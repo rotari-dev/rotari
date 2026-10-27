@@ -72,6 +72,9 @@ A static export contains only paths unless it is made with
 can read the export, such as a published site, can then read those files. The
 command reports how many files and bytes it copied.
 
+`rotari tableview --static-dir` likewise copies the table's rows and the media
+files its cells name into the snapshot, and reports how many it copied.
+
 ## Launching services and commands
 
 Launching is off by default. `rotari web --allow-exec` lets anyone who can

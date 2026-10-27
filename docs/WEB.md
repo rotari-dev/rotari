@@ -161,13 +161,29 @@ waveform and spectrogram for audio; **Channel** picks one channel of a
 multichannel file to draw and to play from both speakers, or **Mix** to
 draw their mean and play the file as it is. For a directory, **Group by stem** puts
 `ref/u1.wav`, `hyp/u1.wav`, and `plots/u1.png` in one row to compare outputs
-and find missing ones. The URL keeps the view, so a link can be shared.
+and find missing ones. The URL keeps the view, so a link can be shared. Try
+it in the [Table viewer demo](https://rotari-dev.github.io/rotari/tableview/),
+an evaluation table whose cells name WAV files; it is a static snapshot
+(below), so filters are off there.
 
 `rotari tableview PATH` opens the same viewer outside any project:
 
 ```sh
 rotari tableview metadata.csv
 rotari tableview eval/ --port 8090
+```
+
+`rotari tableview --static-dir DIR FILE` writes a snapshot of one table file
+that you can publish or open without a server, as in the
+[demo](https://rotari-dev.github.io/rotari/tableview/). It holds every row
+(at most 10,000) and copies the media files the cells name (up to 10 MiB
+each, 100 MiB in all), so share it only with readers who may see them.
+Paging, sorting, **Describe** over the whole file, and the panes work;
+filters, the separator, and the header row can be changed only in the live
+viewer. `DIR` is replaced.
+
+```sh
+rotari tableview --static-dir site/eval eval/utterances.csv
 ```
 
 ## Static export

@@ -3494,10 +3494,23 @@ CLI_SCHEMA: dict[str, Any] = {
                 {
                     "description": "require this token in Authorization: Bearer "
                     "or X-Rotari-Token; prefer "
-                    "ROTARI_WEB_AUTH_TOKEN for secrets",
+                    "ROTARI_WEB_AUTH_TOKEN for secrets; cannot be "
+                    "combined with --static-dir",
                     "environment": "ROTARI_WEB_AUTH_TOKEN",
                     "name": "auth-token",
                     "value_name": "TOKEN",
+                },
+                {
+                    "command_line_only": True,
+                    "description": "write a static snapshot of the Table viewer "
+                    "for a delimited file (up to 10,000 rows, "
+                    "with its media files up to 10 MiB each, 100 "
+                    "MiB in all) instead of serving; filters, the "
+                    "separator, and the header row are fixed; "
+                    "cannot be combined with --host, --port, or "
+                    "--auth-token",
+                    "name": "static-dir",
+                    "value_name": "DIR",
                 },
             ],
             "name": "tableview",
