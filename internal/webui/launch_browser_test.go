@@ -41,7 +41,18 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
   });
   const window = dom.window;
   const document = window.document;
-  await wait(300);
+  const until = async (what, check) => {
+    for (let tries = 0; tries < 300; tries++) {
+      if (check()) return;
+      await wait(30);
+    }
+    fail('timed out waiting for ' + what);
+  };
+  // The page answers /api/launchers and /api/state asynchronously; under
+  // load a fixed wait can read the Launches and settings buttons before
+  // either has arrived.
+  await until('the launcher availability and first render', () =>
+    window.eval('launcherAvailability !== null') && document.querySelector('#settings-actions .config-button'));
   const panelText = () => document.getElementById('artifact-launch-panel')?.textContent || '';
   const choices = () => [...document.querySelectorAll('#artifact-launch-panel .launch-choices button')].map(button => button.textContent);
   // launchers lists a row's, or a preview title line's, viewer and command
