@@ -3,8 +3,8 @@
 Run through `capture-web.sh WORK ROTARI SAMPLES capture_outputs.py` (no
 display needed). The experiment directory ~/tts is a rotari workspace
 (`rotari init`), so its state is in ~/tts/.rotari-state and the run page's
-Files view opens ~/tts. Earlier experiments' outputs sit beside the new run's,
-so TensorBoard on outputs/ compares them. The Web UI runs with --allow-exec
+Files view opens ~/tts, where earlier experiments' outputs sit beside the new
+run's. The Web UI runs with --allow-exec
 and is signed in to over loopback HTTP before anything is recorded; a
 headless Chrome draws it 1100x782 CSS px at scale 2 for the landscape frame.
 
@@ -196,8 +196,8 @@ def main():
             shutil.copy(f"{EXP}/{RUN_OUT}/samples/LJ001-0001.wav", f"{OUT}/sample.wav")
             table.close()
 
-            # The run's Files view: the whole experiment directory, then
-            # TensorBoard on outputs/ to compare every experiment.
+            # The run's Files view: the whole experiment directory and its
+            # outputs/, every experiment's.
             page.goto(run_page)
             page.wait_for_timeout(1500)
             page.get_by_role("button", name="Files", exact=True).first.click()
@@ -206,9 +206,6 @@ def main():
             modal.get_by_text("outputs", exact=True).first.click()
             page.wait_for_timeout(1500)
             S.record(page, frames, "files_outputs", 0.5, fps=4)
-            # The buttons beside the directory's path, the first in the view,
-            # launch on outputs/ itself.
-            launch(page, modal, frames, "all", lambda: None, modal)
             b.close()
     finally:
         web.terminate()
