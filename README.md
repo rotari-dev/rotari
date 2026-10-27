@@ -16,7 +16,7 @@ matrix jobs. If you've used [Kaldi](https://github.com/kaldi-asr/kaldi)'s or
 [ESPnet](https://github.com/espnet)'s `run.pl`/`queue.pl`, the basic idea should
 feel familiar.
 
-The [documentation site](https://rotari-dev.github.io/rotari/docs/) covers installation, concepts, command reference, and running rotari on clusters. AI agents: use the [documentation index](https://rotari-dev.github.io/rotari/docs/llms.txt) to find relevant guides, or the [full documentation](https://rotari-dev.github.io/rotari/docs/llms-full.txt) for the complete set.
+The [documentation site](https://rotari-dev.github.io/rotari/docs/) covers installation, concepts, command reference, and running rotari on clusters, with [short videos](https://rotari-dev.github.io/rotari/docs/VIDEOS/) of each feature. AI agents: use the [documentation index](https://rotari-dev.github.io/rotari/docs/llms.txt) to find relevant guides, or the [full documentation](https://rotari-dev.github.io/rotari/docs/llms-full.txt) for the complete set.
 
 | Plain shell (background jobs) | rotari |
 | --- | --- |
@@ -25,8 +25,6 @@ The [documentation site](https://rotari-dev.github.io/rotari/docs/) covers insta
 <!-- Do not edit `README.md` directly. The `BEGIN GETTING STARTED` section is generated from `docs/GETTING_STARTED.md`; edit that source document and run `python3 scripts/sync_readme.py` instead.-->
 
 <!-- BEGIN GETTING STARTED -->
-
-[![All your runs in one place](https://img.youtube.com/vi/vb_Mt4BkH80/maxresdefault.jpg)](https://rotari-dev.github.io/rotari/docs/VIDEOS/)
 
 ## Manage jobs, logs, and outputs in one place
 
