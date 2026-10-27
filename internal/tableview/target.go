@@ -102,6 +102,16 @@ func (target Target) ResolveMedia(directory bool, baseID, ref string) (string, e
 	if MediaKind(ref) == "" {
 		return "", fmt.Errorf("%s is not an image, audio, or video file", ref)
 	}
+	return target.ResolvePath(directory, baseID, ref)
+}
+
+// ResolvePath returns the absolute path of any file a cell names, as
+// ResolveMedia does without asking for a media file: one the viewer reads
+// as text.
+func (target Target) ResolvePath(directory bool, baseID, ref string) (string, error) {
+	if ref == "" || strings.ContainsRune(ref, 0) {
+		return "", fmt.Errorf("a path is required")
+	}
 	path := ref
 	if !filepath.IsAbs(path) {
 		base, err := target.base(directory, baseID)
@@ -117,8 +127,8 @@ func (target Target) ResolveMedia(directory bool, baseID, ref string) (string, e
 	return path, nil
 }
 
-// OpenMedia opens a media file ResolveMedia returned.
-func (target Target) OpenMedia(path string) (*os.File, error) {
+// Open opens a file ResolveMedia or ResolvePath returned.
+func (target Target) Open(path string) (*os.File, error) {
 	return target.open(path)
 }
 

@@ -2,7 +2,7 @@
 // split right or down. One pane is active, and files clicked in the table
 // open there. Images and video show as they are; audio has a player, its
 // waveform, and its spectrogram, which the browser computes from the
-// decoded samples for the time range in view.
+// decoded samples for the time range in view; any other file shows as text.
 "use strict";
 
 // panes is the layout: a tree of splits whose leaves are panes, or null when
@@ -764,6 +764,10 @@ class TabView {
     this.cache = {};
     this.selection = null;
     this.root = el("div", { className: "tv-tab-view" });
+    if (media.kind === "text") {
+      this.showText();
+      return;
+    }
     const properties = media.properties
       ? formatProperties(media.properties)
       : "";
@@ -849,6 +853,59 @@ class TabView {
       this.resizer.observe(this.wave.canvas);
       this.resizer.observe(this.spec.canvas);
     }
+  }
+
+  // showText shows the file as text a page at a time, as an artifact's
+  // text is shown; a binary file says so.
+  showText() {
+    const text = { pre: el("pre", { className: "tv-text" }), end: 0 };
+    text.status = el("p", { className: "tv-analysis-status" }, "Loading…");
+    text.more = el(
+      "button",
+      { type: "button", onclick: () => this.moreText() },
+      "Load more",
+    );
+    text.more.hidden = true;
+    this.text = text;
+    this.root.append(
+      el(
+        "div",
+        { className: "tv-tab-title" },
+        el("strong", {}, this.media.ref),
+      ),
+      text.status,
+      text.pre,
+      text.more,
+    );
+    this.moreText();
+  }
+
+  async moreText() {
+    const text = this.text;
+    text.more.disabled = true;
+    try {
+      const response = await fetch(
+        apiURL("api/text", {
+          ref: this.media.ref,
+          base: this.media.base || undefined,
+          offset: text.end || undefined,
+        }),
+      );
+      const body = await response.text();
+      if (!response.ok)
+        throw new Error(body.trim() || "HTTP " + response.status);
+      const page = JSON.parse(body);
+      text.pre.append(page.text);
+      text.end = page.end;
+      text.status.textContent =
+        page.end < page.size
+          ? formatBytes(page.end) + " of " + formatBytes(page.size)
+          : "";
+      text.more.hidden = page.end >= page.size;
+    } catch (error) {
+      text.status.textContent = "Cannot show as text: " + error.message;
+    }
+    text.more.disabled = false;
   }
 
   // plot makes a canvas for one view of the samples, with its pointer

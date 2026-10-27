@@ -232,7 +232,7 @@ func TestPagesDescribeTheMediaCellsName(t *testing.T) {
 			t.Errorf("%q resolved to %s", ref, path)
 		}
 	}
-	if file, err := target.OpenMedia(filepath.Join(root, "data", "link.wav")); err == nil {
+	if file, err := target.Open(filepath.Join(root, "data", "link.wav")); err == nil {
 		file.Close()
 		t.Error("a symlink out of the root was opened")
 	}

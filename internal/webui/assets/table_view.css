@@ -291,6 +291,15 @@ a:hover {
   font-family: var(--font-mono);
   overflow-wrap: anywhere;
 }
+.tv-text {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre;
+}
 .tv-image,
 .tv-video {
   flex: 1;

@@ -102,7 +102,8 @@ them with `rotari add --artifact PATH`, which may use
 
 In the Web UI, a job's **Artifacts** button lists them, while the job runs
 too. Files can be previewed (images, audio, video, NumPy arrays, tables,
-text) or downloaded, and directories opened. The first row, `.`, is the
+text) or downloaded, and directories opened. A file of another type, such
+as one without an extension, has **Open as text**. The first row, `.`, is the
 job's working directory, where trackers such as MLflow and Aim write by
 default. The run toolbar's **Files** opens the experiment directory around
 `.rotari-state`, where jobs can share one TensorBoard log directory or
@@ -165,8 +166,9 @@ waveform and spectrogram for audio; **Channel** picks one channel of a
 multichannel file to draw and to play from both speakers, or **Mix** to
 draw their mean and play the file as it is. For a directory, **Group by stem** puts
 `ref/u1.wav`, `hyp/u1.wav`, and `plots/u1.png` in one row to compare outputs
-and find missing ones. A table file in a directory has **Open table**,
-which opens it in a Table viewer of its own in a new tab. The URL keeps the view, so a link can be shared. Try
+and find missing ones. In a directory, clicking any other file shows it as
+text in a pane, and a table file also has **Open table**, which opens it in
+a Table viewer of its own in a new tab. The URL keeps the view, so a link can be shared. Try
 it in the [Table viewer demo](https://rotari-dev.github.io/rotari/tableview/),
 an evaluation table whose cells name WAV files; it is a static snapshot
 (below), so filters are off there.
