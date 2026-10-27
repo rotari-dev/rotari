@@ -428,7 +428,11 @@ function renderToolbar() {
   const known = separatorChoices.some((choice) => choice.value === view.sep);
   const select = el(
     "select",
-    { "aria-label": "Separator", onchange: changeSeparatorChoice },
+    {
+      "aria-label": "Separator",
+      disabled: !!info.static,
+      onchange: changeSeparatorChoice,
+    },
     separatorChoices.map((choice) =>
       el(
         "option",
@@ -444,12 +448,14 @@ function renderToolbar() {
     "aria-label": "Separator character",
     value: known ? "" : view.sep,
     hidden: known,
+    disabled: !!info.static,
     maxLength: 2,
     onchange: (event) => changeSeparator(event.target.value),
   });
   const header = el("input", {
     type: "checkbox",
     checked: view.header,
+    disabled: !!info.static,
     onchange: (event) => {
       view.header = event.target.checked;
       view.page = 1;
@@ -461,6 +467,7 @@ function renderToolbar() {
     "select",
     {
       "aria-label": "Resolve media paths from",
+      disabled: !!info.static,
       onchange: (event) => {
         view.base = event.target.value;
         loadRows();
@@ -625,6 +632,15 @@ function renderFilterBar() {
       ),
     ),
   );
+  if (info.static) {
+    // A static snapshot (table_view_static.js) cannot filter.
+    setChildren(
+      bar,
+      el("span", { className: "tv-filter-label" }, "Filter"),
+      el("span", { className: "tv-muted tv-static-note" }, info.static),
+    );
+    return;
+  }
   draft.column = Math.min(draft.column, rows.columns.length - 1);
   const value = el("input", {
     type: "text",
@@ -870,8 +886,10 @@ function cellContent(text, column) {
   return formatCell(text, column);
 }
 
-// mediaURL requests the file a cell names, as the server resolved it.
+// mediaURL requests the file a cell names, as the server resolved it, or
+// its copy in a static snapshot.
 function mediaURL(media) {
+  if (media.url) return media.url;
   return apiURL("api/media", { ref: media.ref, base: media.base || undefined });
 }
 

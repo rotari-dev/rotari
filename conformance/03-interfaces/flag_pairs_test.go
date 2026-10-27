@@ -49,7 +49,7 @@ var pairInventory = map[string]struct {
 	"retry":      {67, "40536f03cfd9d162"},
 	"server":     {3, "1bc5f18bd9dd276d"},
 	"web":        {12, "c93d4fcc36a7a057"},
-	"tableview":  {3, "18eae4eba561d781"},
+	"tableview":  {4, "b9b47c755d34b032"},
 	"mcp":        {2, "c90df8ffe2985354"},
 	"completion": {0, "e3b0c44298fc1c14"},
 	"schema":     {1, "02bd175f32972037"},

@@ -75,3 +75,73 @@ func TestTableViewCommandServesOnePath(t *testing.T) {
 		t.Fatalf("no path = %s", r)
 	}
 }
+
+func TestTableViewCommandWritesAStaticSnapshot(t *testing.T) {
+	covers(t, "WEB-22")
+	e := support.NewEnv(t)
+	data := filepath.Join(e.Root, "data")
+	for path, content := range map[string]string{
+		filepath.Join(data, "list.csv"):     "id,audio\n2,wav/a.wav\n10,wav/a.wav\n1,wav/gone.wav\n",
+		filepath.Join(data, "wav", "a.wav"): "RIFF",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	output := filepath.Join(e.Root, "site", "tableview")
+	r := e.MustRotari("tableview", "--static-dir", output, filepath.Join(data, "list.csv"))
+	if !strings.Contains(r.Stdout, ": 3 rows and 1 media files (4 bytes)") {
+		t.Fatalf("stdout = %q", r.Stdout)
+	}
+	page, err := os.ReadFile(filepath.Join(output, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The page embeds every row, each column's orders, and Describe; it is
+	// named by the file alone and links the one media file that exists.
+	for _, want := range []string{`"name":"list.csv"`, `"static":`, `"ascending":[[2,0,1]`, `"descending":[[1,0,2]`, `"describe":`, `"media":{"wav/a.wav":"media/0.wav"}`, "table_view_static.js"} {
+		if !strings.Contains(string(page), want) {
+			t.Errorf("page lacks %s", want)
+		}
+	}
+	if strings.Contains(string(page), data) {
+		t.Errorf("page names the source directory %s", data)
+	}
+	for _, name := range []string{"table_view.js", "table_view_panes.js", "table_view_static.js", "table_view.css", "web_tokens.css", "web_fonts.css", "fonts/LICENSE.txt"} {
+		if _, err := os.Stat(filepath.Join(output, name)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if copied, err := os.ReadFile(filepath.Join(output, "media", "0.wav")); err != nil || string(copied) != "RIFF" {
+		t.Errorf("media copy = (%q, %v)", copied, err)
+	}
+
+	for _, test := range []struct {
+		env  *support.Env
+		args []string
+		want string
+	}{
+		{e, []string{"--port", "0"}, "--port cannot be combined with --static-dir"},
+		{e, []string{"--host", "0.0.0.0", "--auth-token", "x"}, "--auth-token, --host cannot be combined with --static-dir"},
+		{e.WithVar("ROTARI_WEB_AUTH_TOKEN", "x"), nil, "--auth-token cannot be combined with --static-dir"},
+	} {
+		args := append(append([]string{"tableview"}, test.args...), "--static-dir", output, filepath.Join(data, "list.csv"))
+		if r := test.env.Rotari(args...); r.Code != 1 || !strings.Contains(r.Stderr, test.want) {
+			t.Errorf("%v = %s", test.args, r)
+		}
+	}
+	for _, test := range []struct{ path, output, want string }{
+		{data, filepath.Join(e.Root, "dir-out"), "a static snapshot takes a delimited file"},
+		{filepath.Join(data, "list.csv"), data, "which it would replace"},
+	} {
+		if r := e.Rotari("tableview", "--static-dir", test.output, test.path); r.Code != 1 || !strings.Contains(r.Stderr, test.want) {
+			t.Errorf("%s into %s = %s", test.path, test.output, r)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(data, "list.csv")); err != nil {
+		t.Fatalf("source after refusal: %v", err)
+	}
+}

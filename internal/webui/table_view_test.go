@@ -151,9 +151,6 @@ func TestLaunchersListTheTableViewer(t *testing.T) {
 // viewer page of entry name open.
 func runTableViewScript(t *testing.T, options Options, f artifactFixture, name, fragment, script string) {
 	t.Helper()
-	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node is not installed")
-	}
 	server := httptest.NewServer(Handler(options))
 	defer server.Close()
 	entry := name // the working directory, "wd"
@@ -161,6 +158,16 @@ func runTableViewScript(t *testing.T, options Options, f artifactFixture, name, 
 		entry = strconv.Itoa(index)
 	}
 	query := url.Values{"project_name": {"default"}, "run_id": {f.runID}, "job_id": {"job-1"}, "entry": {entry}}
+	runTableViewPage(t, server.URL+"/tableview/?"+query.Encode()+fragment, script)
+}
+
+// runTableViewPage runs script in jsdom with the Table viewer page at
+// pageURL open.
+func runTableViewPage(t *testing.T, pageURL, script string) {
+	t.Helper()
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not installed")
+	}
 	command := exec.Command("node", "-e", `
 const { JSDOM, VirtualConsole } = require('jsdom');
 const pageURL = process.argv[1];
@@ -175,6 +182,8 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     // jsdom has no fetch; relative URLs resolve against the page, as in a browser.
     beforeParse(window) {
       window.fetch = (input, init) => fetch(new URL(String(input), window.location.href), init);
+      // Nor Response, which a static snapshot answers with.
+      window.Response = Response;
     },
   });
   const window = dom.window;
@@ -192,7 +201,7 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 `+script+`
   if (errors.length) fail('page errors', errors.join('\n'));
 })().catch(error => fail('exception', error.stack));
-`, server.URL+"/tableview/?"+query.Encode()+fragment)
+`, pageURL)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("browser check failed: %v\n%s", err, output)
 	}

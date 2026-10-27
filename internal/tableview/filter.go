@@ -222,6 +222,13 @@ func (table *Table) selection(conditions []condition, sort *Sort) ([]int, error)
 	return value.([]int), nil
 }
 
+// Order returns the numbers of every row, counted from 0, in the order a
+// sort puts them, as Page reads them; a static snapshot of the viewer
+// sorts with it. The slice is shared and must not be changed.
+func (table *Table) Order(sort Sort) ([]int, error) {
+	return table.selection(nil, &sort)
+}
+
 func (table *Table) matches(conditions []condition) ([]int, error) {
 	numbers := []int{}
 	var tooMany bool

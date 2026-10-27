@@ -6,7 +6,7 @@
 
 ---
 
-[![web demo](https://img.shields.io/website?url=https%3A%2F%2Frotari-dev.github.io%2Frotari%2F&label=web%20demo&style=flat)](https://rotari-dev.github.io/rotari/) [![Documentation](https://img.shields.io/badge/docs-MkDocs%20Material-526CFE)](https://rotari-dev.github.io/rotari/docs/) [![codecov](https://codecov.io/gh/rotari-dev/rotari/graph/badge.svg)](https://codecov.io/gh/rotari-dev/rotari) [![SonarCloud Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=rotari-dev_rotari&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=rotari-dev_rotari)
+[![web demo](https://img.shields.io/website?url=https%3A%2F%2Frotari-dev.github.io%2Frotari%2F&label=web%20demo&style=flat)](https://rotari-dev.github.io/rotari/) [![Table viewer demo](https://img.shields.io/website?url=https%3A%2F%2Frotari-dev.github.io%2Frotari%2Ftableview%2F&label=table%20viewer%20demo&style=flat)](https://rotari-dev.github.io/rotari/tableview/) [![Documentation](https://img.shields.io/badge/docs-MkDocs%20Material-526CFE)](https://rotari-dev.github.io/rotari/docs/) [![codecov](https://codecov.io/gh/rotari-dev/rotari/graph/badge.svg)](https://codecov.io/gh/rotari-dev/rotari) [![SonarCloud Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=rotari-dev_rotari&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=rotari-dev_rotari)
 
 
 **Rotari is a single-user, daemonless job queue and execution manager for command batches.** It runs jobs on workstations, over SSH, or through Slurm, PBS, LSF, and SGE.

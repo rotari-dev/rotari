@@ -207,12 +207,19 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 }
 
 func webStaticServerOptions(fs *flag.FlagSet) []string {
+	return staticServerOptions(fs, "web", []string{"allow-control", "allow-exec", "allowed-host", "artifact-root", "auth-token", "host", "port"})
+}
+
+// staticServerOptions lists the names, options of command that only a live
+// server uses, given on the command line, in the environment, or in the
+// config.
+func staticServerOptions(fs *flag.FlagSet, command string, names []string) []string {
 	var incompatible []string
-	for _, name := range []string{"allow-control", "allow-exec", "allowed-host", "artifact-root", "auth-token", "host", "port"} {
+	for _, name := range names {
 		provided := cliOptionSet(fs, name)
-		spec := cliCommandFlag("web", name)
+		spec := cliCommandFlag(command, name)
 		if !provided && !spec.CommandLineOnly {
-			if envName := cliCommandEnvironmentVariable("web", name); envName != "" {
+			if envName := cliCommandEnvironmentVariable(command, name); envName != "" {
 				_, provided = os.LookupEnv(envName)
 			}
 		}

@@ -25,7 +25,7 @@ implementation imports. The staged rollout is tracked in the
 
 ## Current layers
 
-- `TestCLIFlagPairInventory` enumerates all 8,545 unordered flag-name pairs
+- `TestCLIFlagPairInventory` enumerates all 8,548 unordered flag-name pairs
   from the command schema. Sorted flag-name fingerprints require an explicit
   coverage review when a command or flag is added, removed, or renamed. This
   is not exhaustive value coverage; changes to descriptions/types without a
@@ -216,7 +216,7 @@ at least two advertised flags have adapters; only `bug-report`'s and
 | Commands | Pairs | Required next work |
 | --- | ---: | --- |
 | `bug-report` | 36 | An adapter that normalizes the collection time, the basedir clock probe, and the host's scheduler commands before comparing the two orders |
-| `tableview` | 3 | An adapter that starts the server on a temporary file in each order of `--host`, `--port`, and `--auth-token` and compares the pages it serves |
+| `tableview` | 6 | An adapter that starts the server on a temporary file in each order of `--host`, `--port`, and `--auth-token` and compares the pages it serves, and checks that each of them paired with `--static-dir` is refused the same way in both orders |
 | `schema`, `completion`, `guide`, `version`, `env`, `init` | 0 | Fewer than two advertised flags; subcommand/positional coverage is separate |
 
 The 8,506 executed pairs consist of 1,407 read-only, 42 file-output, 179
