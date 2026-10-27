@@ -684,6 +684,108 @@ if ([...table.slice(0, 3)].join() !== '68,1,84' || [...table.slice(255 * 3)].joi
 	}
 }
 
+// A file of more than one channel offers its channels and their mix for the
+// plots; jsdom cannot decode audio, so the page gets a stand-in decoder.
+func TestTableViewChoosesAChannelInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	wav, err := os.ReadFile(filepath.Join("..", "tableview", "testdata", "media", "pcm16.wav"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"mono.wav", "stereo.wav", "array.wav"} {
+		write(t, filepath.Join(f.work, "set", name), string(wav))
+	}
+	runTableViewScript(t, testOptions(f.baseDir, false), f, "wd", "#pattern=set%2F*.wav&expanded=set", `
+  await until('files', () => document.querySelectorAll('#tv-table a.tv-media-path').length === 3);
+  // The stand-in decodes a file into as many channels as its name says.
+  const counts = { mono: 1, stereo: 2, array: 10 };
+  let decoding = 0;
+  // It also records how the players' sound is routed.
+  const contexts = [];
+  const node = name => ({ name, links: [], connect(to, output) { this.links.push(to.name + (output === undefined ? '' : ':' + output)); }, disconnect() { this.links = []; } });
+  window.AudioContext = class {
+    constructor() { this.state = 'suspended'; this.destination = node('speakers'); this.nodes = []; contexts.push(this); }
+    resume() { this.state = 'running'; return Promise.resolve(); }
+    createMediaElementSource(player) { const made = node('player'); made.player = player; this.nodes.push(made); return made; }
+    createChannelSplitter(count) { const made = node('splitter' + count); this.nodes.push(made); return made; }
+    createGain() { const made = node('single'); this.nodes.push(made); return made; }
+    decodeAudioData() {
+      const count = counts[decoding];
+      return Promise.resolve({
+        numberOfChannels: count, sampleRate: 8000, length: 8000, duration: 1,
+        getChannelData: channel => new window.Float32Array(8000).fill(channel / 10),
+      });
+    }
+    close() {}
+  };
+  window.HTMLCanvasElement.prototype.getContext = () => null;
+  const open = async name => {
+    decoding = name;
+    [...document.querySelectorAll('#tv-table a.tv-media-path')].find(a => a.textContent === 'set/' + name + '.wav').click();
+    const view = document.querySelector('.tv-pane-active .tv-tab-view');
+    await until(name + ' decoded', () => view.querySelector('.tv-analysis-status').textContent === '');
+    return view;
+  };
+
+  // One channel has nothing to choose.
+  let view = await open('mono');
+  if (!view.querySelector('.tv-channel-choice').hidden) fail('mono choice', view.innerHTML);
+
+  // Two channels are buttons, Mix first and pressed.
+  view = await open('stereo');
+  const choice = view.querySelector('.tv-channel-choice');
+  const pressed = () => [...choice.querySelectorAll('button[aria-pressed="true"]')].map(button => button.textContent);
+  if (choice.hidden || JSON.stringify([...choice.querySelectorAll('button')].map(button => button.textContent)) !== '["Mix","1","2"]' || JSON.stringify(pressed()) !== '["Mix"]') fail('stereo choice', choice.outerHTML);
+  // Mix plays the player as it is, without the audio context.
+  const playing = () => contexts.find(context => context.nodes.length);
+  if (playing()) fail('routed on mix');
+  choice.querySelector('button[aria-label="Channel 2"]').click();
+  if (JSON.stringify(pressed()) !== '["2"]') fail('channel 2', choice.outerHTML);
+  // A chosen channel plays alone, from every speaker, in a resumed context.
+  const graph = () => JSON.stringify(playing().nodes.map(made => made.name + '>' + made.links.join(',')));
+  if (graph() !== '["player>splitter2","splitter2>single:1","single>speakers"]' || playing().state !== 'running' || playing().nodes[0].player !== view.querySelector('audio')) fail('channel 2 graph', graph());
+  // Back to Mix, the player goes straight to the speakers.
+  choice.querySelector('button[aria-label="Mix"]').click();
+  if (graph() !== '["player>speakers","splitter2>","single>speakers"]') fail('mix graph', graph());
+  choice.querySelector('button[aria-label="Channel 2"]').click();
+
+  // The channel stays with its file when another tab is shown.
+  view = await open('array');
+  const list = view.querySelector('.tv-channel-choice select[aria-label="Channel"]');
+  if (!list || list.options.length !== 11 || list.value !== 'mix') fail('many channels', view.innerHTML);
+  list.value = '9';
+  list.dispatchEvent(new window.Event('change'));
+  if (view.querySelector('.tv-channel-choice select').value !== '9') fail('channel 10');
+  // Every player shares one playback context.
+  if (contexts.filter(context => context.nodes.length).length !== 1 || !playing().nodes.some(made => made.name === 'splitter10')) fail('one context', contexts.length);
+  [...document.querySelectorAll('.tv-tab-name')].find(button => button.textContent.endsWith('stereo.wav')).click();
+  if (JSON.stringify([...document.querySelectorAll('.tv-pane-active .tv-channel-choice button[aria-pressed="true"]')].map(button => button.textContent)) !== '["2"]') fail('kept channel');
+`)
+}
+
+// channelSamples is a channel as it is, or the mean of them all.
+func TestChannelSamplesMixesChannels(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not installed")
+	}
+	command := exec.Command("node", "-e", `
+const vm = require('vm');
+const context = vm.createContext({ Math, Float32Array, Uint32Array, Uint8Array, Map });
+vm.runInContext(process.argv[1] + '; this.channelSamples = channelSamples;', context);
+const left = Float32Array.from([1, 0.5, 0]), right = Float32Array.from([0, 0.5, -1]);
+const audio = { channels: [left, right] };
+if (context.channelSamples(audio, 1) !== right) { console.error('channel'); process.exit(1); }
+const mix = context.channelSamples(audio, 'mix');
+if ([...mix].join() !== '0.5,0.5,-0.5') { console.error('mix', mix); process.exit(1); }
+if (context.channelSamples(audio, 'mix') !== mix) { console.error('mix not kept'); process.exit(1); }
+const mono = { channels: [left] };
+if (context.channelSamples(mono, 'mix') !== left) { console.error('mono'); process.exit(1); }
+`, tableViewPanesJS)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("channel check failed: %v\n%s", err, output)
+	}
+}
+
 func TestTableViewMovesTabsAndLinksPanesInBrowser(t *testing.T) {
 	f := newArtifactFixture(t)
 	wav, err := os.ReadFile(filepath.Join("..", "tableview", "testdata", "media", "pcm16.wav"))

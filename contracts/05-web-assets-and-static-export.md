@@ -974,7 +974,9 @@ and the separator its extension suggests, and the bases. The page opens a cell's
 split right or down, one pane always active; tabs move between panes by
 drag and drop, a drop near an edge splitting that pane; audio shows a
 waveform and a spectrogram the browser computes from the decoded samples,
-and linked panes share one time range and playback time. The page keeps the separator, header, media
+of the channels' mix or, for a file of more than one channel, any one
+channel chosen per file, which the player then plays alone from every
+speaker (Mix plays the file as it is), and linked panes share one time range and playback time. The page keeps the separator, header, media
 base, directory listing and expanded paths, filters, sort, Describe, page, and page size in its
 URL fragment, and drops
 the filters and sort when the separator or the listing changes. Clicking
@@ -997,7 +999,8 @@ sample files ffmpeg made, with ffprobe's values),
 the page checked by `TestTableViewPagesInBrowser` and
 `TestTableViewFiltersInBrowser`, `TestTableViewShowsMediaInBrowser`,
 `TestTableViewExpandsDirectoriesInBrowser`, `TestTableViewGroupsStemsInBrowser`, `TestTableViewOpensFilesInPanesInBrowser`,
-`TestTableViewMovesTabsAndLinksPanesInBrowser`, and
+`TestTableViewMovesTabsAndLinksPanesInBrowser`,
+`TestTableViewChoosesAChannelInBrowser`, `TestChannelSamplesMixesChannels`, and
 `TestSpectrogramFindsATone`, and the row's link by
 `TestLaunchWithOpensTheTableViewerInBrowser` in
 [internal/webui/table_view_test.go](../internal/webui/table_view_test.go).
