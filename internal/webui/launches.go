@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/rotari-dev/rotari/internal/launcher"
+	"github.com/rotari-dev/rotari/internal/tableview"
 )
 
 // LaunchOptions enables launching registered commands from artifacts
@@ -224,7 +225,7 @@ type webViewer struct {
 // The Table viewer reads table files by name, and any directory.
 var webViewers = []webViewer{{
 	Name: "Table viewer", Path: "/tableview/", Targets: []launcher.TargetKind{launcher.TargetFile},
-	Patterns: []string{"*.csv", "*.CSV", "*.tsv", "*.TSV", "*.tab", "*.psv", "*.txt", "*.scp", "*.lst", "*.list", "*.dat"},
+	Patterns: tableview.TablePatterns,
 }, {
 	Name: "Table viewer", Path: "/tableview/", Targets: []launcher.TargetKind{launcher.TargetDirectory},
 }}

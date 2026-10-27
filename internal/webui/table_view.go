@@ -367,13 +367,15 @@ const TableViewPort = DefaultPort + 1
 // directory named on the command line (rotari tableview), with the fonts
 // and design tokens its page links. It reads only under that directory, or
 // the file's: the only root, and the only base media paths resolve from.
+// For a directory, the query's child names a file or directory inside it
+// to show instead, as for an artifact.
 func TableViewHandler(path string) (http.Handler, error) {
 	source, err := commandTableViewSource(path)
 	if err != nil {
 		return nil, err
 	}
 	view := tableView{
-		resolve:     func(url.Values) (tableViewSource, error) { return source, nil },
+		resolve:     func(query url.Values) (tableViewSource, error) { return source.child(query.Get("child")) },
 		stylesheets: []string{"/web_fonts.css", "/web_tokens.css"},
 	}
 	mux := http.NewServeMux()
@@ -406,4 +408,25 @@ func commandTableViewSource(path string) (tableViewSource, error) {
 		root = filepath.Dir(absolute)
 	}
 	return tableViewSource{target: tableview.Target{Path: absolute, Roots: []string{root}}, directory: info.IsDir(), name: path}, nil
+}
+
+// child is the file or directory child names inside a command's directory,
+// read under the same root; "" is the source itself.
+func (source tableViewSource) child(child string) (tableViewSource, error) {
+	if child == "" {
+		return source, nil
+	}
+	if !source.directory {
+		return tableViewSource{}, fmt.Errorf("child applies only to a directory; %s is a file", source.name)
+	}
+	if err := checkChild(child); err != nil {
+		return tableViewSource{}, err
+	}
+	target := tableview.Target{Path: filepath.Join(source.target.Path, child), Roots: source.target.Roots}
+	info, err := target.Stat()
+	if err != nil {
+		return tableViewSource{}, err
+	}
+	name := strings.TrimSuffix(source.name, "/") + "/" + filepath.ToSlash(child)
+	return tableViewSource{target: target, directory: info.IsDir(), name: name}, nil
 }

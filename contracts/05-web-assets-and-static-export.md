@@ -957,6 +957,10 @@ in typed columns: a filter on a duration takes seconds or `m:ss`, on a size
 a binary suffix such as `10M`, and on a time compares RFC 3339 text.
 Directory rows carry `directory` (the full relative path), a path cell ending
 in `/`, and modification time, but no media properties or file size.
+In either view a row's `tables` lists its path cells naming a table file
+(by the base-name patterns Launch with offers the viewer for), which the
+page links to a viewer of its own in a new tab: the same query with
+`child` naming the file inside the directory, as for any artifact.
 Filters, sorting, and Describe cover only this opened scope.
 `view=stems` uses only files in this same scope, with one row per stem and one column per group, `group` naming
 how a path splits: `top` (the first directory; the stem is the rest
@@ -1009,7 +1013,10 @@ the page checked by `TestTableViewPagesInBrowser` and
 delimited file or directory outside any project: the directory, or the
 file's, is the only root anything is read under and the only base its
 relative media paths resolve from, through `os.Root`, with the same
-refusals. It listens on `--host` (default `127.0.0.1`) and `--port`
+refusals. For a directory, `child` names a file or directory inside it to
+view instead, under the same root, so a table file it lists opens as
+WEB-19 describes; `child` is refused for a file, and when it is not a
+clean relative path, leaves the root through a symlink, or is missing. It listens on `--host` (default `127.0.0.1`) and `--port`
 (default 8788, or the next free port when `--port` is not given), prints
 `rotari tableview listening at http://ADDR`, serves the page's fonts and
 design tokens itself, and, with `--auth-token` or `ROTARI_WEB_AUTH_TOKEN`,

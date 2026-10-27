@@ -380,7 +380,8 @@ a:hover {
 .tv-panes:not([hidden]) ~ .tv-table-area {
   border-radius: 0 0 8px 8px;
 }
-.tv-open-row {
+.tv-open-row,
+.tv-open-table {
   font-size: 12px;
   white-space: nowrap;
 }
