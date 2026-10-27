@@ -679,8 +679,8 @@ const viridisTable = (() => {
 // decoded keeps decoded audio by URL, a few files at a time.
 const decoded = new Map();
 
-// decodeAudio fetches a file and decodes it in the browser into one channel
-// of samples, at most maxAnalysisSeconds long.
+// decodeAudio fetches a file and decodes it in the browser into the samples
+// of each channel, at most maxAnalysisSeconds long.
 function decodeAudio(url, size) {
   if (decoded.has(url)) return decoded.get(url);
   const pending = (async () => {
@@ -705,15 +705,12 @@ function decodeAudio(url, size) {
         buffer.length,
         Math.floor(maxAnalysisSeconds * buffer.sampleRate),
       );
-      const samples = new Float32Array(length);
+      const channels = [];
       for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-        const data = buffer.getChannelData(channel);
-        for (let index = 0; index < length; index++) {
-          samples[index] += data[index] / buffer.numberOfChannels;
-        }
+        channels.push(buffer.getChannelData(channel).slice(0, length));
       }
       return {
-        samples,
+        channels,
         rate: buffer.sampleRate,
         duration: buffer.duration,
         truncated: length < buffer.length,
@@ -728,6 +725,30 @@ function decodeAudio(url, size) {
   return pending;
 }
 
+// channelSamples is one channel of decoded audio, or for "mix" the mean of
+// them all, worked out once.
+function channelSamples(audio, channel) {
+  if (channel !== "mix") return audio.channels[channel];
+  if (audio.channels.length === 1) return audio.channels[0];
+  if (!audio.mix) {
+    const mix = new Float32Array(audio.channels[0].length);
+    for (const data of audio.channels) {
+      for (let index = 0; index < mix.length; index++) {
+        mix[index] += data[index] / audio.channels.length;
+      }
+    }
+    audio.mix = mix;
+  }
+  return audio.mix;
+}
+
+// playbackContext is the one audio context the players play a single
+// channel through, made when a channel is first chosen.
+let playbackContext = null;
+
+// Up to this many channels are chosen with buttons; more, with a list.
+const maxChannelButtons = 8;
+
 // TabView is one open file's elements: its title line, the image, video, or
 // audio player, and for audio the waveform and spectrogram.
 class TabView {
@@ -736,6 +757,10 @@ class TabView {
     this.url = mediaURL(media);
     this.pane = null;
     this.audioData = null;
+    // routing is the player's audio nodes once a channel is chosen.
+    this.routing = null;
+    // channel is the channel the plots draw, an index or "mix".
+    this.channel = "mix";
     this.cache = {};
     this.selection = null;
     this.root = el("div", { className: "tv-tab-view" });
@@ -787,6 +812,8 @@ class TabView {
       { type: "button", onclick: () => this.toggle("spec") },
       "Spectrogram",
     );
+    this.channelChoice = el("span", { className: "tv-channel-choice" });
+    this.channelChoice.hidden = true;
     this.status = el("p", { className: "tv-analysis-status" });
     this.wave = this.plot("tv-waveform");
     this.spec = this.plot("tv-spectrogram");
@@ -798,12 +825,18 @@ class TabView {
         this.player,
         this.waveButton,
         this.specButton,
+        this.channelChoice,
       ),
       this.status,
       this.wave.box,
       this.spec.box,
       this.axis,
     );
+    // A context the browser started suspended resumes when playback does.
+    this.player.addEventListener("play", () => {
+      if (this.routing && playbackContext.state === "suspended")
+        playbackContext.resume();
+    });
     ["play", "pause", "seeked", "timeupdate", "loadedmetadata"].forEach(
       (name) =>
         this.player.addEventListener(name, () => this.playbackChanged(name)),
@@ -872,12 +905,120 @@ class TabView {
       this.status.textContent = "Cannot draw the waveform: " + error.message;
     }
     this.loading = false;
+    this.renderChannelChoice();
     this.redraw();
+  }
+
+  // renderChannelChoice offers the decoded file's channels, and their mix,
+  // for the plots; a file of one channel has no choice.
+  renderChannelChoice() {
+    const count = this.audioData ? this.audioData.channels.length : 0;
+    this.channelChoice.hidden = count < 2;
+    if (count < 2) {
+      setChildren(this.channelChoice);
+      return;
+    }
+    const choices = [{ value: "mix", label: "Mix" }];
+    for (let channel = 0; channel < count; channel++)
+      choices.push({ value: channel, label: String(channel + 1) });
+    const label = el("span", { className: "tv-muted" }, "Channel");
+    if (count > maxChannelButtons) {
+      const list = el(
+        "select",
+        {
+          "aria-label": "Channel",
+          onchange: () =>
+            this.setChannel(list.value === "mix" ? "mix" : Number(list.value)),
+        },
+        choices.map((choice) =>
+          el(
+            "option",
+            {
+              value: String(choice.value),
+              selected: choice.value === this.channel,
+            },
+            choice.label === "Mix" ? "Mix" : "Channel " + choice.label,
+          ),
+        ),
+      );
+      setChildren(this.channelChoice, label, list);
+      return;
+    }
+    setChildren(
+      this.channelChoice,
+      label,
+      el(
+        "span",
+        { className: "tv-segmented", role: "group", "aria-label": "Channel" },
+        choices.map((choice) =>
+          el(
+            "button",
+            {
+              type: "button",
+              "aria-pressed": String(choice.value === this.channel),
+              "aria-label":
+                choice.value === "mix" ? "Mix" : "Channel " + choice.label,
+              onclick: () => this.setChannel(choice.value),
+            },
+            choice.label,
+          ),
+        ),
+      ),
+    );
+  }
+
+  setChannel(channel) {
+    this.channel = channel;
+    this.renderChannelChoice();
+    this.route();
+    this.redraw();
+  }
+
+  // route sends the player's sound through the audio context so that one
+  // chosen channel plays from every speaker, and Mix plays the file as it
+  // is. A player stays on its own output until a channel is first chosen,
+  // since it cannot leave the context once it joins.
+  route() {
+    if (!this.routing && this.channel === "mix") return;
+    try {
+      if (!this.routing) {
+        const Context = window.AudioContext || window.webkitAudioContext;
+        if (!Context) throw new Error("this browser has no Web Audio");
+        if (!playbackContext) playbackContext = new Context();
+        const source = playbackContext.createMediaElementSource(this.player);
+        const splitter = playbackContext.createChannelSplitter(
+          this.audioData.channels.length,
+        );
+        // One channel in; the speakers get it on both sides.
+        const single = playbackContext.createGain();
+        single.channelCount = 1;
+        single.channelCountMode = "explicit";
+        single.connect(playbackContext.destination);
+        this.routing = { source, splitter, single };
+      }
+      const { source, splitter, single } = this.routing;
+      source.disconnect();
+      splitter.disconnect();
+      if (this.channel === "mix") {
+        source.connect(playbackContext.destination);
+      } else {
+        source.connect(splitter);
+        splitter.connect(single, this.channel, 0);
+      }
+      if (playbackContext.state === "suspended") playbackContext.resume();
+    } catch (error) {
+      this.status.textContent =
+        "Cannot play one channel: " + error.message + "; all channels play.";
+    }
+  }
+
+  samples() {
+    return channelSamples(this.audioData, this.channel);
   }
 
   duration() {
     if (this.audioData)
-      return this.audioData.samples.length / this.audioData.rate;
+      return this.audioData.channels[0].length / this.audioData.rate;
     return this.player && Number.isFinite(this.player.duration)
       ? this.player.duration
       : 0;
@@ -1067,7 +1208,8 @@ class TabView {
     if (!context) return;
     const { width, height } = this.size(canvas);
     if (!width || !height) return;
-    const { samples, rate } = this.audioData;
+    const { rate } = this.audioData;
+    const samples = this.samples();
     const range = this.range();
     if (!this.cache.wave || this.cache.wave.width !== width) {
       const low = new Float32Array(width);
@@ -1118,7 +1260,8 @@ class TabView {
     if (!context) return;
     const { width, height } = this.size(canvas);
     if (!width || !height) return;
-    const { samples, rate } = this.audioData;
+    const { rate } = this.audioData;
+    const samples = this.samples();
     const range = this.range();
     if (
       !this.cache.spec ||
@@ -1172,6 +1315,11 @@ class TabView {
   dispose() {
     if (this.player && !this.player.paused) this.player.pause();
     if (this.resizer) this.resizer.disconnect();
+    if (this.routing) {
+      this.routing.source.disconnect();
+      this.routing.splitter.disconnect();
+      this.routing.single.disconnect();
+    }
     this.root.remove();
   }
 }

@@ -304,6 +304,14 @@ a:hover {
   align-items: center;
   gap: 6px;
 }
+.tv-channel-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tv-channel-choice[hidden] {
+  display: none;
+}
 .tv-audio {
   flex: 1;
   min-width: 200px;

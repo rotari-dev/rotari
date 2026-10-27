@@ -157,7 +157,9 @@ A table file (`.csv`, `.tsv`, `.scp`, and similar) or a directory has a
 files with millions of rows and offers filters, sorting, and per-column
 statistics (**Describe**) over the whole file. A cell holding the path of an
 image, audio, or video file opens it in a pane above the table, with a
-waveform and spectrogram for audio. For a directory, **Group by stem** puts
+waveform and spectrogram for audio; **Channel** picks one channel of a
+multichannel file to draw and to play from both speakers, or **Mix** to
+draw their mean and play the file as it is. For a directory, **Group by stem** puts
 `ref/u1.wav`, `hyp/u1.wav`, and `plots/u1.png` in one row to compare outputs
 and find missing ones. The URL keeps the view, so a link can be shared.
 
