@@ -21,7 +21,7 @@ version.
 
 | # | Video | Page it accompanies | Script | State (2026-10-25) |
 | --- | --- | --- | --- | --- |
-| 01 | Overview: every run on the cluster, recorded in one place | README, Getting started | `01_overview.sh` (Short: `01_short.sh`, an older story) | done, 47 s |
+| 01 | Overview: every run on the cluster, recorded in one place | README, Getting started | `01_overview.sh` (Short: `01_short.sh`, an older story) | done, 59 s |
 | 02 | Notifications: desktop, Inbox, Slack | `docs/NOTIFICATIONS.md` | `02_notifications.sh` | done, 35 s |
 | 03 | Outputs: Artifacts, previews, TensorBoard, Files | `docs/WEB.md` (Artifacts) | `03_outputs.sh` | done, 53 s |
 | 04 | Rerunning failures and diagnosis | `docs/RECOVERING.md`, `docs/LOCAL_DIAGNOSIS.md` | `04_recovering.sh` | done, 47 s |
@@ -416,7 +416,10 @@ that through the agent's notes, so it was dropped.
 
 `01_overview.sh` (`capture_overview.py`, `render_overview.py`) carries one
 message for cluster users: hand rotari your usual commands, and every run is
-recorded and seen in one place. On a one-node Slurm cluster (as for 05):
+recorded and seen in one place. It opens as the earlier overviews did: one
+training run in a terminal needs no rotari, but research is never one job
+(the user wanted that opening back). Then, on a one-node Slurm cluster (as
+for 05):
 thirty jobs submitted by hand with `sbatch` leave thirty `slurm-N.out` files
 that `grep -l Error` cannot explain; the same kind of script goes to rotari as
 a matrix (three learning rates by two batch sizes) with `-e slurm`; the Web
