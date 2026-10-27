@@ -8,17 +8,17 @@ the scene times the renderer prints; check them again after a video changes.
 
 ## 01_overview
 
-Title: Research isn't one job: all your runs in one place | rotari
+Title: Every run on your cluster, recorded in one place | rotari
 
-One job? Watching it in a terminal is enough. But research is many projects in
-many directories, and somewhere, something breaks. rotari puts every project
-on one page: see which run failed, open its log, fix it, rerun just that
-project, and look at what it produced, right in the browser.
+On a cluster you submit dozens of jobs, and a week later you can't tell which
+slurm-N.out was which, which one failed, or why. Hand rotari the same
+commands: it submits them to Slurm and records every run. See every project
+and job in one place, open any job's log from the Web UI, and after a fix,
+rerun only the jobs that failed with one command.
 
-0:00 One job, or many?
-0:11 Every project on one page
-0:34 Why it failed, and the fix
-0:47 What it made
+0:00 Dozens of jobs: which one was which?
+0:15 Every run, in one place
+0:28 Fix it, and rerun only what failed
 
 rotari is an open-source tool for managing and running jobs: submit commands
 from any directory, run them here or on Slurm, and see every project's runs,
@@ -28,10 +28,10 @@ GitHub: https://github.com/rotari-dev/rotari
 Documentation: https://rotari-dev.github.io/rotari/docs/
 Getting started: https://rotari-dev.github.io/rotari/docs/GETTING_STARTED/
 
-Everything on screen comes from real runs of rotari. Narration is synthesized
-with Kokoro TTS.
+Everything on screen comes from real runs of rotari, with a one-node Slurm
+cluster. Narration is synthesized with Kokoro TTS.
 
-#MachineLearning #MLOps #rotari
+#Slurm #MachineLearning #rotari
 
 ## 01_short
 

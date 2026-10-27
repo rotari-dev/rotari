@@ -21,7 +21,7 @@ version.
 
 | # | Video | Page it accompanies | Script | State (2026-10-25) |
 | --- | --- | --- | --- | --- |
-| 01 | Overview: one job needs no rotari, many do | README, Getting started | `01_overview.sh` (Short: `01_short.sh`) | done, 78 s (96 s with the Slurm act), landscape and vertical |
+| 01 | Overview: every run on the cluster, recorded in one place | README, Getting started | `01_overview.sh` (Short: `01_short.sh`, an older story) | done, 47 s |
 | 02 | Notifications: desktop, Inbox, Slack | `docs/NOTIFICATIONS.md` | `02_notifications.sh` | done, 35 s |
 | 03 | Outputs: Artifacts, previews, TensorBoard, Files | `docs/OUTPUTS.md` | `03_outputs.sh` | done, 53 s |
 | 04 | Rerunning failures and diagnosis | `docs/RECOVERING.md`, `docs/LOCAL_DIAGNOSIS.md` | `04_recovering.sh` | done, 47 s |
@@ -119,7 +119,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 | `renderer.py` | Shared rendering: options, narration, player page, frames into ffmpeg |
 | `common.py` | Shared capture helpers: commands, terminal sessions (`Term`), Web UI frames |
 | `narration.py` | Kokoro TTS clips, scene fitting, the audio track, and subtitles |
-| `fixture/` | Fake jobs: `train.py`, per-project `train.sh`, `sweep.sh`, `prep.sh`, `train-gpu.sh`, `eval.sh`, and per-episode `grid/`, `webui/`, `terminal/`, `tune/` (with the agent's session) |
+| `fixture/` | Fake jobs: `train.py`, per-project `train.sh`, `sweep.sh`, `prep.sh`, `train-gpu.sh`, `eval.sh`, and per-episode `overview/`, `grid/`, `webui/`, `terminal/`, `tune/` (with the agent's session) |
 | `fullpage.py` | Framing aid: full-page screenshots of a captured state, run in a namespace |
 | `make-episode.sh [--display] TOOLS WORK OUT.mp4 CAPTURE.py RENDER.py` | Build rotari, capture, and render one feature video |
 | `capture-web.sh [--display]` | Enter the namespaces and a namespace-owned `/`, with Xvfb, D-Bus, and dunst when asked, and run a capture script |
@@ -131,6 +131,7 @@ pronunciation of "rotari" and the CLI terms by ear before publishing.
 | `capture_terminal.py`, `render_terminal.py` | Video 08 (no browser) |
 | `capture_agents.py`, `render_agents.py` | Video 09 (a headless browser is enough); it replays `fixture/tune/session.sh` |
 | `capture_executors.py`, `render_executors.py` | Video 05 (needs the Slurm image) |
+| `capture_overview.py`, `render_overview.py` | Video 01 (needs the Slurm image) |
 | `assets/slack/` | Slack screenshots of one capture's webhook message, for video 02 |
 | `newroot.sh`, `dunstrc` | A namespace-owned `/` for `--allow-exec`; the desktop notification style |
 | `tts_samples.py`, `fixture/tts_train.py` | Kokoro clips and the fake TTS job that "produces" them |
@@ -144,7 +145,7 @@ first use, build rotari, capture, narrate, render) and writes
 `scripts/promo-video/out/NN_name.mp4` with an `.srt` beside it:
 
 ```sh
-scripts/promo-video/01_overview.sh        # out/01_overview.mp4
+scripts/promo-video/01_overview.sh        # out/01_overview.mp4 (needs singularity once)
 scripts/promo-video/01_short.sh           # out/01_short.mp4 (vertical, for Shorts)
 scripts/promo-video/02_notifications.sh   # out/02_notifications.mp4 (needs Xvfb)
 scripts/promo-video/03_outputs.sh         # out/03_outputs.mp4
@@ -414,27 +415,23 @@ that through the agent's notes, so it was dropped.
 
 ### Overview (01)
 
-`01_overview.sh` (`render_tour.py`) tells one story and follows one failure
-through, all from 01's own capture: one job is fine in a terminal, so you
-don't need rotari; but research is never one job, so you hop between
-terminal tabs until something breaks; with rotari you submit from any
-directory and see every project on one page, where vision stands out as
-failed. Its log, opened right on the page, says why (the dataset path in
-`train.conf` is wrong); `sed` fixes the path and `rotari retry -p vision`
-reruns just that project; then the loss plot it writes (`fixture/vision_plot.py`,
-found by artifact discovery in the script) opens from the job's Artifacts.
-The log and the plot are captured at 680×487 CSS px so they read. The end
-card names the other features (calendar and history search, sweeps, Slurm,
-notifications, coding agents) in a muted line without narration; each has
-its own video.
+`01_overview.sh` (`capture_overview.py`, `render_overview.py`) carries one
+message for cluster users: hand rotari your usual commands, and every run is
+recorded and seen in one place. On a one-node Slurm cluster (as for 05):
+thirty jobs submitted by hand with `sbatch` leave thirty `slurm-N.out` files
+that `grep -l Error` cannot explain; the same kind of script goes to rotari as
+a matrix (three learning rates by two batch sizes) with `-e slurm`; the Web
+UI lists every project and the sweep's jobs with their node; a failed job's
+log shows batch 128 running out of GPU memory at fp32; `train.conf` is
+switched to bf16 and `rotari retry` reruns only the three failed jobs, the
+others carried. The end card names the other features in a muted line;
+each has its own video.
 
-Earlier versions (2026-10-25 and 26): tours of every feature read as
-disconnected or left nothing understood; a payoff of failure causes and
-retry stressed what matters more to agents than to people; and logs, the
-calendar, search, and outputs as separate scenes still did not connect, so
-the overview now follows the one failure from its log to its fix and its
-output (the user's feedback). The vertical Short, `01_short.sh`, still tells
-the older story through to the sweep and retry.
+Earlier versions (2026-10-25 to 27) toured every feature, then followed a
+failure through artifacts and previews; for someone seeing rotari for the
+first time they asked too much at once (the user's feedback). The vertical
+Short, `01_short.sh`, still tells the older story through to the sweep and
+retry.
 
 ### Agents (09)
 
