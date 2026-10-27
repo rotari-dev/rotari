@@ -3,12 +3,13 @@
 Short videos of rotari, made from real runs. Start with the overview; each
 of the others shows one feature and links to its page.
 
-## All your runs in one place
+## Every run on your cluster, recorded in one place
 
-One job needs no rotari, but research is many projects. Follow one failure
-from every project on one page to its log, its fix, and its output.
+Hand rotari your usual commands, and every run on the cluster is recorded:
+every project and job in one place, each job's log a click away, and a retry
+of only the jobs that failed.
 
-<iframe src="https://www.youtube-nocookie.com/embed/vb_Mt4BkH80" title="All your runs in one place" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
+<iframe src="https://www.youtube-nocookie.com/embed/esewA3o1G4o" title="Every run on your cluster, recorded in one place" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
 See [Getting started](GETTING_STARTED.md).
 
@@ -22,10 +23,10 @@ See [Notifications](NOTIFICATIONS.md).
 
 ## See what your runs wrote
 
-A job's outputs previewed in the browser, TensorBoard from the row, and every
-experiment compared in one TensorBoard.
+A job's outputs previewed in the browser, TensorBoard from the row, and
+directories too.
 
-<iframe src="https://www.youtube-nocookie.com/embed/-6ZoQojlcrU" title="See what your runs wrote" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
+<iframe src="https://www.youtube-nocookie.com/embed/XlSJfi8HCCM" title="See what your runs wrote" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
 See [Web UI: Artifacts](WEB.md#artifacts).
 
