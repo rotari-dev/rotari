@@ -9,7 +9,7 @@ Hand rotari your usual commands, and every run on the cluster is recorded:
 every project and job in one place, each job's log a click away, and a retry
 of only the jobs that failed.
 
-<iframe src="https://www.youtube-nocookie.com/embed/esewA3o1G4o" title="Every run on your cluster, recorded in one place" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
+<iframe src="https://www.youtube-nocookie.com/embed/DQyUqvw5Rzg" title="Every run on your cluster, recorded in one place" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
 See [Getting started](GETTING_STARTED.md).
 
