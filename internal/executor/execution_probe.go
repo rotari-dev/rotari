@@ -143,7 +143,7 @@ func (probe *ExecutionProber) ssh(dir string, result model.RecoveryExecution) mo
 		return result
 	}
 	result.Scope = "remote process group on " + metadata.Host + " identified by its private token; descendants that leave the group are outside this scope"
-	command := append([]string{"-o", "BatchMode=yes", "-o", "LogLevel=ERROR"}, metadata.SSHOptions...)
+	command := append([]string{SSHCommandPath, "-o", "BatchMode=yes", "-o", "LogLevel=ERROR"}, metadata.SSHOptions...)
 	command = append(command, "--", metadata.Host, "sh", "-s")
 	output, err := probe.queryInput(command, []byte(sshExecutionProbeScript(metadata.RemoteToken)), false)
 	if err != nil {

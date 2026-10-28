@@ -197,7 +197,7 @@ func TestSSHExecutionProbeUsesPrivateTokenAndBoundedQuery(t *testing.T) {
 	}
 	probe := NewExecutionProber(testStore(), context.Background())
 	probe.runInput = func(_ context.Context, command []string, input []byte) ([]byte, error) {
-		if strings.Join(command, " ") != "-o BatchMode=yes -o LogLevel=ERROR -p 2222 -- builder@example.test sh -s" {
+		if strings.Join(command, " ") != SSHCommandPath+" -o BatchMode=yes -o LogLevel=ERROR -p 2222 -- builder@example.test sh -s" {
 			t.Fatalf("SSH probe command = %v", command)
 		}
 		if !strings.Contains(string(input), token) {

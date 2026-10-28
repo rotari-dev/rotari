@@ -107,9 +107,10 @@ func TestSSHExecutorRunsAJob(t *testing.T) {
 }
 
 // A job running through the SSH executor reads as running
-// in show and the Web API, as a local job does, rather than as unknown.
+// in show and the Web API, as a local job does, rather than as unknown, and
+// info finds its remote process group active.
 func TestSSHJobReadsAsRunning(t *testing.T) {
-	covers(t, "DUR-1")
+	covers(t, "DUR-1", "SAFE-16")
 	e := support.NewEnv(t)
 	options := sshLoopback(t, e.Root)
 	args := []string{"add", "-p", "remote", "-e", "ssh"}
@@ -140,6 +141,33 @@ func TestSSHJobReadsAsRunning(t *testing.T) {
 			t.Fatalf("SSH job was never dispatched: %+v", shown)
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+	var info struct {
+		ActiveRuns []struct {
+			Assessment struct {
+				Executions []struct {
+					JobID  string `json:"job_id"`
+					State  string `json:"state"`
+					Reason string `json:"reason"`
+				} `json:"executions"`
+			} `json:"execution_assessment"`
+		} `json:"active_runs"`
+	}
+	// The remote side records its process group just after ssh connects;
+	// until then the assessment is unknown.
+	for deadline := time.Now().Add(15 * time.Second); ; {
+		info.ActiveRuns = nil
+		if err := json.Unmarshal([]byte(e.MustRotari("info", "-p", "remote", "--json").Stdout), &info); err != nil {
+			t.Fatal(err)
+		}
+		if len(info.ActiveRuns) == 1 && len(info.ActiveRuns[0].Assessment.Executions) == 1 && info.ActiveRuns[0].Assessment.Executions[0].State == "active" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Errorf("info execution assessment = %+v, want the SSH job's remote process group active", info.ActiveRuns)
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
 	if job := shown.Jobs[0]; job.Job.ID != jobID || job.Status != "running (recorded)" {
 		t.Errorf("show --json job = %+v, want %s running (recorded)", job, jobID)
