@@ -93,7 +93,7 @@ func TestHistoryUsesLastRunThenNewestRun(t *testing.T) {
 	e := support.NewEnv(t)
 	first, _ := e.FinishedJobRun("history")
 	e.MustRotari("add", "-p", "history", "--", "sh", "-c", "exit 3")
-	e.Rotari("run", "-p", "history", "--quiet")
+	e.RotariRun("run", "-p", "history", "--quiet")
 	second := showRunID(t, e.MustRotari("show", "-p", "history", "--json").Stdout)
 	if first == second {
 		t.Fatalf("second run was not created: %q", second)

@@ -35,15 +35,18 @@ func TestReadCountsStayBounded(t *testing.T) {
 	e.mustRotari("add", "-p", "reads", "--array", "1-3", "--", "true")
 	e.mustRotari("add", "-p", "reads", "--", "true")
 	e.mustRotari("add", "-p", "reads", "--", "sh", "-c", "exit 3")
-	if r := e.rotari("run", "-p", "reads", "--quiet"); r.code == 0 {
-		t.Fatalf("the first run should fail: %s", r)
+	first := e.rotari("run", "-p", "reads", "--quiet")
+	if first.code == 0 {
+		t.Fatalf("the first run should fail: %s", first)
 	}
-	if r := e.rotari("retry", "-p", "reads", "--quiet"); r.code == 0 {
-		t.Fatalf("the retry should fail again: %s", r)
+	retried := e.rotari("retry", "-p", "reads", "--quiet")
+	if retried.code == 0 {
+		t.Fatalf("the retry should fail again: %s", retried)
 	}
 	runs, err := os.ReadDir(filepath.Join(e.base, "projects", "reads", "runs"))
 	if err != nil || len(runs) != 2 {
-		t.Fatalf("runs = %v, %v, want an executed run and a retry", runs, err)
+		// A refusal to start also exits 1; show why each command ended.
+		t.Fatalf("runs = %v, %v, want an executed run and a retry\n%s\n%s", runs, err, first, retried)
 	}
 	var latest struct {
 		RunID string `json:"run_id"`

@@ -61,7 +61,7 @@ func TestCarriedJobsReadAsCarriedDuringTheRun(t *testing.T) {
 	flag := filepath.Join(e.Root, "flag")
 	e.MustRotari("add", "-p", "p1", "--job-name", "carried", "--", "true")
 	e.MustRotari("add", "-p", "p1", "--job-name", "again", "--", "sh", "-c", "test -f "+flag+" && sleep 30")
-	e.Rotari("run", "-p", "p1", "--quiet")
+	e.RotariRun("run", "-p", "p1", "--quiet")
 	jobsBeforeRetry := e.MustRotari("jobs", "--basedir", e.Base, "p1", "--format", "%n %s %t %f").Stdout
 	finishedJobsFields := carriedJobFields(jobsBeforeRetry, false)
 	if len(finishedJobsFields) < 8 || finishedJobsFields[1] != "success" {

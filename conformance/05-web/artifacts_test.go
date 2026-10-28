@@ -19,7 +19,7 @@ func TestWebShowsArtifactCandidates(t *testing.T) {
 	e := support.NewEnv(t)
 	jobID := support.AddedJobID(t, e.MustRotari("add", "-p", "art", "--", "sh", "-c", "echo x > out.txt; exit 3", "sh", "missing.csv"))
 	bareJobID := support.AddedJobID(t, e.MustRotari("add", "-p", "art", "--", "true"))
-	e.Rotari("run", "-p", "art", "--quiet")
+	e.RotariRun("run", "-p", "art", "--quiet")
 	var shown struct {
 		RunID string `json:"run_id"`
 		Jobs  []struct {

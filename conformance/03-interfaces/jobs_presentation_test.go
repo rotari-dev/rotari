@@ -182,13 +182,13 @@ func TestRunsNamedLifecycleFilters(t *testing.T) {
 	project := "run-lifecycle"
 
 	e.MustRotari("add", "-p", project, "--job-name", "ok", "--", "true")
-	if result := e.Rotari("run", "-p", project, "--quiet"); result.Code != 0 {
+	if result := e.RotariRun("run", "-p", project, "--quiet"); result.Code != 0 {
 		t.Fatalf("successful run failed: %s", result)
 	}
 	okID := shownRunID(t, e.MustRotari("show", "-p", project, "--json").Stdout)
 
 	e.MustRotari("add", "-p", project, "--job-name", "bad", "--", "false")
-	if result := e.Rotari("run", "-p", project, "--quiet"); result.Code != 1 {
+	if result := e.RotariRun("run", "-p", project, "--quiet"); result.Code != 1 {
 		t.Fatalf("failing run exit = %d, want 1: %s", result.Code, result)
 	}
 	failedID := shownRunID(t, e.MustRotari("show", "-p", project, "--json").Stdout)

@@ -38,7 +38,7 @@ func TestWaitPrintsSameCompletionMessageAsRun(t *testing.T) {
 	e := support.NewEnv(t)
 	project := "completion-message"
 	e.MustRotari("add", "-p", project, "--", "true")
-	run := e.Rotari("run", "-p", project)
+	run := e.RotariRun("run", "-p", project)
 	if run.Code != 0 {
 		t.Fatalf("run exit code = %d, want 0: %s", run.Code, run)
 	}
@@ -68,8 +68,8 @@ func TestCompletionMessageGroupsFailuresByCause(t *testing.T) {
 	e.MustRotari("add", "-p", project, "--job-name", "broken", "--", "sh", "-c", "exit 3")
 	e.MustRotari("add", "-p", project, "--job-name", "other", "--", "sh", "-c", "exit 4")
 	e.MustRotari("add", "-p", project, "--job-name", "fine", "--", "true")
-	e.Rotari("run", "-p", project, "--quiet")
-	retried := e.Rotari("retry", "-p", project, "--job-name", "broken")
+	e.RotariRun("run", "-p", project, "--quiet")
+	retried := e.RotariRun("retry", "-p", project, "--job-name", "broken")
 	start := strings.LastIndex(retried.Stdout, "=== Run failed ===")
 	if retried.Code != 1 || start < 0 {
 		t.Fatalf("retry did not end with a failed run: %s", retried)
@@ -117,7 +117,7 @@ func TestRetryProgressCountsOnlyExecutedJobs(t *testing.T) {
 	e.MustRotari("add", "-p", project, "--job-name", "broken", "--", "sh", "-c", "sleep 2; exit 3")
 	e.MustRotari("add", "-p", project, "--job-name", "fine", "--", "true")
 	e.MustRotari("add", "-p", project, "--job-name", "other", "--", "true")
-	e.Rotari("run", "-p", project, "--quiet")
+	e.RotariRun("run", "-p", project, "--quiet")
 	// wait attaches while the rerun job sleeps, so it prints the run's
 	// progress snapshot and then each count.
 	e.MustRotari("retry", "-p", project, "--async", "--quiet")

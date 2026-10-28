@@ -30,7 +30,7 @@ func TestProjectListHintsWork(t *testing.T) {
 			}
 			other := filepath.Join(e.Root, "other")
 			e.MustRotari("add", "-b", other, "-p", "exp", "--", "false")
-			if result := e.Rotari("run", "-b", other, "-p", "exp", "--quiet"); result.Code == 0 {
+			if result := e.RotariRun("run", "-b", other, "-p", "exp", "--quiet"); result.Code == 0 {
 				t.Fatalf("run with a failing job should exit 1: %s", result)
 			}
 			var shown struct {

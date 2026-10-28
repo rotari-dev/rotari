@@ -54,7 +54,7 @@ func TestWebhookJobNotificationLinksToExactJob(t *testing.T) {
 		t.Fatal(err)
 	}
 	jobID := support.AddedJobID(t, e.MustRotari("add", "-p", "p1", "--job-name", "fail", "--", "sh", "-c", "exit 1"))
-	if run := e.Rotari("run", "-p", "p1", "--quiet"); run.Code == 0 {
+	if run := e.RotariRun("run", "-p", "p1", "--quiet"); run.Code == 0 {
 		t.Fatalf("failing run unexpectedly succeeded: %s", run)
 	}
 	summary := readSummary(t, e, "p1")

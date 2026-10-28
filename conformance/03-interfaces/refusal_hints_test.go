@@ -71,9 +71,9 @@ func TestRefusalAndSourceHintsNameOnlyANonImplicitBaseDir(t *testing.T) {
 				return append(append(append([]string{command}, location...), "-p", "source"), rest...)
 			}
 			client.MustRotari(args("add", "--job-name", "broken", "--", "sh", "-c", "exit 3")...)
-			client.Rotari(args("run", "--quiet")...)
+			client.RotariRun(args("run", "--quiet")...)
 			client.MustRotari(args("add", "--job-name", "next", "--", "true")...)
-			retried := client.Rotari(args("retry")...)
+			retried := client.RotariRun(args("retry")...)
 			var notice string
 			for _, line := range strings.Split(retried.Stdout, "\n") {
 				if strings.HasPrefix(line, "Include them with: ") {

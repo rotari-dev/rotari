@@ -21,7 +21,7 @@ func TestRunNotes(t *testing.T) {
 	if !strings.Contains(preview, "note: first sweep") {
 		t.Fatalf("run --dry-run does not show its note:\n%s", preview)
 	}
-	if r := e.Rotari("run", "-p", "notes", "--quiet", "--note", "first sweep"); r.Code == 0 {
+	if r := e.RotariRun("run", "-p", "notes", "--quiet", "--note", "first sweep"); r.Code == 0 {
 		t.Fatalf("the first run should fail: %s", r)
 	}
 	first := latestRun(t, e, "notes")
@@ -64,7 +64,7 @@ func TestRunNotes(t *testing.T) {
 		t.Errorf("show -j does not show only the job's note:\n%s", jobView)
 	}
 
-	e.Rotari("retry", "-p", "notes", "--quiet", "--note", "retry to see the same failures")
+	e.RotariRun("retry", "-p", "notes", "--quiet", "--note", "retry to see the same failures")
 	second := latestRun(t, e, "notes")
 	history := e.MustRotari("lineage", "-p", "notes").Stdout
 	for _, want := range []string{"NOTE", "first sweep (+1 more)", "retry to see the same failures"} {

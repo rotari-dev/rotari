@@ -20,9 +20,9 @@ func TestCarriedJobLogsFollowEveryCarry(t *testing.T) {
 	// The log line, zebra42fish, appears in no command line.
 	// The first run executes kept; each retry carries it from the one
 	// before, so the last run's kept is three carries from its attempt.
-	e.Rotari("run", "-p", "chain", "--quiet")
+	e.RotariRun("run", "-p", "chain", "--quiet")
 	for i := 0; i < 3; i++ {
-		e.Rotari("retry", "-p", "chain", "--quiet")
+		e.RotariRun("retry", "-p", "chain", "--quiet")
 	}
 	var shown struct {
 		RunID    string `json:"run_id"`

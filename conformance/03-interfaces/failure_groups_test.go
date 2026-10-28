@@ -41,7 +41,7 @@ func TestFailureGroupsAgreeAcrossViews(t *testing.T) {
 esac`)
 	e.MustRotari("add", "-p", project, "--job-name", "slow", "--timeout", "1s", "--", "sleep", "5")
 	e.MustRotari("add", "-p", project, "--job-name", "nan", "--", "sh", "-c", `echo "step 1"; echo "loss became NaN at step 2" >&2; echo; exit 5`)
-	if result := e.Rotari("run", "-p", project, "--quiet"); result.Code == 0 {
+	if result := e.RotariRun("run", "-p", project, "--quiet"); result.Code == 0 {
 		t.Fatalf("run with failing jobs should exit 1: %s", result)
 	}
 	var shown struct {
@@ -115,7 +115,7 @@ func TestFailureGroupRetryHintsWork(t *testing.T) {
 	e.MustRotari("add", "-p", "hints", "--job-name", "oom", "--", "sh", "-c", `echo "torch.OutOfMemoryError: CUDA out of memory" >&2; exit 1`)
 	e.MustRotari("add", "-p", "hints", "--job-name", "full", "--", "sh", "-c", `echo "torch.OutOfMemoryError: CUDA out of memory" >&2; echo "OSError: [Errno 28] No space left on device" >&2; exit 4`)
 	e.MustRotari("add", "-p", "hints", "--job-name", "fine", "--", "true")
-	e.Rotari("run", "-p", "hints", "--quiet")
+	e.RotariRun("run", "-p", "hints", "--quiet")
 	var shown struct {
 		RunID string `json:"run_id"`
 	}
@@ -185,7 +185,7 @@ func TestPrintedHintsNameOnlyANonImplicitBaseDir(t *testing.T) {
 			}
 			e.MustRotari(args("add", "--job-name", "broken", "--", "sh", "-c", "exit 3")...)
 			e.MustRotari(args("add", "--job-name", "fine", "--", "true")...)
-			e.Rotari(args("run", "--quiet")...)
+			e.RotariRun(args("run", "--quiet")...)
 			var shown struct {
 				RunID string `json:"run_id"`
 			}

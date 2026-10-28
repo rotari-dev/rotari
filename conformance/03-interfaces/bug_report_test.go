@@ -25,7 +25,7 @@ func TestBugReportNeverIncludesSecrets(t *testing.T) {
 	)
 	e := support.NewEnv(t)
 	e.MustRotari("add", "-p", "secrets", "--env", "API_TOKEN_VALUE="+jobSecret, "--", "sh", "-c", "echo failing-output; exit 3")
-	if run := e.Rotari("run", "-p", "secrets"); run.Code != 1 {
+	if run := e.RotariRun("run", "-p", "secrets"); run.Code != 1 {
 		t.Fatalf("run of a failing job: %s", run)
 	}
 	if err := os.WriteFile(filepath.Join(e.Base, "notifications.toml"), []byte("[webhook]\nurl = \""+webhook+"\"\n"), 0o600); err != nil {

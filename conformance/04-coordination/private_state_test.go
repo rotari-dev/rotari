@@ -490,7 +490,7 @@ func TestMissingSchedulerCommand(t *testing.T) {
 	}
 	e := support.NewEnv(t).WithVar("PATH", path)
 	job := support.AddedJobID(t, e.MustRotari("add", "-p", "s", "--executor", "slurm", "--", "true"))
-	if r := e.Rotari("run", "-p", "s", "--quiet"); r.Code == 0 {
+	if r := e.RotariRun("run", "-p", "s", "--quiet"); r.Code == 0 {
 		t.Fatalf("a slurm job ran without sbatch: %s", r)
 	}
 	if out := e.MustRotari("show", "-p", "s", "--run-id", "latest", "--job-id", job).Stdout; !strings.Contains(out, "sbatch") {

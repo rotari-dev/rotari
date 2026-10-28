@@ -21,7 +21,7 @@ func TestRunReportReadsCarriedJobLogs(t *testing.T) {
 	fixed := filepath.Join(e.Root, "fixed")
 	e.MustRotari("add", "-p", "rep", "--job-name", "keep", "--", "sh", "-c", "echo config keep; echo val=0.78")
 	e.MustRotari("add", "-p", "rep", "--job-name", "flaky", "--", "sh", "-c", "if [ -f '"+fixed+"' ]; then echo val=0.86; else echo boom; exit 2; fi")
-	if r := e.Rotari("run", "-p", "rep", "--quiet"); r.Code == 0 {
+	if r := e.RotariRun("run", "-p", "rep", "--quiet"); r.Code == 0 {
 		t.Fatalf("the first run should fail: %s", r)
 	}
 	if err := os.WriteFile(fixed, nil, 0o644); err != nil {

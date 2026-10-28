@@ -267,6 +267,52 @@ func (e *Env) MustRotari(args ...string) Result {
 	return r
 }
 
+// RotariRun runs a run or retry that must start a run, whatever its jobs
+// do. A refusal to start also exits 1, like a run whose jobs failed, so it
+// fails the test with the command's output unless a new run directory
+// appeared in e's basedir or one the arguments name.
+func (e *Env) RotariRun(args ...string) Result {
+	e.T.Helper()
+	before := e.runDirs(args)
+	r := e.Rotari(args...)
+	for dir := range e.runDirs(args) {
+		if !before[dir] {
+			return r
+		}
+	}
+	e.T.Fatalf("no run started: %s", r)
+	return r
+}
+
+// runDirs lists the run directories of every project in e's basedir and
+// in the basedirs args name with -b or --basedir.
+func (e *Env) runDirs(args []string) map[string]bool {
+	bases := []string{e.Base}
+	for index, arg := range args {
+		switch {
+		case (arg == "-b" || arg == "--basedir") && index+1 < len(args):
+			bases = append(bases, args[index+1])
+		case strings.HasPrefix(arg, "--basedir="):
+			bases = append(bases, strings.TrimPrefix(arg, "--basedir="))
+		}
+	}
+	workDir := e.Root
+	if e.dir != "" {
+		workDir = e.dir
+	}
+	dirs := map[string]bool{}
+	for _, base := range bases {
+		if !filepath.IsAbs(base) {
+			base = filepath.Join(workDir, base)
+		}
+		matches, _ := filepath.Glob(filepath.Join(base, "projects", "*", "runs", "*"))
+		for _, match := range matches {
+			dirs[match] = true
+		}
+	}
+	return dirs
+}
+
 func (e *Env) Without(name string) *Env {
 	copied := *e
 	copied.vars = nil

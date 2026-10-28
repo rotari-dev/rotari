@@ -64,7 +64,7 @@ func TestShowListsArtifactCandidates(t *testing.T) {
 	}
 	manyJob := support.AddedJobID(t, e.MustRotari(many...))
 	failing := support.AddedJobID(t, e.MustRotari("add", "-p", "art", "--", "sh", "-c", "exit 3", "sh", "fail.csv"))
-	e.Rotari("run", "-p", "art", "--quiet")
+	e.RotariRun("run", "-p", "art", "--quiet")
 	attempt := lastAttemptID(t, e, "art", job)
 
 	shown := e.MustRotari("show", "-p", "art", "-j", job, "--no-pager").Stdout
@@ -111,7 +111,7 @@ func TestShowListsArtifactCandidates(t *testing.T) {
 
 	// A filtered rerun carries the successful job: its listing is the one
 	// of the attempt that produced the result.
-	e.Rotari("run", "-p", "art", "--failed", "--quiet")
+	e.RotariRun("run", "-p", "art", "--failed", "--quiet")
 	carried := e.MustRotari("show", "-p", "art", "-j", job, "--artifacts", "--no-pager").Stdout
 	if !strings.Contains(carried, "  file       out.txt  (> (shell code 1:10))\n") {
 		t.Fatalf("carried job's listing:\n%s", carried)

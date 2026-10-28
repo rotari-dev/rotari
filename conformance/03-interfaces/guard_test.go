@@ -168,7 +168,7 @@ func TestRunPreviewMatchesTheRun(t *testing.T) {
 		t.Fatal("a refused retry changed the project")
 	}
 
-	e.Rotari("retry", "-p", "p1", "--if-revision", revision, "--quiet")
+	e.RotariRun("retry", "-p", "p1", "--if-revision", revision, "--quiet")
 	var shown struct {
 		RunID   string `json:"run_id"`
 		Summary struct {

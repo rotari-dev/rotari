@@ -58,7 +58,7 @@ func TestFilteredRerunCarriesCompletedResults(t *testing.T) {
 	e := support.NewEnv(t)
 	okJob := support.AddedJobID(t, e.MustRotari("add", "-p", "p1", "--job-name", "ok", "--", "sh", "-c", "echo hello"))
 	badJob := support.AddedJobID(t, e.MustRotari("add", "-p", "p1", "--job-name", "bad", "--", "sh", "-c", "exit 3"))
-	if r := e.Rotari("run", "-p", "p1", "--quiet"); r.Code == 0 {
+	if r := e.RotariRun("run", "-p", "p1", "--quiet"); r.Code == 0 {
 		t.Fatalf("run with a failing job should exit 1: %s", r)
 	}
 	first := readSummary(t, e, "p1")
@@ -72,7 +72,7 @@ func TestFilteredRerunCarriesCompletedResults(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if r := e.Rotari("run", "-p", "p1", "--failed", "--quiet"); r.Code == 0 {
+	if r := e.RotariRun("run", "-p", "p1", "--failed", "--quiet"); r.Code == 0 {
 		t.Fatalf("filtered rerun unexpectedly succeeded: %s", r)
 	}
 	second := readSummary(t, e, "p1")
@@ -122,7 +122,7 @@ func TestRetryFromSavedRunLeavesNextQueueUntouched(t *testing.T) {
 	covers(t, "RUN-13")
 	e := support.NewEnv(t)
 	sourceJob := support.AddedJobID(t, e.MustRotari("add", "-p", "saved", "--job-name", "source", "--", "sh", "-c", "exit 3"))
-	if r := e.Rotari("run", "-p", "saved", "--quiet"); r.Code == 0 {
+	if r := e.RotariRun("run", "-p", "saved", "--quiet"); r.Code == 0 {
 		t.Fatalf("source run unexpectedly succeeded: %s", r)
 	}
 	source := readSummary(t, e, "saved")
@@ -141,7 +141,7 @@ func TestRetryFromSavedRunLeavesNextQueueUntouched(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	retry := e.Rotari("retry", "-p", "saved", "--run-id", source.RunID, "--quiet")
+	retry := e.RotariRun("retry", "-p", "saved", "--run-id", source.RunID, "--quiet")
 	if retry.Code == 0 {
 		t.Fatalf("retry of failed source job unexpectedly succeeded: %s", retry)
 	}
@@ -182,7 +182,7 @@ func TestRetryReportsFailedJobsOmittedByNonEmptyQueue(t *testing.T) {
 	e := support.NewEnv(t)
 	failedA := support.AddedJobID(t, e.MustRotari("add", "-p", "report", "--job-name", "failed-a", "--", "sh", "-c", "exit 2"))
 	failedB := support.AddedJobID(t, e.MustRotari("add", "-p", "report", "--job-name", "failed-b", "--", "sh", "-c", "exit 3"))
-	if r := e.Rotari("run", "-p", "report", "--quiet"); r.Code == 0 {
+	if r := e.RotariRun("run", "-p", "report", "--quiet"); r.Code == 0 {
 		t.Fatalf("source run unexpectedly succeeded: %s", r)
 	}
 	latest := readSummary(t, e, "report")
@@ -216,7 +216,7 @@ func TestCopyIntoAnotherProject(t *testing.T) {
 	okJob := support.AddedJobID(t, e.MustRotari("add", "-p", "src", "--job-name", "ok", "--", "true"))
 	badA := support.AddedJobID(t, e.MustRotari("add", "-p", "src", "--job-name", "bad-a", "--", "sh", "-c", "exit 2"))
 	badB := support.AddedJobID(t, e.MustRotari("add", "-p", "src", "--job-name", "bad-b", "--", "sh", "-c", "exit 3"))
-	if r := e.Rotari("run", "-p", "src", "--quiet"); r.Code == 0 {
+	if r := e.RotariRun("run", "-p", "src", "--quiet"); r.Code == 0 {
 		t.Fatalf("source run unexpectedly succeeded: %s", r)
 	}
 	source := readSummary(t, e, "src")
@@ -228,7 +228,7 @@ func TestCopyIntoAnotherProject(t *testing.T) {
 		t.Fatalf("Web copy into another project: status %d: %s", got.Status, got.Body)
 	}
 	for _, project := range []string{"cli", "web"} {
-		if r := e.Rotari("retry", "-p", project, "--quiet"); r.Code == 0 {
+		if r := e.RotariRun("retry", "-p", project, "--quiet"); r.Code == 0 {
 			t.Fatalf("%s: retry of the copied failures unexpectedly succeeded: %s", project, r)
 		}
 		retried := readSummary(t, e, project)
@@ -264,7 +264,7 @@ func TestRetryInAnotherProject(t *testing.T) {
 	okJob := support.AddedJobID(t, e.MustRotari("add", "-p", "src", "--job-name", "ok", "--", "true"))
 	badJob := support.AddedJobID(t, e.MustRotari("add", "-p", "src", "--job-name", "bad", "--", "sh", "-c", "exit 2"))
 	sweep := support.AddedJobID(t, e.MustRotari("add", "-p", "src", "--job-name", "sweep", "--array", "1-3", "--", "sh", "-c", `test "$ROTARI_ARRAY_TASK_ID" != 2 || exit 5`))
-	if r := e.Rotari("run", "-p", "src", "--quiet"); r.Code == 0 {
+	if r := e.RotariRun("run", "-p", "src", "--quiet"); r.Code == 0 {
 		t.Fatalf("source run unexpectedly succeeded: %s", r)
 	}
 	source := readSummary(t, e, "src")
@@ -279,7 +279,7 @@ func TestRetryInAnotherProject(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(e.Base, "projects", "dst")); !os.IsNotExist(err) {
 		t.Errorf("preview created the destination: %v", err)
 	}
-	if r := e.Rotari("retry", "-p", "src", "--to-project", "dst", "--quiet"); r.Code == 0 {
+	if r := e.RotariRun("retry", "-p", "src", "--to-project", "dst", "--quiet"); r.Code == 0 {
 		t.Fatalf("retry of the failures unexpectedly succeeded: %s", r)
 	}
 	retried := readSummary(t, e, "dst")
@@ -299,7 +299,7 @@ func TestRetryInAnotherProject(t *testing.T) {
 		}
 	}
 
-	if r := e.Rotari("retry", "-p", "src", "--run-id", source.RunID, "--to-project", "whole", "--partial-array=false", "--quiet"); r.Code == 0 {
+	if r := e.RotariRun("retry", "-p", "src", "--run-id", source.RunID, "--to-project", "whole", "--partial-array=false", "--quiet"); r.Code == 0 {
 		t.Fatalf("whole-array retry unexpectedly succeeded: %s", r)
 	}
 	whole := readSummary(t, e, "whole")
@@ -339,7 +339,7 @@ func TestBlockedOriginJobsDoNotRewindWebTimeline(t *testing.T) {
 	source := readSummary(t, e, "timeline")
 	e.MustRotari("copy", "-p", "timeline", "--run-id", source.RunID, "--overwrite", "--quiet")
 	e.MustRotari("change", "-p", "timeline", "--job-id", rootJob, "--", "false")
-	if result := e.Rotari("run", "-p", "timeline", "--quiet"); result.Code == 0 {
+	if result := e.RotariRun("run", "-p", "timeline", "--quiet"); result.Code == 0 {
 		t.Fatalf("rerun with a failed dependency unexpectedly succeeded: %s", result)
 	}
 	current := readSummary(t, e, "timeline")
@@ -697,7 +697,7 @@ func TestRunRetrySucceedsWithinOneRun(t *testing.T) {
 	marker := filepath.Join(e.Root, "retry-count")
 	command := fmt.Sprintf("printf x >> %q; test $(wc -c < %q) -ge 3", marker, marker)
 	jobID := support.AddedJobID(t, e.MustRotari("add", "-p", "retry", "--", "sh", "-c", command))
-	if r := e.Rotari("run", "-p", "retry", "--retry", "2", "--quiet"); r.Code != 0 {
+	if r := e.RotariRun("run", "-p", "retry", "--retry", "2", "--quiet"); r.Code != 0 {
 		t.Fatalf("run with a successful retry exited %d: %s", r.Code, r)
 	}
 	data, err := os.ReadFile(marker)
@@ -824,7 +824,7 @@ func TestImportedGroupStatusKeepsUnlistedLeafResults(t *testing.T) {
 		"sh", "-c", `echo train$SEED >> "$0"; [ "$SEED" = 1 ]`, logPath)
 	e.MustRotari("add", "-p", "groups", "--job-name", "tasks", "--array", "1-2", "--",
 		"sh", "-c", `echo task$ROTARI_ARRAY_TASK_ID >> "$0"; [ "$ROTARI_ARRAY_TASK_ID" = 1 ]`, logPath)
-	e.Rotari("run", "-p", "groups", "--quiet")
+	e.RotariRun("run", "-p", "groups", "--quiet")
 	manifestPath := filepath.Join(e.Root, "groups.json")
 	e.MustRotari("export", "-p", "groups", "--format", "json", "--output", manifestPath)
 	data, err := os.ReadFile(manifestPath)
@@ -865,7 +865,7 @@ func TestImportedGroupStatusKeepsUnlistedLeafResults(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.MustRotari("import", "--overwrite", manifestPath, "groups")
-	e.Rotari("retry", "-p", "groups", "--quiet")
+	e.RotariRun("retry", "-p", "groups", "--quiet")
 	executed, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatal(err)
@@ -883,7 +883,7 @@ func TestImportedArrayWideningExecutesNewTasks(t *testing.T) {
 	logPath := filepath.Join(e.Root, "executed.log")
 	e.MustRotari("add", "-p", "widen", "--job-name", "tasks", "--array", "1-2", "--",
 		"sh", "-c", `echo task$ROTARI_ARRAY_TASK_ID >> "$0"; [ "$ROTARI_ARRAY_TASK_ID" != 2 ]`, logPath)
-	e.Rotari("run", "-p", "widen", "--quiet")
+	e.RotariRun("run", "-p", "widen", "--quiet")
 	manifestPath := filepath.Join(e.Root, "widen.json")
 	e.MustRotari("export", "-p", "widen", "--format", "json", "--output", manifestPath)
 	data, err := os.ReadFile(manifestPath)
@@ -901,7 +901,7 @@ func TestImportedArrayWideningExecutesNewTasks(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.MustRotari("import", "--overwrite", manifestPath, "widen")
-	e.Rotari("retry", "-p", "widen", "--quiet")
+	e.RotariRun("retry", "-p", "widen", "--quiet")
 	executed, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatal(err)
@@ -1041,7 +1041,7 @@ func TestExternalLogDestinations(t *testing.T) {
 	}
 	marker := filepath.Join(e.Root, "must-not-run")
 	e.MustRotari("add", "-p", "bad-destination", "--output", "not-a-directory/output", "--", "touch", marker)
-	if result := e.Rotari("run", "-p", "bad-destination", "--quiet"); result.Code == 0 {
+	if result := e.RotariRun("run", "-p", "bad-destination", "--quiet"); result.Code == 0 {
 		t.Fatalf("run succeeded despite destination setup failure: %s", result)
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
@@ -1164,7 +1164,7 @@ func TestArrayNameDependsOnEveryTask(t *testing.T) {
 	collect := support.AddedJobID(t, e.MustRotari("add", "-p", "deps", "--job-name", "collect", "--depends-on-finished", "train", "--", "true"))
 	deploy := support.AddedJobID(t, e.MustRotari("add", "-p", "deps", "--job-name", "deploy", "--depends-on", "train", "--", "true"))
 	e.MustRotari("check", "deps")
-	if result := e.Rotari("run", "-p", "deps", "--quiet"); result.Code == 0 {
+	if result := e.RotariRun("run", "-p", "deps", "--quiet"); result.Code == 0 {
 		t.Fatalf("run with a failing task should exit 1: %s", result)
 	}
 	summary := readSummary(t, e, "deps")

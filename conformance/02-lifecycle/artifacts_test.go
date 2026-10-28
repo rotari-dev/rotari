@@ -46,7 +46,7 @@ func TestStartedAttemptRecordsArtifactCandidates(t *testing.T) {
 	// source, where "$1" has no fixed value and code/unused.csv is literal.
 	jobID := support.AddedJobID(t, e.MustRotari("add", "-p", "artifacts", "--env", "OUTPUT_DIR=out", "--output", "logs/run.log",
 		"--", "sh", "-c", `cat "$1" >/dev/null || cat code/unused.csv; exit 3`, "sh", "conf/train.yaml"))
-	if r := e.Rotari("run", "-p", "artifacts", "--quiet"); r.Code == 0 {
+	if r := e.RotariRun("run", "-p", "artifacts", "--quiet"); r.Code == 0 {
 		t.Fatalf("run of a job that exits 3 succeeded: %s", r)
 	}
 	summary := readSummary(t, e, "artifacts")
@@ -225,7 +225,7 @@ func TestArtifactCandidateExamples(t *testing.T) {
 		args := append([]string{"add", "-p", project}, words[2:]...)
 		jobIDs[index] = support.AddedJobID(t, e.MustRotari(args...))
 	}
-	e.Rotari("run", "-p", project, "--quiet")
+	e.RotariRun("run", "-p", project, "--quiet")
 	summary := readSummary(t, e, project)
 	runDir := filepath.Join(e.Base, "projects", project, "runs", summary.RunID)
 	cwd := runCWD(t, runDir)
@@ -266,7 +266,7 @@ func TestShellVariablesDifferPerArrayTask(t *testing.T) {
 	e := support.NewEnv(t)
 	const project = "artifact-array"
 	e.MustRotari("add", "-p", project, "--array", "0-1", "--", "bash", "-c", `true > "out/$ROTARI_ARRAY_TASK_ID.log"; true > "$ROTARI_JOB_DIR/result.txt"`)
-	e.Rotari("run", "-p", project, "--quiet")
+	e.RotariRun("run", "-p", project, "--quiet")
 	summary := readSummary(t, e, project)
 	runDir := filepath.Join(e.Base, "projects", project, "runs", summary.RunID)
 	cwd := runCWD(t, runDir)

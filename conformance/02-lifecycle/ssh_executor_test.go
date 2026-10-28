@@ -90,7 +90,7 @@ func TestSSHExecutorRunsAJob(t *testing.T) {
 	}
 	args = append(args, "--", "sh", "-c", "echo remote-ok")
 	jobID := support.AddedJobID(t, e.MustRotari(args...))
-	if r := e.Rotari("run", "-p", "remote", "--quiet"); r.Code != 0 {
+	if r := e.RotariRun("run", "-p", "remote", "--quiet"); r.Code != 0 {
 		t.Fatalf("run exited %d: %s", r.Code, r)
 	}
 	summary := readSummary(t, e, "remote")

@@ -13,7 +13,7 @@ func TestShowLogResultSelection(t *testing.T) {
 	run := e.CreateFinishedRun()
 	// The retry carries the successful job. Both executed and carried logs
 	// must obey the same selection, including the older run explicitly.
-	if result := e.Rotari("retry", "-p", run.Project, "--quiet"); result.Code != 1 {
+	if result := e.RotariRun("retry", "-p", run.Project, "--quiet"); result.Code != 1 {
 		t.Fatalf("expected a failing retry: %s", result)
 	}
 	for _, view := range []string{run.RunID, "latest"} {

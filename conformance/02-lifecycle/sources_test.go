@@ -86,7 +86,7 @@ func TestRunRecordsTheSourceItExecuted(t *testing.T) {
 	carriedCommit := gitRepo(t, carried, "exit 0\n")
 	fixedJob := support.AddedJobID(t, e.MustRotari("add", "-p", "src", "--job-name", "fixed", "--working-directory", fixed, "--", "sh", "job.sh"))
 	e.MustRotari("add", "-p", "src", "--job-name", "carried", "--working-directory", carried, "--", "sh", "job.sh")
-	e.Rotari("run", "-p", "src", "--quiet")
+	e.RotariRun("run", "-p", "src", "--quiet")
 	firstRun := latestRun(t, e, "src")
 
 	sources := runSources(t, e, firstRun)

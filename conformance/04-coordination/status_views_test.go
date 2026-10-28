@@ -286,7 +286,7 @@ func TestStatusFallbackChainAgreesAcrossViews(t *testing.T) {
 		}
 		e.MustRotari(append(append(args, "--"), c.command...)...)
 	}
-	e.Rotari("run", "-p", project, "--quiet")
+	e.RotariRun("run", "-p", project, "--quiet")
 	runID, ids := runJobIDs(t, e, project)
 	for _, c := range cases {
 		if c.edit == nil {
@@ -509,7 +509,7 @@ func TestAcceptedJobLabelAgreesAcrossViews(t *testing.T) {
 	project := "accepted-label"
 	bad := support.AddedJobID(t, e.MustRotari("add", "-p", project, "--job-name", "bad", "--", "false"))
 	e.MustRotari("add", "-p", project, "--job-name", "good", "--", "true")
-	e.Rotari("run", "-p", project, "--quiet")
+	e.RotariRun("run", "-p", project, "--quiet")
 	e.MustRotari("copy", "-p", project, "--quiet")
 	e.MustRotari("change", "-p", project, "-j", bad, "--status", "success", "--quiet")
 	e.MustRotari("retry", "-p", project, "--quiet")
