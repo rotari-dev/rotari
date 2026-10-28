@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rotari-dev/rotari/conformance/support"
 )
@@ -101,5 +103,58 @@ func TestSSHExecutorRunsAJob(t *testing.T) {
 	stdout, err := os.ReadFile(filepath.Join(e.Base, "projects", "remote", "runs", summary.RunID, jobID, "attempts", attemptID, "stdout"))
 	if err != nil || strings.TrimSpace(string(stdout)) != "remote-ok" {
 		t.Fatalf("SSH job stdout = %q, err = %v", stdout, err)
+	}
+}
+
+// A job running through the SSH executor reads as running
+// in show and the Web API, as a local job does, rather than as unknown.
+func TestSSHJobReadsAsRunning(t *testing.T) {
+	covers(t, "DUR-1")
+	e := support.NewEnv(t)
+	options := sshLoopback(t, e.Root)
+	args := []string{"add", "-p", "remote", "-e", "ssh"}
+	for _, option := range options {
+		args = append(args, "--executor-option="+option)
+	}
+	jobID := support.AddedJobID(t, e.MustRotari(append(args, "--", "sleep", "300")...))
+	e.MustRotari("run", "-p", "remote", "--quiet", "--async")
+	t.Cleanup(func() { _ = e.Rotari("cancel", "-p", "remote", "--wait") })
+
+	var shown struct {
+		RunID string `json:"run_id"`
+		Jobs  []struct {
+			Job struct {
+				ID string `json:"id"`
+			} `json:"job"`
+			Status string `json:"status"`
+		} `json:"jobs"`
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		shown.RunID, shown.Jobs = "", nil
+		_ = json.Unmarshal([]byte(e.Rotari("show", "-p", "remote", "--json").Stdout), &shown)
+		if shown.RunID != "" && len(shown.Jobs) == 1 && shown.Jobs[0].Status != "pending" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("SSH job was never dispatched: %+v", shown)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if job := shown.Jobs[0]; job.Job.ID != jobID || job.Status != "running (recorded)" {
+		t.Errorf("show --json job = %+v, want %s running (recorded)", job, jobID)
+	}
+	var detail struct {
+		Jobs []struct {
+			ID              string `json:"id"`
+			ExecutionStatus string `json:"execution_status"`
+		} `json:"jobs"`
+	}
+	body := e.HTTPGet(e.StartWeb() + "/api/run?project_name=remote&run_id=" + shown.RunID).Body
+	if err := json.Unmarshal([]byte(body), &detail); err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.Jobs) != 1 || detail.Jobs[0].ExecutionStatus != "running (recorded)" {
+		t.Errorf("Web API jobs = %+v, want %s running (recorded)", detail.Jobs, jobID)
 	}
 }

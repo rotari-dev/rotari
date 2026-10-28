@@ -104,7 +104,14 @@ func (ssh SSH) Submit(runDir string, job model.JobSpec, options []string) (JobHa
 		return JobHandle{}, fmt.Errorf("ssh %s: %w", host, err)
 	}
 	metadata := sshJobMetadata{Executor: "ssh", JobID: job.ID, Command: job.Command, Host: host, PID: cmd.Process.Pid, SSHOptions: sshOptions, RemoteToken: remoteToken, SubmittedAt: nowRFC3339()}
-	if err := state.WriteJSON(filepath.Join(jobDir, "job.json"), metadata); err != nil {
+	err = state.WriteJSON(filepath.Join(jobDir, "job.json"), metadata)
+	if err == nil {
+		// The remote wrapper cannot write the local run directory, so the job
+		// is recorded as running on its target host once ssh has started, as
+		// the local wrapper records it once it starts.
+		err = state.WriteJSON(filepath.Join(jobDir, "status.json"), WrapperStatus{Phase: "running", Hosts: []string{host}, StartedAt: metadata.SubmittedAt})
+	}
+	if err != nil {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 		_ = stdout.Close()
@@ -150,6 +157,9 @@ func (ssh SSH) Wait(runDir string, handle JobHandle) model.JobResult {
 		}
 	}
 	status := WrapperStatus{Phase: "finished", ExitCode: exitCode, FinishedAt: nowRFC3339(), Hosts: []string{metadata.Host}}
+	if running, ok := LoadWrapperStatus(ssh.Store, filepath.Join(jobDir, "status.json")); ok {
+		status.StartedAt = running.StartedAt
+	}
 	if err != nil {
 		status.Error = err.Error()
 	}

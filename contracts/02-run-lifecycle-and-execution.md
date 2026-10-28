@@ -1232,7 +1232,11 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   An SSH path is resolved on the remote host, not from local `context.json`.
 - The SSH executor treats its first executor option as the target host and the
   rest as `ssh` options. It records output and final status locally and does not
-  require the remote host to mount the run directory. It starts each command in a
+  require the remote host to mount the run directory. Once the local `ssh`
+  process has started, it records the attempt's `status.json` as running on
+  the target host, so `show`, `jobs`, and the Web UI read the job as
+  `running (recorded)`, as they read a local job; the phase covers the
+  connection as well as the remote command. It starts each command in a
   remote process group and records the PID plus Linux `/proc` start time under
   an owner-only runtime directory keyed by a random token. Cancellation opens
   another SSH connection and signals the group only when the current process

@@ -288,3 +288,41 @@ func TestSSHWrapperScriptChangesWorkingDirectory(t *testing.T) {
 		t.Fatalf("script = %q", script)
 	}
 }
+
+// A submitted SSH job records a running phase on its target host, as the
+// local wrapper does, and keeps its start time once it finishes.
+func TestSSHExecutorRecordsRunningPhaseAtSubmission(t *testing.T) {
+	binDir := t.TempDir()
+	oldSSHCommandPath := SSHCommandPath
+	SSHCommandPath = filepath.Join(binDir, "ssh")
+	t.Cleanup(func() { SSHCommandPath = oldSSHCommandPath })
+	release := filepath.Join(t.TempDir(), "release")
+	writeExecutable(t, binDir, "ssh", fmt.Sprintf(`#!/bin/sh
+while [ ! -f %q ]; do sleep 0.02; done
+exec sh -s
+`, release))
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+
+	runDir := filepath.Join(t.TempDir(), "runs", "run-1")
+	job := model.JobSpec{ID: "job-1", AttemptID: "att-1", LogMode: model.LogModeSeparate, Command: []string{"true"}}
+	ssh := SSH{Store: testStore()}
+	handle, err := ssh.Submit(runDir, job, []string{"builder@example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	statusPath := filepath.Join(runDir, "job-1", "attempts", "att-1", "status.json")
+	running, ok := LoadWrapperStatus(testStore(), statusPath)
+	if !ok || running.Phase != "running" || running.StartedAt == "" || len(running.Hosts) != 1 || running.Hosts[0] != "builder@example.test" {
+		t.Errorf("status after submission = %#v, %v, want running on builder@example.test with a start time", running, ok)
+	}
+	if err := os.WriteFile(release, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if result := ssh.Wait(runDir, handle); result.ExitCode != 0 {
+		t.Fatalf("result = %#v", result)
+	}
+	finished, ok := LoadWrapperStatus(testStore(), statusPath)
+	if !ok || finished.Phase != "finished" || finished.StartedAt != running.StartedAt || finished.FinishedAt == "" {
+		t.Fatalf("status after Wait = %#v, want finished with start time %q", finished, running.StartedAt)
+	}
+}

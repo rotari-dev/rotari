@@ -162,3 +162,8 @@ rotari add -p sweep \
   ./train.sh
 rotari run -p sweep
 ```
+
+The job's output and result are written to the local run directory, so the
+remote host does not need to share it. While `ssh` runs, `rotari show` and the
+Web UI list the job as `running (recorded)` on its destination; this includes
+the time `ssh` spends connecting.

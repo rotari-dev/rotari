@@ -147,7 +147,7 @@ the IDs, this table, and those calls disagree.
 | RES-25 | Runs save immutable canonical merged file values, separate from runtime overrides and source metadata | partial | `TestMergedFileConfigSnapshotAndScopeValidation`, `TestWebWorkspaceSourceSelectionAndRunSnapshot` |
 | RES-26 | List commands ignore implicit location defaults; jobs/runs/projects scan known basedirs by default, and show requires a uniquely selected detail target | conformance | `TestAggregateCommandsIgnoreImplicitLocationDefaults` |
 | RES-27 | A carried job shows the log of the attempt that produced its result, however many carries back, in `show`, `--logs`, `--follow`, `/api/log`, the word cloud, and the run page | conformance | `TestCarriedJobLogsFollowEveryCarry` |
-| DUR-1 | Every executor runs jobs through the self-reporting wrapper | partial | `TestJobOutlivesKilledSupervisor` |
+| DUR-1 | Every executor runs jobs through the self-reporting wrapper | partial | `TestJobOutlivesKilledSupervisor`, `TestSSHJobReadsAsRunning` |
 | DUR-2 | The wrapper records status independently of its launcher | partial | `TestJobOutlivesKilledSupervisor` |
 | DUR-3 | An orphaned local job still records its own status | conformance | `TestJobOutlivesKilledSupervisor` |
 | DUR-4 | Supervisors are not restarted; crash detection is file-backed | conformance | `TestJobOutlivesKilledSupervisor` |
