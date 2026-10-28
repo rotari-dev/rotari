@@ -60,6 +60,7 @@ func AnalyzeResult(result model.JobResult, log string, readErr error) model.JobR
 		return result
 	}
 	result.Diagnoses = DiagnoseDefault(Job{JobID: result.ID, Error: result.Error, Log: log})
+	result.LastOutputLine = LastOutputLine(log)
 	result.DiagnosisStatus = model.DiagnosisMatched
 	if len(result.Diagnoses) == 0 {
 		result.DiagnosisStatus = model.DiagnosisNoMatch

@@ -1269,6 +1269,9 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   dependency resolution, or scheduler control. `diagnosis_status` records
   `matched`, `no_match`, or `unavailable` (with the reason in
   `diagnosis_note`), and `diagnoses` lists only recognized diagnoses.
+  When the output was read, `last_output_line` saves its last nonblank line,
+  without ANSI escapes, text a carriage return overwrote, or the lines that
+  shortening and stream separation add.
   `diagnosis_rules` is a hash of the rule definitions and matcher revision;
   saved analyses are never recomputed, and `show`, `report`, and the Web UI
   mark a matched or no-match analysis whose hash differs from the current

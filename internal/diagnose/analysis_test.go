@@ -13,12 +13,14 @@ func TestAnalyzeResultRecordsStatusAndRules(t *testing.T) {
 	if matched.DiagnosisStatus != model.DiagnosisMatched || len(matched.Diagnoses) != 1 || matched.DiagnosisRules != RulesVersion() {
 		t.Fatalf("AnalyzeResult(match) = %#v", matched)
 	}
-	noMatch := AnalyzeResult(model.JobResult{ID: "job-1", ExitCode: 1}, "ordinary failure", nil)
-	if noMatch.DiagnosisStatus != model.DiagnosisNoMatch || len(noMatch.Diagnoses) != 0 || noMatch.DiagnosisRules != RulesVersion() {
+	noMatch := AnalyzeResult(model.JobResult{ID: "job-1", ExitCode: 1}, "step 1\nordinary failure\n", nil)
+	if noMatch.DiagnosisStatus != model.DiagnosisNoMatch || len(noMatch.Diagnoses) != 0 || noMatch.DiagnosisRules != RulesVersion() ||
+		noMatch.LastOutputLine != "ordinary failure" {
 		t.Fatalf("AnalyzeResult(no match) = %#v", noMatch)
 	}
 	unavailable := AnalyzeResult(model.JobResult{ID: "job-1", ExitCode: 1}, "CUDA out of memory", errors.New("output unreadable"))
-	if unavailable.DiagnosisStatus != model.DiagnosisUnavailable || unavailable.DiagnosisNote != "output unreadable" || len(unavailable.Diagnoses) != 0 {
+	if unavailable.DiagnosisStatus != model.DiagnosisUnavailable || unavailable.DiagnosisNote != "output unreadable" || len(unavailable.Diagnoses) != 0 ||
+		unavailable.LastOutputLine != "" {
 		t.Fatalf("AnalyzeResult(unavailable) = %#v", unavailable)
 	}
 }

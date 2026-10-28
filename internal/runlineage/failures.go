@@ -124,7 +124,8 @@ var recordedCauseSuggestions = map[string]string{
 }
 
 // classifyFailure returns a failed job's cause, as model.FailureCause
-// decides it, the suggestion for it, and the line that shows it.
+// decides it, the suggestion for it, and the line that shows it: the matched
+// diagnosis's line, else the recorded error, else the job's last output line.
 func classifyFailure(job Job) (failureCause, string, string) {
 	result := job.Result
 	kind, name := model.FailureCause(result)
@@ -137,5 +138,9 @@ func classifyFailure(job Job) (failureCause, string, string) {
 		diagnosis := result.Diagnoses[0]
 		return failureCause{kind: kind, name: name}, diagnosis.Suggestion, diagnosis.Evidence
 	}
-	return failureCause{kind: kind, name: name}, recordedCauseSuggestions[kind], result.Error
+	evidence := result.Error
+	if evidence == "" {
+		evidence = result.LastOutputLine
+	}
+	return failureCause{kind: kind, name: name}, recordedCauseSuggestions[kind], evidence
 }

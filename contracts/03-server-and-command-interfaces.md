@@ -245,7 +245,9 @@ does not promise to detect a lost remote client.
   own result, so array tasks and matrix members fall into their own causes: a
   block, cancellation, or timeout that rotari recorded comes first, then the
   job's latest saved rule diagnosis, then its remaining failure kind. Groups
-  list the most frequent cause first. In text, each group of the project's last
+  list the most frequent cause first. A group's example line is its first
+  job's matched diagnosis line, else its recorded error, else its saved
+  `last_output_line`. In text, each group of the project's last
   finished run also prints a `retry:` command that previews a rerun of only
   that group's jobs, by `--filter-failure-cause` (SEL-11), which classifies
   each job as the groups do; it works as printed, also when the jobs of one

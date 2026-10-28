@@ -11,6 +11,25 @@ func TestTailLog(t *testing.T) {
 	}
 }
 
+func TestLastOutputLine(t *testing.T) {
+	tests := []struct {
+		name, log, want string
+	}{
+		{name: "empty", log: "", want: ""},
+		{name: "trailing blank lines", log: "step 1\nloss became NaN\n\n  \n", want: "loss became NaN"},
+		{name: "ANSI escapes and spaces", log: "\x1b[31m  loss became NaN \x1b[0m\n", want: "loss became NaN"},
+		{name: "carriage return overwrites", log: "epoch 1: 10%\repoch 1: 50%\r\n", want: "epoch 1: 50%"},
+		{name: "separate streams end with stderr", log: "--- stdout ---\nstep 1\n\n--- stderr ---\nloss became NaN\n", want: "loss became NaN"},
+		{name: "empty stderr after its header", log: "--- stdout ---\nstep 1\n--- stderr ---\n", want: "step 1"},
+		{name: "only the tail marker", log: TailLog("01", 1)[:len(omittedLogMarker)+1], want: ""},
+	}
+	for _, test := range tests {
+		if got := LastOutputLine(test.log); got != test.want {
+			t.Errorf("%s: LastOutputLine(%q) = %q, want %q", test.name, test.log, got, test.want)
+		}
+	}
+}
+
 func TestDiagnoseDefaultMatchesSchedulerErrorAndLog(t *testing.T) {
 	diagnoses := DiagnoseDefault(Job{
 		Error: "CUDA error: out of memory",

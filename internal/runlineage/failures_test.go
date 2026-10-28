@@ -88,6 +88,24 @@ func TestFailureGroupsClassifiesEachJobByCause(t *testing.T) {
 	}
 }
 
+// TestFailureGroupsShowTheLastOutputLineWhenNothingElseDoes checks that a
+// group whose example has neither a matched diagnosis nor a recorded error
+// shows the job's last output line, and that a recorded error still comes
+// first.
+func TestFailureGroupsShowTheLastOutputLineWhenNothingElseDoes(t *testing.T) {
+	run := Run{Jobs: []Job{
+		failedTask(1, StatusFailed, model.JobResult{ExitCode: 1, DiagnosisStatus: model.DiagnosisNoMatch, LastOutputLine: "loss became NaN"}),
+		failedTask(2, StatusFailed, model.JobResult{ExitCode: model.TimeoutExitCode, Error: "timed out after 5s", LastOutputLine: "epoch 3"}),
+	}}
+	evidence := map[string]string{}
+	for _, group := range FailureGroups(run) {
+		evidence[group.Kind] = group.Example.Evidence
+	}
+	if evidence[model.FailureKindError] != "loss became NaN" || evidence[model.FailureKindTimeout] != "timed out after 5s" {
+		t.Fatalf("FailureGroups() examples = %q, want the last output line for the error and the recorded error for the timeout", evidence)
+	}
+}
+
 func TestFailureGroupsIsEmptyWithoutFailures(t *testing.T) {
 	got := FailureGroups(Run{Jobs: []Job{failedTask(1, StatusSuccess, model.JobResult{}), failedTask(2, StatusUnfinished, model.JobResult{})}})
 	if len(got) != 0 {

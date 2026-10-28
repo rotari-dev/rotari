@@ -26,7 +26,10 @@ This is a historical, informational snapshot; it does not affect job status,
 retries, dependencies, or scheduler control. Every finalized failed job records
 one of three outcomes in `diagnosis_status`: `matched` with its recognized
 `diagnoses`, `no_match`, or `unavailable` with the reason in `diagnosis_note`
-when its output cannot be read.
+when its output cannot be read. When the output was read, `last_output_line`
+keeps its last nonblank line, normally the end of stderr; failure summaries
+show it as the example of a cause no rule recognized and rotari recorded no
+error for.
 
 The snapshot also records `diagnosis_rules`, an identifier of the rule set that
 produced it. Saved results are not recomputed when rotari's rules change.

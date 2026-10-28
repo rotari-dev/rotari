@@ -17,7 +17,10 @@ type failureGroupsView []struct {
 	Cause     string `json:"cause"`
 	Count     int    `json:"count"`
 	ExitCodes []int  `json:"exit_codes"`
-	Jobs      []struct {
+	Example   struct {
+		Evidence string `json:"evidence"`
+	} `json:"example"`
+	Jobs []struct {
 		ID string `json:"id"`
 	} `json:"jobs"`
 }
@@ -27,7 +30,9 @@ func TestFailureGroupsAgreeAcrossViews(t *testing.T) {
 	e := support.NewEnv(t)
 	project := "causes"
 	// Tasks 1 and 3 run out of memory with different exit codes, task 2
-	// raises a ValueError, task 4 succeeds, and a separate job times out.
+	// raises a ValueError, task 4 succeeds, a separate job times out, and
+	// another fails with output that no rule recognizes, so its group shows
+	// its last output line.
 	e.MustRotari("add", "-p", project, "--job-name", "train", "--array", "1-4", "--", "sh", "-c",
 		`case $ROTARI_ARRAY_TASK_ID in
 1) echo "torch.OutOfMemoryError: CUDA out of memory" >&2; exit 1;;
@@ -35,6 +40,7 @@ func TestFailureGroupsAgreeAcrossViews(t *testing.T) {
 2) echo "ValueError: bad learning rate" >&2; exit 2;;
 esac`)
 	e.MustRotari("add", "-p", project, "--job-name", "slow", "--timeout", "1s", "--", "sleep", "5")
+	e.MustRotari("add", "-p", project, "--job-name", "nan", "--", "sh", "-c", `echo "step 1"; echo "loss became NaN at step 2" >&2; echo; exit 5`)
 	if result := e.Rotari("run", "-p", project, "--quiet"); result.Code == 0 {
 		t.Fatalf("run with failing jobs should exit 1: %s", result)
 	}
@@ -65,11 +71,14 @@ esac`)
 	for _, group := range shown.Failures {
 		causes = append(causes, group.Kind+":"+group.Cause)
 	}
-	if want := []string{"diagnosis:CUDA/GPU memory exhausted", "diagnosis:Python type or value error", "timeout:timeout"}; !reflect.DeepEqual(causes, want) {
+	if want := []string{"diagnosis:CUDA/GPU memory exhausted", "diagnosis:Python type or value error", "timeout:timeout", "error:error"}; !reflect.DeepEqual(causes, want) {
 		t.Fatalf("show --json causes = %q, want %q\n%+v", causes, want, shown.Failures)
 	}
 	if oom := shown.Failures[0]; oom.Count != 2 || !reflect.DeepEqual(oom.ExitCodes, []int{1, 3}) || len(oom.Jobs) != 2 {
 		t.Fatalf("OOM group = %+v, want tasks 1 and 3 with exit codes 1 and 3", oom)
+	}
+	if nan := shown.Failures[3]; nan.Example.Evidence != "loss became NaN at step 2" {
+		t.Fatalf("error group example = %q, want the job's last output line", nan.Example.Evidence)
 	}
 	if !reflect.DeepEqual(lineage.Failures, shown.Failures) {
 		t.Errorf("lineage --json failures differ from show --json:\nlineage %+v\nshow    %+v", lineage.Failures, shown.Failures)
@@ -81,7 +90,8 @@ esac`)
 		"show":    e.MustRotari("show", "-p", project, "--run-id", shown.RunID).Stdout,
 		"lineage": e.MustRotari("lineage", "-p", project, shown.RunID).Stdout,
 	} {
-		for _, want := range []string{"Failures by cause:", "2 CUDA/GPU memory exhausted (exit 1,3): train[1,3]", "1 timeout (exit 124): slow"} {
+		for _, want := range []string{"Failures by cause:", "2 CUDA/GPU memory exhausted (exit 1,3): train[1,3]", "1 timeout (exit 124): slow",
+			"1 error (exit 5): nan", "e.g. loss became NaN at step 2"} {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s output does not contain %q:\n%s", name, want, text)
 			}

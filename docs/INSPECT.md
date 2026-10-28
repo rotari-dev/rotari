@@ -227,7 +227,17 @@ Failures by cause:
 Each job is classified on its own result: a block by a failed dependency, a
 cancellation, or a timeout comes first, then the job's latest saved rule
 diagnosis, and otherwise its failure kind (`oom`, `signal`, or `error`; see
-`--filter-failure-kind`). The most frequent cause is listed first. With result
+`--filter-failure-kind`). The most frequent cause is listed first. The example
+line is the matched rule's line, else the error rotari recorded, such as
+`timed out after 5s`, else the job's last output line, so a script that only
+exits nonzero still shows how its output ended:
+
+```text
+  3 error (exit 1): train[2,5,9]
+    e.g. loss became NaN at step 1200
+```
+
+With result
 selections or filters, only the listed jobs are grouped. `show --run-id RUN_ID
 --json` carries the same groups, with every job ID, as `failures`; so do
 `lineage RUN_ID --json` and the Web UI's run summary.

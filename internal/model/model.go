@@ -573,8 +573,9 @@ type RuleDiagnosis struct {
 // its saved rule-based analysis: DiagnosisStatus is DiagnosisMatched,
 // DiagnosisNoMatch, or DiagnosisUnavailable (empty when never analyzed);
 // Diagnoses lists only recognized diagnoses; DiagnosisNote says why an
-// unavailable analysis could not run; and DiagnosisRules identifies the rule
-// set that produced the analysis.
+// unavailable analysis could not run; DiagnosisRules identifies the rule
+// set that produced the analysis; and LastOutputLine is the last nonblank line
+// of the output the analysis read, which shows the cause when no rule matched.
 type JobResult struct {
 	ID string `json:"id"`
 	// Name is the job's name, such as train[3], in a run summary; results
@@ -590,6 +591,7 @@ type JobResult struct {
 	DiagnosisStatus string          `json:"diagnosis_status,omitempty"`
 	DiagnosisNote   string          `json:"diagnosis_note,omitempty"`
 	DiagnosisRules  string          `json:"diagnosis_rules,omitempty"`
+	LastOutputLine  string          `json:"last_output_line,omitempty"`
 }
 
 // Rule-based analysis outcomes saved in JobResult.DiagnosisStatus.
@@ -612,6 +614,7 @@ func (result *JobResult) ClearDiagnosis() {
 	result.DiagnosisStatus = ""
 	result.DiagnosisNote = ""
 	result.DiagnosisRules = ""
+	result.LastOutputLine = ""
 }
 
 // UnmarshalJSON decodes a job result and converts an analysis saved before
