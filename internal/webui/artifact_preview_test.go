@@ -28,6 +28,13 @@ const runID = process.argv[2];
 const entries = JSON.parse(process.argv[3]);
 const fail = (code, detail) => { console.error(code, detail || ''); process.exit(1); };
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// settle waits until check passes, or for nine seconds, rather than for a
+// fixed time that a loaded host can exceed; the check that follows it then
+// reports the details of a timeout.
+const settle = async (check) => {
+  const passes = () => { try { return !!check(); } catch { return false; } };
+  for (let tries = 0; tries < 300 && !passes(); tries++) await wait(30);
+};
 (async () => {
   const html = await (await fetch(base + '/')).text();
   const dom = new JSDOM(html, {
@@ -39,7 +46,7 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
   });
   const window = dom.window;
   const document = window.document;
-  await wait(200);
+  await settle(() => window.eval('state') !== undefined);
   // A job without a record shows its text in the log box, like a log, so
   // the copy button sits where it does for logs.
   await window.showArtifacts('default', runID, 'job-2', '');
@@ -126,14 +133,17 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
   const more = [...view.querySelectorAll('.artifact-preview button')].find(button => button.textContent === 'More');
   const beforeMore = scrolls;
   more.click();
-  await wait(200);
+  await settle(() => view.querySelectorAll('.artifact-preview tbody tr').length === 53);
   if (scrolls !== beforeMore) fail('directory pagination moved preview');
   children = view.querySelectorAll('.artifact-preview tbody tr');
   if (children.length !== 53) fail('second directory page', children.length);
   const quoted = [...view.querySelectorAll('.artifact-preview .artifact-open')].find(button => button.textContent === "it's.txt");
   if (!quoted) fail('quoted child');
+  // A click starts an open that is not awaited; let it finish, scroll
+  // included, before the next open, or the two scrolls overlap.
+  const beforeQuoted = scrolls;
   quoted.click();
-  await wait(200);
+  await settle(() => scrolls === beforeQuoted + 1);
   if (!view.querySelector('.artifact-preview-title').textContent.includes("many/it's.txt")) fail('quoted child title', view.querySelector('.artifact-preview').textContent);
 
   await window.openArtifact(entries['weights.npy'], '', 'file');
@@ -153,11 +163,11 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
   // A file of no listed type opens as text on request; a binary one is
   // refused.
   view.querySelector('.artifact-open-text').click();
-  await wait(100);
+  await settle(() => view.querySelector('.artifact-preview').textContent.includes('Failed to open'));
   if (!view.querySelector('.artifact-preview').textContent.includes('Failed to open: binary file')) fail('binary as text', view.querySelector('.artifact-preview').textContent);
   await window.openArtifact('wd', 'NOTES', 'file');
   view.querySelector('.artifact-open-text').click();
-  await wait(100);
+  await settle(() => view.querySelector('.artifact-text'));
   if (view.querySelector('.artifact-text')?.textContent !== 'no extension\n') fail('text without an extension', view.querySelector('.artifact-preview').innerHTML);
   process.exit(0);
 })().catch(error => fail('error', error.stack));

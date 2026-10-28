@@ -41,12 +41,16 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
   });
   const window = dom.window;
   const document = window.document;
+  // settle waits until check passes, or for nine seconds, rather than for
+  // a fixed time that a loaded host can exceed; the check that follows it
+  // then reports the details of a timeout.
+  const settle = async (check) => {
+    const passes = () => { try { return !!check(); } catch { return false; } };
+    for (let tries = 0; tries < 300 && !passes(); tries++) await wait(30);
+  };
   const until = async (what, check) => {
-    for (let tries = 0; tries < 300; tries++) {
-      if (check()) return;
-      await wait(30);
-    }
-    fail('timed out waiting for ' + what);
+    await settle(check);
+    if (!check()) fail('timed out waiting for ' + what);
   };
   // The page answers /api/launchers and /api/state asynchronously; under
   // load a fixed wait can read the Launches and settings buttons before
@@ -85,25 +89,25 @@ func TestWebLaunchInBrowser(t *testing.T) {
   // A listing row has a button per command that accepts it, and the Table
   // viewer for a table file; a command's button opens its confirmation as
   // a row below, and the same button closes it.
-  await wait(300);
+  await settle(() => ['data.csv', 'many'].every(name => launchers([...document.querySelectorAll('.artifact-table tbody tr')].find(row => row.children[1].textContent === name)).length === 4));
   const listingRow = [...document.querySelectorAll('.artifact-table tbody tr')].find(row => row.children[1].textContent === 'data.csv');
   if (JSON.stringify(launchers(listingRow)) !== '["Table viewer","Cat","Sleep","Viewer"]') fail('row buttons', launchers(listingRow));
   const manyRow = [...document.querySelectorAll('.artifact-table tbody tr')].find(row => row.children[1].textContent === 'many');
   if (JSON.stringify(launchers(manyRow)) !== '["Table viewer","Count","Sleep","Viewer"]') fail('directory row buttons', launchers(manyRow));
   const catButton = () => [...listingRow.querySelectorAll('.artifact-launchers button')].find(button => button.textContent === 'Cat');
   catButton().click();
-  await wait(300);
+  await settle(() => panelText().includes('/bin/sh -c cat'));
   const panelRow = listingRow.nextElementSibling;
   if (!panelRow || !panelRow.classList.contains('artifact-launch-row') || !panelRow.querySelector('#artifact-launch-panel')) fail('row panel', panelRow && panelRow.outerHTML);
   if (panelRow.firstElementChild.colSpan !== listingRow.children.length) fail('row panel span', panelRow.firstElementChild.colSpan);
   if (!panelText().includes('/bin/sh -c cat') || JSON.stringify(choices()) !== '["Launch","Cancel"]') fail('row confirmation', panelText());
   catButton().click();
-  await wait(100);
+  await settle(() => !document.querySelector('.artifact-launch-row') && !document.getElementById('artifact-launch-panel'));
   if (document.querySelector('.artifact-launch-row') || document.getElementById('artifact-launch-panel')) fail('row panel did not close');
 
   // An opened file has the same buttons in its title line.
   await window.openArtifact(entries['data.csv'], '', 'file');
-  await wait(300);
+  await settle(() => titleLaunchers().length === 4);
   if (JSON.stringify(titleLaunchers()) !== '["Table viewer","Cat","Sleep","Viewer"]') fail('file buttons', titleLaunchers());
 
   // The confirmation shows what the server would run, and nothing has run.
@@ -140,7 +144,7 @@ func TestWebLaunchInBrowser(t *testing.T) {
   await window.showArtifacts('default', runID, 'job-1', '');
   window.document.getElementById('artifact-preview').scrollIntoView = () => {};
   await window.openArtifact(entries['many'], '', 'directory');
-  await wait(300);
+  await settle(() => titleLaunchers().length === 4);
   if (JSON.stringify(titleLaunchers()) !== '["Table viewer","Count","Sleep","Viewer"]') fail('directory buttons', titleLaunchers());
   await window.chooseArtifactLaunch(entries['many'], '', 'Sleep');
   await window.startArtifactLaunch(entries['many'], '', 'Sleep', false);
@@ -152,8 +156,11 @@ func TestWebLaunchInBrowser(t *testing.T) {
   const stop = [...view.querySelectorAll('button')].find(button => button.textContent === 'Stop');
   if (!stop) fail('no Stop button for a running launch', view.textContent);
   await window.stopLaunch(sleep.id);
-  await wait(300);
-  await window.renderLaunches();
+  for (let tries = 0; tries < 300; tries++) {
+    await window.renderLaunches();
+    if (view.textContent.includes('stopped (terminated)')) break;
+    await wait(30);
+  }
   if (!view.textContent.includes('stopped (terminated)')) fail('stopped state', view.textContent);
 
   // A service is followed until it is ready, then opens through the
@@ -197,7 +204,7 @@ func TestWebLaunchWorkingDirectoryWithoutCandidatesInBrowser(t *testing.T) {
   await window.showArtifacts('default', runID, 'job-2', '');
   const rows = [...document.querySelectorAll('#artifact-view .artifact-table tbody tr')];
   if (rows.length !== 1 || rows[0].children[1].textContent !== '.') fail('working directory row', document.getElementById('artifact-view').innerHTML);
-  await wait(300);
+  await settle(() => launchers(rows[0]).length === 2);
   if (JSON.stringify(launchers(rows[0])) !== '["Table viewer","Count"]') fail('working directory buttons', launchers(rows[0]));
 `)
 	// A working directory missing on the Web server's host is listed as
@@ -207,7 +214,7 @@ func TestWebLaunchWorkingDirectoryWithoutCandidatesInBrowser(t *testing.T) {
 	}
 	runLaunchBrowserScript(t, options, f, `
   await window.showArtifacts('default', runID, 'job-2', '');
-  await wait(300);
+  await settle(() => document.querySelector('#artifact-view tr[data-entry="wd"]').children[0].textContent === 'missing');
   const row = document.querySelector('#artifact-view tr[data-entry="wd"]');
   if (!row || row.children[0].textContent !== 'missing' || row.querySelector('.artifact-open') || launchers(row).length) fail('missing working directory', document.getElementById('artifact-view').innerHTML);
 `)
@@ -231,7 +238,8 @@ func TestWebRunFilesInBrowser(t *testing.T) {
   const toolbar = new window.DOMParser().parseFromString(window.runFilesButton('default', runID), 'text/html').querySelectorAll('button');
   if ([...toolbar].map(button => button.textContent).join() !== 'Files') fail('toolbar buttons', [...toolbar].map(button => button.outerHTML));
   await window.showRunFiles('default', runID);
-  await wait(300);
+  await settle(() => titleLaunchers().length === 2 &&
+    [...document.querySelectorAll('#artifact-preview tbody tr')].some(row => row.children[1].textContent === baseName && launchers(row).length === 2));
   const view = document.getElementById('artifact-view');
   if (view.hidden || !view.querySelector('.artifact-preview-title').textContent.includes(parent)) fail('title', view.innerHTML);
   if (view.querySelector('.artifact-up')) fail('Up above the basedir\'s parent', view.innerHTML);
@@ -241,10 +249,11 @@ func TestWebRunFilesInBrowser(t *testing.T) {
 
   // A child directory opens with Up, and its rows launch on it.
   row(baseName).querySelector('.artifact-open').click();
-  await wait(300);
+  await settle(() => view.querySelector('.artifact-up') && view.querySelector('.artifact-preview-title').textContent.includes(parent + '/' + baseName) &&
+    [...view.querySelectorAll('.artifact-preview-title .artifact-launchers button')].some(button => button.textContent === 'Count'));
   if (!view.querySelector('.artifact-preview-title').textContent.includes(parent + '/' + baseName) || !view.querySelector('.artifact-up')) fail('child title', view.innerHTML);
   [...view.querySelectorAll('.artifact-preview-title .artifact-launchers button')].find(button => button.textContent === 'Count').click();
-  await wait(300);
+  await settle(() => panelText().includes('run ' + runID));
   for (const want of ['Count', parent + '/' + baseName + ' (directory)', 'Working directory' + parent + '/' + baseName, 'run ' + runID]) {
     if (!panelText().includes(want)) fail('confirmation lacks ' + want, panelText());
   }
@@ -252,7 +261,7 @@ func TestWebRunFilesInBrowser(t *testing.T) {
   await window.startArtifactLaunch('basedir_parent', baseName, 'Count', false);
   if (!panelText().includes('Started Count.')) fail('start message', panelText());
   view.querySelector('.artifact-up').click();
-  await wait(300);
+  await settle(() => row(baseName));
   if (!row(baseName)) fail('Up', view.innerHTML);
 `)
 }
@@ -269,7 +278,7 @@ func TestWebLaunchExplainsUnavailableInBrowser(t *testing.T) {
   await window.showArtifacts('default', runID, 'job-1', '');
   window.document.getElementById('artifact-preview').scrollIntoView = () => {};
   await window.openArtifact(entries['data.csv'], '', 'file');
-  await wait(300);
+  await settle(() => titleLaunchers().length === 1 && document.querySelector('#artifact-view .launch-unavailable-note'));
   // The rows keep the Web UI's own viewers, and the view says why nothing
   // can be launched.
   if (JSON.stringify(titleLaunchers()) !== '["Table viewer"]') fail('viewers while launching is disabled', titleLaunchers());
@@ -284,12 +293,12 @@ func TestWebLaunchExplainsUnavailableInBrowser(t *testing.T) {
   await window.showArtifacts('default', runID, 'job-1', '');
   window.document.getElementById('artifact-preview').scrollIntoView = () => {};
   await window.openArtifact(entries['data.csv'], '', 'file');
-  await wait(300);
+  await settle(() => titleLaunchers().length === 1);
   // A file no command accepts has only its viewers; a directory has the
   // command.
   if (JSON.stringify(titleLaunchers()) !== '["Table viewer"]') fail('file buttons', titleLaunchers());
   await window.openArtifact(entries['many'], '', 'directory');
-  await wait(300);
+  await settle(() => titleLaunchers().length === 2);
   if (JSON.stringify(titleLaunchers()) !== '["Table viewer","TensorBoard"]') fail('directory buttons', titleLaunchers());
   if (document.querySelector('.launch-unavailable-note')) fail('explanation while launching is available');
 `)
@@ -302,7 +311,7 @@ func TestWebLaunchExplainsUnavailableInBrowser(t *testing.T) {
   await window.showArtifacts('default', runID, 'job-1', '');
   window.document.getElementById('artifact-preview').scrollIntoView = () => {};
   await window.openArtifact(entries['data.csv'], '', 'file');
-  await wait(300);
+  await settle(() => document.querySelectorAll('#artifact-preview .artifact-preview-title .artifact-launchers button').length === 2);
   const buttons = [...document.querySelectorAll('#artifact-preview .artifact-preview-title .artifact-launchers button')];
   const missingButton = buttons.find(button => button.textContent === 'Missing');
   const catButton = buttons.find(button => button.textContent === 'Cat');

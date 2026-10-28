@@ -259,7 +259,7 @@ func TestLaunchWithOpensTheTableViewerInBrowser(t *testing.T) {
 	runLaunchBrowserScript(t, testOptions(f.baseDir, false), f, `
   await window.showArtifacts('default', runID, 'job-1', '');
   const row = [...document.querySelectorAll('.artifact-table tbody tr')].find(row => row.children[1].textContent === 'data.csv');
-  await wait(300);
+  await settle(() => row.querySelector('.artifact-launchers a.launch-viewer'));
   const link = row.querySelector('.artifact-launchers a.launch-viewer');
   if (!link || link.textContent !== 'Table viewer' || link.target !== '_blank') fail('viewer link', row.innerHTML);
   const href = new URL(link.getAttribute('href'), base);

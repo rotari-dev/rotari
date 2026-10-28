@@ -73,15 +73,31 @@ func TestCloseWaitsForStateLock(t *testing.T) {
 	defer lock.Close()
 	done := make(chan error, 1)
 	go func() { done <- session.Close(model.RunClientReasonCtrlD) }()
+	// Close removes the session files before it waits for the state lock;
+	// wait for that rather than for a fixed time, which a loaded host can
+	// exceed, and fail if Close returns meanwhile.
+	removed := func() bool {
+		for _, suffix := range []string{".json", ".lock"} {
+			if _, err := os.Stat(filepath.Join(dir, session.id+suffix)); !errors.Is(err, os.ErrNotExist) {
+				return false
+			}
+		}
+		return true
+	}
+	for deadline := time.Now().Add(10 * time.Second); !removed(); {
+		select {
+		case err := <-done:
+			t.Fatalf("Close bypassed held state lock: %v", err)
+		case <-time.After(10 * time.Millisecond):
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("explicit session files remain while Close waits")
+		}
+	}
 	select {
 	case err := <-done:
 		t.Fatalf("Close bypassed held state lock: %v", err)
 	case <-time.After(150 * time.Millisecond):
-	}
-	for _, suffix := range []string{".json", ".lock"} {
-		if _, err := os.Stat(filepath.Join(dir, session.id+suffix)); !errors.Is(err, os.ErrNotExist) {
-			t.Fatalf("explicit session %s remains while Close waits: %v", suffix, err)
-		}
 	}
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
 		t.Fatalf("session lock released before Close finished: %v", err)
