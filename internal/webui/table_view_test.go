@@ -747,6 +747,81 @@ func TestTableViewOpensFilesInPanesInBrowser(t *testing.T) {
 `)
 }
 
+// A plot computes its spectra once for what it shows: drawing again at the
+// same size reuses them, a new size is drawn stretched until it has held,
+// and a new height alone needs no new spectra. jsdom has no canvas or Web
+// Audio, so the page gets stand-ins that count the work.
+func TestTableViewPlotsComputeOnceInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	wav, err := os.ReadFile(filepath.Join("..", "tableview", "testdata", "media", "pcm16.wav"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(f.work, "u1.wav"), string(wav))
+	runTableViewScript(t, testOptions(f.baseDir, false), f, "wd", "#pattern=*.wav", `
+  await until('files', () => document.querySelector('#tv-table a.tv-media-path'));
+  window.devicePixelRatio = 1;
+  const plot = { width: 100, height: 40 };
+  for (const name of ['clientWidth', 'clientHeight']) {
+    const inherited = Object.getOwnPropertyDescriptor(window.Element.prototype, name);
+    Object.defineProperty(window.HTMLCanvasElement.prototype, name, {
+      configurable: true,
+      get() { return this.isConnected ? plot[name === 'clientWidth' ? 'width' : 'height'] : inherited.get.call(this); },
+    });
+  }
+  const drawn = [];
+  window.HTMLCanvasElement.prototype.getContext = function () {
+    const canvas = this;
+    return {
+      createImageData: (width, height) => ({ width, height, data: new Uint8ClampedArray(width * height * 4) }),
+      putImageData() {},
+      drawImage: (source, x, y, width, height) => { if (canvas.classList.contains('tv-spectrogram')) drawn.push([source.width, source.height, width, height]); },
+      clearRect() {},
+      fillRect() {},
+    };
+  };
+  window.AudioContext = class {
+    async decodeAudioData() {
+      const data = new Float32Array(8000).map((_, index) => Math.sin(index / 5));
+      return { length: data.length, sampleRate: 16000, duration: 0.5, numberOfChannels: 1, getChannelData: () => data };
+    }
+    close() {}
+  };
+  window.spectra = 0;
+  window.eval('const computed = magnitudes; magnitudes = function (...args) { window.spectra++; return computed(...args); };');
+  const last = () => JSON.stringify(drawn[drawn.length - 1]);
+
+  document.querySelector('#tv-table a.tv-media-path').click();
+  await until('first drawing', () => window.spectra === 100 && drawn.length);
+  if (last() !== '[100,40,100,40]') fail('first drawing', last());
+  const view = window.eval('tabViews').values().next().value;
+  view.redraw();
+  if (window.spectra !== 100 || last() !== '[100,40,100,40]') fail('same size computed again', window.spectra, last());
+
+  // A new width is stretched until it holds, then computed once.
+  plot.width = 120;
+  view.redraw();
+  plot.width = 150;
+  view.redraw();
+  view.redraw();
+  if (window.spectra !== 100 || last() !== '[100,40,150,40]') fail('resizing computed', window.spectra, last());
+  await until('settled width', () => window.spectra === 250);
+  if (last() !== '[150,40,150,40]') fail('settled width drawing', last());
+  await wait(300);
+  if (window.spectra !== 250) fail('settled more than once', window.spectra);
+
+  // A new height redraws the colours from the same spectra.
+  plot.height = 60;
+  view.redraw();
+  await until('settled height', () => last() === '[150,60,150,60]');
+  if (window.spectra !== 250) fail('height computed spectra', window.spectra);
+
+  // A new range in view is computed at once.
+  view.zoom(0.5);
+  if (window.spectra !== 400 || last() !== '[150,60,150,60]') fail('zoom', window.spectra, last());
+`)
+}
+
 // The spectrogram's FFT finds a tone in its bin, and its colour scale runs
 // from viridis' first stop to its last; jsdom has no canvas to draw them.
 func TestSpectrogramFindsATone(t *testing.T) {
@@ -755,7 +830,7 @@ func TestSpectrogramFindsATone(t *testing.T) {
 	}
 	command := exec.Command("node", "-e", `
 const vm = require('vm');
-const context = vm.createContext({ Math, Float32Array, Uint32Array, Uint8Array, Map });
+const context = vm.createContext({ Math, Float32Array, Float64Array, Uint32Array, Uint8Array, Map });
 vm.runInContext(process.argv[1] + '; this.magnitudes = magnitudes; this.viridisTable = viridisTable;', context);
 const rate = 16000, size = 512, samples = new Float32Array(4096);
 for (let index = 0; index < samples.length; index++) samples[index] = Math.sin(2 * Math.PI * 1000 * index / rate);
@@ -763,6 +838,19 @@ const out = new Float32Array(size / 2);
 context.magnitudes(samples, 1000, size, out);
 const peak = out.indexOf(Math.max(...out));
 if (peak !== 1000 / rate * size) { console.error('peak bin', peak); process.exit(1); }
+// Every bin matches the windowed DFT worked out directly.
+const noise = new Float32Array(64).map((_, index) => Math.sin(index * index * 0.37));
+const fast = new Float32Array(32);
+context.magnitudes(noise, 0, 64, fast);
+for (let bin = 0; bin < 32; bin++) {
+  let real = 0, imag = 0;
+  for (let index = 0; index < 64; index++) {
+    const sample = noise[index] * (0.5 - 0.5 * Math.cos(2 * Math.PI * index / 63));
+    real += sample * Math.cos(-2 * Math.PI * bin * index / 64);
+    imag += sample * Math.sin(-2 * Math.PI * bin * index / 64);
+  }
+  if (Math.abs(fast[bin] - Math.hypot(real, imag)) > 1e-4) { console.error('bin', bin, fast[bin], Math.hypot(real, imag)); process.exit(1); }
+}
 // Past the end of the samples the window reads silence.
 context.magnitudes(samples, samples.length, size, out);
 if (Math.max(...out) !== 0) { console.error('silence', Math.max(...out)); process.exit(1); }
@@ -909,7 +997,7 @@ func TestChannelSamplesMixesChannels(t *testing.T) {
 	}
 	command := exec.Command("node", "-e", `
 const vm = require('vm');
-const context = vm.createContext({ Math, Float32Array, Uint32Array, Uint8Array, Map });
+const context = vm.createContext({ Math, Float32Array, Float64Array, Uint32Array, Uint8Array, Map });
 vm.runInContext(process.argv[1] + '; this.channelSamples = channelSamples;', context);
 const left = Float32Array.from([1, 0.5, 0]), right = Float32Array.from([0, 0.5, -1]);
 const audio = { channels: [left, right] };

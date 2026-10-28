@@ -17,6 +17,9 @@ const maxDecodeBytes = 512 * 1024 * 1024;
 const maxAnalysisSeconds = 600;
 // The spectrogram's range below its loudest point, in decibels.
 const spectrogramRange = 80;
+// A plot whose size changes is stretched from its last drawing until the
+// size has held this long, and then computed again.
+const resizeSettleMs = 150;
 
 function newPane(tabs) {
   return {
@@ -607,9 +610,19 @@ function fftTable(size) {
       value |= ((index >> bit) & 1) << (bits - 1 - bit);
     reversed[index] = value;
   }
+  // The twiddle factors of the full size; a stage of length L takes every
+  // size/L-th one.
+  const cos = new Float64Array(size / 2);
+  const sin = new Float64Array(size / 2);
+  for (let index = 0; index < size / 2; index++) {
+    cos[index] = Math.cos((-2 * Math.PI * index) / size);
+    sin[index] = Math.sin((-2 * Math.PI * index) / size);
+  }
   table = {
     window,
     reversed,
+    cos,
+    sin,
     real: new Float32Array(size),
     imag: new Float32Array(size),
   };
@@ -620,7 +633,7 @@ function fftTable(size) {
 // magnitudes writes the windowed spectrum of samples from start into out,
 // one value per bin up to half the size.
 function magnitudes(samples, start, size, out) {
-  const { window, reversed, real, imag } = fftTable(size);
+  const { window, reversed, cos, sin, real, imag } = fftTable(size);
   for (let index = 0; index < size; index++) {
     const sample = samples[start + index];
     real[reversed[index]] = sample === undefined ? 0 : sample * window[index];
@@ -628,15 +641,15 @@ function magnitudes(samples, start, size, out) {
   }
   for (let length = 2; length <= size; length <<= 1) {
     const half = length >> 1;
-    const angle = (-2 * Math.PI) / length;
+    const step = size / length;
     for (let offset = 0; offset < size; offset += length) {
       for (let index = 0; index < half; index++) {
-        const cos = Math.cos(angle * index);
-        const sin = Math.sin(angle * index);
+        const c = cos[index * step];
+        const s = sin[index * step];
         const a = offset + index;
         const b = a + half;
-        const tr = real[b] * cos - imag[b] * sin;
-        const ti = real[b] * sin + imag[b] * cos;
+        const tr = real[b] * c - imag[b] * s;
+        const ti = real[b] * s + imag[b] * c;
         real[b] = real[a] - tr;
         imag[b] = imag[a] - ti;
         real[a] += tr;
@@ -645,7 +658,7 @@ function magnitudes(samples, start, size, out) {
     }
   }
   for (let bin = 0; bin < size / 2; bin++) {
-    out[bin] = Math.hypot(real[bin], imag[bin]);
+    out[bin] = Math.sqrt(real[bin] * real[bin] + imag[bin] * imag[bin]);
   }
 }
 
@@ -1203,9 +1216,37 @@ class TabView {
 
   redraw() {
     if (!this.player || !this.root.isConnected) return;
-    this.cache = {};
     this.drawAxis();
     this.drawOverlays();
+  }
+
+  // current says whether a plot's cache was computed from the samples and
+  // range in view, whatever its size.
+  current(cache) {
+    const range = this.range();
+    return (
+      cache &&
+      cache.samples === this.samples() &&
+      cache.start === range.start &&
+      cache.end === range.end
+    );
+  }
+
+  // settled says whether a plot may be computed again for a new size. While
+  // the size keeps changing it may not, and the plots are drawn again once
+  // it has held for resizeSettleMs.
+  settled(plot, size) {
+    if (plot.settled === size) return true;
+    // Playback draws every frame; only a new size starts the wait again.
+    if (plot.pending === size) return false;
+    plot.pending = size;
+    clearTimeout(plot.timer);
+    plot.timer = setTimeout(() => {
+      plot.pending = null;
+      plot.settled = size;
+      this.drawOverlays();
+    }, resizeSettleMs);
+    return false;
   }
 
   // size matches a canvas's pixels to its box; 0 when it is not shown.
@@ -1268,7 +1309,13 @@ class TabView {
     const { rate } = this.audioData;
     const samples = this.samples();
     const range = this.range();
-    if (!this.cache.wave || this.cache.wave.width !== width) {
+    // A new width is drawn stretched from the last until it settles; the
+    // height needs no new samples.
+    let cache = this.cache.wave;
+    if (
+      !this.current(cache) ||
+      (cache.width !== width && this.settled(this.wave, String(width)))
+    ) {
       const low = new Float32Array(width);
       const high = new Float32Array(width);
       const perPixel = ((range.end - range.start) * rate) / width;
@@ -1288,7 +1335,14 @@ class TabView {
         low[x] = min;
         high[x] = max;
       }
-      this.cache.wave = { width, low, high };
+      cache = this.cache.wave = {
+        samples,
+        start: range.start,
+        end: range.end,
+        width,
+        low,
+        high,
+      };
     }
     const style = getComputedStyle(document.documentElement);
     const played = style.getPropertyValue("--link").trim() || "#1f63c4";
@@ -1296,11 +1350,13 @@ class TabView {
     context.clearRect(0, 0, width, height);
     const span = range.end - range.start || 1;
     const cursorX = ((this.cursor() - range.start) / span) * width;
-    const { low, high } = this.cache.wave;
+    const { low, high } = cache;
+    const scale = cache.width / width;
     for (let x = 0; x < width; x++) {
+      const at = Math.floor(x * scale);
       context.fillStyle = x < cursorX ? played : rest;
-      const top = ((1 - high[x]) / 2) * height;
-      const bottom = ((1 - low[x]) / 2) * height;
+      const top = ((1 - high[at]) / 2) * height;
+      const bottom = ((1 - low[at]) / 2) * height;
       context.fillRect(x, top, 1, Math.max(1, bottom - top));
     }
     this.overlay(
@@ -1320,30 +1376,47 @@ class TabView {
     const { rate } = this.audioData;
     const samples = this.samples();
     const range = this.range();
+    // A new size is drawn stretched from the last until it settles; then
+    // only a new width needs the spectra again.
+    let cache = this.cache.spec;
+    const current = this.current(cache);
     if (
-      !this.cache.spec ||
-      this.cache.spec.width !== width ||
-      this.cache.spec.height !== height
+      !current ||
+      ((cache.width !== width || cache.height !== height) &&
+        this.settled(this.spec, width + "x" + height))
     ) {
-      // A window of about 32 ms, as a power of two.
-      const size = Math.min(
-        4096,
-        Math.max(256, 2 ** Math.round(Math.log2(rate * 0.032))),
-      );
-      const bins = size / 2;
-      const columns = new Float32Array(width * bins);
-      const column = new Float32Array(bins);
-      const perPixel = ((range.end - range.start) * rate) / width;
-      let loudest = -Infinity;
-      for (let x = 0; x < width; x++) {
-        const middle = Math.floor(range.start * rate + (x + 0.5) * perPixel);
-        magnitudes(samples, middle - bins, size, column);
-        for (let bin = 0; bin < bins; bin++) {
-          const level = 20 * Math.log10(column[bin] + 1e-10);
-          columns[x * bins + bin] = level;
-          if (level > loudest) loudest = level;
+      if (!current || cache.width !== width) {
+        // A window of about 32 ms, as a power of two.
+        const size = Math.min(
+          4096,
+          Math.max(256, 2 ** Math.round(Math.log2(rate * 0.032))),
+        );
+        const bins = size / 2;
+        const levels = new Float32Array(width * bins);
+        const column = new Float32Array(bins);
+        const perPixel = ((range.end - range.start) * rate) / width;
+        let loudest = -Infinity;
+        for (let x = 0; x < width; x++) {
+          const middle = Math.floor(range.start * rate + (x + 0.5) * perPixel);
+          magnitudes(samples, middle - bins, size, column);
+          for (let bin = 0; bin < bins; bin++) {
+            const level = 20 * Math.log10(column[bin] + 1e-10);
+            levels[x * bins + bin] = level;
+            if (level > loudest) loudest = level;
+          }
         }
+        cache = this.cache.spec = {
+          samples,
+          start: range.start,
+          end: range.end,
+          width,
+          bins,
+          levels,
+          loudest,
+        };
+        this.spec.box.dataset.top = formatRate(rate / 2);
       }
+      const { bins, levels, loudest } = cache;
       const image = context.createImageData(width, height);
       for (let y = 0; y < height; y++) {
         const bin = Math.min(
@@ -1352,7 +1425,7 @@ class TabView {
         );
         for (let x = 0; x < width; x++) {
           const level =
-            (columns[x * bins + bin] - loudest + spectrogramRange) /
+            (levels[x * bins + bin] - loudest + spectrogramRange) /
             spectrogramRange;
           const color = Math.round(Math.min(1, Math.max(0, level)) * 255) * 3;
           const offset = (y * width + x) * 4;
@@ -1362,16 +1435,24 @@ class TabView {
           image.data[offset + 3] = 255;
         }
       }
-      this.cache.spec = { width, height, image };
-      this.spec.box.dataset.top = formatRate(rate / 2);
+      // The pixels live on a canvas of their own, which a new size draws
+      // stretched.
+      const pixels = document.createElement("canvas");
+      pixels.width = width;
+      pixels.height = height;
+      pixels.getContext("2d").putImageData(image, 0, 0);
+      cache.height = height;
+      cache.pixels = pixels;
     }
-    context.putImageData(this.cache.spec.image, 0, 0);
+    context.drawImage(cache.pixels, 0, 0, width, height);
     this.overlay(context, width, height, "#ffffff");
   }
 
   dispose() {
     if (this.player && !this.player.paused) this.player.pause();
     if (this.resizer) this.resizer.disconnect();
+    if (this.wave) clearTimeout(this.wave.timer);
+    if (this.spec) clearTimeout(this.spec.timer);
     if (this.routing) {
       this.routing.source.disconnect();
       this.routing.splitter.disconnect();
