@@ -656,12 +656,22 @@ i_dir: "out/run[0-9].csv"
 j_dir: "~/j"
 ```
 
+<!-- artifact-example-file: py/plot.py -->
+```python
+"""Plot the training curves to outputs/loss.png."""
+OUTPUT = "outputs/loss.png"
+DATA = "My Data/train.csv"
+print("Wrote outputs/loss.png.")
+```
+
 | Rule | Condition | Command | Recorded |
 | --- | --- | --- | --- |
 | `PATH-X1` | Empty or blank | `rotari add -- train --log-dir '' --cache-dir ' '` | nothing |
 | `PATH-X1` | A URL or URI (`scheme://`, `mailto:`, `data:`, `urn:`), other than a local `file:` or `sqlite:` URI (`PATH-R6`) | `rotari add -- train https://example.org/a.png s3://bucket/a ftp://host/a.csv postgresql://db/m mailto:me@example.org` | nothing |
 | `PATH-X1` | A number or numeric ratio | `rotari add -- train --log-dir 10 0.001 1e-3 inf 1/2 0.5/1.5` | nothing |
 | `PATH-X1` | A regular expression (`^…`, `.*`, `.+`, `\.`, `\d`, `\w`, `\s`, `(?`, `[^`) | `rotari add -- train '^results' '.*/a.csv' 'a\.csv' 'a/\d+'` | nothing |
+| `PATH-X1` | A sentence: whitespace inside and a final period, such as a docstring or a log message; a path with spaces is still classified | `rotari add -- python3 py/plot.py` | `py/plot.py`, `outputs/loss.png`, `My Data/train.csv` |
+| `PATH-X1` | The same in arguments | `rotari add -- train 'Saved to results/a.png.' results/v1.` | `results/v1.` |
 | `PATH-X1` | A control character, such as a newline in code | `rotari add -- train "$(printf 'a/b\nc.csv')"` | nothing |
 | `PATH-X1` | An environment search-path list (name ending in `PATH`, value with `:`) | `rotari add --env PYTHONPATH=src:lib --env LD_LIBRARY_PATH=/a:/b -- true` | nothing |
 | `PATH-X2` | In a configuration file: `$NAME`, `${…}`, `$(…)`, backquotes, `{{ }}`, `%(name)s`, glob characters, or a leading `~` | `rotari add -- train conf/interpolated.yaml` | `conf/interpolated.yaml` |

@@ -95,7 +95,9 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 
 Rotari records the paths each job's definition names (arguments, `--env` and
 matrix values, redirections, and paths in the config files and scripts it
-reads), without running the job. Paths built at runtime are missed; declare
+reads), without running the job. A sentence that mentions a path, such as a
+docstring or log message (spaces inside and a final period), is not taken
+for one. Paths built at runtime are missed; declare
 them with `rotari add --artifact PATH`, which may use
 `$ROTARI_ARRAY_TASK_ID`, `$ROTARI_JOB_DIR`, and the job's variables.
 `rotari show -j JOB --artifacts` lists them in a terminal.

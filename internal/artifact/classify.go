@@ -216,6 +216,9 @@ func excluded(value string, syntax Syntax) bool {
 	if strings.HasPrefix(value, "^") {
 		return true
 	}
+	if isSentence(value) {
+		return true
+	}
 	if syntax == Interpolated && (interpolation.MatchString(value) || globPattern.MatchString(value) || strings.HasPrefix(value, "~")) {
 		return true
 	}
@@ -227,6 +230,15 @@ func excluded(value string, syntax Syntax) bool {
 func IsSpecialSink(value string) bool {
 	cleaned := path.Clean(value)
 	return slices.Contains(specialSinks, cleaned) || descriptor.MatchString(cleaned)
+}
+
+// isSentence reports whether value reads as prose, such as a docstring or a
+// log message that mentions a path: it has whitespace inside and ends with
+// a period. A path practically never ends with a period, so a path with
+// spaces is still classified.
+func isSentence(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return strings.HasSuffix(trimmed, ".") && strings.IndexFunc(trimmed, unicode.IsSpace) >= 0
 }
 
 func containsControl(value string) bool {
