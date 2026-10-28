@@ -177,10 +177,7 @@ func TestRunRecordsAJJWorkingCopy(t *testing.T) {
 		t.Skip("jj is not installed")
 	}
 	e := support.NewEnv(t).WithVar("JJ_USER", "t").WithVar("JJ_EMAIL", "t@example.invalid")
-	repo := filepath.Join(e.Root, "repo")
-	if err := os.MkdirAll(repo, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	repo := support.MemoryTempDir(t)
 	cmd := exec.Command("jj", "git", "init")
 	cmd.Dir = repo
 	cmd.Env = append(os.Environ(), "HOME="+filepath.Join(e.Root, "home"), "JJ_USER=t", "JJ_EMAIL=t@example.invalid")

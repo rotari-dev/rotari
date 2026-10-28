@@ -20,6 +20,21 @@ func run(t *testing.T, dir, name string, args ...string) string {
 	return strings.TrimSpace(string(output))
 }
 
+// memoryTempDir returns a directory on /dev/shm when it is writable,
+// removed when the test ends, and t.TempDir otherwise. jj syncs its
+// operation log to disk on every snapshot, which takes seconds on a host
+// busy with synchronous writes, so jj repositories made by tests live in
+// memory.
+func memoryTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/dev/shm", "rotari-test-")
+	if err != nil {
+		return t.TempDir()
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 func write(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -85,7 +100,7 @@ func TestReadJJ(t *testing.T) {
 	}
 	t.Setenv("JJ_CONFIG", filepath.Join(t.TempDir(), "none.toml"))
 	for _, colocate := range []bool{false, true} {
-		root := t.TempDir()
+		root := memoryTempDir(t)
 		args := []string{"git", "init"}
 		if colocate {
 			args = append(args, "--colocate")

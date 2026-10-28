@@ -313,6 +313,21 @@ func (e *Env) runDirs(args []string) map[string]bool {
 	return dirs
 }
 
+// MemoryTempDir returns a directory on /dev/shm when it is writable,
+// removed when the test ends, and t.TempDir otherwise. jj syncs its
+// operation log to disk on every snapshot, which takes seconds on a host
+// busy with synchronous writes, so jj repositories made by tests live in
+// memory.
+func MemoryTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/dev/shm", "rotari-test-")
+	if err != nil {
+		return t.TempDir()
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 func (e *Env) Without(name string) *Env {
 	copied := *e
 	copied.vars = nil
