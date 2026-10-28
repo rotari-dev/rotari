@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/url"
 	"strings"
@@ -26,7 +27,19 @@ type Payload struct {
 	OmittedJobs   int            `json:"omitted_jobs,omitempty"`
 }
 
-func NewPayload(batch Batch, selected []string, webURL string) Payload {
+// WebBaseDirRoutePrefix is the Web UI path prefix that serves one basedir as
+// WebBaseDirRoutePrefix + WebBaseDirID(baseDir) + "/".
+const WebBaseDirRoutePrefix = "/_basedir/"
+
+// WebBaseDirID returns the Web UI route ID of baseDir, an absolute, clean path.
+func WebBaseDirID(baseDir string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(baseDir))
+}
+
+// NewPayload builds the webhook payload for batch. webURL is the root of the
+// rotari web server; links open the run under baseDir's route because one
+// notifications.toml can serve runs of any basedir.
+func NewPayload(batch Batch, selected []string, webURL, baseDir string) Payload {
 	payload := Payload{SchemaVersion: batch.SchemaVersion, CreatedAt: batch.CreatedAt, OmittedJobs: batch.OmittedJobs}
 	successes, failures := 0, 0
 	for _, event := range batch.Events {
@@ -45,14 +58,14 @@ func NewPayload(batch Batch, selected []string, webURL string) Payload {
 	for _, event := range batch.Events {
 		fields := make([]Field, 0, len(selected))
 		for _, name := range selected {
-			fields = append(fields, eventFields(event, name, successes, failures, webURL)...)
+			fields = append(fields, eventFields(event, name, successes, failures, webURL, baseDir)...)
 		}
 		payload.Events = append(payload.Events, PayloadEvent{Event: event.Kind, Fields: fields})
 	}
 	return payload
 }
 
-func eventFields(event Event, name string, successes, failures int, webURL string) []Field {
+func eventFields(event Event, name string, successes, failures int, webURL, baseDir string) []Field {
 	add := func(value any, present bool) []Field {
 		if !present {
 			return nil
@@ -64,7 +77,7 @@ func eventFields(event Event, name string, successes, failures int, webURL strin
 	}
 	switch name {
 	case "link":
-		value := eventLink(webURL, event)
+		value := eventLink(webURL, baseDir, event)
 		return add(value, value != "")
 	case "project":
 		return add(event.Project, event.Project != "")
@@ -139,15 +152,15 @@ func eventFields(event Event, name string, successes, failures int, webURL strin
 	return nil
 }
 
-func eventLink(webURL string, event Event) string {
-	if webURL == "" || event.Project == "" || event.RunID == "" {
+func eventLink(webURL, baseDir string, event Event) string {
+	if webURL == "" || baseDir == "" || event.Project == "" || event.RunID == "" {
 		return ""
 	}
 	base, err := url.Parse(webURL)
 	if err != nil {
 		return ""
 	}
-	base.Path = strings.TrimRight(base.Path, "/") +
+	base.Path = strings.TrimRight(base.Path, "/") + WebBaseDirRoutePrefix + WebBaseDirID(baseDir) +
 		"/project/" + event.Project + "/run/" + event.RunID
 	if event.Kind == JobFinished && event.Job != nil && event.Job.ID != "" {
 		query := base.Query()

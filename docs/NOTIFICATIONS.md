@@ -129,14 +129,17 @@ fields = ["project", "run_id", "run_name", "run_status", "job_name", "attempt_id
 max_jobs = 20
 ```
 
-Set `web_url` to the base URL where the corresponding project is served by
-`rotari web`. Job notifications include a direct link that opens the run and
-focuses the matching job; run-completion notifications open the run. If the
-project is served under a basedir mount or reverse-proxy path, include that
-prefix in `web_url`. The default `webhook.fields` includes `link`; remove it
-to omit links, or leave `web_url` empty to disable link generation. In the Web
-UI notification settings, **Use current Web URL** fills the field from the
-currently open Rotari Web address, including a basedir mount when present.
+Set `web_url` to the root URL of the `rotari web` server. Job notifications
+include a direct link that opens the run and focuses the matching job;
+run-completion notifications open the run. Each link adds the route of the
+run's own basedir (`/_basedir/<id>/`), so a global or basedir
+`notifications.toml` links runs from any basedir; the server must know that
+basedir to open the link. If the server is behind a reverse-proxy path, include
+that prefix in `web_url`. The default `webhook.fields` includes `link`; remove
+it to omit links, or leave `web_url` empty to disable link generation. In the
+Web UI notification settings, **Use current Web URL** fills the field with the
+root of the currently open Rotari Web server, without the path of the page or
+basedir being viewed.
 
 A job is reported once after its retries end. Blocked jobs and jobs cancelled
 before they start are failures. Events within ten seconds of the first pending

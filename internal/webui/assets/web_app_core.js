@@ -130,11 +130,10 @@ function appURL(path) {
     ? "/_basedir/" + mountedBasedirID + path
     : path;
 }
+// The server root, without a basedir mount: notification links add the
+// mount of each run's own basedir.
 function currentWebBaseURL() {
-  const parts = location.pathname.split("/").filter(Boolean);
-  const mount =
-    parts[0] === "_basedir" ? "/" + parts.slice(0, 2).join("/") : "";
-  return new URL(mount + "/", location.origin).href;
+  return new URL("/", location.origin).href;
 }
 const nativeFetch = window.fetch.bind(window);
 window.fetch = function (input, options) {

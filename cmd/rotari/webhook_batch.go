@@ -20,6 +20,7 @@ import (
 const webhookBatchWindow = 10 * time.Second
 
 type pendingWebhookBatch struct {
+	baseDir  string
 	settings notification.WebhookSettings
 	events   []notification.Event
 	timer    *time.Timer
@@ -30,7 +31,7 @@ type webhookNotificationManager struct {
 	pending map[string]*pendingWebhookBatch
 	after   func(time.Duration, func()) *time.Timer
 	now     func() time.Time
-	send    func(notification.WebhookSettings, notification.Batch)
+	send    func(notification.WebhookSettings, string, notification.Batch)
 }
 
 func newWebhookNotificationManager() *webhookNotificationManager {
@@ -79,7 +80,13 @@ func (manager *webhookNotificationManager) add(paths state.ProjectPaths, runID s
 			printErrorf("WARNING: cannot load webhook settings: %v", err)
 			return
 		}
-		pending = &pendingWebhookBatch{settings: settings}
+		baseDir, err := filepath.Abs(paths.BaseDir)
+		if err != nil {
+			manager.mu.Unlock()
+			printErrorf("WARNING: cannot resolve basedir for webhook links: %v", err)
+			return
+		}
+		pending = &pendingWebhookBatch{baseDir: baseDir, settings: settings}
 		manager.pending[key] = pending
 		pending.timer = manager.after(webhookBatchWindow, func() { manager.flush(key) })
 	}
@@ -109,7 +116,7 @@ func (manager *webhookNotificationManager) flush(key string) {
 func (manager *webhookNotificationManager) deliver(pending *pendingWebhookBatch) {
 	batch := notification.NewBatch(pending.events, pending.settings.ChannelSettings, manager.now())
 	if pending.settings.URL != "" && !batch.Empty() {
-		manager.send(pending.settings, batch)
+		manager.send(pending.settings, pending.baseDir, batch)
 	}
 }
 
@@ -148,13 +155,13 @@ func loadRunNotificationSettings(paths state.ProjectPaths, runID string) (notifi
 	return loaded.Settings, err
 }
 
-func sendWebhookBatch(settings notification.WebhookSettings, batch notification.Batch) {
+func sendWebhookBatch(settings notification.WebhookSettings, baseDir string, batch notification.Batch) {
 	parsed, err := url.Parse(settings.URL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		printErrorf("WARNING: invalid %s URL", envWebhookURL)
 		return
 	}
-	payload := notification.NewPayload(batch, settings.Fields, settings.WebURL)
+	payload := notification.NewPayload(batch, settings.Fields, settings.WebURL, baseDir)
 	encoder, ok := webhookEncoders[normalizeWebhookFormat(settings.Format)]
 	if !ok {
 		printErrorf("WARNING: unsupported webhook format %q", settings.Format)

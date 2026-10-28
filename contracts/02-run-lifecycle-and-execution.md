@@ -1262,9 +1262,11 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   the pending batch immediately. `webhook.fields` selects the reported fields
   from the shared vocabulary ([implementation](../internal/notification/payload.go),
   [tests](../internal/notification/event_test.go)) and `webhook.max_jobs`
-  bounds the listed jobs. When `webhook.web_url` is set, the selected `link`
-  field opens the matching run and, for job events, focuses that job in the
-  Web UI; service-specific encoders provide a clickable link. `webhook.format`
+  bounds the listed jobs. When `webhook.web_url` is set to the root of a
+  `rotari web` server, the selected `link` field opens the matching run under
+  its own basedir's route, so one global or basedir file links runs of any
+  basedir, and, for job events, focuses that job in the Web UI;
+  service-specific encoders provide a clickable link. `webhook.format`
   selects the generic rotari JSON
   payload or a supported service-specific payload. Delivery errors are warnings
   and do not change run status; rotari keeps no delivery ledger and does not

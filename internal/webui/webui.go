@@ -2,7 +2,6 @@ package webui
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,7 +36,7 @@ const (
 	webConfigFileName  = "config.toml"
 	authBearerPrefix   = "Bearer "
 	headerContentType  = "Content-Type"
-	basedirRoutePrefix = "/_basedir/"
+	basedirRoutePrefix = notification.WebBaseDirRoutePrefix
 )
 
 func newNotificationSession() string {
@@ -294,7 +293,7 @@ func (s site) basedirEntries() []webBaseDir {
 }
 
 func basedirID(path string) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(path))
+	return notification.WebBaseDirID(path)
 }
 
 func (s site) currentBasePrefix() string {

@@ -913,8 +913,10 @@ setTimeout(() => {
 		if (webURL.value !== 'http://127.0.0.1/') process.exit(73);
 		dom.window.history.pushState({}, '', '/_basedir/basedir-id/project/default');
 		useCurrentWebURL.click();
-		if (webURL.value !== 'http://127.0.0.1/_basedir/basedir-id/') process.exit(74);
+		if (webURL.value !== 'http://127.0.0.1/') process.exit(74);
 		dom.window.history.pushState({}, '', '/project/default/run/run-1');
+		useCurrentWebURL.click();
+		if (webURL.value !== 'http://127.0.0.1/') process.exit(76);
 		webURL.value = 'https://rotari.example.test';
 		webURL.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 		if (notificationForm.classList.contains('dirty')) process.exit(75);

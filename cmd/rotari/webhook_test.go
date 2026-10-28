@@ -101,7 +101,7 @@ func testWebhookBatch(t *testing.T, status string) notification.Batch {
 }
 
 func TestWebhookPayloadHonorsSelectedFields(t *testing.T) {
-	payload := notification.NewPayload(testWebhookBatch(t, "failed"), []string{"job_name", "job_status", "run_status", "failure_count"}, "")
+	payload := notification.NewPayload(testWebhookBatch(t, "failed"), []string{"job_name", "job_status", "run_status", "failure_count"}, "", "")
 	if len(payload.Events) != 3 {
 		t.Fatalf("payload = %#v", payload)
 	}
@@ -131,7 +131,7 @@ func TestSendWebhookBatchPostsEncodedPayload(t *testing.T) {
 	settings.URL = server.URL
 	settings.WebURL = "https://rotari.example.test"
 	settings.Format = "slack"
-	sendWebhookBatch(settings, testWebhookBatch(t, "failed"))
+	sendWebhookBatch(settings, "/state", testWebhookBatch(t, "failed"))
 
 	if requests != 1 || received.Text != "rotari run finished: failed" || len(received.Blocks) != 3 {
 		t.Fatalf("requests = %d, payload = %#v", requests, received)
@@ -154,7 +154,7 @@ func TestSendWebhookBatchHonorsFieldsForGenericJSON(t *testing.T) {
 	settings := notification.Defaults().Webhook
 	settings.URL = server.URL
 	settings.Fields = []string{"job_name", "diagnosis_name", "diagnosis_suggestion", "run_status", "failure_count"}
-	sendWebhookBatch(settings, testWebhookBatch(t, "failed"))
+	sendWebhookBatch(settings, "/state", testWebhookBatch(t, "failed"))
 
 	if len(received.Events) != 3 || len(received.Events[1].Fields) != 5 || len(received.Events[2].Fields) != 2 {
 		t.Fatalf("generic payload = %#v", received)
@@ -175,7 +175,7 @@ func TestSendWebhookBatchRejectsUnsupportedFormat(t *testing.T) {
 	settings := notification.Defaults().Webhook
 	settings.URL = server.URL
 	settings.Format = "unknown"
-	sendWebhookBatch(settings, testWebhookBatch(t, "success"))
+	sendWebhookBatch(settings, "/state", testWebhookBatch(t, "success"))
 
 	if requests != 0 {
 		t.Fatalf("unsupported format requests = %d, want 0", requests)

@@ -35,7 +35,7 @@ func TestNewPayloadSelectsAvailableFields(t *testing.T) {
 	event.SetTimestamps("2026-01-02T03:04:00Z", "2026-01-02T03:04:05Z")
 	event.SetDiagnosisOutdated(true)
 	batch := NewBatch([]Event{event}, Defaults().Webhook.ChannelSettings, now)
-	payload := NewPayload(batch, []string{"project", "job_name", "exit_code", "duration", "diagnosis_name", "diagnosis_suggestion", "diagnosis_outdated", "run_name"}, "")
+	payload := NewPayload(batch, []string{"project", "job_name", "exit_code", "duration", "diagnosis_name", "diagnosis_suggestion", "diagnosis_outdated", "run_name"}, "", "")
 	if len(payload.Events) != 1 {
 		t.Fatalf("events = %#v", payload.Events)
 	}
@@ -60,7 +60,7 @@ func TestNewPayloadAddsRunCounts(t *testing.T) {
 		NewJobEvent("demo", "run-1", "", model.JobSpec{ID: "bad"}, model.JobResult{ID: "bad", ExitCode: 2}, now),
 		NewRunEvent("demo", model.RunSummary{RunID: "run-1", Status: "failed", ExitCode: 1, Results: []model.JobResult{{ID: "ok"}, {ID: "bad", ExitCode: 2}}}, now),
 	}, settings, now)
-	payload := NewPayload(batch, []string{"run_status", "exit_code", "success_count", "failure_count", "total_count"}, "")
+	payload := NewPayload(batch, []string{"run_status", "exit_code", "success_count", "failure_count", "total_count"}, "", "")
 	got := payload.Events[2].Fields
 	want := []Field{{Name: "run_status", Value: "failed"}, {Name: "exit_code", Value: 1}, {Name: "success_count", Value: 1}, {Name: "failure_count", Value: 1}, {Name: "total_count", Value: 2}}
 	if !reflect.DeepEqual(got, want) {
@@ -74,11 +74,12 @@ func TestNewPayloadBuildsRunAndJobLinks(t *testing.T) {
 		NewJobEvent("demo", "run-1", "", model.JobSpec{ID: "job-1"}, model.JobResult{ID: "job-1", ExitCode: 1}, now),
 		NewRunEvent("demo", model.RunSummary{RunID: "run-1", Status: "failed", ExitCode: 1}, now),
 	}, ChannelSettings{JobFailure: true, RunFailure: true, MaxJobs: 20}, now)
-	payload := NewPayload(batch, []string{"link"}, "https://rotari.example.test/proxy/")
-	if got, want := payload.Events[0].Fields, []Field{{Name: "link", Value: "https://rotari.example.test/proxy/project/demo/run/run-1?job_id=job-1"}}; !reflect.DeepEqual(got, want) {
+	payload := NewPayload(batch, []string{"link"}, "https://rotari.example.test/proxy/", "/state/a")
+	// base64url("/state/a") routes to that basedir whichever basedir the server started in.
+	if got, want := payload.Events[0].Fields, []Field{{Name: "link", Value: "https://rotari.example.test/proxy/_basedir/L3N0YXRlL2E/project/demo/run/run-1?job_id=job-1"}}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("job link = %#v, want %#v", got, want)
 	}
-	if got, want := payload.Events[1].Fields, []Field{{Name: "link", Value: "https://rotari.example.test/proxy/project/demo/run/run-1"}}; !reflect.DeepEqual(got, want) {
+	if got, want := payload.Events[1].Fields, []Field{{Name: "link", Value: "https://rotari.example.test/proxy/_basedir/L3N0YXRlL2E/project/demo/run/run-1"}}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("run link = %#v, want %#v", got, want)
 	}
 }

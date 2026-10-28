@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -66,7 +67,13 @@ func TestWebhookJobNotificationLinksToExactJob(t *testing.T) {
 		}
 		for _, field := range event.Fields {
 			if field.Name == "link" {
-				want := "https://rotari.example.test/rotari/project/p1/run/" + summary.RunID + "?job_id=" + url.QueryEscape(jobID)
+				// web_url is the server root; the link mounts the run's own basedir.
+				base, err := filepath.Abs(e.Base)
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := "https://rotari.example.test/rotari/_basedir/" + base64.RawURLEncoding.EncodeToString([]byte(base)) +
+					"/project/p1/run/" + summary.RunID + "?job_id=" + url.QueryEscape(jobID)
 				if field.Value != want {
 					t.Fatalf("job link = %q, want %q", field.Value, want)
 				}

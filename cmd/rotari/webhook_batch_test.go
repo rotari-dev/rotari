@@ -30,7 +30,7 @@ job_success = true
 
 	manager := newWebhookNotificationManager()
 	var sent []notification.Batch
-	manager.send = func(_ notification.WebhookSettings, batch notification.Batch) {
+	manager.send = func(_ notification.WebhookSettings, _ string, batch notification.Batch) {
 		sent = append(sent, batch)
 	}
 	manager.now = func() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) }
@@ -53,7 +53,7 @@ job_success = false
 	}
 	manager := newWebhookNotificationManager()
 	var sent []notification.Batch
-	manager.send = func(_ notification.WebhookSettings, batch notification.Batch) { sent = append(sent, batch) }
+	manager.send = func(_ notification.WebhookSettings, _ string, batch notification.Batch) { sent = append(sent, batch) }
 	manager.JobFinished(paths, "run-filter", "", model.JobSpec{ID: "ok"}, model.JobResult{ID: "ok"})
 
 	manager.mu.Lock()
