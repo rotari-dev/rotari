@@ -303,6 +303,15 @@ func TestLocalJobTimeoutKillsCommandIgnoringTerm(t *testing.T) {
 	}
 }
 
+// delayedCommand is a command that waits two seconds, records that it got
+// past the wait in the returned marker file, and then execs a long sleep.
+// A cancel that is not deferred until the delayed exec stops it before the
+// marker exists, however long a loaded host takes to deliver the signal.
+func delayedCommand(dir string) ([]string, string) {
+	marker := filepath.Join(dir, "delay-passed")
+	return []string{"sh", "-c", `sleep 2; : > "$1"; exec sleep 30`, "sh", marker}, marker
+}
+
 func TestLocalCancelBeforeWrapperStarts(t *testing.T) {
 	runDir := t.TempDir()
 	jobDir := filepath.Join(runDir, "job")
@@ -310,7 +319,8 @@ func TestLocalCancelBeforeWrapperStarts(t *testing.T) {
 		t.Fatal(err)
 	}
 	wrapperPath := filepath.Join(jobDir, "local-wrapper.sh")
-	script := StatusWrapperScript([]string{"sh", "-c", "sleep 0.25; exec sleep 30"}, jobDir, nil, "", "")
+	command, marker := delayedCommand(runDir)
+	script := StatusWrapperScript(command, jobDir, nil, "", "")
 	if err := os.WriteFile(wrapperPath, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -325,8 +335,8 @@ func TestLocalCancelBeforeWrapperStarts(t *testing.T) {
 	if err == nil {
 		t.Fatal("wrapper exited successfully even though cancellation was already recorded")
 	}
-	if d := time.Since(start); d > 500*time.Millisecond {
-		t.Fatalf("cancelled wrapper took %s; it waited for the delayed exec before aborting", d)
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatalf("cancelled wrapper took %s and its command got past its delay; it waited for the delayed exec before aborting", time.Since(start))
 	}
 	status, err := os.ReadFile(filepath.Join(jobDir, "status.json"))
 	if err != nil {
@@ -344,7 +354,8 @@ func TestLocalJobCancelStopsCommandBeforeForegroundExec(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(wrapperPath), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		script := StatusWrapperScript([]string{"sh", "-c", "sleep 0.25; exec sleep 30"}, filepath.Dir(wrapperPath), nil, "", "")
+		command, marker := delayedCommand(runDir)
+		script := StatusWrapperScript(command, filepath.Dir(wrapperPath), nil, "", "")
 		if err := os.WriteFile(wrapperPath, []byte(script), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -367,8 +378,8 @@ func TestLocalJobCancelStopsCommandBeforeForegroundExec(t *testing.T) {
 		if err == nil {
 			t.Fatalf("job exited successfully after SIGTERM before the delayed exec")
 		}
-		if elapsed > 500*time.Millisecond {
-			t.Fatalf("killed job took %s; cancellation was deferred until after the delayed child started", elapsed)
+		if _, err := os.Stat(marker); err == nil {
+			t.Fatalf("killed job took %s and its command got past its delay; cancellation was deferred until after the delayed child started", elapsed)
 		}
 		// A signal that reached the command while it was still the
 		// wrapper's forked copy must not leave it running.
