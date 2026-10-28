@@ -922,8 +922,8 @@ class TabView {
   }
 
   // plot makes a canvas for one view of the samples, with its pointer
-  // handling: a click seeks, a drag zooms to its range, and the wheel
-  // scrolls.
+  // handling: a click seeks, a drag zooms to its range, and a sideways or
+  // Shift wheel scrolls it; a plain wheel scrolls the page.
   plot(className) {
     const canvas = el("canvas", { className });
     const box = el(
@@ -1188,10 +1188,16 @@ class TabView {
   }
 
   wheel(event) {
+    const sideways = event.shiftKey
+      ? event.deltaY || event.deltaX
+      : Math.abs(event.deltaX) > Math.abs(event.deltaY)
+        ? event.deltaX
+        : 0;
+    if (!sideways) return;
     event.preventDefault();
     const range = this.range();
     const width = range.end - range.start;
-    const delta = Math.sign(event.deltaY || event.deltaX) * width * 0.1;
+    const delta = Math.sign(sideways) * width * 0.1;
     const start = Math.max(
       0,
       Math.min(this.duration() - width, range.start + delta),
@@ -1537,7 +1543,7 @@ function renderPaneToolbar() {
     el(
       "span",
       { className: "tv-muted tv-hint" },
-      "drag on a plot to zoom to a range · wheel to scroll · click to seek",
+      "drag on a plot to zoom to a range · Shift+wheel to scroll · click to seek",
     ),
   );
 }

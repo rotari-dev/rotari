@@ -749,8 +749,9 @@ func TestTableViewOpensFilesInPanesInBrowser(t *testing.T) {
 
 // A plot computes its spectra once for what it shows: drawing again at the
 // same size reuses them, a new size is drawn stretched until it has held,
-// and a new height alone needs no new spectra. jsdom has no canvas or Web
-// Audio, so the page gets stand-ins that count the work.
+// and a new height alone needs no new spectra; only a sideways or Shift
+// wheel scrolls a plot. jsdom has no canvas or Web Audio, so the page gets
+// stand-ins that count the work.
 func TestTableViewPlotsComputeOnceInBrowser(t *testing.T) {
 	f := newArtifactFixture(t)
 	wav, err := os.ReadFile(filepath.Join("..", "tableview", "testdata", "media", "pcm16.wav"))
@@ -819,6 +820,17 @@ func TestTableViewPlotsComputeOnceInBrowser(t *testing.T) {
   // A new range in view is computed at once.
   view.zoom(0.5);
   if (window.spectra !== 400 || last() !== '[150,60,150,60]') fail('zoom', window.spectra, last());
+
+  // A plain wheel over a plot is left to scroll the page; a sideways or
+  // Shift wheel scrolls the plot's range instead.
+  const canvas = document.querySelector('canvas.tv-spectrogram');
+  const roll = init => { const event = new window.WheelEvent('wheel', { cancelable: true, bubbles: true, ...init }); canvas.dispatchEvent(event); return event.defaultPrevented; };
+  const start = () => view.range().start;
+  const before = start();
+  if (roll({ deltaY: 100 }) || start() !== before) fail('plain wheel taken', start());
+  if (!roll({ deltaY: 100, shiftKey: true }) || !(start() > before)) fail('shift wheel', start());
+  const shifted = start();
+  if (!roll({ deltaX: -100, deltaY: 10 }) || !(start() < shifted)) fail('sideways wheel', start());
 `)
 }
 
