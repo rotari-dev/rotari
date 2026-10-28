@@ -10,12 +10,17 @@ import (
 	"time"
 )
 
-// leaseAttempts and leaseRetryDelay bound how long Acquire waits for the
-// lease. Running holds a shared lock on it for an instant, which must not
-// make a starting supervisor report that another one is running.
+// Acquire waits for a held lease in steps of leaseRetryDelay. A supervisor
+// that has recorded its PID is live, so Acquire waits only leaseProbeWait:
+// Running holds a shared lock on the lease for an instant, which must not
+// make a starting supervisor report that another one is running. Without a
+// PID record, the holder is a supervisor that Withdraw marked as exiting
+// after its run, whose client may already have returned, or one that is
+// about to record its PID, so Acquire waits up to finishingLeaseWait.
 const (
-	leaseAttempts   = 20
-	leaseRetryDelay = 10 * time.Millisecond
+	leaseRetryDelay    = 10 * time.Millisecond
+	leaseProbeWait     = 200 * time.Millisecond
+	finishingLeaseWait = 10 * time.Second
 )
 
 // Acquire takes the lease of dir, a project directory, and records the
@@ -26,12 +31,17 @@ func Acquire(dir string, fileMode os.FileMode) (func(), error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open server lock: %w", err)
 	}
-	for attempt := 1; ; attempt++ {
+	start := time.Now()
+	for {
 		err = syscall.Flock(int(lease.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 		if err == nil {
 			break
 		}
-		if !errors.Is(err, syscall.EWOULDBLOCK) || attempt == leaseAttempts {
+		limit := leaseProbeWait
+		if _, statErr := os.Lstat(PIDPath(dir)); errors.Is(statErr, os.ErrNotExist) {
+			limit = finishingLeaseWait
+		}
+		if !errors.Is(err, syscall.EWOULDBLOCK) || time.Since(start) >= limit {
 			_ = lease.Close()
 			if errors.Is(err, syscall.EWOULDBLOCK) {
 				return nil, ErrAlreadyRunning
@@ -48,6 +58,18 @@ func Acquire(dir string, fileMode os.FileMode) (func(), error) {
 		_ = os.Remove(PIDPath(dir))
 		_ = lease.Close()
 	}, nil
+}
+
+// Withdraw removes the PID record of dir's supervisor, whose run has ended,
+// before the run lock is removed and the run's clients return. The
+// supervisor keeps its lease until it exits, and a supervisor starting
+// meanwhile waits for it instead of reporting that a run is starting or
+// running.
+func Withdraw(dir string) error {
+	if err := os.Remove(PIDPath(dir)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to remove server pid: %w", err)
+	}
+	return nil
 }
 
 // Running reports whether a supervisor holds the lease of dir, a project

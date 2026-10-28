@@ -198,13 +198,25 @@ func cmdServerShutdown(args []string) int {
 // stopSupervisor sends SIGTERM to supervisor and waits until its lease is
 // released.
 func stopSupervisor(supervisor runningSupervisor) error {
-	if supervisor.pid == 0 {
-		return fmt.Errorf("its PID record %s is unreadable", serverinternal.PIDPath(supervisor.paths.ProjectDir))
+	deadline := time.Now().Add(shutdownTimeout)
+	// A supervisor has no PID record just after it starts, until it writes
+	// one, and once its run's jobs have ended, until it exits (COORD-7).
+	for supervisor.pid == 0 {
+		pid, running := serverinternal.Running(supervisor.paths.ProjectDir)
+		if !running {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("its PID record %s is unreadable", serverinternal.PIDPath(supervisor.paths.ProjectDir))
+		}
+		supervisor.pid = pid
+		if pid == 0 {
+			time.Sleep(20 * time.Millisecond)
+		}
 	}
 	if err := syscall.Kill(supervisor.pid, syscall.SIGTERM); err != nil {
 		return fmt.Errorf("signal pid %d: %w", supervisor.pid, err)
 	}
-	deadline := time.Now().Add(shutdownTimeout)
 	for {
 		if _, running := serverinternal.Running(supervisor.paths.ProjectDir); !running {
 			return nil
@@ -315,8 +327,17 @@ func newRotariServer(paths state.ProjectPaths) *serverinternal.Server {
 
 // supervisorOperations performs the run of paths' project.
 func supervisorOperations(paths state.ProjectPaths, logger *serverinternal.Logger) supervisor.Operations {
+	runner := projectRunner()
+	// Withdraw the PID record before the run lock goes, so a run started as
+	// soon as this one's client returns waits for this supervisor to exit
+	// (COORD-7).
+	runner.ExecutionEnded = func(paths state.ProjectPaths) {
+		if err := serverinternal.Withdraw(paths.ProjectDir); err != nil {
+			logger.Writef("%v", err)
+		}
+	}
 	return supervisor.Operations{
-		BaseDir: paths.BaseDir, Project: paths.ProjectName, Controller: jobController(), Runner: projectRunner(),
+		BaseDir: paths.BaseDir, Project: paths.ProjectName, Controller: jobController(), Runner: runner,
 		NewRunID: makeRunID, Logf: logger.Writef,
 	}
 }

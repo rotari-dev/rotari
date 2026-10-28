@@ -1076,6 +1076,31 @@ func TestCmdCancelAcceptsPositionalRunID(t *testing.T) {
 	}
 }
 
+// TestStopSupervisorWaitsForAFinishingSupervisor stops a supervisor that
+// has withdrawn its PID record after its run, as server shutdown can find
+// one right after a run returned: it waits for the supervisor to exit
+// rather than failing on the missing record.
+func TestStopSupervisorWaitsForAFinishingSupervisor(t *testing.T) {
+	paths := testProjectPaths(t, t.TempDir(), "finishing")
+	release, err := serverinternal.Acquire(paths.ProjectDir, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := serverinternal.Withdraw(paths.ProjectDir); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		release()
+	}()
+	if err := stopSupervisor(runningSupervisor{paths: paths}); err != nil {
+		t.Fatalf("stopSupervisor() = %v, want it to wait for the finishing supervisor", err)
+	}
+	if _, running := serverinternal.Running(paths.ProjectDir); running {
+		t.Fatal("stopSupervisor() returned while the lease was held")
+	}
+}
+
 func TestCmdServerStatusReportsRunningServer(t *testing.T) {
 	baseDir, err := os.MkdirTemp("", "rotari-status-server-")
 	if err != nil {

@@ -176,6 +176,9 @@ func (runner Runner) Run(paths state.ProjectPaths, options Options, observer Obs
 	if err != nil {
 		runner.errorf("%v", err)
 	}
+	if runner.ExecutionEnded != nil {
+		runner.ExecutionEnded(paths)
+	}
 	if err := runner.Finish(paths, options.RunID, exitCode); err != nil {
 		return 1, err
 	}

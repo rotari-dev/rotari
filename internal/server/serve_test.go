@@ -377,6 +377,33 @@ func TestAcquireWaitsOutRunningProbe(t *testing.T) {
 	release()
 }
 
+// TestAcquireWaitsForAFinishingSupervisor holds the lease as a supervisor
+// does: while it has a PID record, Acquire reports it running; once Withdraw
+// marks it as exiting after its run, Acquire waits for its lease.
+func TestAcquireWaitsForAFinishingSupervisor(t *testing.T) {
+	dir := t.TempDir()
+	finishing, err := Acquire(dir, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if _, err := Acquire(dir, 0o600); !errors.Is(err, ErrAlreadyRunning) || time.Since(start) >= finishingLeaseWait {
+		t.Fatalf("Acquire() beside a live supervisor = %v after %s, want ErrAlreadyRunning without waiting for its exit", err, time.Since(start))
+	}
+	if err := Withdraw(dir); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		time.Sleep(time.Second)
+		finishing()
+	}()
+	release, err := Acquire(dir, 0o600)
+	if err != nil {
+		t.Fatalf("Acquire() while a withdrawn supervisor exits: %v", err)
+	}
+	release()
+}
+
 // fakeSupervisor serves one connection like a supervisor: Ready, then one
 // request, which it answers according to the request's RunName, and returns
 // what it read after the request.

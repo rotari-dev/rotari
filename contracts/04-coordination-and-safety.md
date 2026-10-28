@@ -146,6 +146,22 @@ chain is checked across `show`, `jobs`, reports, and the Web API by
   [`internal/jobcontrol/active_run_test.go`](../internal/jobcontrol/active_run_test.go)
   and CLI/Web conformance is in
   [`conformance/04-coordination/private_state_test.go`](../conformance/04-coordination/private_state_test.go).
+- **COORD-7** A synchronous `run`, `retry`, or `wait` returns once the run is
+  finalized and its run lock removed, which can be before the run's
+  supervisor has released its lease and exited. The supervisor removes its
+  PID record (`server.pid`) when its jobs have ended, before the run lock;
+  a supervisor started while the lease is held without a PID record waits up
+  to ten seconds for it, so a `run` or `retry` started as soon as the
+  previous one returned is not refused as starting or running. A held lease
+  with a PID record, a live supervisor, is still refused at once, and
+  `running.lock` remains what keeps a second run from starting. The wait is
+  `Acquire` and the removal `Withdraw` in
+  [`internal/server/lease.go`](../internal/server/lease.go), called through
+  `projectrun.Runner.ExecutionEnded`, with unit
+  coverage in
+  [`internal/server/serve_test.go`](../internal/server/serve_test.go) and
+  conformance in
+  [`conformance/04-coordination/finishing_supervisor_test.go`](../conformance/04-coordination/finishing_supervisor_test.go).
 
 Design and implementation notes:
 

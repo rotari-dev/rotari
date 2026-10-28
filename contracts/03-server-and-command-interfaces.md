@@ -52,10 +52,15 @@ Representative implementation and tests:
   and `server list` check the lock and read the PID file without contacting
   the supervisor; the check never creates the lease file, and a starting
   supervisor retries the lease briefly so a check does not make it fail.
+  A supervisor removes its PID file once its jobs have ended, so `show`
+  reports a supervisor without one as starting or finishing; a starting
+  supervisor waits for such a lease to be released (COORD-7 in
+  [04-coordination-and-safety.md](04-coordination-and-safety.md)).
   `server status` and `server shutdown` act on the supervisor of every
   project in the base directory that has one, and report `server is not
   running` when none does. `server shutdown` sends it `SIGTERM` and waits for
-  the lease to be released. Shutting a supervisor down leaves its run
+  the lease to be released; a supervisor without a PID record is waited for
+  until it writes one or exits. Shutting a supervisor down leaves its run
   interrupted with its jobs still running; `cancel` is how to stop a run.
   `server list` shows the supervisors registered in the master directory,
   one per project.

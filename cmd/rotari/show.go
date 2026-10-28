@@ -829,8 +829,12 @@ func writeShowTargetHeaderWithMode(writer io.Writer, paths state.ProjectPaths, m
 	if inspection, err := project.Inspect(paths); err == nil {
 		fmt.Fprintf(writer, "%s %s\n", cyan("Project state:"), projectStateName(inspection.State))
 	}
-	if pid, running := serverinternal.Running(paths.ProjectDir); running {
+	if pid, running := serverinternal.Running(paths.ProjectDir); running && pid > 0 {
 		fmt.Fprintf(writer, "%s running (pid=%d)\n", cyan("Runner server:"), pid)
+	} else if running {
+		// A supervisor has no PID record just after it starts and once its
+		// run's jobs have ended (COORD-7).
+		fmt.Fprintf(writer, "%s starting or finishing\n", cyan("Runner server:"))
 	} else {
 		fmt.Fprintf(writer, "%s stopped\n", cyan("Runner server:"))
 	}

@@ -43,6 +43,9 @@ type Runner struct {
 	JobFinished func(paths state.ProjectPaths, runID, runName string, job model.JobSpec, result model.JobResult)
 	// RunFinished is called after the project is finalized. Optional.
 	RunFinished func(paths state.ProjectPaths, runID string, exitCode int)
+	// ExecutionEnded is called by Run once the jobs have ended, before
+	// Finish finalizes the project and removes the run lock. Optional.
+	ExecutionEnded func(paths state.ProjectPaths)
 
 	// Now returns the current time; nil means time.Now.
 	Now func() time.Time

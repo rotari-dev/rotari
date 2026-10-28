@@ -178,6 +178,7 @@ the IDs, this table, and those calls disagree.
 | COORD-4 | A missing scheduler command fails the job with an error naming it | partial | `TestMissingSchedulerCommand` |
 | COORD-5 | `ROTARI_PRIVATE_STATE` makes new paths owner-only; the static export stays publishable | partial | `TestPrivateStateModes` |
 | COORD-6 | Suspend/resume preflight every selected target; errors after partial scheduler actions identify already-acted jobs | partial | `TestSuspendAndResumePreflightAllSelectedJobs` |
+| COORD-7 | A supervisor withdraws its PID record when its jobs end, and `run` and `retry` wait for a withdrawn supervisor's lease instead of refusing, so they can follow a run that just returned | conformance | `TestRunWaitsForAFinishingSupervisor` |
 | STATE-1 | Reading state from a newer rotari fails asking to upgrade, and leaves the file; the Web UI marks such a run unreadable | conformance | `TestNewerStateVersionIsRejected`, `TestWebShowsNewerRunAsUnreadable`, `TestJobNameLookupReportsSnapshotErrors` |
 | STATE-2 | State without `state_version` reads as version 1 | conformance | `TestUnversionedStateIsVersionOne` |
 | STATE-3 | Reading history never rewrites it | conformance | `TestReadingHistoryDoesNotRewriteIt` |
