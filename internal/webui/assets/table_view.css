@@ -97,8 +97,13 @@ a:hover {
   display: flex;
   flex-direction: column;
   padding: 0 24px 16px;
+  /* Open panes push the table down rather than shrink it: main scrolls, and
+     the table keeps main's height (100cqh). */
+  overflow-y: auto;
+  container-type: size;
 }
 .tv-panes {
+  flex: none;
   height: 45vh;
   min-height: 160px;
   display: flex;
@@ -377,6 +382,7 @@ a:hover {
   display: none;
 }
 .tv-panes-handle {
+  flex: none;
   height: 10px;
   cursor: row-resize;
   background: var(--line-soft);
@@ -395,8 +401,9 @@ a:hover {
   white-space: nowrap;
 }
 .tv-table-area {
-  flex: 1;
-  min-height: 0;
+  flex: none;
+  height: 100cqh;
+  min-height: 240px;
   display: flex;
   flex-direction: column;
   background: var(--surface);

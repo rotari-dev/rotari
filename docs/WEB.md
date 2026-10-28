@@ -163,7 +163,8 @@ A table file (`.csv`, `.tsv`, `.scp`, and similar) or a directory has a
 **Table viewer** button, available without `--allow-exec`. It pages through
 files with millions of rows and offers filters, sorting, and per-column
 statistics (**Describe**) over the whole file. A cell holding the path of an
-image, audio, or video file opens it in a pane above the table, with a
+image, audio, or video file opens it in a pane above the table (the table keeps
+its height, and the page scrolls), with a
 waveform and spectrogram for audio; **Channel** picks one channel of a
 multichannel file to draw and to play from both speakers, or **Mix** to
 draw their mean and play the file as it is. For a directory, **Group by stem** puts

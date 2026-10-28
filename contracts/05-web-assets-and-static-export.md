@@ -979,6 +979,8 @@ relative to it. A file's parameters are refused for a directory and a
 directory's for a file, rather than ignored.
 `/tableview/api/info` names the file or directory, a file's size, download,
 and the separator its extension suggests, and the bases. The page opens a cell's media in tabs of the active pane of panes
+above the table, which keeps the height of the page below its header, so
+open panes scroll the page rather than shrink the table; panes
 split right or down, one pane always active; tabs move between panes by
 drag and drop, a drop near an edge splitting that pane; audio shows a
 waveform and a spectrogram the browser computes from the decoded samples,
