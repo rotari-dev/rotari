@@ -7,7 +7,7 @@ import (
 	"github.com/rotari-dev/rotari/internal/joblist"
 )
 
-// A Job activity row shows the command under the job name, as the run page
+// A Recent jobs row shows the command under the job name, as the run page
 // does, and the attempt ID by its end with the whole ID kept in its text,
 // title, and copy button.
 func TestJobsHTMLShowsCommandUnderJobAndAttemptByItsEnd(t *testing.T) {
@@ -28,7 +28,7 @@ func TestJobsHTMLShowsCommandUnderJobAndAttemptByItsEnd(t *testing.T) {
 	}
 }
 
-// The Job activity subtitle names the window the page lists, not a fixed
+// The Recent jobs subtitle names the window the page lists, not a fixed
 // default.
 func TestJobsHTMLDescribesSinceWindow(t *testing.T) {
 	for _, test := range []struct {

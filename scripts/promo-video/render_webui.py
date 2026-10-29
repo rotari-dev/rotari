@@ -73,7 +73,7 @@ def timeline():
             "jobs",
             3.4,
             [[0, "What's running,<br><em>what just finished.</em>"]],
-            say="Job activity shows what's running, and what just finished.",
+            say="Recent jobs shows what's running, and what just finished.",
         ),
         webscene(
             "search_query",

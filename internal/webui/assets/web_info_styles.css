@@ -379,7 +379,7 @@ pre {
   }
 }
 
-/* The Job activity table, laid out like the run page's jobs table: the
+/* The Recent jobs table, laid out like the run page's jobs table: the
    command under the job name, attempt IDs by their end, copy buttons on
    hover. Its section is not a card; the table is. */
 .jobs-section {

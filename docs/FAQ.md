@@ -502,7 +502,7 @@ A command that serves HTTP, such as TensorBoard, opens through the
 `rotari tableview PATH` opens any file or directory in it; see
 [Viewing tables](WEB.md#viewing-tables).
 
-### What does the Job activity link show?
+### What does the Recent jobs link show?
 
 It lists unfinished jobs and jobs that finished within the `Since` window,
 which defaults to `1d` as in `rotari jobs`; the line under the page title
@@ -604,7 +604,7 @@ external browser if the embedded one does not. See
 
 ### Can I run the Web UI read-only?
 
-Yes. `--allow-control=false` (or `ROTARI_WEB_ALLOW_CONTROL=false`) keeps state, logs, job activity, and docs pages available and returns `403 Forbidden` for control and file-write APIs.
+Yes. `--allow-control=false` (or `ROTARI_WEB_ALLOW_CONTROL=false`) keeps state, logs, recent jobs, and docs pages available and returns `403 Forbidden` for control and file-write APIs.
 
 ### Can I switch projects or state directories in the Web UI?
 

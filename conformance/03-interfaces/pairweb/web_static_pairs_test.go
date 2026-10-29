@@ -256,7 +256,7 @@ func TestCLIFlagPairWebNotificationsEffect(t *testing.T) {
 		{name: "disabled", page: disabledJobs, want: []byte("const jobsNotificationsDefaultOn = false")},
 	} {
 		if !bytes.Contains(check.page, []byte(`id="notify-toggle"`)) || !bytes.Contains(check.page, []byte(`onclick="toggleJobsNotifications()"`)) || !bytes.Contains(check.page, check.want) || !bytes.Contains(check.page, []byte("const jobsPageIsLive = false")) || !bytes.Contains(check.page, []byte("if (!jobsPageIsLive) return;")) || !bytes.Contains(check.page, []byte("if (jobsPageIsLive) setInterval(pollJobsActivity, 2000)")) {
-			t.Fatalf("static Job activity page does not expose the %s notification toggle with the requested default", check.name)
+			t.Fatalf("static Recent jobs page does not expose the %s notification toggle with the requested default", check.name)
 		}
 	}
 }

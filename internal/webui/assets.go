@@ -239,7 +239,7 @@ func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row,
 			}
 		}
 	}
-	crumbs.WriteString(`<span class="crumb-here">Job activity</span>`)
+	crumbs.WriteString(`<span class="crumb-here">Recent jobs</span>`)
 	template = strings.Replace(template, "__ROTARI_JOBS_CRUMBS__", crumbs.String(), 1)
 	template = strings.Replace(template, "__ROTARI_JOBS_SCOPE__", html.EscapeString(jobsScopeText(since)), 1)
 	template = strings.Replace(template, "__ROTARI_JOBS_NOTIFICATION_CONTROL__", notificationControl, 1)
@@ -397,7 +397,7 @@ func writeJobsBasedirEntry(builder *strings.Builder, homePath string, currentPro
 	}
 	builder.WriteString(`" href="`)
 	builder.WriteString(html.EscapeString(basePath))
-	builder.WriteString(`jobs/">Job activity</a></div></div>`)
+	builder.WriteString(`jobs/">Recent jobs</a></div></div>`)
 }
 
 // writeBasedirCrumb writes the breadcrumb that names a page's basedir, with

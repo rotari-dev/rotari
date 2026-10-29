@@ -1,4 +1,4 @@
-// The page frame shared by the application and Job activity pages, inlined
+// The page frame shared by the application and Recent jobs pages, inlined
 // in <head> of both: the viewer's theme, the Settings menu, the navigation
 // drawer on narrow screens, the sidebar's width, and why notifications are
 // unavailable.

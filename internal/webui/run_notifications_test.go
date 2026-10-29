@@ -62,8 +62,8 @@ setTimeout(() => {
 }, 50);
 `
 	for name, page := range map[string]string{
-		"application":  testSite().webHTML(),
-		"job activity": jobsHTML("/", nil, nil, "", true, true),
+		"application": testSite().webHTML(),
+		"recent jobs": jobsHTML("/", nil, nil, "", true, true),
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "index.html")
@@ -183,8 +183,8 @@ setTimeout(async () => {
 }
 
 // Browsers allow notifications only in a secure context, and an insecure page
-// may not expose Notification at all. The toggle on the application and Job
-// activity pages then stays visible but disabled, and says why, instead of
+// may not expose Notification at all. The toggle on the application and Recent
+// jobs pages then stays visible but disabled, and says why, instead of
 // disappearing or being disabled silently.
 func TestNotificationToggleExplainsWhyItIsUnavailable(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
@@ -236,8 +236,8 @@ for (const test of cases) {
 }
 `
 	pages := map[string]string{
-		"application":  testSite().webHTML(),
-		"job activity": jobsHTML("/", nil, nil, "", true, true),
+		"application": testSite().webHTML(),
+		"recent jobs": jobsHTML("/", nil, nil, "", true, true),
 	}
 	for name, page := range pages {
 		t.Run(name, func(t *testing.T) {

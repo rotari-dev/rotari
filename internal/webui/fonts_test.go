@@ -56,7 +56,7 @@ func TestLiveServerServesEmbeddedFonts(t *testing.T) {
 	}
 	jobs := jobsHTML("/", nil, nil, joblist.DefaultSinceText, true, true)
 	if !strings.Contains(jobs, `src: url("/fonts/IBMPlexSans-Regular-Latin1.woff2")`) {
-		t.Error("Job activity page does not declare the fonts")
+		t.Error("Recent jobs page does not declare the fonts")
 	}
 }
 

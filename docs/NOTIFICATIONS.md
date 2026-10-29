@@ -29,7 +29,7 @@ data to an external service.
 
 ### In-page inbox
 
-The live Web UI and Job activity page have an **Inbox (N)** button. The number
+The live Web UI and Recent jobs page have an **Inbox (N)** button. The number
 is the unread count; opening the inbox marks its entries read. New entries
 are also announced to screen readers. The inbox keeps the latest 50 entries
 in memory for the current page; navigating away or reloading clears them.
@@ -39,7 +39,7 @@ This works without the desktop Notification API or its permission, including
 in embedded browsers such as VS Code's internal browser and over HTTP.
 Desktop notification permissions, the desktop on/off toggle, and
 `--notifications=false` do not disable the inbox. Project browser event and
-field settings still apply on the main Web UI; Job activity uses its existing
+field settings still apply on the main Web UI; Recent jobs uses its existing
 job-result notifications and selected basedirs.
 The page must remain open and polling; this is not a background notification
 service. A supported browser can additionally show desktop notifications.
@@ -100,7 +100,7 @@ The current basedir's `/api/state` is checked every two seconds. Selected other
 basedirs use `/api/active-runs`. Completed run details are not repeatedly
 loaded. Static exports have no server to load notification settings, so they
 provide neither the editor nor live notifications. They show a local on/off
-toggle on both the main pages and Job activity; `--notifications` selects its
+toggle on both the main pages and Recent jobs; `--notifications` selects its
 initial value. Live-server options
 (`--host`, `--port`, `--auth-token`, and `--allow-control`) cannot be combined
 with `--static-dir`; use them only when starting the HTTP server.

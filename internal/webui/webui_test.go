@@ -2012,7 +2012,7 @@ func TestStylesAndScriptsTakeColoursFromTokens(t *testing.T) {
 		t.Error("web page does not link the token stylesheet")
 	}
 	if jobs := jobsHTML("/", nil, nil, joblist.DefaultSinceText, true, true); !strings.Contains(jobs, "--bg:") {
-		t.Error("Job activity page does not include the tokens")
+		t.Error("Recent jobs page does not include the tokens")
 	}
 }
 
@@ -2033,15 +2033,15 @@ func TestWebSidebarStylesAreSharedWithJobsPage(t *testing.T) {
 	}
 	jobsHTML := jobsHTML("/", []string{"demo"}, nil, joblist.DefaultSinceText, true, true)
 	if !strings.Contains(jobsHTML, `sidebar-search-link"`) || !strings.Contains(jobsHTML, `href="/search/"`) || !strings.Contains(jobsHTML, `History search`) {
-		t.Fatal("Job activity sidebar does not link to history search")
+		t.Fatal("Recent jobs sidebar does not link to history search")
 	}
 	for _, marker := range []string{".sidebar-brand {", ".sidebar-project-row {", ".sidebar-link.active,", ".content > .topbar {", ".settings-panel {", ".page-head {"} {
 		if !strings.Contains(jobsHTML, marker) || !strings.Contains(webShellCSS, marker) {
-			t.Fatalf("Job activity page is missing shared sidebar style %q", marker)
+			t.Fatalf("Recent jobs page is missing shared sidebar style %q", marker)
 		}
 	}
 	if !strings.Contains(jobsHTML, `class="sidebar-project-row"><span class="sidebar-toggle-placeholder"`) {
-		t.Fatal("Job activity project links do not use the shared sidebar row layout")
+		t.Fatal("Recent jobs project links do not use the shared sidebar row layout")
 	}
 	for _, marker := range []string{".sidebar-section-heading {", ".sidebar-section-note {", ".sidebar-link {", ".sidebar-resizer {", ".basedir-bell {", ".basedir-bell:has(input:checked) {", ".basedir-contents {", "margin-left: 20px;", ".basedir-parent {", ".sidebar-run-dot.tone-ok {", "overflow-y: auto;", "overflow-x: hidden;", "overscroll-behavior: contain;", "overflow-anchor: none;", "text-overflow: ellipsis;", ".crumb-basedir {", "@media (max-width: 760px)", "body.drawer-open .sidebar {"} {
 		if !strings.Contains(webShellCSS, marker) {
@@ -2125,10 +2125,10 @@ setTimeout(async () => {
 		root = dom.window.document.querySelector(rootSelector);
 		assert(!root.querySelector(':scope > .basedir-contents').hidden, 'collapsed basedir cannot be reopened');
 		assert(root.querySelector('.sidebar-project-link.basedir-path').title.startsWith('/'), 'basedir path tooltip is not absolute');
-		const jobActivity = root.querySelector('a[href="/jobs/"]');
+		const recentJobs = root.querySelector('a[href="/jobs/"]');
 		const allProjects = [...root.querySelectorAll('.sidebar-project-link')].find(link => link.textContent.trim() === 'All projects');
-		assert(jobActivity && allProjects, 'Job activity or All projects is missing from its basedir');
-		assert(allProjects.compareDocumentPosition(jobActivity) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'Job activity should appear after the All projects tree');
+		assert(recentJobs && allProjects, 'Recent jobs or All projects is missing from its basedir');
+		assert(allProjects.compareDocumentPosition(recentJobs) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'Recent jobs should appear after the All projects tree');
 		assert(allProjects.closest('.all-projects').querySelector('.project-list'), 'project list is not nested under All projects');
 		const allProjectsToggle = allProjects.closest('.sidebar-project-row').querySelector('.sidebar-toggle');
 		assert(allProjectsToggle && allProjectsToggle.getAttribute('aria-expanded') === 'true', 'All projects should have an expanded toggle');
@@ -3219,11 +3219,11 @@ func TestWebJobsPageShowsRecentJobs(t *testing.T) {
 	if !regexp.MustCompile(`<a\s+class="sidebar-brand"\s+href="/"`).MatchString(response.Body.String()) {
 		t.Fatalf("GET /jobs/ sidebar brand does not link home: %s", response.Body.String())
 	}
-	if !regexp.MustCompile(`<h1 id="page-title">Job activity</h1>`).MatchString(response.Body.String()) {
-		t.Fatalf("GET /jobs/ is not titled Job activity: %s", response.Body.String())
+	if !regexp.MustCompile(`<h1 id="page-title">Recent jobs</h1>`).MatchString(response.Body.String()) {
+		t.Fatalf("GET /jobs/ is not titled Recent jobs: %s", response.Body.String())
 	}
 	for _, want := range []string{
-		"Job activity",
+		"Recent jobs",
 		"Registered basedirs",
 		"State directories known to rotari",
 		`aria-label="Toggle projects"`,
@@ -3239,7 +3239,7 @@ func TestWebJobsPageShowsRecentJobs(t *testing.T) {
 		"job-1",
 		`href="/project/demo"`,
 		`href="/project/demo/run/` + runID + `"`,
-		`href="/jobs/">Job activity</a>`,
+		`href="/jobs/">Recent jobs</a>`,
 		`title="Copy command"`,
 		`title="Copy attempt ID"`,
 		`data-copy-value="true"`,
@@ -3257,16 +3257,16 @@ func TestWebJobsPageShowsRecentJobs(t *testing.T) {
 	// The notification toggle is in the top bar, as on the application page.
 	topbar := regexp.MustCompile(`(?s)<header class="topbar">.*?</header>`).FindString(body)
 	if !strings.Contains(topbar, `<button id="notify-toggle"`) || !strings.Contains(topbar, `id="settings-button"`) {
-		t.Fatal("Job activity top bar lacks the notification toggle or the Settings menu")
+		t.Fatal("Recent jobs top bar lacks the notification toggle or the Settings menu")
 	}
 	if strings.Contains(body, `sidebar-config-controls`) {
-		t.Fatal("Job activity sidebar still holds the notification controls")
+		t.Fatal("Recent jobs sidebar still holds the notification controls")
 	}
 	allProjectsIndex := strings.Index(body, `>All projects</a>`)
 	projectListIndex := strings.Index(body, `class="sidebar-projects project-list"`)
-	jobActivityIndex := strings.Index(body, `href="/jobs/">Job activity</a>`)
-	if allProjectsIndex < 0 || projectListIndex <= allProjectsIndex || jobActivityIndex <= projectListIndex {
-		t.Fatalf("Job activity sidebar order is invalid: All projects=%d project list=%d Job activity=%d", allProjectsIndex, projectListIndex, jobActivityIndex)
+	recentJobsIndex := strings.Index(body, `href="/jobs/">Recent jobs</a>`)
+	if allProjectsIndex < 0 || projectListIndex <= allProjectsIndex || recentJobsIndex <= projectListIndex {
+		t.Fatalf("Recent jobs sidebar order is invalid: All projects=%d project list=%d Recent jobs=%d", allProjectsIndex, projectListIndex, recentJobsIndex)
 	}
 }
 
@@ -3298,7 +3298,7 @@ func TestWebSwitchesBetweenRegisteredBasedirs(t *testing.T) {
 	}
 	response = serveWebGet(t, handler, "/_basedir/"+otherID+"/jobs/")
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `href="/_basedir/`+otherID+`/project/other-project"`) {
-		t.Fatalf("GET basedir Job activity page = (%d, %q), want links scoped to selected basedir", response.Code, response.Body.String())
+		t.Fatalf("GET basedir Recent jobs page = (%d, %q), want links scoped to selected basedir", response.Code, response.Body.String())
 	}
 	response = serveWebGet(t, handler, "/_basedir/"+otherID+"/jobs")
 	if response.Code != http.StatusMovedPermanently || response.Header().Get("Location") != "/_basedir/"+otherID+"/jobs/" {
@@ -3563,7 +3563,7 @@ func TestGenerateStaticWebIncludesJobsPage(t *testing.T) {
 				t.Fatal(err)
 			}
 			body := string(data)
-			for _, want := range []string{"Job activity", `aria-label="Toggle projects"`, `href="../project/demo"`, `class="brand-icon"`, "job-1", `href="../project/demo/run/` + runID + `"`, `id="notify-toggle"`, `onclick="toggleJobsNotifications()"`, `const jobsPageIsLive = false`, `if (!jobsPageIsLive) return;`, `if (jobsPageIsLive) setInterval(pollJobsActivity, 2000)`, "const jobsNotificationsDefaultOn = " + strconv.FormatBool(notifications)} {
+			for _, want := range []string{"Recent jobs", `aria-label="Toggle projects"`, `href="../project/demo"`, `class="brand-icon"`, "job-1", `href="../project/demo/run/` + runID + `"`, `id="notify-toggle"`, `onclick="toggleJobsNotifications()"`, `const jobsPageIsLive = false`, `if (!jobsPageIsLive) return;`, `if (jobsPageIsLive) setInterval(pollJobsActivity, 2000)`, "const jobsNotificationsDefaultOn = " + strconv.FormatBool(notifications)} {
 				if !strings.Contains(body, want) {
 					t.Fatalf("static jobs page does not contain %q: %s", want, body)
 				}

@@ -4,7 +4,7 @@
 #   scripts/promo-video/07_webui.sh [RENDER_OPTIONS...]
 #
 # Accompanies docs/WEB.md: four projects in their own directories and two
-# state directories, seen through All projects, Activity, Job activity, and
+# state directories, seen through All projects, Activity, Recent jobs, and
 # History search. Prepares the tools on first use, then builds rotari,
 # captures (a headless browser is enough), and renders. PROMO_TOOLS and
 # PROMO_WORK as for 01_short.sh.

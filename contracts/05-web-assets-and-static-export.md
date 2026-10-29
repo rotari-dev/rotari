@@ -200,7 +200,7 @@ root (`TestLiveServerServesEmbeddedFonts`, `TestStaticExportWritesFontsOnce`).
 A status is shown as a pill whose tone (ok, bad, run, warn, off) names its
 colour and icon. `statusTones` in
 [internal/webui/status.go](../internal/webui/status.go) is the only
-status-to-tone rule: Go renders the Job activity page with it and injects it
+status-to-tone rule: Go renders the Recent jobs page with it and injects it
 into the application script, which normalises labels the same way
 (`TestStatusToneMatchesInGoAndJS`).
 
@@ -233,7 +233,7 @@ default. The dynamic page accepts `?since=DURATION`, validated by the shared
 fixed at the default window; preserve that page whenever changing the Web export
 layout.
 
-The All projects and Job activity pages load the same page-frame stylesheet,
+The All projects and Recent jobs pages load the same page-frame stylesheet,
 `web_shell.css` (sidebar, top bar, and status pills); static Web exports
 include it beside each generated application page. Keep shared frame changes
 in that asset rather than duplicating them in the page-specific stylesheets. `TestWebSidebarStylesAreSharedWithJobsPage`
@@ -284,24 +284,24 @@ basedir, and the history search's basedir choice label the basedir by its parent
 with the full path in its tooltip, because basedirs usually share a name such
 as `.rotari-state`; `newWebBaseDir` in [assets.go](../internal/webui/assets.go)
 computes the label once for both page kinds
-(`TestNewWebBaseDirLabelsByParentAndName`). `All projects` and `Job activity` are nested
+(`TestNewWebBaseDirLabelsByParentAndName`). `All projects` and `Recent jobs` are nested
 inside each basedir entry rather than offered once at the top level, since both
 pages describe a single basedir. `All projects` has its own disclosure control;
-its project list is nested beneath it, and `Job activity` follows the project
+its project list is nested beneath it, and `Recent jobs` follows the project
 tree. The sidebar scrolls independently of the page body, preserves its
 manually selected position during background refreshes, and remembers the
 position per basedir. A separator at the sidebar/content boundary is shown on
 hover and can be dragged to resize the sidebar; a label too long for the
 width ends with an ellipsis. These rules apply to both the application page
-and the server-rendered Job activity page.
+and the server-rendered Recent jobs page.
 
 Each basedir row has a notification monitor checkbox, drawn as a bell. The selected basedir IDs
 are stored in browser local storage under a key scoped to the current Web
 server session. Restarting `rotari web` therefore discards the extra selected
 basedirs and returns monitoring to the current basedir. The application page
 polls `/api/state` for its mounted basedir and `/api/active-runs` for each
-other selected basedir; the server-rendered Job activity page polls the Job
-activity endpoint. A newly selected basedir is
+other selected basedir; the server-rendered Recent jobs page polls the Recent
+jobs endpoint. A newly selected basedir is
 initialized from its current state, so existing completed jobs do not produce
 retroactive notifications. Desktop notifications remain controlled by the global
 notification permission and on/off toggle.
@@ -327,7 +327,7 @@ one before it reads:
 4. Restarting `rotari web` also rereads its options and configuration and
    starts a new notification session.
 
-The Job activity page's Refresh reloads the page. Covered by
+The Recent jobs page's Refresh reloads the page. Covered by
 [`TestWebRereadsRegisteredBasedirsWithoutRestart`](../internal/webui/basedir_reload_test.go),
 [`TestWebRefreshButtonRereadsBasedirs`](../internal/webui/basedir_reload_test.go),
 and [`TestWebListsBasedirsRegisteredAfterStart`](../conformance/05-web/basedir_reload_test.go).
@@ -382,13 +382,13 @@ rest of config handling in
 
 ## Desktop notifications
 
-**WEB-21** The live main and Job activity pages also keep an in-page inbox, implemented
+**WEB-21** The live main and Recent jobs pages also keep an in-page inbox, implemented
 once in [web_shell.js](../internal/webui/assets/web_shell.js). It retains the
 latest 50 notifications in page memory, shows an unread count, marks entries
 read on opening, and supports clearing and Escape to close. It works without
 the desktop API, permission, secure context, or desktop on/off setting.
 Reloading or navigating clears the inbox. Main-page entries share the event
-selection and fields below; links retain the event's basedir. Job activity
+selection and fields below; links retain the event's basedir. Recent jobs
 uses its existing selected-basedir job-result detection. Static exports have
 no inbox. Covered by `TestNotificationInboxWithoutDesktopAPI` in
 [run_notifications_test.go](../internal/webui/run_notifications_test.go).
@@ -448,14 +448,14 @@ JavaScript once granted, so the global on/off toggle is a separate
 `localStorage` flag (`rotari-notifications-enabled`) checked before showing
 each notification; it does not touch the browser's actual permission grant.
 `--notifications`/`ROTARI_WEB_NOTIFICATIONS` (`webui.Options.Notifications`,
-injected into the app bundle and the Job activity page) only seeds the
+injected into the app bundle and the Recent jobs page) only seeds the
 toggle's starting value for an origin that has never set the `localStorage`
-flag; an explicit prior toggle click always wins. The static Job activity page
+flag; an explicit prior toggle click always wins. The static Recent jobs page
 shows this local toggle too, but does not poll for live job events.
 
 When the page cannot use notifications, because it is not a secure context
 (plain HTTP from a non-loopback host) or the site's permission is denied, the
-toggle on both the application and Job activity pages stays visible but
+toggle on both the application and Recent jobs pages stays visible but
 disabled, and its title gives the reason from `notificationUnavailableReason`
 in `web_shell.js`. Covered by
 `TestNotificationToggleExplainsWhyItIsUnavailable`.
@@ -475,7 +475,7 @@ not transmit or submit the report. Covered by
 `TestStaticWebReportRedactionToggle`.
 
 The run page's jobs table (`runJobsHTML` in `web_app_core.js`) shows each
-job's command under its name, as the Job activity page does. Both show an
+job's command under its name, as the Recent jobs page does. Both show an
 attempt ID by its end (`.id-tail` in `web_shell.css`, written by
 `idTailHTML` in `web_app_core.js` and `assets.go`), while its text, title,
 and copy button keep the whole ID. Hosts, Executor options, and Working
@@ -639,8 +639,8 @@ standalone checks are in
 [conformance/03-interfaces/pairweb/web_static_pairs_test.go](../conformance/03-interfaces/pairweb/web_static_pairs_test.go).
 
 **WEB-4** The static export's initial browser notification toggle, on both the
-application and Job activity pages, follows `--notifications`. The Job
-activity page does not poll for live events. Static export does not load saved
+application and Recent jobs pages, follows `--notifications`. The Recent
+jobs page does not poll for live events. Static export does not load saved
 notification settings or provide live event polling: it has no server. The
 markers are rendered by [internal/webui/assets.go](../internal/webui/assets.go)
 and checked by `TestCLIFlagPairWebNotificationsEffect` in

@@ -76,7 +76,7 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
   [FAQ](FAQ.md#does-the-web-ui-send-run-details-to-an-ai-service).
 - **Several projects and state directories:** switch from the sidebar.
   **Activity** shows runs across every state directory on a calendar;
-  **Job activity** lists running and recently finished jobs;
+  **Recent jobs** lists running and recently finished jobs;
   **History search** searches project, run, and job history (live server only).
 - **Control** (not in read-only mode): copy, change, remove, cancel, and clear
   jobs, and **Create queue** or **Append to queue**, which a separate

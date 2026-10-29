@@ -7,7 +7,7 @@ workspace with its own (`rotari init`). Their history is made off camera:
 asr and tts each ran out of GPU memory once and then succeeded, vision is
 missing a data file, and nlp's evaluation finished while its training is
 still running. The terminal starts `rotari web`; a headless Chrome (960x688
-CSS px at scale 2) records All projects, Activity, Job activity, and a
+CSS px at scale 2) records All projects, Activity, Recent jobs, and a
 History search for the jobs that ran out of memory in either state
 directory.
 
@@ -134,7 +134,7 @@ def main():
 
             page.goto(f"{BASE}/")
             page.wait_for_timeout(1200)
-            page.get_by_text("Job activity", exact=True).first.click()
+            page.get_by_text("Recent jobs", exact=True).first.click()
             page.wait_for_timeout(2000)
             S.record(page, frames, "jobs", 0.5, fps=4)
 

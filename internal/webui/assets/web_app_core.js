@@ -593,7 +593,7 @@ function sidebarBasedirHTML(
     (isActive && isJobsPage ? " active" : "") +
     ' basedir-switch" href="' +
     basedirURL(entry.id, "/jobs/") +
-    '">Job activity</a></div></div>'
+    '">Recent jobs</a></div></div>'
   );
 }
 function renderSidebar(queues) {
@@ -1926,7 +1926,7 @@ function copyButtonHTML(value, label) {
 }
 // idTailHTML shows a long ID by its end, which tells a run's attempts
 // apart (.id-tail in web_shell.css); its text and title keep the whole ID.
-// assets.go writes the same markup on the Job activity page.
+// assets.go writes the same markup on the Recent jobs page.
 function idTailHTML(id) {
   return (
     '<span class="id-tail" title="' +

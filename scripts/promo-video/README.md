@@ -381,8 +381,8 @@ Four projects in their own directories (`fixture/webui/train.sh`, whose
 directory, tts in a workspace with its own (`rotari init`). Their history is
 made off camera; nlp's training is still running. The terminal runs `ls` and
 `rotari web` (its own start-up lines, on the default port); the browser
-(960×688) shows All projects, Activity's calendar and Where you worked, Job
-activity, and a History search for jobs whose diagnosis is "CUDA/GPU memory
+(960×688) shows All projects, Activity's calendar and Where you worked, Recent
+jobs, and a History search for jobs whose diagnosis is "CUDA/GPU memory
 exhausted" in both state directories, which finds asr's and tts's.
 
 - Runs cannot be dated in the past (rotari reads the clock itself), so
