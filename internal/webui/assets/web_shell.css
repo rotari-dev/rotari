@@ -137,13 +137,26 @@ main {
   letter-spacing: 0.14em;
 }
 
+/* Section headings are labels, not links: smaller, spaced out, and followed
+   by a rule so they read apart from the clickable entries beneath them. */
 .sidebar-section-heading {
-  margin: 14px 8px 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 8px 6px;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+  cursor: default;
+  user-select: none;
+}
+.sidebar-section-heading::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
 }
 
 .sidebar-section-note {
