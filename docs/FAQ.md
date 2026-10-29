@@ -504,12 +504,19 @@ A command that serves HTTP, such as TensorBoard, opens through the
 
 ### What does the Recent jobs link show?
 
-It lists unfinished jobs and jobs that finished within the `Since` window,
-which defaults to `1d` as in `rotari jobs`; the line under the page title
-names the window in effect. Select a job name to open its run page.
-`rotari jobs PROJECT` narrows the CLI list to one project. Enter a Go duration
-such as `6h` or `168h`, or whole days such as `7d`, in `Since` to change the
-completed-job window.
+It lists unfinished jobs, which stay at the top whatever you select, and jobs
+that finished in the last 24 hours, as `rotari jobs` does by default. When the
+state directory's latest run ended before that, it opens on the 24 hours up to
+that run's end instead, so you see the last work without searching. Choose
+`1h`, `6h`, or `24h` above the table for a window before now. To look further back, drag
+on the bar below them, which shows this state directory's runs: the jobs that
+finished inside the range you drag are listed. A click selects the day under
+it; drag the selection's edges to resize it or its middle to move it. `1d`,
+`7d`, and `30d` set how much the bar shows, and `‹` and `›` move it to earlier
+or later times. The choice stays in the URL, so the link can be shared. The
+line under the page title names what is listed. Select a job name to open its
+run page. `rotari jobs PROJECT --since 90m` takes any window from a terminal.
+A static export lists the same default, without the bar.
 
 ### Where did I run jobs recently?
 

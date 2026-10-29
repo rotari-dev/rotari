@@ -55,7 +55,7 @@ func TestWebBrandAndBasedirCrumbLinkHome(t *testing.T) {
 }
 
 func TestJobsSidebarShowsGlobalNotificationToggleOnly(t *testing.T) {
-	html := jobsHTMLWithSession("/_basedir/base-1/", nil, nil, "24h", true, true, "session")
+	html := jobsHTMLWithSession("/_basedir/base-1/", nil, nil, jobsSelection{}, true, true, "session")
 	if !strings.Contains(html, `id="notify-toggle"`) {
 		t.Fatal("Recent jobs sidebar is missing the global notification toggle")
 	}

@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rotari-dev/rotari/internal/joblist"
 	"github.com/rotari-dev/rotari/internal/model"
 	stateinternal "github.com/rotari-dev/rotari/internal/state"
 )
@@ -54,7 +53,7 @@ func TestLiveServerServesEmbeddedFonts(t *testing.T) {
 	if !strings.Contains(composeWebHTML(nil, true, ""), `<link rel="stylesheet" href="/web_fonts.css" />`) {
 		t.Error("web page does not link the font stylesheet")
 	}
-	jobs := jobsHTML("/", nil, nil, joblist.DefaultSinceText, true, true)
+	jobs := jobsHTML("/", nil, nil, jobsSelection{}, true, true)
 	if !strings.Contains(jobs, `src: url("/fonts/IBMPlexSans-Regular-Latin1.woff2")`) {
 		t.Error("Recent jobs page does not declare the fonts")
 	}

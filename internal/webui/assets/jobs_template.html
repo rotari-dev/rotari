@@ -218,6 +218,399 @@
           });
         });
 
+      // The window presets and range bar. The bar shows ?view= (1d, 7d, or
+      // 30d) ending at ?end= (now when absent), paged by ‹ and ›, with this
+      // basedir's runs behind it. Dragging on it selects a range, snapped
+      // to the view's step; a click selects the local day (the hour in the
+      // 1d view) under it; the selection's ends resize it and its middle
+      // moves it. The page reloads with ?from= and ?to=, or ?window= for a
+      // preset.
+      const jobsWindowPresets = {
+        "1h": 3600e3,
+        "6h": 6 * 3600e3,
+        "24h": 24 * 3600e3,
+      };
+      const jobsViewWidths = {
+        "1d": 24 * 3600e3,
+        "7d": 7 * 24 * 3600e3,
+        "30d": 30 * 24 * 3600e3,
+      };
+      const jobsViewSteps = {
+        "1d": 15 * 60e3,
+        "7d": 3600e3,
+        "30d": 6 * 3600e3,
+      };
+      const jobsDefaultView = "7d";
+
+      // jobsSnap rounds a time to a multiple of step in local time.
+      function jobsSnap(time, step) {
+        const offset = new Date(time).getTimezoneOffset() * 60e3;
+        return Math.round((time - offset) / step) * step + offset;
+      }
+
+      function jobsLocalDayStart(time) {
+        const date = new Date(time);
+        date.setHours(0, 0, 0, 0);
+        return date.getTime();
+      }
+
+      function jobsNextLocalDay(time) {
+        const date = new Date(jobsLocalDayStart(time));
+        date.setDate(date.getDate() + 1);
+        return date.getTime();
+      }
+
+      function jobsISO(time) {
+        return new Date(time).toISOString().replace(/\.\d{3}Z$/, "Z");
+      }
+
+      // jobsRangeURL builds the page URL for a state: a range or a window,
+      // and the bar's view and end when they are not the defaults. The
+      // window is always named: with none the server picks the default,
+      // which follows the latest run.
+      function jobsRangeURL(state) {
+        const query = new URLSearchParams();
+        if (state.from !== null) {
+          query.set("from", jobsISO(state.from));
+          query.set("to", jobsISO(state.to));
+        } else if (state.window !== null) {
+          query.set("window", state.window);
+        }
+        if (state.view !== jobsDefaultView) query.set("view", state.view);
+        if (state.end !== null) query.set("end", jobsISO(state.end));
+        const text = query.toString();
+        return location.pathname + (text ? "?" + text : "");
+      }
+
+      function jobsNavigateTo(url) {
+        location.href = url;
+      }
+
+      function jobsRangeButton(text, label, pressed, onClick) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "jobs-range-button";
+        button.textContent = text;
+        if (label) button.setAttribute("aria-label", label);
+        if (pressed !== null)
+          button.setAttribute("aria-pressed", String(pressed));
+        button.addEventListener("click", onClick);
+        return button;
+      }
+
+      function jobsRangeGroup(label, buttons) {
+        const group = document.createElement("div");
+        group.className = "jobs-range-group";
+        group.setAttribute("role", "group");
+        group.setAttribute("aria-label", label);
+        group.append(...buttons);
+        return group;
+      }
+
+      // jobsRunTone colours a run on the bar as the Activity page does.
+      function jobsRunTone(run) {
+        if (run.lifecycle === "running") return "run";
+        if (run.lifecycle === "interrupted" || run.lifecycle === "incomplete")
+          return "warn";
+        if (run.lifecycle === "cancelled") return "muted";
+        return run.exit_code === 0 ? "ok" : "bad";
+      }
+
+      async function drawJobsRangeRuns(range, layer, start, end) {
+        const query = new URLSearchParams({
+          from: jobsISO(start),
+          to: jobsISO(end),
+        });
+        let data;
+        try {
+          const response = await fetch(
+            range.dataset.activityUrl + "?" + query,
+            {
+              cache: "no-store",
+            },
+          );
+          if (!response.ok) throw new Error(await response.text());
+          data = await response.json();
+        } catch (error) {
+          layer.textContent = "Runs could not be loaded: " + error.message;
+          layer.classList.add("jobs-range-error");
+          return;
+        }
+        const lanes = [];
+        data.runs
+          .filter((run) => run.basedir_id === range.dataset.basedirId)
+          .map((run) => ({
+            run,
+            from: Math.max(Date.parse(run.started_at), start),
+            to: Math.min(Date.parse(run.ends_at), end),
+          }))
+          .filter((span) => span.to >= span.from)
+          .sort((left, right) => left.from - right.from)
+          .forEach((span) => {
+            // At most three lanes; later overlapping runs share the last.
+            let lane = lanes.findIndex((laneEnd) => laneEnd <= span.from);
+            if (lane < 0) lane = lanes.length < 3 ? lanes.length : 2;
+            lanes[lane] = Math.max(lanes[lane] || 0, span.to);
+            const mark = document.createElement("span");
+            mark.className = "jobs-range-run tone-" + jobsRunTone(span.run);
+            mark.style.left = ((span.from - start) / (end - start)) * 100 + "%";
+            mark.style.width =
+              Math.max(((span.to - span.from) / (end - start)) * 100, 0.3) +
+              "%";
+            mark.style.top = 4 + lane * 7 + "px";
+            mark.title =
+              span.run.project_name +
+              " " +
+              (span.run.run_name || span.run.run_id) +
+              " (" +
+              span.run.lifecycle +
+              ")";
+            layer.append(mark);
+          });
+      }
+
+      function drawJobsRangeTicks(layer, start, end, view) {
+        const label = new Intl.DateTimeFormat(
+          undefined,
+          view === "1d"
+            ? { hour: "2-digit", minute: "2-digit" }
+            : { month: "short", day: "numeric" },
+        );
+        const ticks = [];
+        if (view === "1d") {
+          for (
+            let time = jobsSnap(start, 3 * 3600e3);
+            time <= end;
+            time += 3 * 3600e3
+          )
+            ticks.push({ time, text: label.format(time) });
+        } else {
+          let index = 0;
+          for (
+            let time = jobsNextLocalDay(start);
+            time <= end;
+            time = jobsNextLocalDay(time), index++
+          )
+            ticks.push({
+              time,
+              text: view === "7d" || index % 5 === 0 ? label.format(time) : "",
+            });
+        }
+        ticks
+          .filter((tick) => tick.time >= start)
+          .forEach((tick) => {
+            const mark = document.createElement("span");
+            mark.className = "jobs-range-tick";
+            mark.style.left = ((tick.time - start) / (end - start)) * 100 + "%";
+            mark.textContent = tick.text;
+            layer.append(mark);
+          });
+      }
+
+      function renderJobsRange(range) {
+        const params = new URLSearchParams(location.search);
+        const now = Date.now();
+        const state = {
+          window: range.dataset.window || null,
+          from: range.dataset.from ? Date.parse(range.dataset.from) : null,
+          to: range.dataset.to ? Date.parse(range.dataset.to) : null,
+          view: params.get("view") || jobsDefaultView,
+          end: params.has("end") ? Date.parse(params.get("end")) : null,
+        };
+        // A range opened without a view or end, as from a shared link, is
+        // shown: widened to 30d when longer than the view, and ending at
+        // the range when it began before the view.
+        if (
+          state.from !== null &&
+          !params.has("view") &&
+          state.to - state.from > jobsViewWidths[state.view]
+        )
+          state.view = "30d";
+        if (
+          state.from !== null &&
+          !params.has("end") &&
+          state.from < now - jobsViewWidths[state.view]
+        )
+          state.end = Math.min(state.to, now);
+        const view = state.view;
+        const width = jobsViewWidths[view];
+        const step = jobsViewSteps[view];
+        const end = state.end === null ? now : state.end;
+        const start = end - width;
+
+        const presets = Object.keys(jobsWindowPresets).map((preset) =>
+          jobsRangeButton(
+            preset,
+            "Last " + preset,
+            state.window === preset,
+            () =>
+              jobsNavigateTo(
+                jobsRangeURL({
+                  ...state,
+                  window: preset,
+                  from: null,
+                  to: null,
+                  end: null,
+                }),
+              ),
+          ),
+        );
+        const views = Object.keys(jobsViewWidths).map((name) =>
+          jobsRangeButton(name, "Show " + name, name === view, () =>
+            jobsNavigateTo(jobsRangeURL({ ...state, view: name })),
+          ),
+        );
+        const earlier = jobsRangeButton("‹", "Earlier", null, () =>
+          jobsNavigateTo(jobsRangeURL({ ...state, end: end - width })),
+        );
+        const later = jobsRangeButton("›", "Later", null, () =>
+          jobsNavigateTo(
+            jobsRangeURL({
+              ...state,
+              end: end + width >= now ? null : end + width,
+            }),
+          ),
+        );
+        later.disabled = state.end === null;
+
+        const controls = document.createElement("div");
+        controls.className = "jobs-range-controls";
+        controls.append(
+          jobsRangeGroup("Window", presets),
+          jobsRangeGroup("Bar width", views),
+        );
+
+        const bar = document.createElement("div");
+        bar.className = "jobs-range-bar";
+        bar.title = "Drag to select when jobs finished";
+        const runs = document.createElement("div");
+        runs.className = "jobs-range-runs";
+        const ticks = document.createElement("div");
+        ticks.className = "jobs-range-ticks";
+        const selection = document.createElement("div");
+        selection.className = "jobs-range-selection";
+        const startHandle = document.createElement("span");
+        startHandle.className = "jobs-range-handle";
+        startHandle.dataset.edge = "from";
+        const endHandle = document.createElement("span");
+        endHandle.className = "jobs-range-handle";
+        endHandle.dataset.edge = "to";
+        selection.append(startHandle, endHandle);
+        bar.append(runs, ticks, selection);
+
+        const track = document.createElement("div");
+        track.className = "jobs-range-track";
+        track.append(earlier, bar, later);
+        range.append(controls, track);
+
+        // The shown selection: the range, or a window's span before now.
+        let shown =
+          state.from !== null
+            ? { from: state.from, to: state.to }
+            : state.window
+              ? { from: now - jobsWindowPresets[state.window], to: now }
+              : null;
+        function drawSelection() {
+          if (!shown || shown.to <= start || shown.from >= end) {
+            selection.hidden = true;
+            return;
+          }
+          selection.hidden = false;
+          const from = Math.max(shown.from, start);
+          const to = Math.min(shown.to, end);
+          selection.style.left = ((from - start) / width) * 100 + "%";
+          selection.style.width = ((to - from) / width) * 100 + "%";
+        }
+        drawSelection();
+        drawJobsRangeTicks(ticks, start, end, view);
+        drawJobsRangeRuns(range, runs, start, end);
+
+        function timeAt(event) {
+          const rect = bar.getBoundingClientRect();
+          const ratio = Math.min(
+            Math.max((event.clientX - rect.left) / rect.width, 0),
+            1,
+          );
+          return start + ratio * width;
+        }
+        const clamp = (time) => Math.min(Math.max(time, start), end);
+        let drag = null;
+        bar.addEventListener("pointerdown", (event) => {
+          if (event.button !== undefined && event.button !== 0) return;
+          const time = timeAt(event);
+          const edge = event.target.dataset
+            ? event.target.dataset.edge
+            : undefined;
+          if (edge && shown) drag = { mode: edge };
+          else if (shown && event.target === selection)
+            drag = {
+              mode: "move",
+              offset: time - shown.from,
+              length: shown.to - shown.from,
+            };
+          else drag = { mode: "new", anchor: time, x: event.clientX };
+          if (bar.setPointerCapture && event.pointerId !== undefined)
+            bar.setPointerCapture(event.pointerId);
+          event.preventDefault();
+        });
+        bar.addEventListener("pointermove", (event) => {
+          if (!drag) return;
+          const time = timeAt(event);
+          if (drag.mode === "new") {
+            const from = clamp(jobsSnap(Math.min(drag.anchor, time), step));
+            const to = clamp(jobsSnap(Math.max(drag.anchor, time), step));
+            shown = { from, to };
+          } else if (drag.mode === "move") {
+            const from = Math.min(
+              Math.max(jobsSnap(time - drag.offset, step), start),
+              end - drag.length,
+            );
+            shown = { from, to: from + drag.length };
+          } else if (drag.mode === "from") {
+            shown = {
+              from: Math.min(clamp(jobsSnap(time, step)), shown.to - step),
+              to: shown.to,
+            };
+          } else {
+            shown = {
+              from: shown.from,
+              to: Math.max(clamp(jobsSnap(time, step)), shown.from + step),
+            };
+          }
+          drawSelection();
+        });
+        bar.addEventListener("pointerup", (event) => {
+          if (!drag) return;
+          const mode = drag.mode;
+          const clicked =
+            mode === "new" && Math.abs(event.clientX - drag.x) < 4;
+          drag = null;
+          if (clicked) {
+            // A click selects the local day, or hour in the 1d view, under it.
+            const time = timeAt(event);
+            shown =
+              view === "1d"
+                ? {
+                    from: jobsSnap(time - 1800e3, 3600e3),
+                    to: jobsSnap(time - 1800e3, 3600e3) + 3600e3,
+                  }
+                : { from: jobsLocalDayStart(time), to: jobsNextLocalDay(time) };
+          }
+          if (!shown || shown.to <= shown.from) return;
+          jobsNavigateTo(
+            jobsRangeURL({
+              ...state,
+              window: null,
+              from: shown.from,
+              to: shown.to,
+            }),
+          );
+        });
+      }
+
+      const jobsRange = document.querySelector(".jobs-range");
+      if (jobsRange) renderJobsRange(jobsRange);
+
       const jobsPageIsLive = __ROTARI_JOBS_LIVE__;
       // History search runs on the server; a static export has none.
       if (!jobsPageIsLive)

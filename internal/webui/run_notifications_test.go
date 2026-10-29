@@ -63,7 +63,7 @@ setTimeout(() => {
 `
 	for name, page := range map[string]string{
 		"application": testSite().webHTML(),
-		"recent jobs": jobsHTML("/", nil, nil, "", true, true),
+		"recent jobs": jobsHTML("/", nil, nil, jobsSelection{}, true, true),
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "index.html")
@@ -237,7 +237,7 @@ for (const test of cases) {
 `
 	pages := map[string]string{
 		"application": testSite().webHTML(),
-		"recent jobs": jobsHTML("/", nil, nil, "", true, true),
+		"recent jobs": jobsHTML("/", nil, nil, jobsSelection{}, true, true),
 	}
 	for name, page := range pages {
 		t.Run(name, func(t *testing.T) {

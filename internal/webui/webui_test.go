@@ -136,7 +136,7 @@ func TestWebThemeChoice(t *testing.T) {
 	}
 	pages := map[string]string{
 		"web":  testSite().webHTML(),
-		"jobs": jobsHTML("/", []string{"demo"}, nil, joblist.DefaultSinceText, true, true),
+		"jobs": jobsHTML("/", []string{"demo"}, nil, jobsSelection{}, true, true),
 	}
 	script := `
 const { JSDOM } = require('jsdom');
@@ -2011,7 +2011,7 @@ func TestStylesAndScriptsTakeColoursFromTokens(t *testing.T) {
 	if !strings.Contains(composeWebHTML(nil, true, ""), `<link rel="stylesheet" href="/web_tokens.css" />`) {
 		t.Error("web page does not link the token stylesheet")
 	}
-	if jobs := jobsHTML("/", nil, nil, joblist.DefaultSinceText, true, true); !strings.Contains(jobs, "--bg:") {
+	if jobs := jobsHTML("/", nil, nil, jobsSelection{}, true, true); !strings.Contains(jobs, "--bg:") {
 		t.Error("Recent jobs page does not include the tokens")
 	}
 }
@@ -2031,7 +2031,7 @@ func TestWebSidebarStylesAreSharedWithJobsPage(t *testing.T) {
 			t.Fatalf("page-specific stylesheets duplicate shared sidebar selector %q", selector)
 		}
 	}
-	jobsHTML := jobsHTML("/", []string{"demo"}, nil, joblist.DefaultSinceText, true, true)
+	jobsHTML := jobsHTML("/", []string{"demo"}, nil, jobsSelection{}, true, true)
 	if !strings.Contains(jobsHTML, `sidebar-search-link"`) || !strings.Contains(jobsHTML, `href="/search/"`) || !strings.Contains(jobsHTML, `History search`) {
 		t.Fatal("Recent jobs sidebar does not link to history search")
 	}
@@ -3326,7 +3326,7 @@ func TestWebJobsPageShowsRecentJobs(t *testing.T) {
 		`class="sidebar-project-link basedir-path"`,
 		`href="/project/demo"`,
 		`class="brand-icon"`,
-		`name="since" value="1d"`,
+		`class="jobs-range" data-activity-url="/api/activity"`,
 		"job-1",
 		`href="/project/demo"`,
 		`href="/project/demo/run/` + runID + `"`,
@@ -3526,36 +3526,59 @@ func TestWebStateLoadsProjectAndRunDetailsOnDemand(t *testing.T) {
 	}
 }
 
-func TestWebJobsPageFiltersBySince(t *testing.T) {
+// The live page lists jobs that finished inside the dragged range and
+// leaves out those before and after it.
+func TestWebJobsPageFiltersByRange(t *testing.T) {
 	baseDir := t.TempDir()
-	runID := "20260922-090000-00000001"
-	now := time.Now().UTC()
-	writeTestJobsRun(t, baseDir, "demo", runID, "old-job", now.Add(-2*time.Hour), now.Add(-time.Hour), 0)
+	now := time.Now().UTC().Truncate(time.Hour)
+	writeTestJobsRun(t, baseDir, "demo", "20260901-090000-00000001", "before-job", now.Add(-50*time.Hour), now.Add(-49*time.Hour), 0)
+	writeTestJobsRun(t, baseDir, "demo", "20260901-090000-00000002", "inside-job", now.Add(-40*time.Hour), now.Add(-39*time.Hour), 1)
+	writeTestJobsRun(t, baseDir, "demo", "20260901-090000-00000003", "after-job", now.Add(-30*time.Hour), now.Add(-29*time.Hour), 0)
+	from, to := now.Add(-48*time.Hour).Format(time.RFC3339), now.Add(-32*time.Hour).Format(time.RFC3339)
+	path := "/jobs/?from=" + from + "&to=" + to
 
-	request := httptest.NewRequest(http.MethodGet, "/jobs/?since=30m", nil)
-	response := httptest.NewRecorder()
-	Handler(testOptions(baseDir, false)).ServeHTTP(response, request)
-
+	response := serveWebGet(t, Handler(testOptions(baseDir, false)), path)
+	body := response.Body.String()
 	if response.Code != http.StatusOK {
-		t.Fatalf("GET /jobs/?since=30m status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+		t.Fatalf("GET %s status = %d, want %d: %s", path, response.Code, http.StatusOK, body)
 	}
-	if strings.Contains(response.Body.String(), "old-job") || !strings.Contains(response.Body.String(), `value="30m"`) {
-		t.Fatalf("GET /jobs/?since=30m response = %s", response.Body.String())
+	if !strings.Contains(body, "inside-job") || strings.Contains(body, "before-job") || strings.Contains(body, "after-job") {
+		t.Fatalf("GET %s does not list exactly the range's job: %s", path, body)
+	}
+	if !strings.Contains(body, `data-from="`+from+`" data-to="`+to+`"`) {
+		t.Fatalf("GET %s does not hand the range to the bar: %s", path, body)
 	}
 }
 
-func TestWebJobsPageRejectsInvalidSince(t *testing.T) {
-	request := httptest.NewRequest(http.MethodGet, "/jobs/?since=invalid", nil)
-	response := httptest.NewRecorder()
-	Handler(testOptions(t.TempDir(), false)).ServeHTTP(response, request)
+// With nothing chosen and only an old run, the page opens on the 24 hours
+// up to that run's end and lists its job.
+func TestWebJobsPageDefaultsToLatestRun(t *testing.T) {
+	baseDir := t.TempDir()
+	started := time.Now().UTC().Add(-5 * 24 * time.Hour).Truncate(time.Second)
+	writeTestJobsRun(t, baseDir, "demo", started.Format("20060102-150405")+"-00000001", "old-job", started, started.Add(time.Hour), 0)
 
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("GET /jobs/?since=invalid status = %d, want %d: %s", response.Code, http.StatusBadRequest, response.Body.String())
+	response := serveWebGet(t, Handler(testOptions(baseDir, false)), "/jobs/")
+	body := response.Body.String()
+	to := started.Add(time.Hour).Truncate(time.Minute).Add(time.Minute)
+	if response.Code != http.StatusOK || !strings.Contains(body, "old-job") || !strings.Contains(body, "around the latest run") || !strings.Contains(body, `data-to="`+to.Format(time.RFC3339)+`"`) {
+		t.Fatalf("GET /jobs/ = %d, want the old run's job in the 24 hours up to %v: %s", response.Code, to, body)
+	}
+	if response := serveWebGet(t, Handler(testOptions(baseDir, false)), "/jobs/?window=24h"); strings.Contains(response.Body.String(), "old-job") {
+		t.Fatal("GET /jobs/?window=24h lists a job that finished 5 days ago")
+	}
+}
+
+func TestWebJobsPageRejectsInvalidSelection(t *testing.T) {
+	handler := Handler(testOptions(t.TempDir(), false))
+	for _, path := range []string{"/jobs/?since=7d", "/jobs/?window=2h", "/jobs/?from=2026-10-28T00:00:00Z", "/jobs/?from=2999-01-01T00:00:00Z&to=2999-01-02T00:00:00Z", "/jobs/?view=14d"} {
+		if response := serveWebGet(t, handler, path); response.Code != http.StatusBadRequest {
+			t.Errorf("GET %s status = %d, want %d: %s", path, response.Code, http.StatusBadRequest, response.Body.String())
+		}
 	}
 }
 
 func TestJobsHTMLStylesStates(t *testing.T) {
-	html := jobsHTML("/", nil, []joblist.Row{{State: "success"}, {State: "failed"}, {State: "running"}, {State: "running (recorded)"}}, joblist.DefaultSinceText, true, true)
+	html := jobsHTML("/", nil, []joblist.Row{{State: "success"}, {State: "failed"}, {State: "running"}, {State: "running (recorded)"}}, jobsSelection{}, true, true)
 	for _, want := range []string{
 		`<td class="jobs-state"><span class="status-pill tone-ok">success</span></td>`,
 		`<td class="jobs-state"><span class="status-pill tone-bad">failed</span></td>`,
@@ -3619,7 +3642,7 @@ vm.runInContext(` + string(code) + `, context);
 func TestJobsHTMLSupportsSortingAndTimezoneTimestamps(t *testing.T) {
 	started := time.Date(2026, 9, 29, 1, 2, 3, 0, time.UTC)
 	finished := started.Add(time.Minute)
-	html := jobsHTML("/", nil, []joblist.Row{{State: "success", Project: "p", RunID: "r", JobName: "j", Command: "echo hi", FullCommand: "echo hi", AttemptID: "att_1", StartedAt: started, FinishedAt: finished}}, joblist.DefaultSinceText, false, false)
+	html := jobsHTML("/", nil, []joblist.Row{{State: "success", Project: "p", RunID: "r", JobName: "j", Command: "echo hi", FullCommand: "echo hi", AttemptID: "att_1", StartedAt: started, FinishedAt: finished}}, jobsSelection{}, false, false)
 	for _, want := range []string{
 		`class="jobs-table"`,
 		`data-sort="started"`,
@@ -4454,7 +4477,7 @@ func TestJobsPageCopyButtonShowsFeedback(t *testing.T) {
 		t.Skip("node is not installed")
 	}
 	htmlPath := filepath.Join(t.TempDir(), "jobs.html")
-	page := jobsHTML("/", nil, []joblist.Row{{State: "success", Project: "p", RunID: "r", JobName: "j", Command: "echo hi", FullCommand: "echo hi", AttemptID: "att_1"}}, joblist.DefaultSinceText, false, false)
+	page := jobsHTML("/", nil, []joblist.Row{{State: "success", Project: "p", RunID: "r", JobName: "j", Command: "echo hi", FullCommand: "echo hi", AttemptID: "att_1"}}, jobsSelection{}, false, false)
 	if err := os.WriteFile(htmlPath, []byte(page), 0o600); err != nil {
 		t.Fatal(err)
 	}

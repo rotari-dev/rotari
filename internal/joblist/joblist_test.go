@@ -53,6 +53,33 @@ func TestCollectAcrossProjectsIncludesRecentFinishedJobs(t *testing.T) {
 	}
 }
 
+// Jobs are listed when they finished inside any of the spans, so a gap
+// between two selected days leaves out what finished in it.
+func TestCollectFinishedInListsJobsInsideAnySpan(t *testing.T) {
+	baseDir := t.TempDir()
+	now := time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)
+	day := func(offset int) time.Time { return time.Date(2026, 9, 22+offset, 0, 0, 0, 0, time.UTC) }
+	writeTestJobsRun(t, baseDir, "demo", "20260919-090000-00000001", "before-job", day(-3).Add(9*time.Hour), day(-3).Add(10*time.Hour), 0)
+	writeTestJobsRun(t, baseDir, "demo", "20260920-090000-00000002", "first-job", day(-2).Add(9*time.Hour), day(-2).Add(10*time.Hour), 0)
+	writeTestJobsRun(t, baseDir, "demo", "20260921-090000-00000003", "gap-job", day(-1).Add(9*time.Hour), day(-1).Add(10*time.Hour), 0)
+	writeTestJobsRun(t, baseDir, "demo", "20260922-090000-00000004", "second-job", day(0).Add(9*time.Hour), day(0).Add(10*time.Hour), 1)
+
+	rows, err := CollectFinishedIn(testStore(), baseDir, []string{"demo"}, now, []Interval{
+		{Start: day(-2), End: day(-1)},
+		{Start: day(0), End: day(1)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, row := range rows {
+		got = append(got, row.AttemptID)
+	}
+	if len(rows) != 2 || !strings.Contains(got[0], "second-job") || !strings.Contains(got[1], "first-job") {
+		t.Fatalf("CollectFinishedIn() attempts = %q, want second-job and first-job only", got)
+	}
+}
+
 func TestCollectRunStopsAtOldCompletedRun(t *testing.T) {
 	baseDir := t.TempDir()
 	now := time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)
@@ -62,7 +89,7 @@ func TestCollectRunStopsAtOldCompletedRun(t *testing.T) {
 	}
 	writeTestJobsRun(t, baseDir, "demo", "20260920-090000-00000001", "old-job", now.Add(-48*time.Hour), now.Add(-25*time.Hour), 0)
 
-	rows, include, stop, err := collectRun(testStore(), paths, "20260920-090000-00000001", false, now, now.Add(-24*time.Hour))
+	rows, include, stop, err := collectRun(testStore(), paths, "20260920-090000-00000001", false, now, intervals{{Start: now.Add(-24 * time.Hour)}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +128,7 @@ func TestCollectRunIncludesTerminalJobUsingStartedAtWhenFinishedAtMissing(t *tes
 		t.Fatal(err)
 	}
 
-	rows, include, stop, err := collectRun(testStore(), paths, runID, false, now, now.Add(-24*time.Hour))
+	rows, include, stop, err := collectRun(testStore(), paths, runID, false, now, intervals{{Start: now.Add(-24 * time.Hour)}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +249,7 @@ func TestCollectRunUsesCarriedStatusAndOriginTimestamps(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rows, _, _, err := collectRun(testStore(), paths, runID, false, now, now.Add(-24*time.Hour))
+	rows, _, _, err := collectRun(testStore(), paths, runID, false, now, intervals{{Start: now.Add(-24 * time.Hour)}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,6 +265,48 @@ func TestCollectRunUsesCarriedStatusAndOriginTimestamps(t *testing.T) {
 	}
 	if !row.StartedAt.Equal(started) || !row.FinishedAt.Equal(finished) {
 		t.Errorf("row timestamps = %v, %v; want origin times %v, %v", row.StartedAt, row.FinishedAt, started, finished)
+	}
+}
+
+// A run that started after every selected span still lists the job it
+// carried from a run that finished inside one, and leaves out its own jobs
+// unread, since they finished later.
+func TestCollectFinishedInKeepsCarriedJobsOfLaterRuns(t *testing.T) {
+	baseDir := t.TempDir()
+	paths, err := state.ResolveProjectPaths(baseDir, "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	span := Interval{Start: time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC), End: time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)}
+	sourceRunID := "20261009-090000-11111111"
+	runID := "20261011-090000-22222222"
+	writeTestJobsRun(t, baseDir, "demo", sourceRunID, "carried-job", span.Start.Add(9*time.Hour), span.Start.Add(10*time.Hour), 0)
+	writeTestJobsRun(t, baseDir, "demo", runID, "own-job", span.End.Add(33*time.Hour), span.End.Add(34*time.Hour), 0)
+	runDir := filepath.Join(paths.RunsDir, runID)
+	carriedAttempt := state.MakeAttemptID(sourceRunID, "carried-job", 0)
+	ownAttempt := state.MakeAttemptID(runID, "own-job", 0)
+	queue := model.Queue{Commands: []model.QueuedCommand{
+		{ID: "carried-job", Command: []string{"true"}, Origin: &model.JobOrigin{RunID: sourceRunID, JobID: "carried-job", AttemptID: carriedAttempt}},
+		{ID: "own-job", Command: []string{"true"}},
+	}}
+	if err := state.WriteJSON(filepath.Join(runDir, "commands.json"), queue); err != nil {
+		t.Fatal(err)
+	}
+	summary := model.RunSummary{RunID: runID, StartedAt: span.End.Add(33 * time.Hour).Format(time.RFC3339), FinishedAt: span.End.Add(34 * time.Hour).Format(time.RFC3339), Results: []model.JobResult{
+		{ID: "carried-job", AttemptID: carriedAttempt, ExitCode: 0},
+		{ID: "own-job", AttemptID: ownAttempt, ExitCode: 0},
+	}}
+	if err := state.WriteJSON(filepath.Join(runDir, "summary.json"), summary); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, _, _, err := collectRun(testStore(), paths, runID, false, now, intervals{span})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].JobID != "carried-job" || !rows[0].FinishedAt.Equal(span.Start.Add(10*time.Hour)) {
+		t.Fatalf("collectRun() = %#v, want only the carried job at its origin's finish", rows)
 	}
 }
 

@@ -114,29 +114,140 @@ code {
   color: var(--text);
 }
 
-.jobs-filter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* The Recent jobs window presets and range bar. The bar draws this
+   basedir's runs in up to three lanes, day or hour ticks beneath them, and
+   the selected range over both; pressed buttons and the selection use the
+   link colour, like the Activity calendar's selected day. */
+.jobs-range {
   margin: 0 0 16px;
 }
 
-.jobs-filter input {
-  width: 8ch;
-  padding: 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--bg);
-  color: var(--text);
+.jobs-range-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 8px;
 }
 
-.jobs-filter button {
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
+.jobs-range-group {
+  display: flex;
+  gap: 4px;
+}
+
+.jobs-range-button {
+  min-width: 36px;
+  padding: 4px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
   background: var(--surface);
   color: var(--text);
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
+}
+
+.jobs-range-button[aria-pressed="true"] {
+  border-color: var(--link);
+  box-shadow: 0 0 0 1px var(--link);
+}
+
+.jobs-range-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.jobs-range-track {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.jobs-range-bar {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 48px;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--surface);
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+
+.jobs-range-runs,
+.jobs-range-ticks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.jobs-range-runs.jobs-range-error {
+  padding: 4px 8px;
+  color: var(--s-bad);
+  font-size: 12px;
+}
+
+.jobs-range-run {
+  position: absolute;
+  height: 5px;
+  border-radius: 2px;
+  opacity: 0.55;
+  background: var(--muted);
+}
+
+.jobs-range-run.tone-ok {
+  background: var(--s-ok);
+}
+
+.jobs-range-run.tone-bad {
+  background: var(--s-bad);
+}
+
+.jobs-range-run.tone-warn {
+  background: var(--s-warn);
+}
+
+.jobs-range-run.tone-run {
+  background: var(--s-run);
+}
+
+.jobs-range-tick {
+  position: absolute;
+  top: 26px;
+  bottom: 0;
+  padding-left: 3px;
+  border-left: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.jobs-range-selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-right: 2px solid var(--link);
+  border-left: 2px solid var(--link);
+  background: color-mix(in oklab, var(--link) 16%, transparent);
+  cursor: grab;
+}
+
+.jobs-range-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: ew-resize;
+}
+
+.jobs-range-handle[data-edge="from"] {
+  left: -6px;
+}
+
+.jobs-range-handle[data-edge="to"] {
+  right: -6px;
 }
 
 .jobs-copy {
@@ -318,10 +429,6 @@ button {
 button:hover {
   border-color: var(--muted);
   background: var(--surface-2);
-}
-
-.jobs-filter input {
-  background: var(--surface-sunken);
 }
 
 .jobs-copy {

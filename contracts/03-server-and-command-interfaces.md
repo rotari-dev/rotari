@@ -275,14 +275,14 @@ does not promise to detect a lost remote client.
   list is in [`cmd/rotari/projects.go`](../cmd/rotari/projects.go)
   (`showProjectsForBaseDirs`), with the end-to-end check in
   [`conformance/03-interfaces/project_list_test.go`](../conformance/03-interfaces/project_list_test.go).
-- **CLI-6** The listing window, `jobs --since`, `runs --since`, and the Web jobs page's
-  `since`, takes a Go duration such as `24h` or `90m`, or a whole number of
-  days such as `7d`; anything else is rejected. The CLI commands default to
-  `1d`; running jobs and active, interrupted, or incomplete runs are included regardless of
-  age. `jobs --since 0` keeps unfinished jobs and excludes finished history;
+- **CLI-6** The listing window, `jobs --since` and `runs --since`, takes a Go
+  duration such as `24h` or `90m`, or a whole number of days such as `7d`;
+  anything else is rejected. The commands default to `1d`; running jobs and
+  active, interrupted, or incomplete runs are included regardless of age.
+  `jobs --since 0` keeps unfinished jobs and excludes finished history;
   use `--running` or `--filter-running` to select only running-state jobs.
-  The Web jobs page states the window it applied under its title rather than
-  a fixed default. All three interfaces parse it with
+  The Web Recent jobs page selects windows and ranges instead (WEB-23). Both commands
+  parse it with
   `joblist.ParseSince` in [`internal/joblist/joblist.go`](../internal/joblist/joblist.go),
   with the end-to-end check in
   [`conformance/03-interfaces/jobs_presentation_test.go`](../conformance/03-interfaces/jobs_presentation_test.go).

@@ -353,21 +353,22 @@ func (s site) baseHandler() http.Handler {
 		_, _ = writer.Write([]byte(webShellCSS))
 	})
 	mux.HandleFunc("/jobs/", func(writer http.ResponseWriter, request *http.Request) {
-		sinceText := request.URL.Query().Get("since")
-		window, err := joblist.ParseSince(sinceText)
+		now := time.Now()
+		selection, err := parseJobsSelection(request.URL.Query(), now)
 		if err != nil {
-			writeWebError(writer, fmt.Errorf("invalid since duration %q", sinceText))
+			writeWebError(writer, err)
 			return
 		}
-		if sinceText == "" {
-			sinceText = joblist.DefaultSinceText
+		if selection, err = resolveJobsDefault(selection, baseDir, now); err != nil {
+			writeWebError(writer, err)
+			return
 		}
 		projects, err := joblist.Projects(baseDir, "")
 		if err != nil {
 			writeWebError(writer, err)
 			return
 		}
-		rows, err := joblist.Collect(s.Store, baseDir, projects, time.Now(), window)
+		rows, err := joblist.CollectFinishedIn(s.Store, baseDir, projects, now, selection.Spans)
 		if err != nil {
 			writeWebError(writer, err)
 			return
@@ -375,7 +376,7 @@ func (s site) baseHandler() http.Handler {
 		joblist.Sort(rows)
 		_ = s.reloadBaseDirs()
 		writer.Header().Set(headerContentType, "text/html; charset=utf-8")
-		_, _ = writer.Write([]byte(jobsHTMLWithSession(s.currentBasePrefix()+"/", projects, rows, sinceText, true, s.Notifications, s.notificationSession, s.basedirEntries())))
+		_, _ = writer.Write([]byte(jobsHTMLWithSession(s.currentBasePrefix()+"/", projects, rows, selection, true, s.Notifications, s.notificationSession, s.basedirEntries())))
 	})
 	mux.HandleFunc("/jobs", func(writer http.ResponseWriter, request *http.Request) {
 		http.Redirect(writer, request, s.currentBasePrefix()+"/jobs/", http.StatusMovedPermanently)
@@ -1866,12 +1867,17 @@ func (s site) generateStaticWeb(outputDir string) error {
 	if err != nil {
 		return err
 	}
-	jobs, err := joblist.Collect(s.Store, baseDir, projects, time.Now(), joblist.DefaultSince)
+	now := time.Now()
+	selection, err := resolveJobsDefault(jobsSelection{Default: true}, baseDir, now)
+	if err != nil {
+		return err
+	}
+	jobs, err := joblist.CollectFinishedIn(s.Store, baseDir, projects, now, selection.Spans)
 	if err != nil {
 		return err
 	}
 	joblist.Sort(jobs)
-	if err := writeStaticWebPage(filepath.Join(outputDir, "jobs", "index.html"), jobsHTMLWithSession("../", projects, jobs, joblist.DefaultSinceText, false, s.Notifications, s.notificationSession, staticBaseDirs)); err != nil {
+	if err := writeStaticWebPage(filepath.Join(outputDir, "jobs", "index.html"), jobsHTMLWithSession("../", projects, jobs, selection, false, s.Notifications, s.notificationSession, staticBaseDirs)); err != nil {
 		return err
 	}
 	if err := writeStaticStylesheet(outputDir, filepath.Join(outputDir, "jobs")); err != nil {

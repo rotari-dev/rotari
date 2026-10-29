@@ -228,10 +228,9 @@ generated state, logs, and reports during export.
 `/jobs/` is server-rendered from the same `joblist.Collect` path
 ([internal/joblist](../internal/joblist/joblist.go)) as `rotari jobs`:
 it includes running jobs and jobs completed within the preceding 24 hours by
-default. The dynamic page accepts `?since=DURATION`, validated by the shared
-`joblist.ParseSince` helper. Its static equivalent is `jobs/index.html` and remains
-fixed at the default window; preserve that page whenever changing the Web export
-layout.
+default, or up to the latest run when that ended earlier, and the live page
+selects other windows and ranges as WEB-23 describes. Its static equivalent is
+`jobs/index.html`, which lists that default with no range bar; preserve that page whenever changing the Web export layout.
 
 The All projects and Recent jobs pages load the same page-frame stylesheet,
 `web_shell.css` (sidebar, top bar, and status pills); static Web exports
@@ -1066,6 +1065,42 @@ and `table_view_static.js`; covered by
 with the page checked by `TestStaticTableViewInBrowser` and the refusals by
 `TestStaticTableViewRefuses` in
 [internal/webui/table_view_static_test.go](../internal/webui/table_view_static_test.go).
+
+**WEB-23** The live Recent jobs page (`/jobs/`) offers window presets
+(`1h`, `6h`, and the default `24h`) and a range bar showing 1, 7 (the
+default), or 30 days, with this basedir's runs from `/api/activity` behind
+it; `‹` and `›` page it by its width, `›` disabled when it ends now.
+Dragging on the bar selects one range, snapped to 15 minutes, an hour, or 6
+hours by width; a click selects the local day (the hour on the 1-day bar)
+under it; dragging the selection's ends resizes it and its middle moves it.
+The page reloads with `from` and `to` (RFC 3339) or `window`, and the bar's
+`view` and `end` when they are not the defaults; a range opened without them
+is shown. The page then lists unfinished jobs and jobs that finished from
+`from` up to `to`, or inside the window before now, and names which under
+its title. With neither, it lists the 24 hours before now unless this
+basedir's latest run, by the end of every run meeting the time since the
+latest start, ended before them; then it opens on the 24 hours up to that end,
+rounded up to the minute, so a quiet basedir shows its last work. The static
+`jobs/index.html` lists the same default without the bar. `since`, which the page took before, answers 400 rather than
+being ignored, as do another window or view, a window with a range, `from`
+without `to` or the reverse, a malformed time, `to` not after `from`, `from`
+not before now, a range over 30 days, a future `end`, and a repeated
+parameter. A finished run that started after the range ended is not read for
+the jobs it ran itself, which finished later; jobs carried from an earlier
+run keep that run's times and are still listed by them. Implemented by
+`parseJobsSelection` in
+[internal/webui/jobs_range.go](../internal/webui/jobs_range.go) and
+`joblist.CollectFinishedIn` in
+[internal/joblist/joblist.go](../internal/joblist/joblist.go), with the bar
+drawn by `renderJobsRange` in `jobs_template.html`; covered by
+`TestRecentJobsSelectsFinishedJobsByRange` in
+[conformance/05-web/recent_jobs_test.go](../conformance/05-web/recent_jobs_test.go),
+which cannot age a run and so leaves the latest-run default to
+`TestResolveJobsDefaultFollowsLatestRun` and
+`TestWebJobsPageDefaultsToLatestRun`, with the bar checked by `TestJobsRangeBarInBrowser` in
+[internal/webui/jobs_page_test.go](../internal/webui/jobs_page_test.go) and
+carried jobs by `TestCollectFinishedInKeepsCarriedJobsOfLaterRuns` in
+[internal/joblist/joblist_test.go](../internal/joblist/joblist_test.go).
 
 ## Editing rules
 

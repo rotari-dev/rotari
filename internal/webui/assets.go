@@ -197,28 +197,40 @@ func composeInfoHTML(template, homePath, content string) string {
 	return template
 }
 
-func jobsHTML(homePath string, projects []string, rows []joblist.Row, since string, canFilter, notifications bool, basedirLists ...[]webBaseDir) string {
-	return jobsHTMLWithSession(homePath, projects, rows, since, canFilter, notifications, "", basedirLists...)
+func jobsHTML(homePath string, projects []string, rows []joblist.Row, selection jobsSelection, canFilter, notifications bool, basedirLists ...[]webBaseDir) string {
+	return jobsHTMLWithSession(homePath, projects, rows, selection, canFilter, notifications, "", basedirLists...)
 }
 
-// jobsScopeText describes the listing window the page shows. Callers pass
-// since already validated by joblist.ParseSince; empty means the default.
-func jobsScopeText(since string) string {
-	if since == "" {
-		since = joblist.DefaultSinceText
-	}
-	if window, err := joblist.ParseSince(since); err == nil && window == 0 {
-		return "Unfinished jobs"
-	}
-	return "Unfinished jobs and jobs finished in the last " + since
-}
-
-func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row, since string, canFilter, notifications bool, notificationSession string, basedirLists ...[]webBaseDir) string {
+// jobsHTMLWithSession renders the Recent jobs page for selection; the zero
+// selection is the default window. The live page's script draws the
+// window presets and range bar into .jobs-range, with this basedir's runs
+// from the Activity API behind the bar.
+func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row, selection jobsSelection, canFilter, notifications bool, notificationSession string, basedirLists ...[]webBaseDir) string {
 	var builder strings.Builder
 	if canFilter {
-		builder.WriteString(`<form class="jobs-filter" method="get"><label for="jobs-since">Since</label><input id="jobs-since" name="since" value="`)
-		builder.WriteString(html.EscapeString(since))
-		builder.WriteString(`" placeholder="24h" inputmode="text"><button type="submit">Apply</button></form>`)
+		basedirID := ""
+		if len(basedirLists) > 0 {
+			basedirID = jobsActiveBasedirID(homePath, basedirLists[0])
+		}
+		window := ""
+		for _, preset := range jobsWindows {
+			if selection.From.IsZero() && (preset.Window == selection.Window || selection.Window == 0 && preset.Window == joblist.DefaultSince) {
+				window = preset.Text
+			}
+		}
+		builder.WriteString(`<div class="jobs-range" data-activity-url="`)
+		builder.WriteString(html.EscapeString(homePath + "api/activity"))
+		builder.WriteString(`" data-basedir-id="`)
+		builder.WriteString(html.EscapeString(basedirID))
+		builder.WriteString(`" data-window="`)
+		builder.WriteString(window)
+		if !selection.From.IsZero() {
+			builder.WriteString(`" data-from="`)
+			builder.WriteString(selection.From.UTC().Format(time.RFC3339))
+			builder.WriteString(`" data-to="`)
+			builder.WriteString(selection.To.UTC().Format(time.RFC3339))
+		}
+		builder.WriteString(`"></div>`)
 	}
 	var sidebar strings.Builder
 	if len(basedirLists) > 0 {
@@ -250,7 +262,7 @@ func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row,
 	}
 	crumbs.WriteString(`<span class="crumb-here">Recent jobs</span>`)
 	template = strings.Replace(template, "__ROTARI_JOBS_CRUMBS__", crumbs.String(), 1)
-	template = strings.Replace(template, "__ROTARI_JOBS_SCOPE__", html.EscapeString(jobsScopeText(since)), 1)
+	template = strings.Replace(template, "__ROTARI_JOBS_SCOPE__", html.EscapeString(jobsScopeText(selection)), 1)
 	template = strings.Replace(template, "__ROTARI_JOBS_NOTIFICATION_CONTROL__", notificationControl, 1)
 	template = strings.Replace(template, "__ROTARI_JOBS_TOOLBAR__", toolbar, 1)
 	template = strings.Replace(template, "__ROTARI_JOBS_LIVE__", strconv.FormatBool(canFilter), 1)

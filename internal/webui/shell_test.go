@@ -5,8 +5,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
-
-	"github.com/rotari-dev/rotari/internal/joblist"
 )
 
 // A basedir is labelled by its parent directory and its own name, which tell
@@ -37,7 +35,7 @@ func TestWebShellUsesFullWidth(t *testing.T) {
 		name, html, css string
 	}{
 		{"web", testSite().webHTML(), webStylesCSS},
-		{"jobs", jobsHTML("/", []string{"demo"}, nil, joblist.DefaultSinceText, true, true), webInfoStylesCSS},
+		{"jobs", jobsHTML("/", []string{"demo"}, nil, jobsSelection{}, true, true), webInfoStylesCSS},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -79,7 +77,7 @@ func TestWebShellMenuAndDrawer(t *testing.T) {
 	}
 	pages := map[string]string{
 		"web":  testSite().webHTML(),
-		"jobs": jobsHTML("/", []string{"demo"}, nil, joblist.DefaultSinceText, true, true),
+		"jobs": jobsHTML("/", []string{"demo"}, nil, jobsSelection{}, true, true),
 	}
 	script := `
 const { JSDOM } = require('jsdom');

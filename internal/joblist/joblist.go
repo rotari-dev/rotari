@@ -24,6 +24,55 @@ const (
 	DefaultSinceText = "1d"
 )
 
+// Interval is a span of finish times from Start up to, but not including,
+// End. A zero End leaves the span open.
+type Interval struct {
+	Start time.Time
+	End   time.Time
+}
+
+func (interval Interval) contains(value time.Time) bool {
+	return !value.Before(interval.Start) && (interval.End.IsZero() || value.Before(interval.End))
+}
+
+// intervals is the set of spans a finished job must fall in to be listed.
+type intervals []Interval
+
+func (spans intervals) contains(value time.Time) bool {
+	for _, span := range spans {
+		if span.contains(value) {
+			return true
+		}
+	}
+	return false
+}
+
+// latestEnd is where the last span ends, or zero when a span is open.
+func (spans intervals) latestEnd() time.Time {
+	var latest time.Time
+	for _, span := range spans {
+		if span.End.IsZero() {
+			return time.Time{}
+		}
+		if span.End.After(latest) {
+			latest = span.End
+		}
+	}
+	return latest
+}
+
+// earliest is the first moment any span covers; with no spans nothing
+// finished is listed, so it is now.
+func (spans intervals) earliest(now time.Time) time.Time {
+	earliest := now
+	for index, span := range spans {
+		if index == 0 || span.Start.Before(earliest) {
+			earliest = span.Start
+		}
+	}
+	return earliest
+}
+
 // Row is one job in the listing: an unfinished attempt of an active or
 // interrupted run, a job of such a run that has not started (with no
 // AttemptID), or a job that finished inside the window.
@@ -127,7 +176,13 @@ func Projects(baseDir, requested string) ([]string, error) {
 // finished within window before now. Each job's status follows the
 // internal/jobstatus fallback chain.
 func Collect(store state.Store, baseDir string, projects []string, now time.Time, window time.Duration) ([]Row, error) {
-	cutoff := now.Add(-window)
+	return CollectFinishedIn(store, baseDir, projects, now, []Interval{{Start: now.Add(-window)}})
+}
+
+// CollectFinishedIn is Collect for jobs that finished inside any of spans
+// rather than one window before now. Unfinished jobs are listed regardless.
+func CollectFinishedIn(store state.Store, baseDir string, projects []string, now time.Time, spans []Interval) ([]Row, error) {
+	finished := intervals(spans)
 	rows := make([]Row, 0)
 	for _, projectName := range projects {
 		paths, err := state.ResolveProjectPaths(baseDir, projectName)
@@ -160,7 +215,7 @@ func Collect(store state.Store, baseDir string, projects []string, now time.Time
 		collected := make([]runRows, len(runs))
 		state.ReadEach(len(runs), func(index int) {
 			name := runs[index].Name()
-			rows, include, _, err := collectRun(store, paths, name, name == activeRunID, now, cutoff)
+			rows, include, _, err := collectRun(store, paths, name, name == activeRunID, now, finished)
 			collected[index] = runRows{rows: rows, include: include, err: err}
 		})
 		// An older interrupted run can retain an unfinished attempt even
@@ -177,17 +232,30 @@ func Collect(store state.Store, baseDir string, projects []string, now time.Time
 	return rows, nil
 }
 
-func collectRun(store state.Store, paths state.ProjectPaths, runID string, active bool, now, cutoff time.Time) ([]Row, bool, bool, error) {
+func collectRun(store state.Store, paths state.ProjectPaths, runID string, active bool, now time.Time, finished intervals) ([]Row, bool, bool, error) {
 	runDir := filepath.Join(paths.RunsDir, runID)
+	cutoff := finished.earliest(now)
+	// startedAfterSpans is set for a finished run that started after every
+	// span ended. A job it ran and recorded a result for finished later
+	// still and is skipped unread; jobs carried from an earlier run keep
+	// their origin's times, and jobs without a result may be unfinished,
+	// so those are still read.
+	startedAfterSpans := false
 	if !active {
-		// A finished run outside the window is decided from its summary's
-		// head, before its other files are read.
+		// A run that finished before every span is decided from its
+		// summary's head, before its other files are read.
 		head, err := state.LoadRunSummaryHead(filepath.Join(runDir, "summary.json"))
 		if errors.Is(err, state.ErrNewerStateVersion) {
 			return nil, false, false, err
 		}
-		if finishedAt, parseErr := parseTimestamp(head.FinishedAt); err == nil && parseErr == nil && finishedAt.Before(cutoff) {
-			return nil, false, true, nil
+		if finishedAt, parseErr := parseTimestamp(head.FinishedAt); err == nil && parseErr == nil {
+			if finishedAt.Before(cutoff) {
+				return nil, false, true, nil
+			}
+			end := finished.latestEnd()
+			if startedAt, startErr := parseTimestamp(head.StartedAt); startErr == nil && !end.IsZero() && !startedAt.Before(end) {
+				startedAfterSpans = true
+			}
 		}
 	}
 	run, err := state.LoadRunSnapshot(runDir)
@@ -202,15 +270,18 @@ func collectRun(store state.Store, paths state.ProjectPaths, runID string, activ
 	resultByID := jobstatus.RecordedResults(run)
 	rows := make([]Row, 0)
 	for _, job := range model.QueueToJobs(runQueue.Commands) {
+		origin := runQueue.OriginOf(job.ID)
+		summaryResult, hasSummary := resultByID[job.ID]
+		if startedAfterSpans && origin == nil && hasSummary {
+			continue
+		}
 		latestAttemptID, jobDir, err := state.LatestAttempt(runDir, job.ID)
 		if err != nil {
 			continue
 		}
-		summaryResult, hasSummary := resultByID[job.ID]
 		resolved := jobstatus.ReadJob(store, jobDir, summaryResult, hasSummary)
 		statusOK := resolved.Finished()
 		displayStatus := resolved.DisplayStatus(model.JobSpec{ID: job.ID, Command: job.Command})
-		origin := runQueue.OriginOf(job.ID)
 		carried := runlineage.IsCarried(origin, latestAttemptID, resolved.Blocked(), hasSummary)
 		jobState := jobstatus.DisplayLabel(displayStatus, resolved.Accepted(), carried)
 		pending := displayStatus == jobstatus.StatusPending
@@ -234,10 +305,10 @@ func collectRun(store state.Store, paths state.ProjectPaths, runID string, activ
 		}
 		if statusOK {
 			if finishedErr == nil {
-				if finishedAt.Before(cutoff) {
+				if !finished.contains(finishedAt) {
 					continue
 				}
-			} else if startedAt.Before(cutoff) {
+			} else if !finished.contains(startedAt) {
 				continue
 			}
 		}
