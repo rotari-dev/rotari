@@ -1102,6 +1102,18 @@ which cannot age a run and so leaves the latest-run default to
 carried jobs by `TestCollectFinishedInKeepsCarriedJobsOfLaterRuns` in
 [internal/joblist/joblist_test.go](../internal/joblist/joblist_test.go).
 
+**WEB-24** A job that has started shows its latest attempt's ID from
+dispatch on, while it runs and before the run has a summary: in `/api/run`
+and the run page as on the Recent jobs page and in `rotari jobs`. A job
+without an attempt in the run, as a carried job, shows the attempt its
+recorded result names; a job not started yet shows none. Both pages take the
+ID from `jobstatus.AttemptID` in
+[internal/jobstatus/job.go](../internal/jobstatus/job.go); covered by
+`TestRunPageShowsRunningAttemptID` in
+[conformance/05-web/running_attempt_test.go](../conformance/05-web/running_attempt_test.go)
+and `TestLoadJobsShowsRunningAttemptID` in
+[internal/web/loader_test.go](../internal/web/loader_test.go).
+
 ## Editing rules
 
 - Edit HTML, CSS, and JavaScript in `internal/webui/assets/`, not in `webui.go`.

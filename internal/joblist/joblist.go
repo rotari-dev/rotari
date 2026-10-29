@@ -312,12 +312,7 @@ func collectRun(store state.Store, paths state.ProjectPaths, runID string, activ
 				continue
 			}
 		}
-		attemptID := latestAttemptID
-		if attemptID == "" {
-			if result, ok := resultByID[job.ID]; ok {
-				attemptID = result.AttemptID
-			}
-		}
+		attemptID := jobstatus.AttemptID(latestAttemptID, summaryResult, hasSummary)
 		if attemptID == "" && !pending {
 			continue
 		}

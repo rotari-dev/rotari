@@ -189,10 +189,7 @@ func LoadJobs(store state.Store, runDir string, files state.RunSnapshot, selecte
 		}
 		origin := origins[jobSpec.ID]
 		summaryResult, hasSummary := results[jobSpec.ID]
-		attemptID := jobSpec.AttemptID
-		if attemptID == "" && hasSummary {
-			attemptID = summaryResult.AttemptID
-		}
+		attemptID := jobstatus.AttemptID(latestAttemptID, summaryResult, hasSummary)
 		attempt := jobstatus.ReadAttempt(store, jobDir)
 		_, finalErr := os.Stat(filepath.Join(jobDir, state.FinalResultFileName))
 		job := Job{ID: jobSpec.ID, AttemptID: attemptID, AttemptDir: jobDir, Name: jobSpec.Name, Stage: jobSpec.Stage, Command: jobSpec.Command, Environment: jobSpec.Environment, WorkingDirectory: jobSpec.WorkingDirectory, Executor: jobSpec.Executor, ExecutorOptions: jobSpec.ExecutorOptions, LogMode: jobSpec.LogMode, DependsOn: jobSpec.DependsOn, DependsOnFinished: jobSpec.DependsOnFinished, Origin: origin, ArrayTaskID: jobSpec.ArrayTaskID, ArrayFirst: jobSpec.ArrayFirst, ArrayLast: jobSpec.ArrayLast, SchedulerState: attempt.SchedulerState, Final: hasSummary || finalErr == nil}

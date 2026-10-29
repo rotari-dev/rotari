@@ -189,6 +189,16 @@ func (job Job) Result(spec model.JobSpec) (model.JobResult, bool) {
 	return job.Attempt.Result(spec)
 }
 
+// AttemptID is the attempt a job's row shows: its latest attempt in the run,
+// which exists from dispatch on, or without one the attempt its recorded
+// result names, as for a carried job.
+func AttemptID(latestAttemptID string, recorded model.JobResult, hasRecorded bool) string {
+	if latestAttemptID == "" && hasRecorded {
+		return recorded.AttemptID
+	}
+	return latestAttemptID
+}
+
 // RecordedResults returns the results a run has recorded for its jobs, which
 // the chain reads as each job's run result: its summary's once it has one,
 // and before that the results it carries forward from earlier runs, which it

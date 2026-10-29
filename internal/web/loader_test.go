@@ -237,6 +237,32 @@ func TestBuildTimelineUsesRunStartSampleWhenSummaryStartedAtIsLate(t *testing.T)
 	}
 }
 
+func TestLoadJobsShowsRunningAttemptID(t *testing.T) {
+	runID := "20261029-120000-12345678"
+	runDir := filepath.Join(t.TempDir(), runID)
+	running := state.MakeAttemptID(runID, "running", 0)
+	writeTestFile(t, filepath.Join(runDir, "running", "attempts", running, "status.json"), `{"phase":"running"}`)
+	first := state.MakeAttemptID(runID, "retried", 0)
+	second := state.MakeAttemptID(runID, "retried", 1)
+	writeTestFile(t, filepath.Join(runDir, "retried", "attempts", first, "status"), "1")
+	writeTestFile(t, filepath.Join(runDir, "retried", "attempts", second, "status.json"), `{"phase":"running"}`)
+	queue := model.Queue{Commands: []model.QueuedCommand{
+		{ID: "running", Command: []string{"sleep", "10"}},
+		{ID: "retried", Command: []string{"sleep", "10"}},
+		{ID: "not-started", Command: []string{"true"}},
+	}}
+	jobs, err := loadJobs(state.NewStore(0o700, 0o600), runDir, queue, model.RunSummary{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{running, second, ""}
+	for index, attemptID := range want {
+		if jobs[index].AttemptID != attemptID {
+			t.Errorf("job %s attempt ID = %q, want %q", jobs[index].ID, jobs[index].AttemptID, attemptID)
+		}
+	}
+}
+
 func TestLoadJobsPrefersAttemptStatusOverSummary(t *testing.T) {
 	runDir := filepath.Join(t.TempDir(), "20260925-000000-00000000")
 	writeTestFile(t, filepath.Join(runDir, "job-1", "status"), "3")
