@@ -96,6 +96,12 @@ identifies its run, job, and exact execution without repeating the job ID.
 Those fields remain selectable. In browser notifications, the default `link`
 opens the exact run page; removing it disables click navigation.
 
+Each basedir in the sidebar has a bell that selects it for notifications;
+only the current basedir starts selected. With several basedirs registered,
+the bell beside the **Registered basedirs** heading selects all of them at
+once, or clears them when all are selected; it looks mixed while only some
+are selected. The selection lasts until `rotari web` restarts.
+
 The current basedir's `/api/state` is checked every two seconds. Selected other
 basedirs use `/api/active-runs`. Completed run details are not repeatedly
 loaded. Static exports have no server to load notification settings, so they

@@ -255,6 +255,24 @@ main {
   background: var(--accent-soft);
   color: var(--accent-text);
 }
+/* The heading bell is mixed while only some basedir bells are on. */
+.basedir-bell:has(input:indeterminate) {
+  border-color: var(--line);
+  color: var(--accent-text);
+}
+.basedir-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.basedir-heading .basedir-bell {
+  letter-spacing: normal;
+  text-transform: none;
+}
+.basedir-bell[hidden] {
+  display: none;
+}
 .basedir-bell:has(input:focus-visible) {
   outline: 2px solid var(--focus);
   outline-offset: 1px;

@@ -37,7 +37,9 @@
           href="__ROTARI_SEARCH_PATH__"
           >History search</a
         >
-        <div class="sidebar-section-heading">Registered basedirs</div>
+        <div class="sidebar-section-heading basedir-heading">
+          <span>Registered basedirs</span>__ROTARI_ALL_BASEDIRS_BELL__
+        </div>
         <div class="sidebar-section-note">
           State directories known to rotari
         </div>
@@ -348,6 +350,25 @@
               : selected.has(checkbox.dataset.basedirId);
           updateJobsNotificationTooltip(checkbox);
         });
+        updateAllJobsNotificationToggle();
+      }
+
+      // The heading bell is on when every basedir bell is on and mixed when
+      // only some are.
+      function updateAllJobsNotificationToggle() {
+        const all = document.querySelector(".basedir-notification-all");
+        if (!all) return;
+        const checkboxes = jobsNotificationCheckboxes();
+        const checked = checkboxes.filter((checkbox) => checkbox.checked);
+        all.checked =
+          checkboxes.length > 0 && checked.length === checkboxes.length;
+        all.indeterminate =
+          checked.length > 0 && checked.length < checkboxes.length;
+        const bell = all.closest(".basedir-bell");
+        bell.hidden = checkboxes.length < 2;
+        bell.title = all.checked
+          ? "Disable notifications for all basedirs"
+          : "Enable notifications for all basedirs";
       }
 
       function saveJobsNotificationTargets() {
@@ -418,6 +439,7 @@
       async function toggleJobsNotificationBasedir(checkbox) {
         updateJobsNotificationTooltip(checkbox);
         saveJobsNotificationTargets();
+        updateAllJobsNotificationToggle();
         const target = jobsNotificationTargets().find(
           (item) => item.id === checkbox.dataset.basedirId,
         );
@@ -427,6 +449,34 @@
         }
         const snapshot = await loadJobsNotificationSnapshot(target);
         if (snapshot) previousJobsActivity.set(target.id, snapshot);
+      }
+
+      async function toggleAllJobsNotificationBasedirs(all) {
+        const changed = jobsNotificationCheckboxes().filter(
+          (checkbox) => checkbox.checked !== all.checked,
+        );
+        changed.forEach((checkbox) => {
+          checkbox.checked = all.checked;
+          updateJobsNotificationTooltip(checkbox);
+        });
+        saveJobsNotificationTargets();
+        updateAllJobsNotificationToggle();
+        if (!all.checked) {
+          changed.forEach((checkbox) =>
+            previousJobsActivity.delete(checkbox.dataset.basedirId),
+          );
+          return;
+        }
+        await Promise.all(
+          changed.map(async (checkbox) => {
+            const target = {
+              id: checkbox.dataset.basedirId,
+              url: checkbox.dataset.jobsUrl,
+            };
+            const snapshot = await loadJobsNotificationSnapshot(target);
+            if (snapshot) previousJobsActivity.set(target.id, snapshot);
+          }),
+        );
       }
 
       restoreJobsNotificationTargets();

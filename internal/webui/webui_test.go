@@ -2092,6 +2092,7 @@ const dom = new JSDOM(html, {
 			requests.push(String(url));
 			if (url === '/api/state') return {ok: true, json: async () => state};
 			if (url === '/api/projects?basedir_id=' + process.argv[3]) return {ok: true, json: async () => ({projects: ['other-project']})};
+			if (url === '/_basedir/' + process.argv[3] + '/api/active-runs') return {ok: true, json: async () => ({queues: []})};
 			throw new Error('unexpected fetch: ' + url);
 		};
 		window.setInterval = () => 1;
@@ -2117,6 +2118,24 @@ setTimeout(async () => {
 		assert(!root.querySelector('.basedir-notification-toggle').checked, 'active basedir notification monitor unexpectedly turned back on after rerender');
 		root.querySelector('.basedir-notification-toggle').click();
 		assert(root.querySelector('.basedir-notification-toggle').checked, 'active basedir notification monitor cannot be switched back on');
+		// The heading bell turns every basedir bell on or off at once.
+		const allToggle = () => dom.window.document.querySelector('.basedir-notification-all');
+		const basedirToggles = () => [...dom.window.document.querySelectorAll('.basedir-notification-toggle')];
+		assert(allToggle() && !allToggle().closest('.basedir-bell').hidden, 'all-basedirs notification bell is missing');
+		assert(allToggle().indeterminate && !allToggle().checked, 'all-basedirs bell should be mixed while only some basedirs are monitored');
+		allToggle().click();
+		assert(basedirToggles().every(toggle => toggle.checked), 'all-basedirs bell did not turn on every basedir bell');
+		assert(allToggle().checked && !allToggle().indeterminate, 'all-basedirs bell is not on after turning every basedir on');
+		assert(allToggle().closest('.basedir-bell').title === 'Disable notifications for all basedirs', 'all-basedirs bell does not explain how to disable');
+		assert([...dom.window.selectedNotificationBasedirIDs()].sort().join() === [rootID, process.argv[3]].sort().join(), 'all-basedirs selection was not saved');
+		dom.window.renderSidebar(state.projects);
+		assert(basedirToggles().every(toggle => toggle.checked) && allToggle().checked, 'all-basedirs selection was lost after rerender');
+		allToggle().click();
+		assert(basedirToggles().every(toggle => !toggle.checked) && !allToggle().checked && !allToggle().indeterminate, 'all-basedirs bell did not turn off every basedir bell');
+		assert(dom.window.selectedNotificationBasedirIDs().size === 0, 'all-basedirs deselection was not saved');
+		dom.window.document.querySelector(rootSelector + ' .basedir-notification-toggle').click();
+		assert(allToggle().indeterminate, 'all-basedirs bell does not follow a single basedir bell');
+		root = dom.window.document.querySelector(rootSelector);
 		assert(root.querySelector('.sidebar-project:not(.basedir-entry) .sidebar-project-link.active')?.textContent.trim() === 'root-project', 'selected project is not active in the sidebar');
 		root.querySelector(':scope > .basedir-row .sidebar-toggle').click();
 		root = dom.window.document.querySelector(rootSelector);
@@ -2168,6 +2187,78 @@ setTimeout(async () => {
 `
 	if output, err := exec.Command("node", "-e", script, pagePath, statePath, otherID, rootID).CombinedOutput(); err != nil {
 		t.Fatalf("basedir sidebar check failed: %v\n%s", err, output)
+	}
+}
+
+// The Recent jobs page's heading bell turns every basedir bell on or off at
+// once, as on the application page.
+func TestWebJobsPageTogglesAllBasedirNotifications(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not installed")
+	}
+	rootBaseDir, otherBaseDir := t.TempDir(), t.TempDir()
+	options := testOptions(rootBaseDir, false)
+	options.BaseDirs = []string{otherBaseDir}
+	request := httptest.NewRequest(http.MethodGet, "/jobs/", nil)
+	response := httptest.NewRecorder()
+	Handler(options).ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("GET /jobs/ status = %d: %s", response.Code, response.Body.String())
+	}
+	pagePath := filepath.Join(t.TempDir(), "jobs.html")
+	if err := os.WriteFile(pagePath, response.Body.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := `
+const fs = require('fs');
+const { JSDOM, VirtualConsole } = require('jsdom');
+const html = fs.readFileSync(process.argv[1], 'utf8');
+const requests = [];
+const errors = [];
+const virtualConsole = new VirtualConsole();
+virtualConsole.on('jsdomError', error => errors.push(error.stack || String(error)));
+const dom = new JSDOM(html, {
+	runScripts: 'dangerously',
+	url: 'http://127.0.0.1/jobs/',
+	virtualConsole,
+	beforeParse(window) {
+		window.fetch = async url => {
+			requests.push(String(url));
+			return {ok: true, text: async () => '<table></table>'};
+		};
+		window.setInterval = () => 1;
+	},
+});
+setTimeout(async () => {
+	const assert = (condition, message) => { if (!condition) throw new Error(message); };
+	try {
+		const document = dom.window.document;
+		const all = document.querySelector('.sidebar-section-heading .basedir-notification-all');
+		const toggles = [...document.querySelectorAll('.basedir-notification-toggle')];
+		assert(toggles.length === 2, 'Recent jobs does not show both basedir bells');
+		assert(all && !all.closest('.basedir-bell').hidden, 'all-basedirs bell is missing');
+		assert(toggles.filter(toggle => toggle.checked).length === 1 && all.indeterminate, 'all-basedirs bell should be mixed while only the current basedir is monitored');
+		all.click();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert(toggles.every(toggle => toggle.checked) && all.checked && !all.indeterminate, 'all-basedirs bell did not turn on every basedir bell');
+		const other = toggles.find(toggle => !toggle.closest('.basedir-entry').classList.contains('expanded'));
+		assert(requests.includes(other.dataset.jobsUrl), 'newly monitored basedir was not initialized from its current jobs');
+		const key = Object.keys(dom.window.localStorage).find(name => name.startsWith('rotari-notification-basedirs:'));
+		assert(JSON.parse(dom.window.localStorage.getItem(key)).length === 2, 'all-basedirs selection was not saved');
+		all.click();
+		assert(toggles.every(toggle => !toggle.checked) && !all.checked, 'all-basedirs bell did not turn off every basedir bell');
+		assert(JSON.parse(dom.window.localStorage.getItem(key)).length === 0, 'all-basedirs deselection was not saved');
+		other.click();
+		assert(all.indeterminate, 'all-basedirs bell does not follow a single basedir bell');
+		if (errors.length) throw new Error(errors.join('\n'));
+	} catch (error) {
+		console.error(error.stack || String(error));
+		process.exit(1);
+	}
+}, 50);
+`
+	if output, err := exec.Command("node", "-e", script, pagePath).CombinedOutput(); err != nil {
+		t.Fatalf("Recent jobs all-basedirs bell check failed: %v\n%s", err, output)
 	}
 }
 

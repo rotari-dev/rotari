@@ -403,6 +403,40 @@ function restoreNotificationBasedirs() {
           : selected.has(checkbox.dataset.basedirId);
       updateNotificationTooltip(checkbox);
     });
+  updateAllNotificationToggle();
+}
+// updateAllNotificationToggle shows the heading bell as on when every
+// basedir bell is on and as mixed when only some are.
+function updateAllNotificationToggle() {
+  const all = document.querySelector(".basedir-notification-all");
+  if (!all) return;
+  const checkboxes = [
+    ...document.querySelectorAll(".basedir-notification-toggle"),
+  ];
+  const checked = checkboxes.filter((checkbox) => checkbox.checked).length;
+  all.checked = checkboxes.length > 0 && checked === checkboxes.length;
+  all.indeterminate = checked > 0 && checked < checkboxes.length;
+  const bell = all.closest(".basedir-bell");
+  bell.hidden = checkboxes.length < 2;
+  bell.title = all.checked
+    ? "Disable notifications for all basedirs"
+    : "Enable notifications for all basedirs";
+}
+function toggleAllNotificationBasedirs(all) {
+  const selected = selectedNotificationBasedirIDs() || new Set();
+  document
+    .querySelectorAll(".basedir-notification-toggle")
+    .forEach((checkbox) => {
+      checkbox.checked = all.checked;
+      if (all.checked) selected.add(checkbox.dataset.basedirId);
+      else selected.delete(checkbox.dataset.basedirId);
+      updateNotificationTooltip(checkbox);
+    });
+  selectedNotificationBasedirIDsState = selected;
+  localStorage.setItem(notificationBasedirsKey, JSON.stringify([...selected]));
+  updateAllNotificationToggle();
+  if (typeof refreshOtherBasedirNotifications === "function")
+    refreshOtherBasedirNotifications();
 }
 function updateNotificationTooltip(checkbox) {
   const text = checkbox.checked
@@ -424,6 +458,7 @@ function toggleNotificationBasedir(checkbox) {
   selectedNotificationBasedirIDsState = selected;
   localStorage.setItem(notificationBasedirsKey, JSON.stringify([...selected]));
   updateNotificationTooltip(checkbox);
+  updateAllNotificationToggle();
   if (typeof refreshOtherBasedirNotifications === "function")
     refreshOtherBasedirNotifications();
 }

@@ -117,6 +117,13 @@ func basedirBellHTML(entry webBaseDir, extra, onchange string) string {
 		html.EscapeString(entry.ID) + `"` + extra + ` aria-label="Notify about runs in this basedir" onchange="` + onchange + `(this)" />` + bellIconSVG + `</label>`
 }
 
+// allBasedirsBellHTML is the switch beside the Registered basedirs heading
+// that turns every basedir bell on or off at once. It stays hidden until the
+// page's script finds more than one basedir bell.
+func allBasedirsBellHTML(onchange string) string {
+	return `<label class="basedir-bell basedir-bell-all" title="Enable notifications for all basedirs" hidden><input class="basedir-notification-all" type="checkbox" aria-label="Notify about runs in all basedirs" onchange="` + onchange + `(this)" />` + bellIconSVG + `</label>`
+}
+
 const bellIconSVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg>`
 
 func composeWebHTML(executors []string, notifications bool, bootstrap string, basedirLists ...[]webBaseDir) string {
@@ -147,6 +154,7 @@ func composeWebHTMLWithNotificationSettings(executors []string, notifications bo
 	template := strings.Replace(webTemplateHTML, "__ROTARI_SHELL_SCRIPT__", webShellJS, 1)
 	template = strings.Replace(template, "__ROTARI_WEB_APP__", webAppJS, 1)
 	template = strings.Replace(template, "__ROTARI_BASEDIRS__", string(basedirJSON), 1)
+	template = strings.Replace(template, "__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllNotificationBasedirs"), 1)
 	template = strings.Replace(template, "__ROTARI_EXECUTORS__", string(executorJSON), 1)
 	template = strings.Replace(template, "__ROTARI_STATUS_TONES__", statusTonesJSON(), 1)
 	template = strings.ReplaceAll(template, "__ROTARI_BRAND_ICON__", brandIcon())
@@ -219,6 +227,7 @@ func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row,
 		writeJobsSidebarProjects(&sidebar, homePath, projects)
 	}
 	template := strings.Replace(jobsTemplateHTML, "__ROTARI_JOBS_PROJECTS__", sidebar.String(), 1)
+	template = strings.Replace(template, "__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllJobsNotificationBasedirs"), 1)
 	if len(basedirLists) > 0 {
 		template = strings.Replace(template, "__ROTARI_BASEDIR_SCROLL_KEY__", currentBasedirScrollID(basedirLists[0]), 1)
 	} else {

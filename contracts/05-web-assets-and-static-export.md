@@ -298,7 +298,12 @@ and the server-rendered Recent jobs page.
 Each basedir row has a notification monitor checkbox, drawn as a bell. The selected basedir IDs
 are stored in browser local storage under a key scoped to the current Web
 server session. Restarting `rotari web` therefore discards the extra selected
-basedirs and returns monitoring to the current basedir. The application page
+basedirs and returns monitoring to the current basedir. When more than one
+basedir is listed, a bell beside the `Registered basedirs` heading turns every
+basedir's checkbox on, or off when all are already on; it shows a mixed state
+while only some are on, and the selection it makes is stored the same way
+(`TestWebSidebarLazilyListsProjectsInOtherBasedirs`,
+`TestWebJobsPageTogglesAllBasedirNotifications`). The application page
 polls `/api/state` for its mounted basedir and `/api/active-runs` for each
 other selected basedir; the server-rendered Recent jobs page polls the Recent
 jobs endpoint. A newly selected basedir is
