@@ -91,7 +91,7 @@ job_failure = true
 job_success = false
 run_failure = true
 run_success = true
-fields = ["project", "run_id", "run_name", "run_status", "job_name", "attempt_id", "job_status", "exit_code", "diagnosis_name", "diagnosis_suggestion", "link"]
+fields = ["project", "job_name", "job_status", "exit_code", "diagnosis_name", "diagnosis_suggestion", "run_name", "run_status", "run_id", "attempt_id", "link"]
 max_jobs = 10
 ```
 
@@ -105,8 +105,10 @@ truncated at 1000 characters.
 
 The defaults include `run_id`, `job_name`, and `attempt_id` so a notification
 identifies its run, job, and exact execution without repeating the job ID.
-Those fields remain selectable. In browser notifications, the default `link`
-opens the exact run page; removing it disables click navigation.
+Fields appear in the order listed, so the defaults lead with the project, job
+name, and outcome and leave the IDs last. Those fields remain selectable. In
+browser notifications, the default `link` opens the exact run page; removing it
+disables click navigation.
 
 Each basedir in the sidebar has a bell that selects it for notifications;
 only the current basedir starts selected. With several basedirs registered,
@@ -143,7 +145,7 @@ job_failure = true
 job_success = false
 run_failure = true
 run_success = true
-fields = ["project", "run_id", "run_name", "run_status", "job_name", "attempt_id", "job_status", "exit_code", "success_count", "failure_count", "duration", "diagnosis_name", "diagnosis_suggestion"]
+fields = ["project", "job_name", "job_status", "exit_code", "diagnosis_name", "diagnosis_suggestion", "run_name", "run_status", "success_count", "failure_count", "duration", "run_id", "attempt_id"]
 max_jobs = 20
 ```
 

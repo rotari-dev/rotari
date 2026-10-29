@@ -95,6 +95,17 @@ func TestDefaultNotificationFieldsIncludeRunAndAttemptIDs(t *testing.T) {
 		if channel == "webhook" && !selected["link"] {
 			t.Errorf("%s default fields do not include link: %v", channel, fields)
 		}
+		position := make(map[string]int, len(fields))
+		for index, field := range fields {
+			position[field] = index
+		}
+		for _, name := range []string{"project", "job_name"} {
+			for _, id := range []string{"run_id", "attempt_id"} {
+				if position[name] > position[id] {
+					t.Errorf("%s default fields list %q after %q: %v", channel, name, id, fields)
+				}
+			}
+		}
 	}
 }
 
