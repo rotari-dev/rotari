@@ -204,6 +204,8 @@ async function open(search) {
     url: 'http://localhost/jobs/' + search,
     runScripts: 'dangerously',
     beforeParse(window) {
+      // The page reads the same now, so its bar starts at now - 7d.
+      window.Date.now = () => now;
       window.fetch = async url => {
         fetched.push(url);
         return { ok: true, json: async () => ({ runs: [
@@ -247,13 +249,14 @@ const param = (url, name) => new URL('http://localhost' + url).searchParams.get(
   let from = Date.parse(param(url, 'from')), to = Date.parse(param(url, 'to'));
   const start = now - 7 * day;
   if (from % hour || to % hour || Math.abs(from - (start + 3.5 * day)) > hour || Math.abs(to - (start + 5.25 * day)) > hour || param(url, 'window') !== null) fail('drag', url);
-  // A click selects the local (here UTC) day under it.
+  // A click selects the local (here UTC) day under where it is released.
   page.pointer(page.bar, 'pointerdown', 500);
   page.pointer(page.bar, 'pointerup', 501);
   url = page.visited.pop();
   from = Date.parse(param(url, 'from'));
   to = Date.parse(param(url, 'to'));
-  if (from % day || to - from !== day || from > start + 3.5 * day || to <= start + 3.5 * day) fail('click', url);
+  const clicked = start + 0.501 * 7 * day;
+  if (from % day || to - from !== day || from > clicked || to <= clicked) fail('click', url);
   presets[0].click();
   views[2].click();
   page.document.querySelector('[aria-label="Earlier"]').click();
