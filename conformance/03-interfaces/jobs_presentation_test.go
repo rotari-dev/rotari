@@ -49,6 +49,8 @@ func TestJobsWindowAcceptsDays(t *testing.T) {
 	web := e.StartWeb()
 	if got := e.HTTPGet(web + "/jobs/?since=7d"); got.Status != 200 || !strings.Contains(got.Body, run.BadAttempt) {
 		t.Fatalf("GET /jobs/?since=7d: status %d, want 200 listing %s", got.Status, run.BadAttempt)
+	} else if !strings.Contains(got.Body, "jobs finished in the last 7d") {
+		t.Fatalf("GET /jobs/?since=7d does not describe the 7d window:\n%s", got.Body)
 	}
 }
 

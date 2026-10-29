@@ -193,6 +193,18 @@ func jobsHTML(homePath string, projects []string, rows []joblist.Row, since stri
 	return jobsHTMLWithSession(homePath, projects, rows, since, canFilter, notifications, "", basedirLists...)
 }
 
+// jobsScopeText describes the listing window the page shows. Callers pass
+// since already validated by joblist.ParseSince; empty means the default.
+func jobsScopeText(since string) string {
+	if since == "" {
+		since = joblist.DefaultSinceText
+	}
+	if window, err := joblist.ParseSince(since); err == nil && window == 0 {
+		return "Unfinished jobs"
+	}
+	return "Unfinished jobs and jobs finished in the last " + since
+}
+
 func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row, since string, canFilter, notifications bool, notificationSession string, basedirLists ...[]webBaseDir) string {
 	var builder strings.Builder
 	if canFilter {
@@ -229,6 +241,7 @@ func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row,
 	}
 	crumbs.WriteString(`<span class="crumb-here">Job activity</span>`)
 	template = strings.Replace(template, "__ROTARI_JOBS_CRUMBS__", crumbs.String(), 1)
+	template = strings.Replace(template, "__ROTARI_JOBS_SCOPE__", html.EscapeString(jobsScopeText(since)), 1)
 	template = strings.Replace(template, "__ROTARI_JOBS_NOTIFICATION_CONTROL__", notificationControl, 1)
 	template = strings.Replace(template, "__ROTARI_JOBS_TOOLBAR__", toolbar, 1)
 	template = strings.Replace(template, "__ROTARI_JOBS_LIVE__", strconv.FormatBool(canFilter), 1)

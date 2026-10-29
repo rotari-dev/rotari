@@ -281,7 +281,8 @@ does not promise to detect a lost remote client.
   `1d`; running jobs and active, interrupted, or incomplete runs are included regardless of
   age. `jobs --since 0` keeps unfinished jobs and excludes finished history;
   use `--running` or `--filter-running` to select only running-state jobs.
-  All three interfaces parse it with
+  The Web jobs page states the window it applied under its title rather than
+  a fixed default. All three interfaces parse it with
   `joblist.ParseSince` in [`internal/joblist/joblist.go`](../internal/joblist/joblist.go),
   with the end-to-end check in
   [`conformance/03-interfaces/jobs_presentation_test.go`](../conformance/03-interfaces/jobs_presentation_test.go).

@@ -27,3 +27,27 @@ func TestJobsHTMLShowsCommandUnderJobAndAttemptByItsEnd(t *testing.T) {
 		t.Error("jobs page still has a separate Command column")
 	}
 }
+
+// The Job activity subtitle names the window the page lists, not a fixed
+// default.
+func TestJobsHTMLDescribesSinceWindow(t *testing.T) {
+	for _, test := range []struct {
+		since string
+		want  string
+	}{
+		{"", "Unfinished jobs and jobs finished in the last 1d"},
+		{joblist.DefaultSinceText, "Unfinished jobs and jobs finished in the last 1d"},
+		{"7d", "Unfinished jobs and jobs finished in the last 7d"},
+		{"90m", "Unfinished jobs and jobs finished in the last 90m"},
+		{"0", "Unfinished jobs<"},
+		{"0s", "Unfinished jobs<"},
+	} {
+		page := jobsHTML("/", nil, nil, test.since, true, false)
+		if !strings.Contains(page, `<div class="facts">`+test.want) {
+			t.Errorf("since %q: jobs page lacks subtitle %q", test.since, test.want)
+		}
+		if strings.Contains(page, "24 hours") {
+			t.Errorf("since %q: jobs page still names a fixed 24-hour window", test.since)
+		}
+	}
+}

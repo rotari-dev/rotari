@@ -504,10 +504,12 @@ A command that serves HTTP, such as TensorBoard, opens through the
 
 ### What does the Job activity link show?
 
-It lists running jobs and jobs that finished during the preceding 24 hours,
-using the same default scope as `rotari jobs`. Select a job name to open its
-run page. `rotari jobs PROJECT` narrows the CLI list to one project. Enter a Go
-duration such as `6h` or `168h` in `Since` to change the completed-job window.
+It lists unfinished jobs and jobs that finished within the `Since` window,
+which defaults to `1d` as in `rotari jobs`; the line under the page title
+names the window in effect. Select a job name to open its run page.
+`rotari jobs PROJECT` narrows the CLI list to one project. Enter a Go duration
+such as `6h` or `168h`, or whole days such as `7d`, in `Since` to change the
+completed-job window.
 
 ### Where did I run jobs recently?
 
