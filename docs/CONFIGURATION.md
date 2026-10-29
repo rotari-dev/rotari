@@ -197,7 +197,10 @@ replaces the global file entirely: an omitted webhook URL does not inherit a
 global destination; omitted fields use notification built-in defaults.
 Notification snapshots remain separate files and are included in the run's
 read-only **View config snapshot** view.
-Generate one with:
+
+The simplest way to edit it is **Settings** → **Notification config** in
+`rotari web`, which edits the file in effect as a form and can create one when
+none exists. From the command line, generate one with:
 
 ```sh
 rotari config --notifications

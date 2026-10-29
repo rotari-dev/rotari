@@ -132,7 +132,7 @@ Run `rotari config`, or use `--output FILE` to save a template. Each run saves t
 
 ### How can I notify another service when a run or job finishes?
 
-Generate `notifications.toml` with `rotari config --notifications`, then set `webhook.url` there or `ROTARI_WEBHOOK_URL`. Use `job_failure`, `job_success`, `run_failure`, and `run_success` to choose the events; jobs are reported once, after their retries end. Slack, Teams, and Discord formats are supported; see [Notifications](NOTIFICATIONS.md#webhook-notifications).
+The easiest way is **Settings** → **Notification config** in `rotari web`, which creates and edits `notifications.toml` as a form. Alternatively, generate the file with `rotari config --notifications`, then set `webhook.url` there or `ROTARI_WEBHOOK_URL`. Use `job_failure`, `job_success`, `run_failure`, and `run_success` to choose the events; jobs are reported once, after their retries end. Slack, Teams, and Discord formats are supported; see [Notifications](NOTIFICATIONS.md#webhook-notifications).
 
 ### How are concurrency and executor options selected?
 

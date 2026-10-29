@@ -6,9 +6,21 @@ Rotari supports local in-page and browser desktop notifications and outbound Web
 notifications. Both channels are configured in `notifications.toml` and use
 the same event and field vocabulary, while keeping independent settings.
 
-Generate the file with `rotari config --notifications`, or edit it from the
-Web UI's **Notifications** button. Rotari uses the first file it finds in the
-project, the basedir, then the global config directory; scopes are not merged.
+The Web UI is the easiest way to change these settings. In `rotari web`, open
+**Settings** on a project or run page and choose **Notification config**. It
+edits both channels' events, fields, `max_jobs`, and Webhook destination as a
+form, and saves to the file that is currently in effect. When no file exists
+yet, it offers the global, basedir, and (on a project) project locations to
+create one from the template; **Generate notification config** creates or
+replaces a template at a chosen location. A saved Webhook URL is never sent
+back to the browser: the field only says that one is set, and you can replace
+or clear it. Saving and generating need a live server with control enabled
+(the default); a server started with `--allow-control=false` and static
+exports cannot write.
+
+From the command line, generate the file with `rotari config --notifications`
+and edit it directly. Rotari uses the first file it finds in the project, the
+basedir, then the global config directory; scopes are not merged.
 
 This is deliberately different from ordinary command configuration, which
 merges global → cwd workspace → basedir → project files (see
