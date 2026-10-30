@@ -23,12 +23,12 @@ const FileName = "notifications.toml"
 // happened to which job first, then run context and details, and opaque IDs
 // last. Defaults follow it, and the Web UI editor offers fields in this order.
 var fieldOrder = []string{
-	"project", "job_name", "job_status", "exit_code", "error",
-	"diagnosis_name", "diagnosis_suggestion", "diagnosis_evidence",
-	"diagnosis_status", "diagnosis_rules", "diagnosis_outdated",
+	"project", "job_name", "job_status", "exit_code", "error", "diagnosis_name",
+	"command", "started_at", "finished_at", "duration",
 	"run_name", "run_status", "success_count", "failure_count", "total_count",
-	"duration", "started_at", "finished_at", "stage", "array_task_id",
-	"executor", "hosts", "working_directory", "command",
+	"diagnosis_suggestion", "diagnosis_evidence", "diagnosis_status",
+	"diagnosis_rules", "diagnosis_outdated", "stage", "array_task_id",
+	"executor", "hosts", "working_directory",
 	"run_id", "job_id", "attempt_id", "link",
 }
 
@@ -97,13 +97,13 @@ func Defaults() Settings {
 		Webhook: WebhookSettings{
 			ChannelSettings: ChannelSettings{
 				JobFailure: true, RunFailure: true, RunSuccess: true, MaxJobs: 20,
-				Fields: []string{"project", "job_name", "job_status", "exit_code", "diagnosis_name", "diagnosis_suggestion", "run_name", "run_status", "success_count", "failure_count", "duration", "run_id", "attempt_id", "link"},
+				Fields: []string{"project", "job_name", "job_status", "exit_code", "diagnosis_name", "command", "started_at", "run_name", "run_status", "success_count", "failure_count", "run_id", "attempt_id", "link"},
 			},
 			Format: "json",
 		},
 		Browser: ChannelSettings{
 			JobFailure: true, RunFailure: true, RunSuccess: true, MaxJobs: 10,
-			Fields: []string{"project", "job_name", "job_status", "exit_code", "diagnosis_name", "diagnosis_suggestion", "run_name", "run_status", "run_id", "attempt_id", "link"},
+			Fields: []string{"project", "job_name", "job_status", "exit_code", "diagnosis_name", "command", "started_at", "run_name", "run_status", "run_id", "attempt_id", "link"},
 		},
 	}
 }

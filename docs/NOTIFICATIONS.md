@@ -94,7 +94,7 @@ job_failure = true
 job_success = false
 run_failure = true
 run_success = true
-fields = ["project", "job_name", "job_status", "exit_code", "diagnosis_name", "diagnosis_suggestion", "run_name", "run_status", "run_id", "attempt_id", "link"]
+fields = ["project", "job_name", "job_status", "exit_code", "diagnosis_name", "command", "started_at", "run_name", "run_status", "run_id", "attempt_id", "link"]
 max_jobs = 10
 ```
 
@@ -109,7 +109,7 @@ truncated at 1000 characters.
 The defaults include `run_id`, `job_name`, and `attempt_id` so a notification
 identifies its run, job, and exact execution without repeating the job ID.
 Fields appear in the order listed, so the defaults lead with the project, job
-name, and outcome and leave the IDs last. Those fields remain selectable. In
+name, outcome, command, and start time and leave the IDs last. Those fields remain selectable. In
 browser notifications, the default `link` opens the exact run page; removing it
 disables click navigation.
 
@@ -148,7 +148,7 @@ job_failure = true
 job_success = false
 run_failure = true
 run_success = true
-fields = ["project", "job_name", "job_status", "exit_code", "diagnosis_name", "diagnosis_suggestion", "run_name", "run_status", "success_count", "failure_count", "duration", "run_id", "attempt_id"]
+fields = ["project", "job_name", "job_status", "exit_code", "diagnosis_name", "command", "started_at", "run_name", "run_status", "success_count", "failure_count", "run_id", "attempt_id"]
 max_jobs = 20
 ```
 
@@ -261,9 +261,9 @@ For Make, Zapier, Pipedream, or an internal HTTP service, use the default
 
 Both channels independently select job failures, job successes, run failures,
 and run successes. `fields` selects values in display order; the default
-order leads with the project, job name, and outcome and ends with `run_id`,
-`job_id`, `attempt_id`, and `link`. Fields that do
-not apply to an event are omitted, and multiple diagnoses produce repeated
+order leads with the project, job name, outcome, command, and start time and
+ends with `run_id`, `job_id`, `attempt_id`, and `link`. Fields that do not
+apply to an event are omitted, and multiple diagnoses produce repeated
 diagnosis fields. The event type, payload schema version, and creation time are
 always present in generic JSON.
 
@@ -281,6 +281,7 @@ selected output fields.
 | Diagnosis | `diagnosis_status`, `diagnosis_name`, `diagnosis_evidence`, `diagnosis_suggestion`, `diagnosis_rules`, `diagnosis_outdated` |
 | Navigation | `link` |
 
-`working_directory`, `command`, and `diagnosis_evidence` can contain sensitive
-or lengthy values, so they are disabled by default. Environment variables and
-executor options cannot be selected.
+`working_directory` and `diagnosis_evidence` can contain sensitive or lengthy
+values, so they are disabled by default. `command` is enabled by default for
+both channels; remove it from `webhook.fields` if command lines must not leave
+the host. Environment variables and executor options cannot be selected.
