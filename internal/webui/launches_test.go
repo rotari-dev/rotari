@@ -981,7 +981,7 @@ func TestLaunchAvailabilityForATarget(t *testing.T) {
 		}
 		matched = append(matched, strings.Join(target.Commands, ",")+"|"+strings.Join(viewers, ","))
 	}
-	if got, want := strings.Join(matched, " "), "App,Cat| Cat|Table viewer Count|Table viewer App,Cat|"; got != want {
+	if got, want := strings.Join(matched, " "), "App,Cat|Table viewer Cat|Table viewer Count|Table viewer App,Cat|Table viewer"; got != want {
 		t.Errorf("targets = %s, want %s", got, want)
 	}
 	for _, query := range []string{"target=file", "target=socket:x", "target=" + strings.Repeat("&target=file:x", maxLaunchTargets)} {

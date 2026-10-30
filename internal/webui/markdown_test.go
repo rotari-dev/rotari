@@ -80,7 +80,7 @@ const want = [
   '<blockquote><p>quoted</p></blockquote>',
   '<thead><tr><th>Job</th><th>LR</th><th>Last log line</th></tr></thead>',
   '<td>train</td><td><code>0.1</code></td><td><code>ValueError: a | ` + "`b`" + `</code></td>',
-  '<pre><code>[&quot;sh&quot;,&quot;-c&quot;,&quot;echo &lt;b&gt;&quot;]</code></pre>',
+	'<pre><code class="tv-markdown-code">[&quot;sh&quot;,&quot;-c&quot;,&quot;echo &lt;b&gt;&quot;]</code></pre>',
 ];
 for (const piece of want) {
   if (!html.includes(piece)) throw new Error('missing ' + piece + '\n' + html);
