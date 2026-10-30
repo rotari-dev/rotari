@@ -43,8 +43,8 @@ func projectRunner() projectrun.Runner {
 		},
 		RegisterRun: registerRun,
 		Diagnose:    diagnoseJobResult,
-		JobFinished: webhookNotifications.JobFinished,
-		RunFinished: webhookNotifications.RunFinished,
+		JobFinished: runNotifications.JobFinished,
+		RunFinished: runNotifications.RunFinished,
 	}
 }
 

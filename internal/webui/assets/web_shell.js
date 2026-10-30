@@ -39,12 +39,55 @@
     setMenuOpen(document.getElementById("settings-panel")?.hidden ?? false);
   window.closeSettingsMenu = () => setMenuOpen(false);
 
-  const inbox = [];
+  // The inbox shows the notifications runs recorded for the selected
+  // basedirs, read from /api/notifications on every 2-second poll. Its read
+  // and cleared cursors are shared through the server; on a read-only server
+  // they stay in page memory. Entries seen for the first time after the
+  // first poll of a selection are announced and passed to options.desktop;
+  // history, including that of a newly selected basedir, is not.
+  const zeroCursor = { created_at: "", id: "" };
+  const after = (a, b) =>
+    a.created_at !== b.created_at ? a.created_at > b.created_at : a.id > b.id;
+  const later = (a, b) => (after(a, b) ? a : b);
+  let inbox = [];
+  let inboxProblems = [];
+  let inboxError = "";
+  let serverState = { read: zeroCursor, cleared: zeroCursor };
+  let localState = { read: zeroCursor, cleared: zeroCursor };
+  const seen = new Set();
+  let selectionKey = null;
   let inboxPanel;
   let inboxButton;
-  window.initializeNotificationInbox = () => {
+  let inboxOptions;
+  const inboxState = () => {
+    const cleared = later(serverState.cleared, localState.cleared);
+    return {
+      cleared,
+      read: later(later(serverState.read, localState.read), cleared),
+    };
+  };
+  // saveInboxState advances the shared cursors, or the page's own when the
+  // server cannot save them.
+  const saveInboxState = async (next) => {
+    localState = {
+      read: later(localState.read, next.read),
+      cleared: later(localState.cleared, next.cleared),
+    };
+    try {
+      const response = await fetch("/api/notifications/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      if (response.ok) serverState = await response.json();
+    } catch (error) {
+      // The page keeps its own cursors until the server is reachable.
+    }
+  };
+  window.initializeNotificationInbox = (options) => {
     const toggle = document.getElementById("notify-toggle");
     if (!toggle || inboxButton) return;
+    inboxOptions = options;
     const container = document.createElement("div");
     container.className = "notification-inbox";
     inboxButton = document.createElement("button");
@@ -67,13 +110,32 @@
     container.append(inboxButton, inboxPanel, announcement);
     inboxPanel.append(clear, list);
     toggle.before(container);
+    const visible = () =>
+      inbox.filter((item) => after(item, inboxState().cleared));
+    const markRead = () => {
+      const newest = visible()[0];
+      if (newest && after(newest, inboxState().read))
+        saveInboxState({
+          read: { created_at: newest.created_at, id: newest.id },
+          cleared: inboxState().cleared,
+        });
+    };
     const render = () => {
-      const unread = inbox.filter((item) => !item.read).length;
+      const entries = visible();
+      const read = inboxState().read;
+      const unread = entries.filter((item) => after(item, read)).length;
       inboxButton.textContent = "Inbox (" + unread + ")";
       inboxButton.classList.toggle("notifications-on", unread > 0);
       list.replaceChildren();
-      if (!inbox.length) list.textContent = "No notifications yet.";
-      for (const item of inbox) {
+      for (const message of [inboxError, ...inboxProblems]) {
+        if (!message) continue;
+        const note = document.createElement("p");
+        note.className = "notification-inbox-error";
+        note.textContent = message;
+        list.append(note);
+      }
+      if (!entries.length) list.append("No notifications yet.");
+      for (const item of entries) {
         const entry = document.createElement("article");
         const title = document.createElement(item.url ? "a" : "strong");
         title.textContent = item.title;
@@ -84,14 +146,65 @@
         list.append(entry);
       }
     };
+    const load = async () => {
+      const ids = [...new Set(inboxOptions.basedirIDs())].sort();
+      const key = ids.join(",");
+      const baseline = key !== selectionKey;
+      let data = { entries: [], read: zeroCursor, cleared: zeroCursor };
+      if (ids.length) {
+        let response;
+        try {
+          response = await fetch(
+            "/api/notifications?" + new URLSearchParams({ basedirs: key }),
+            { cache: "no-store" },
+          );
+        } catch (error) {
+          return; // Keep polling after temporary network failures.
+        }
+        if (!response.ok) {
+          inboxError =
+            "Cannot load notifications: " + (await response.text()).trim();
+          render();
+          return;
+        }
+        data = await response.json();
+        if (!Array.isArray(data.entries) || !data.read || !data.cleared)
+          throw new Error("unexpected response from /api/notifications");
+      }
+      inboxError = "";
+      selectionKey = key;
+      serverState = { read: data.read, cleared: data.cleared };
+      inboxProblems = (data.problems || []).map(
+        (problem) => "Unreadable notification record: " + problem,
+      );
+      const arrived = data.entries.filter((item) => !seen.has(item.id));
+      data.entries.forEach((item) => seen.add(item.id));
+      inbox = data.entries;
+      const announced = baseline
+        ? []
+        : arrived.filter((item) => after(item, inboxState().cleared));
+      if (announced.length) {
+        announcement.textContent = announced[0].title;
+        announced
+          .slice()
+          .reverse()
+          .forEach((item) => inboxOptions.desktop?.(item));
+        if (!inboxPanel.hidden) markRead();
+      }
+      render();
+    };
     inboxButton.onclick = () => {
       inboxPanel.hidden = !inboxPanel.hidden;
       inboxButton.setAttribute("aria-expanded", String(!inboxPanel.hidden));
-      if (!inboxPanel.hidden) inbox.forEach((item) => (item.read = true));
+      if (!inboxPanel.hidden) markRead();
       render();
     };
     clear.onclick = () => {
-      inbox.length = 0;
+      const newest = visible()[0];
+      if (newest) {
+        const cursor = { created_at: newest.created_at, id: newest.id };
+        saveInboxState({ read: cursor, cleared: cursor });
+      }
       render();
     };
     document.addEventListener("keydown", (event) => {
@@ -101,13 +214,17 @@
         inboxButton.focus();
       }
     });
-    window.addInboxNotification = (title, body, url) => {
-      inbox.unshift({ title, body, url, read: !inboxPanel.hidden });
-      inbox.length = Math.min(inbox.length, 50);
-      announcement.textContent = title;
-      render();
-    };
+    const poll = () =>
+      load().catch((error) => {
+        inboxError = "Cannot load notifications: " + error;
+        render();
+      });
+    // A changed basedir selection is read at once; its history does not
+    // announce.
+    window.refreshNotificationInbox = poll;
     render();
+    poll();
+    setInterval(poll, 2000);
   };
 
   // Below 760px the sidebar is a drawer over the page.

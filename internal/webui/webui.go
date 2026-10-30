@@ -469,6 +469,8 @@ func (s site) baseHandler() http.Handler {
 		}
 		writeWebJSON(writer, loaded.Settings.Browser)
 	})
+	mux.HandleFunc("/api/notifications", s.handleNotifications)
+	mux.HandleFunc("/api/notifications/state", s.handleNotificationState)
 	mux.HandleFunc("/api/notification-config", func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodGet {
 			methodNotAllowed(writer)
@@ -2117,11 +2119,7 @@ func (s site) webHTMLWithStaticBootstrap(bootstrap string) string {
 			}
 		}
 	}
-	settings := s.NotificationSettings
-	if settings.MaxJobs == 0 {
-		settings = notification.Defaults().Browser
-	}
-	html := composeWebHTMLWithNotificationSettings(s.Executors, s.Notifications, settings, bootstrap, s.notificationSession, basedirs)
+	html := composeWebHTMLWithSession(s.Executors, s.Notifications, bootstrap, s.notificationSession, basedirs)
 	logout := ""
 	if s.AuthEnabled {
 		logout = `<form method="post" action="/_auth/logout"><button type="submit">Sign out</button></form>`

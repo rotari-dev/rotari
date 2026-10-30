@@ -8,10 +8,11 @@ import (
 
 	"github.com/rotari-dev/rotari/internal/model"
 	"github.com/rotari-dev/rotari/internal/notification"
+	"github.com/rotari-dev/rotari/internal/notificationlog"
 	"github.com/rotari-dev/rotari/internal/state"
 )
 
-func TestWebhookNotificationManagerBatchesJobsUntilRunFinishes(t *testing.T) {
+func TestRunNotificationManagerBatchesJobsUntilRunFinishes(t *testing.T) {
 	paths := testWebhookPaths(t)
 	if err := os.WriteFile(filepath.Join(paths.BaseDir, notification.FileName), []byte(`[webhook]
 url = "https://example.invalid/hook"
@@ -28,7 +29,7 @@ job_success = true
 		t.Fatal(err)
 	}
 
-	manager := newWebhookNotificationManager()
+	manager := newRunNotificationManager(t.TempDir())
 	var sent []notification.Batch
 	manager.send = func(_ notification.WebhookSettings, _ string, batch notification.Batch) {
 		sent = append(sent, batch)
@@ -43,7 +44,7 @@ job_success = true
 	}
 }
 
-func TestWebhookNotificationManagerAppliesJobSuccessSetting(t *testing.T) {
+func TestRunNotificationManagerAppliesJobSuccessSetting(t *testing.T) {
 	paths := testWebhookPaths(t)
 	if err := os.WriteFile(filepath.Join(paths.BaseDir, notification.FileName), []byte(`[webhook]
 url = "https://example.invalid/hook"
@@ -51,7 +52,7 @@ job_success = false
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	manager := newWebhookNotificationManager()
+	manager := newRunNotificationManager(t.TempDir())
 	var sent []notification.Batch
 	manager.send = func(_ notification.WebhookSettings, _ string, batch notification.Batch) { sent = append(sent, batch) }
 	manager.JobFinished(paths, "run-filter", "", model.JobSpec{ID: "ok"}, model.JobResult{ID: "ok"})
@@ -65,5 +66,56 @@ job_success = false
 	manager.mu.Unlock()
 	if len(sent) != 0 {
 		t.Fatalf("sent batches = %#v", sent)
+	}
+}
+
+// Every batch is recorded for the Web inbox before any channel's selection,
+// whether or not a webhook is configured or its settings can be read; only
+// the webhook depends on them.
+func TestRunNotificationManagerRecordsEveryBatch(t *testing.T) {
+	for name, config := range map[string]string{
+		"no webhook":       "",
+		"webhook selected": "[webhook]\nurl = \"https://example.invalid/hook\"\njob_success = false\n",
+		"unreadable":       "[webhook\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			t.Setenv(envWebhookURL, "")
+			paths := testWebhookPaths(t)
+			if config != "" {
+				if err := os.WriteFile(filepath.Join(paths.BaseDir, notification.FileName), []byte(config), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			runID := "run-record"
+			runDir := filepath.Join(paths.RunsDir, runID)
+			if err := os.MkdirAll(runDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := state.WriteJSON(filepath.Join(runDir, "summary.json"), model.RunSummary{RunID: runID, Status: "finished"}); err != nil {
+				t.Fatal(err)
+			}
+			masterDir := t.TempDir()
+			manager := newRunNotificationManager(masterDir)
+			var sent []notification.Batch
+			manager.send = func(_ notification.WebhookSettings, _ string, batch notification.Batch) { sent = append(sent, batch) }
+			manager.JobFinished(paths, runID, "", model.JobSpec{ID: "ok"}, model.JobResult{ID: "ok"})
+			manager.RunFinished(paths, runID, 0)
+
+			records, problems, err := notificationlog.Open(masterDir).Records()
+			if err != nil || len(problems) != 0 || len(records) != 1 || len(records[0].Events) != 2 {
+				t.Fatalf("records = %#v, problems %v, err %v", records, problems, err)
+			}
+			if records[0].BaseDir != paths.BaseDir || records[0].RunID != runID {
+				t.Fatalf("record location = %#v", records[0])
+			}
+			wantSent := 0
+			if name == "webhook selected" {
+				wantSent = 1
+			}
+			if len(sent) != wantSent || (wantSent == 1 && len(sent[0].Events) != 1) {
+				t.Fatalf("sent batches = %#v", sent)
+			}
+		})
 	}
 }

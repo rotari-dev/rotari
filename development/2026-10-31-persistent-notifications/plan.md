@@ -1,7 +1,8 @@
 # Plan: Persistent Notifications
 
 Created: 2026-10-31
-Status: Planned; no implementation yet.
+Status: Implemented (phases 1-6); see [work-log.md](work-log.md). A CLI
+command to read the records remains a later, separate plan.
 
 ## Purpose
 
@@ -169,6 +170,21 @@ write the cursors; its read and cleared state stay in page memory, as today.
   history into the inbox without popups.
 - The `/api/state` and `/api/active-runs` polls stay for the page's own
   display; only notification detection stops using them.
+
+### Implementation notes
+
+- `rotari web` no longer injects `[browser]` settings into the page: the
+  server renders entries. It still validates its basedir's
+  `notifications.toml` at startup.
+- Recent jobs shows the same entries as the main page, so its old titles
+  ("rotari: job failed", "project / job") are replaced by the shared ones, and
+  blocked or cancelled-before-start jobs are reported as failures there too.
+- SAFE-15 previously said repair never replays notifications. It now reports
+  the run's completion once and still replays no job notification or other
+  hook; the run's process reports completion only after finalizing its
+  metadata, so a run that needs repair never reported it.
+- `/api/active-runs`, `/api/notification-settings`, and the notification-only
+  parts of `/api/state` were kept for API clients; see ISSUES.md.
 
 ## Known limitations to document
 

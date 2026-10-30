@@ -692,6 +692,10 @@ main {
   white-space: pre-wrap;
   margin: 0.5rem 0 0;
 }
+.notification-inbox-list .notification-inbox-error {
+  color: var(--s-bad);
+  overflow-wrap: anywhere;
+}
 .notification-announcement {
   position: absolute;
   width: 1px;

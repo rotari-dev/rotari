@@ -269,15 +269,14 @@ startup `--basedir`) contain projects, and projects contain runs. Other than
 History search, users choose a project from the selected basedir's tree.
 `/api/state` is a lightweight index: it lists project names,
 run counts, the latest and immediately preceding run summaries, and running-lock
-metadata without loading project queues or completed run details. Keeping the
-preceding summary lets notification polling catch a fast run followed by a new
-run before the next tick. It includes full details only for
-currently running runs across the selected basedir, so completion and
-job-failure notifications work without scanning completed runs' jobs. Opening
+metadata without loading project queues or completed run details. It also
+keeps the preceding summary and full details of currently running runs
+across the selected basedir, which browser notifications used to read before
+they came from recorded notifications (WEB-21). Opening
 a project loads its queue and run summaries through `/api/project`; opening a
 completed run loads its jobs, attempts, context, and timeline through `/api/run`.
-`/api/active-runs` exposes the same index for notification monitoring of
-other basedirs. Completed run details are cached in the browser for that
+`/api/active-runs` exposes the same index for other basedirs; no page reads
+it now. Completed run details are cached in the browser for that
 session and are not polled again. These API routes are bound to the basedir in
 the URL mount. The cross-basedir `/api/history-search` route is the exception:
 it accepts only basedir IDs from the registered allowlist. The mount identifier resolves
@@ -322,13 +321,11 @@ basedir is listed, a bell beside the `Registered basedirs` heading turns every
 basedir's checkbox on, or off when all are already on; it shows a mixed state
 while only some are on, and the selection it makes is stored the same way
 (`TestWebSidebarLazilyListsProjectsInOtherBasedirs`,
-`TestWebJobsPageTogglesAllBasedirNotifications`). The application page
-polls `/api/state` for its mounted basedir and `/api/active-runs` for each
-other selected basedir; the server-rendered Recent jobs page polls the Recent
-jobs endpoint. A newly selected basedir is
-initialized from its current state, so existing completed jobs do not produce
-retroactive notifications. Desktop notifications remain controlled by the global
-notification permission and on/off toggle.
+`TestWebJobsPageTogglesAllBasedirNotifications`). The inbox reads the
+recorded notifications of the selected basedirs (WEB-21); a newly selected
+basedir's recorded history enters the inbox without desktop notifications.
+Desktop notifications remain controlled by the global notification permission
+and on/off toggle.
 
 **WEB-12** `rotari web` reads the registered basedir list at startup and
 rereads the basedir registry on every page load and on `GET /api/basedirs`,
@@ -406,65 +403,58 @@ rest of config handling in
 
 ## Desktop notifications
 
-**WEB-21** The live main and Recent jobs pages also keep an in-page inbox, implemented
-once in [web_shell.js](../internal/webui/assets/web_shell.js). It retains the
-latest 50 notifications in page memory, shows an unread count, marks entries
-read on opening, and supports clearing and Escape to close. It works without
-the desktop API, permission, secure context, or desktop on/off setting.
-Reloading or navigating clears the inbox. Main-page entries share the event
-selection and fields below; links retain the event's basedir. Recent jobs
-uses its existing selected-basedir job-result detection. Static exports have
-no inbox. Covered by `TestNotificationInboxWithoutDesktopAPI` in
-[run_notifications_test.go](../internal/webui/run_notifications_test.go).
-The built binary is checked by `TestWebNotificationInboxWithoutDesktopPermission`
-in [notifications_test.go](../conformance/05-web/notifications_test.go).
+**WEB-21** The live main and Recent jobs pages keep an in-page inbox,
+implemented once in [web_shell.js](../internal/webui/assets/web_shell.js), of
+the notifications runs recorded under the master directory (NOT-2). Every two
+seconds, and at once when a basedir bell changes, the page reads
+`GET /api/notifications?basedirs=ID,...`
+([notifications.go](../internal/webui/notifications.go)). The main page asks
+for its own basedir and the other basedirs whose bell is on; Recent jobs asks
+for the basedirs whose bell is on. An unknown basedir ID answers 400. The
+server answers the latest 50 entries after the cleared cursor, newest first,
+each rendered with its project's current `[browser]` settings by
+`notification.NewBrowserMessage`, plus the read and cleared cursors and a
+description of each record it could not read, which the inbox shows. A
+cursor is a record's creation time and ID; entries after the read cursor are
+unread. Opening the inbox moves the read cursor to the newest entry, and
+**Clear notifications** moves both cursors there, through
+`POST /api/notifications/state`; the server only moves cursors forward, so
+pages using the same master directory share them across reloads and
+restarts. Without control (`--allow-control=false`) that POST answers 403 and
+the page keeps its own cursors until it is reloaded. Entries are announced to
+screen readers and shown as desktop notifications only when they first appear
+in a later read for an unchanged basedir selection, so history present when
+the page loads, or when a bell is turned on, never pops up. The inbox works
+without the desktop API, permission, secure context, or desktop on/off
+setting. Static exports have no inbox. Covered by
+`TestNotificationInboxWithoutDesktopAPI` and
+`TestNotificationInboxAnnouncesOnlyNewEntries` in
+[run_notifications_test.go](../internal/webui/run_notifications_test.go), and
+`TestNotificationsListSelectedBasedirsWithProjectSettings` and
+`TestNotificationStateIsSharedAndNeedsControl` in
+[notifications_test.go](../internal/webui/notifications_test.go). The built
+binary is checked by `TestWebNotificationInboxWithoutDesktopPermission` and
+`TestWebInboxShowsNotificationsRecordedWhileClosed` in
+[notifications_test.go](../conformance/05-web/notifications_test.go).
 
-`internal/webui/assets/web_app_notifications.js` shows a browser `Notification`
-when a run finishes or a job fails. It is entirely client-side: no server
-route, socket, or webhook exists for this. `runServer` (the job-execution
-daemon) and `rotari web` are separate processes that never talk to each other
-directly; `rotari web` only re-reads persisted state from disk per request
-(see "Web UI model and reports" below), so there is no event to push from the
-runner side even if one were added. Instead this feature wraps the existing
-`refresh()` polling loop (`web_app_core.js`) and diffs the previous and next
-`/api/state` index on every tick; that index includes lightweight summaries
-for each project's latest run and full details only for currently running
-runs. When other basedirs are selected for notifications, their `/api/active-runs`
-projections are polled as well:
-
-- A run is newly finished when it stops being `running` between two polls, or
-  when it is seen for the first time already finished and its run ID sorts
-  after every run the previous poll had in its project (covers runs shorter
-  than the 2-second poll interval). An older run seen for the first time only
-  appeared because the page loaded it, as opening a project or run does, and
-  does not notify.
-- A job is newly finished when `jobDisplayStatus(job, run)` (`web_app_tables.js`)
-  becomes `"failed"` or `"success"`, the projection marks the job's result
-  final, and the previous poll did not already show that final result. A job
-  the previous poll lacked counts only in a run that poll showed running or
-  that is new as above; opening a finished run, which loads its jobs, does not
-  notify. Retried attempts are not reported because a job's result becomes
-  final only after its retries end.
-- Settings are looked up per basedir and project, for the page's basedir and
-  each other polled basedir alike.
-- Covered by `TestBrowserNotificationsReportOnlyWhatHappenedSinceThePreviousPoll`
-  and `TestBrowserRunNotificationsUseTheExitCode`.
-- Job results and a run's own completion detected in the same poll tick are
-  merged into one `Notification` per run; events from different ticks stay
-  separate.
-- The very first poll after page load never notifies (there is no previous
-  snapshot to diff against), so existing history never triggers a notification
-  burst on open.
+`rotari web` and the run processes never talk to each other directly: runs
+append records and the server reads them per request. The pages detect no
+events themselves. A run reports a job once its retries end, as a failure
+when its exit code is not 0 (including blocked jobs and jobs cancelled before
+they start), and its own completion as a success only when its exit code is
+0; events within one batch window share one entry (NOT-1).
 
 Which events are shown comes from `notifications.toml`, whose `[browser]`
 section uses the same keys and field vocabulary as `[webhook]` but holds its
-own values. `rotari web` reads the settings for its own basedir at startup and
-serves per-project settings from `/api/notification-settings`, so a saved or
-reloaded file applies to open pages on their next poll without restarting the
-process. `browser.job_failure`, `browser.job_success`, `browser.run_failure`,
-and `browser.run_success` select the events, `browser.max_jobs` bounds the
-jobs listed per notification, and the body is truncated at 1000 characters.
-The static export has no server to read, save, or reload those files, so it
+own values. The server reads each record's project settings when it renders
+the inbox, so a saved or reloaded file applies to open pages, and to entries
+already recorded, on their next read without restarting the process.
+`browser.job_failure`, `browser.job_success`, `browser.run_failure`, and
+`browser.run_success` select the events, `browser.max_jobs` bounds the failed
+and the succeeded jobs listed per entry, and the body is truncated at 1000
+characters. `rotari web` still validates its basedir's file at startup and
+`/api/notification-settings` serves a project's settings to the editor. The
+static export has no server to read, save, or reload those files, so it
 offers neither the notification editor nor live notifications.
 
 The permission itself (`Notification.permission`) cannot be revoked from

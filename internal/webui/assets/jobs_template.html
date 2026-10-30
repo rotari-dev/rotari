@@ -661,28 +661,7 @@
         updateJobsNotifyToggleLabel();
       }
 
-      function jobsNotificationSnapshot(documentNode) {
-        const rows = new Map();
-        documentNode
-          .querySelectorAll("tr[data-notification-key]")
-          .forEach((row) => {
-            rows.set(row.dataset.notificationKey, {
-              state: row.querySelector(".jobs-state").textContent.trim(),
-              project: row.dataset.project,
-              job: row.dataset.job,
-              runURL: row.dataset.runUrl,
-            });
-          });
-        return rows;
-      }
-
-      function notifyJobsActivity(job) {
-        const title =
-          job.state === "failed"
-            ? "rotari: job failed"
-            : "rotari: job finished";
-        const body = job.project + " / " + job.job;
-        window.addInboxNotification?.(title, body, job.runURL);
+      function showJobsDesktopNotification(item) {
         if (
           typeof Notification === "undefined" ||
           notificationUnavailableReason() ||
@@ -690,27 +669,25 @@
           !jobsNotificationsEnabled()
         )
           return;
-        const notification = new Notification(title, {
-          body,
+        const notification = new Notification(item.title, {
+          body: item.body,
           icon: jobsNotificationIcon,
         });
-        notification.onclick = () => {
-          window.focus();
-          location.href = job.runURL;
-        };
+        if (item.url)
+          notification.onclick = () => {
+            window.focus();
+            location.href = item.url;
+          };
       }
 
       function jobsNotificationCheckboxes() {
         return [...document.querySelectorAll(".basedir-notification-toggle")];
       }
 
-      function jobsNotificationTargets() {
+      function jobsNotificationBasedirIDs() {
         return jobsNotificationCheckboxes()
           .filter((checkbox) => checkbox.checked)
-          .map((checkbox) => ({
-            id: checkbox.dataset.basedirId,
-            url: checkbox.dataset.jobsUrl,
-          }));
+          .map((checkbox) => checkbox.dataset.basedirId);
       }
 
       function updateJobsNotificationTooltip(checkbox) {
@@ -767,115 +744,34 @@
       function saveJobsNotificationTargets() {
         localStorage.setItem(
           jobsNotificationBasedirsKey,
-          JSON.stringify(jobsNotificationTargets().map((target) => target.id)),
+          JSON.stringify(jobsNotificationBasedirIDs()),
         );
       }
 
-      const previousJobsActivity = new Map();
-      const currentNotificationCheckbox = jobsNotificationCheckboxes().find(
-        (checkbox) =>
-          checkbox.closest(".basedir-entry").classList.contains("expanded"),
-      );
-      if (currentNotificationCheckbox)
-        previousJobsActivity.set(
-          currentNotificationCheckbox.dataset.basedirId,
-          jobsNotificationSnapshot(document),
-        );
-
-      async function loadJobsNotificationSnapshot(target) {
-        if (!jobsPageIsLive) return;
-        try {
-          const response = await fetch(target.url, { cache: "no-store" });
-          if (!response.ok) return;
-          const html = await response.text();
-          const nextDocument = new DOMParser().parseFromString(
-            html,
-            "text/html",
-          );
-          return jobsNotificationSnapshot(nextDocument);
-        } catch (error) {
-          // Keep this target in the next poll after temporary failures.
-        }
-      }
-
-      async function pollJobsActivity() {
-        const targets = jobsNotificationTargets();
-        await Promise.all(
-          targets.map(async (target) => {
-            const nextJobs = await loadJobsNotificationSnapshot(target);
-            if (!nextJobs) return;
-            const previous = previousJobsActivity.get(target.id);
-            if (previous) {
-              nextJobs.forEach((job, key) => {
-                const before = previous.get(key);
-                if (
-                  ["failed", "success", "cancelled", "blocked"].includes(
-                    job.state,
-                  ) &&
-                  (!before ||
-                    [
-                      "running",
-                      "running (recorded)",
-                      "waiting (recorded)",
-                      "suspended (recorded)",
-                      "unknown",
-                    ].includes(before.state))
-                )
-                  notifyJobsActivity(job);
-              });
-            }
-            previousJobsActivity.set(target.id, nextJobs);
-          }),
-        );
-      }
-
-      async function toggleJobsNotificationBasedir(checkbox) {
+      function toggleJobsNotificationBasedir(checkbox) {
         updateJobsNotificationTooltip(checkbox);
         saveJobsNotificationTargets();
         updateAllJobsNotificationToggle();
-        const target = jobsNotificationTargets().find(
-          (item) => item.id === checkbox.dataset.basedirId,
-        );
-        if (!target) {
-          previousJobsActivity.delete(checkbox.dataset.basedirId);
-          return;
-        }
-        const snapshot = await loadJobsNotificationSnapshot(target);
-        if (snapshot) previousJobsActivity.set(target.id, snapshot);
+        window.refreshNotificationInbox?.();
       }
 
-      async function toggleAllJobsNotificationBasedirs(all) {
-        const changed = jobsNotificationCheckboxes().filter(
-          (checkbox) => checkbox.checked !== all.checked,
-        );
-        changed.forEach((checkbox) => {
+      function toggleAllJobsNotificationBasedirs(all) {
+        jobsNotificationCheckboxes().forEach((checkbox) => {
           checkbox.checked = all.checked;
           updateJobsNotificationTooltip(checkbox);
         });
         saveJobsNotificationTargets();
         updateAllJobsNotificationToggle();
-        if (!all.checked) {
-          changed.forEach((checkbox) =>
-            previousJobsActivity.delete(checkbox.dataset.basedirId),
-          );
-          return;
-        }
-        await Promise.all(
-          changed.map(async (checkbox) => {
-            const target = {
-              id: checkbox.dataset.basedirId,
-              url: checkbox.dataset.jobsUrl,
-            };
-            const snapshot = await loadJobsNotificationSnapshot(target);
-            if (snapshot) previousJobsActivity.set(target.id, snapshot);
-          }),
-        );
+        window.refreshNotificationInbox?.();
       }
 
       restoreJobsNotificationTargets();
       updateJobsNotifyToggleLabel();
-      if (jobsPageIsLive) window.initializeNotificationInbox();
-      if (jobsPageIsLive) setInterval(pollJobsActivity, 2000);
+      if (jobsPageIsLive)
+        window.initializeNotificationInbox({
+          basedirIDs: jobsNotificationBasedirIDs,
+          desktop: showJobsDesktopNotification,
+        });
     </script>
   </body>
 </html>

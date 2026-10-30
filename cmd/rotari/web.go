@@ -13,6 +13,7 @@ import (
 
 	"github.com/rotari-dev/rotari/internal/basedirregistry"
 	"github.com/rotari-dev/rotari/internal/notification"
+	"github.com/rotari-dev/rotari/internal/notificationlog"
 	stateinternal "github.com/rotari-dev/rotari/internal/state"
 	"github.com/rotari-dev/rotari/internal/webui"
 )
@@ -30,12 +31,12 @@ func cmdWeb(args []string) int {
 	}
 	options := webOptions(baseDir, flags.allowControl, flags.notifications)
 	options.LauncherFile, _ = webLauncherFile()
-	loadedNotifications, err := notification.Load(baseDir, "")
-	if err != nil {
+	// An invalid notifications.toml is reported before serving; each
+	// project's file is read again whenever the inbox renders its records.
+	if _, err := notification.Load(baseDir, ""); err != nil {
 		printErrorf("failed to load notification configuration: %v", err)
 		return 1
 	}
-	options.NotificationSettings = loadedNotifications.Settings.Browser
 	if flags.staticDir != "" {
 		options.StaticArtifactContents = flags.staticArtifactContents
 		options.StaticArtifactsCopied = func(files int, bytes int64) {
@@ -147,6 +148,12 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 		return 1
 	}
 	options.ReloadBaseDirs = registry.BaseDirs
+	notificationLog, err := notificationlog.Default()
+	if err != nil {
+		printErrorf("failed to resolve notification history: %v", err)
+		return 1
+	}
+	options.NotificationLog = &notificationLog
 	options.ArtifactRoots = flags.artifactRoots
 	if flags.allowExec {
 		launches, err := newWebLaunches()

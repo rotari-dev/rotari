@@ -590,97 +590,6 @@ func TestWebHistorySearchRejectsUnknownBasedir(t *testing.T) {
 	}
 }
 
-func TestBrowserNotificationSettingsSeparateByBasedir(t *testing.T) {
-	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node is not installed")
-	}
-	js := strings.ReplaceAll(webAppNotificationsJS, "__ROTARI_NOTIFICATION_ICON__", "'icon.png'")
-	js = strings.ReplaceAll(js, "__ROTARI_NOTIFICATION_DEFAULT__", "true")
-	js = strings.ReplaceAll(js, "__ROTARI_NOTIFICATION_SETTINGS__", "{}")
-	script := `
-const vm = require('vm');
-const fs = require('fs');
-const code = ` + strconv.Quote(js) + `;
-const context = {
-  console,
-  window: { initializeNotificationInbox: () => {} },
-  document: { getElementById: () => null },
-  Notification: { permission: 'granted', requestPermission: async () => {} },
-  localStorage: { getItem: () => 'true', setItem: () => {} },
-  URLSearchParams,
-  refresh: async () => {},
-  fetch: async (url) => {
-    const params = new URLSearchParams(String(url).split('?')[1] || '');
-    const basedir = params.get('basedir_id') || 'current';
-    const runSuccess = basedir === 'two' ? false : true;
-    return { ok: true, json: async () => ({ job_failure: true, job_success: true, run_failure: true, run_success: runSuccess, max_jobs: 10, fields: [] }) };
-  },
-  appURL: (path) => path,
-  basedirURL: (id, path) => path + (path.includes('?') ? '&' : '?') + 'basedir_id=' + encodeURIComponent(id),
-  mountedBasedirID: '',
-  registeredBasedirs: [],
-  selectedNotificationBasedirIDs: () => new Set(),
-  jobDisplayStatus: (job, run) => (job && job.result && job.result.exit_code === 0) ? 'success' : 'failed',
-  NotificationPermission: 'granted',
-};
-vm.createContext(context);
-vm.runInContext(code, context);
-(async () => {
-  const current = await context.notificationSettings('demo', 'one');
-  const other = await context.notificationSettings('demo', 'two');
-  if (current.run_success !== true || other.run_success !== false) {
-    console.error(JSON.stringify({ current, other }));
-    process.exit(1);
-  }
-})();
-`
-	path := filepath.Join(t.TempDir(), "notification-settings-basedir.js")
-	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if output, err := exec.Command("node", path).CombinedOutput(); err != nil {
-		t.Fatalf("browser notification settings did not respect basedir: %v\n%s", err, output)
-	}
-}
-
-func TestBrowserNotificationFields(t *testing.T) {
-	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node is not installed")
-	}
-	start := strings.Index(webAppNotificationsJS, "function notificationDuration")
-	end := strings.Index(webAppNotificationsJS, "function notifyRunEvent")
-	if start < 0 || end <= start {
-		t.Fatal("browser notification field functions not found")
-	}
-	script := `
-function jobDisplayStatus(job) { return job.result.exit_code === 0 ? "success" : "failed"; }
-` + webAppNotificationsJS[start:end] + `
-const info = {projectName: "demo", runID: "run-1", status: "failed", run: {
-  run_name: "nightly", exit_code: 1,
-  jobs: [{id: "job-1", final: true, result: {exit_code: 1}}]
-}};
-const job = {id: "job-1", name: "train", result: {exit_code: 1, diagnoses: [
-  {name: "First", suggestion: "check logs"},
-  {name: "Second", suggestion: "check quota"}
-]}};
-const jobLines = notificationEventLines({fields: ["job_id", "job_name", "diagnosis_name", "diagnosis_suggestion"]}, info, job, "failed");
-const runLines = notificationEventLines({fields: ["run_id", "run_name", "failure_count", "job_id", "link"]}, info, null, "");
-const expectedJobs = ["job id: job-1", "job name: train", "diagnosis name: First", "diagnosis name: Second", "diagnosis suggestion: check logs", "diagnosis suggestion: check quota"];
-const expectedRun = ["run id: run-1", "run name: nightly", "failure count: 1"];
-if (JSON.stringify(jobLines) !== JSON.stringify(expectedJobs) || JSON.stringify(runLines) !== JSON.stringify(expectedRun)) {
-  console.error(JSON.stringify({jobLines, runLines}));
-  process.exit(1);
-}
-`
-	path := filepath.Join(t.TempDir(), "notification-fields.js")
-	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if output, err := exec.Command("node", path).CombinedOutput(); err != nil {
-		t.Fatalf("browser notification fields failed: %v\n%s", err, output)
-	}
-}
-
 func TestWebHTMLRendersState(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node is not installed")
@@ -2242,7 +2151,8 @@ setTimeout(async () => {
 		await new Promise(resolve => setTimeout(resolve, 0));
 		assert(toggles.every(toggle => toggle.checked) && all.checked && !all.indeterminate, 'all-basedirs bell did not turn on every basedir bell');
 		const other = toggles.find(toggle => !toggle.closest('.basedir-entry').classList.contains('expanded'));
-		assert(requests.includes(other.dataset.jobsUrl), 'newly monitored basedir was not initialized from its current jobs');
+		const inboxReads = requests.filter(url => url.startsWith('/api/notifications?')).map(url => new URLSearchParams(url.split('?')[1]).get('basedirs').split(','));
+		assert(inboxReads.some(ids => ids.includes(other.dataset.basedirId)), 'newly monitored basedir was not read into the inbox');
 		const key = Object.keys(dom.window.localStorage).find(name => name.startsWith('rotari-notification-basedirs:'));
 		assert(JSON.parse(dom.window.localStorage.getItem(key)).length === 2, 'all-basedirs selection was not saved');
 		all.click();
@@ -3320,7 +3230,6 @@ func TestWebJobsPageShowsRecentJobs(t *testing.T) {
 		`aria-label="Toggle projects"`,
 		`onclick="toggleJobsSidebar(this)"`,
 		`class="basedir-notification-toggle"`,
-		`data-jobs-url="/jobs/"`,
 		`onchange="toggleJobsNotificationBasedir(this)"`,
 		`rotari-notification-basedirs`,
 		`class="sidebar-project-link basedir-path"`,
@@ -3338,7 +3247,7 @@ func TestWebJobsPageShowsRecentJobs(t *testing.T) {
 		`onclick="toggleJobsNotifications()"`,
 		`onclick="location.reload()">Refresh</button>`,
 		`const jobsPageIsLive = true`,
-		`setInterval(pollJobsActivity, 2000)`,
+		"if (jobsPageIsLive)\n        window.initializeNotificationInbox({",
 	} {
 		if !strings.Contains(response.Body.String(), want) {
 			t.Fatalf("GET /jobs/ response does not contain %q: %s", want, response.Body.String())
@@ -3594,51 +3503,6 @@ func TestJobsHTMLStylesStates(t *testing.T) {
 	}
 }
 
-func TestJobsNotificationsRecognizeRecordedStates(t *testing.T) {
-	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node is not installed")
-	}
-	start := strings.Index(jobsTemplateHTML, "async function pollJobsActivity()")
-	end := strings.Index(jobsTemplateHTML, "async function toggleJobsNotificationBasedir(")
-	if start < 0 || end <= start {
-		t.Fatal("jobs notification polling function not found")
-	}
-	code, err := json.Marshal(jobsTemplateHTML[start:end])
-	if err != nil {
-		t.Fatal(err)
-	}
-	script := `
-const vm = require('vm');
-let nextState = 'success';
-const notifications = [];
-const previous = new Map();
-const context = {
-  jobsNotificationTargets: () => [{id: 'base'}],
-  loadJobsNotificationSnapshot: async () => new Map([['attempt', {state: nextState}]]),
-  previousJobsActivity: new Map([['base', previous]]),
-  notifyJobsActivity: job => notifications.push(job.state),
-};
-vm.createContext(context);
-vm.runInContext(` + string(code) + `, context);
-(async () => {
-  for (const before of ['running (recorded)', 'waiting (recorded)', 'suspended (recorded)', 'unknown']) {
-    for (const terminal of ['success', 'failed', 'cancelled', 'blocked']) {
-      nextState = terminal;
-      context.previousJobsActivity.set('base', new Map([['attempt', {state: before}]]));
-      const count = notifications.length;
-      await context.pollJobsActivity();
-      if (notifications.length !== count + 1) throw new Error(before + ' -> ' + terminal + ' did not notify');
-      await context.pollJobsActivity();
-      if (notifications.length !== count + 1) throw new Error('duplicate terminal notification');
-    }
-  }
-})().catch(error => { console.error(error); process.exit(1); });
-`
-	if output, err := exec.Command("node", "-e", script).CombinedOutput(); err != nil {
-		t.Fatalf("recorded job notifications: %v\n%s", err, output)
-	}
-}
-
 func TestJobsHTMLSupportsSortingAndTimezoneTimestamps(t *testing.T) {
 	started := time.Date(2026, 9, 29, 1, 2, 3, 0, time.UTC)
 	finished := started.Add(time.Minute)
@@ -3677,7 +3541,7 @@ func TestGenerateStaticWebIncludesJobsPage(t *testing.T) {
 				t.Fatal(err)
 			}
 			body := string(data)
-			for _, want := range []string{"Recent jobs", `aria-label="Toggle projects"`, `href="../project/demo"`, `class="brand-icon"`, "job-1", `href="../project/demo/run/` + runID + `"`, `id="notify-toggle"`, `onclick="toggleJobsNotifications()"`, `const jobsPageIsLive = false`, `if (!jobsPageIsLive) return;`, `if (jobsPageIsLive) setInterval(pollJobsActivity, 2000)`, "const jobsNotificationsDefaultOn = " + strconv.FormatBool(notifications)} {
+			for _, want := range []string{"Recent jobs", `aria-label="Toggle projects"`, `href="../project/demo"`, `class="brand-icon"`, "job-1", `href="../project/demo/run/` + runID + `"`, `id="notify-toggle"`, `onclick="toggleJobsNotifications()"`, `const jobsPageIsLive = false`, "if (jobsPageIsLive)\n        window.initializeNotificationInbox({", "const jobsNotificationsDefaultOn = " + strconv.FormatBool(notifications)} {
 				if !strings.Contains(body, want) {
 					t.Fatalf("static jobs page does not contain %q: %s", want, body)
 				}

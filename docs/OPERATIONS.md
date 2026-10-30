@@ -76,6 +76,17 @@ The registry is stored separately, with one JSON file per run:
 order. A registry file contains the run ID, base directory, and project name;
 it is only a lookup index, not the source of the run's logs or results.
 
+The master directory also keeps each run's notifications for the Web inbox,
+one file per run, removed 10 days after the run's last notification, and the
+inbox's shared read state:
+
+```text
+<masterdir>/notifications/<run-id>.jsonl
+<masterdir>/notifications/inbox-state.json
+```
+
+See [Notifications](NOTIFICATIONS.md#in-page-inbox).
+
 `gc` is separate from inspection and recovery: it maintains this master
 registry after run data was removed outside rotari. To list orphaned registry
 entries without removing them:
@@ -228,10 +239,11 @@ example blocked dependencies or pre-dispatch cancellation) need no execution
 attestation. A live coordinator always blocks.
 
 Repair preserves the original summary/results, commands, origins, run ID,
-and recorded finish time; it completes applicable client status without
-replaying completion notifications or hooks. It consumes no queued work and
-executes no jobs. A retry after partial cleanup is safe. An idle project
-without a lock remains a no-op.
+and recorded finish time; it completes applicable client status. It reports
+the run's completion, which the stopped run never did, to the Web inbox and
+the Webhook, and replays no job notification or other hook. It consumes no
+queued work and executes no jobs. A retry after partial cleanup is safe. An
+idle project without a lock remains a no-op.
 
 Without a complete trustworthy summary, preview reports `action: "release"`
 and explains why it cannot finalize. Apply returns to collecting without

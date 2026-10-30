@@ -207,6 +207,9 @@ async function open(search) {
       // The page reads the same now, so its bar starts at now - 7d.
       window.Date.now = () => now;
       window.fetch = async url => {
+        // The inbox's own polls are not the range bar's.
+        if (String(url).startsWith('/api/notifications'))
+          return { ok: true, json: async () => ({ entries: [], read: {}, cleared: {} }) };
         fetched.push(url);
         return { ok: true, json: async () => ({ runs: [
           { basedir_id: 'b1', project_name: 'p', run_id: 'r1', lifecycle: 'finished', exit_code: 1, started_at: iso(now - 2 * day), ends_at: iso(now - 2 * day + hour) },

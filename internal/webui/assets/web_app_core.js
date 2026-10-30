@@ -435,8 +435,7 @@ function toggleAllNotificationBasedirs(all) {
   selectedNotificationBasedirIDsState = selected;
   localStorage.setItem(notificationBasedirsKey, JSON.stringify([...selected]));
   updateAllNotificationToggle();
-  if (typeof refreshOtherBasedirNotifications === "function")
-    refreshOtherBasedirNotifications();
+  window.refreshNotificationInbox?.();
 }
 function updateNotificationTooltip(checkbox) {
   const text = checkbox.checked
@@ -459,8 +458,7 @@ function toggleNotificationBasedir(checkbox) {
   localStorage.setItem(notificationBasedirsKey, JSON.stringify([...selected]));
   updateNotificationTooltip(checkbox);
   updateAllNotificationToggle();
-  if (typeof refreshOtherBasedirNotifications === "function")
-    refreshOtherBasedirNotifications();
+  window.refreshNotificationInbox?.();
 }
 function sidebarRunLinksHTML(q, isActive, activeRun, basedirID) {
   const runs = (q.runs || [])
@@ -1261,7 +1259,6 @@ async function generateNotificationConfig(project, target, button) {
     alert(text);
     return;
   }
-  notificationSettingsByProject.delete(project);
   await showNotificationConfig();
 }
 function renderConfigTargetOptions(container, targets, fileName, generate) {
@@ -1452,7 +1449,6 @@ async function showNotificationConfig() {
         alert(saveText);
         return;
       }
-      notificationSettingsByProject.delete(project);
       await showNotificationConfig();
     };
   }

@@ -333,8 +333,9 @@ Implemented by [internal/config/layers.go](../internal/config/layers.go),
   `ROTARI_WEBHOOK_URL` overrides `webhook.url`.
 - A run resolves its webhook settings when it starts and snapshots the file
   with its other configs, so later edits do not change that run. `rotari web`
-  reads browser settings for its own basedir and serves per-project settings
-  from `/api/notification-settings`.
+  validates the file for its own basedir at startup and applies each
+  project's current browser settings when it renders the inbox (WEB-21); it
+  also serves them from `/api/notification-settings`.
 - `fields` order is the order notifications show values. The Web UI editor
   shows a saved order as it is, lets each selected field move up or down, and
   saves the fields in the order shown; unselected fields and **Use default

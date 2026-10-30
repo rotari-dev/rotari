@@ -14,39 +14,59 @@ import (
 	"github.com/rotari-dev/rotari/internal/diagnose"
 	"github.com/rotari-dev/rotari/internal/model"
 	"github.com/rotari-dev/rotari/internal/notification"
+	"github.com/rotari-dev/rotari/internal/notificationlog"
 	"github.com/rotari-dev/rotari/internal/state"
 )
 
 const webhookBatchWindow = 10 * time.Second
 
-type pendingWebhookBatch struct {
-	baseDir  string
-	settings notification.WebhookSettings
-	events   []notification.Event
-	timer    *time.Timer
+// pendingNotificationBatch is one run's events waiting for the batch window.
+// settingsErr is why the run's webhook settings could not be loaded; the
+// batch is still recorded for the inbox.
+type pendingNotificationBatch struct {
+	baseDir     string
+	settings    notification.WebhookSettings
+	settingsErr error
+	events      []notification.Event
+	timer       *time.Timer
 }
 
-type webhookNotificationManager struct {
+// runNotificationManager batches a run's notification events and delivers
+// each batch to the inbox record and, when configured, the webhook.
+type runNotificationManager struct {
 	mu      sync.Mutex
-	pending map[string]*pendingWebhookBatch
+	pending map[string]*pendingNotificationBatch
 	after   func(time.Duration, func()) *time.Timer
 	now     func() time.Time
 	send    func(notification.WebhookSettings, string, notification.Batch)
+	record  func(baseDir string, events []notification.Event) error
 }
 
-func newWebhookNotificationManager() *webhookNotificationManager {
-	manager := &webhookNotificationManager{
-		pending: make(map[string]*pendingWebhookBatch),
+// newRunNotificationManager records batches under masterDir, or under the
+// resolved master directory when masterDir is empty.
+func newRunNotificationManager(masterDir string) *runNotificationManager {
+	manager := &runNotificationManager{
+		pending: make(map[string]*pendingNotificationBatch),
 		after:   time.AfterFunc,
 		now:     time.Now,
 	}
 	manager.send = sendWebhookBatch
+	manager.record = func(baseDir string, events []notification.Event) error {
+		log := notificationlog.Open(masterDir)
+		if masterDir == "" {
+			var err error
+			if log, err = notificationlog.Default(); err != nil {
+				return err
+			}
+		}
+		return log.Append(baseDir, events)
+	}
 	return manager
 }
 
-var webhookNotifications = newWebhookNotificationManager()
+var runNotifications = newRunNotificationManager("")
 
-func (manager *webhookNotificationManager) JobFinished(paths state.ProjectPaths, runID, runName string, job model.JobSpec, result model.JobResult) {
+func (manager *runNotificationManager) JobFinished(paths state.ProjectPaths, runID, runName string, job model.JobSpec, result model.JobResult) {
 	event := notification.NewJobEvent(paths.ProjectName, runID, runName, job, result, manager.now())
 	event.SetDiagnosisOutdated(diagnose.Outdated(result))
 	if runDir, err := state.SafeJoin(paths.RunsDir, runID); err == nil {
@@ -55,38 +75,36 @@ func (manager *webhookNotificationManager) JobFinished(paths state.ProjectPaths,
 	manager.add(paths, runID, event, false)
 }
 
-func (manager *webhookNotificationManager) RunFinished(paths state.ProjectPaths, runID string, _ int) {
+func (manager *runNotificationManager) RunFinished(paths state.ProjectPaths, runID string, _ int) {
 	runDir, err := state.SafeJoin(paths.RunsDir, runID)
 	if err != nil {
-		printErrorf("WARNING: cannot prepare webhook notification: %v", err)
+		printErrorf("WARNING: cannot prepare run notification: %v", err)
 		return
 	}
 	summary, err := state.LoadRunSummary(filepath.Join(runDir, "summary.json"))
 	if err != nil {
-		printErrorf("WARNING: cannot load run summary for webhook: %v", err)
+		printErrorf("WARNING: cannot load run summary for notifications: %v", err)
 		return
 	}
 	manager.add(paths, runID, notification.NewRunEvent(paths.ProjectName, summary, manager.now()), true)
 }
 
-func (manager *webhookNotificationManager) add(paths state.ProjectPaths, runID string, event notification.Event, flush bool) {
+func (manager *runNotificationManager) add(paths state.ProjectPaths, runID string, event notification.Event, flush bool) {
 	key := paths.BaseDir + "\x00" + paths.ProjectName + "\x00" + runID
 	manager.mu.Lock()
 	pending := manager.pending[key]
 	if pending == nil {
-		settings, err := loadRunWebhookSettings(paths, runID)
-		if err != nil {
-			manager.mu.Unlock()
-			printErrorf("WARNING: cannot load webhook settings: %v", err)
-			return
-		}
 		baseDir, err := filepath.Abs(paths.BaseDir)
 		if err != nil {
 			manager.mu.Unlock()
-			printErrorf("WARNING: cannot resolve basedir for webhook links: %v", err)
+			printErrorf("WARNING: cannot resolve basedir for notifications: %v", err)
 			return
 		}
-		pending = &pendingWebhookBatch{baseDir: baseDir, settings: settings}
+		pending = &pendingNotificationBatch{baseDir: baseDir}
+		pending.settings, pending.settingsErr = loadRunWebhookSettings(paths, runID)
+		if pending.settingsErr != nil {
+			printErrorf("WARNING: cannot load webhook settings: %v", pending.settingsErr)
+		}
 		manager.pending[key] = pending
 		pending.timer = manager.after(webhookBatchWindow, func() { manager.flush(key) })
 	}
@@ -103,7 +121,7 @@ func (manager *webhookNotificationManager) add(paths state.ProjectPaths, runID s
 	manager.deliver(pending)
 }
 
-func (manager *webhookNotificationManager) flush(key string) {
+func (manager *runNotificationManager) flush(key string) {
 	manager.mu.Lock()
 	pending := manager.pending[key]
 	delete(manager.pending, key)
@@ -113,7 +131,13 @@ func (manager *webhookNotificationManager) flush(key string) {
 	}
 }
 
-func (manager *webhookNotificationManager) deliver(pending *pendingWebhookBatch) {
+func (manager *runNotificationManager) deliver(pending *pendingNotificationBatch) {
+	if err := manager.record(pending.baseDir, pending.events); err != nil {
+		printErrorf("WARNING: cannot record notification for the Web inbox: %v", err)
+	}
+	if pending.settingsErr != nil {
+		return
+	}
 	batch := notification.NewBatch(pending.events, pending.settings.ChannelSettings, manager.now())
 	if pending.settings.URL != "" && !batch.Empty() {
 		manager.send(pending.settings, pending.baseDir, batch)

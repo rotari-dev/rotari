@@ -604,10 +604,11 @@ Chrome is warning about and whether it belongs to this rotari server.
 
 The live Web UI's **Inbox (N)** works without browser notification permission,
 including in embedded browsers. It shows an unread count and the latest 50
-events while the page stays open; opening the inbox marks them read.
-Reloading or navigating clears the list. Desktop popups additionally require
-a browser that supports the Notification API and grants permission; use an
-external browser if the embedded one does not. See
+notifications that runs recorded, including those from while no page was
+open; opening the inbox marks them read, and reloading keeps them. Desktop
+popups, for notifications that arrive while the page is open, additionally
+require a browser that supports the Notification API and grants permission;
+use an external browser if the embedded one does not. See
 [Notifications](NOTIFICATIONS.md#in-page-inbox).
 
 ### Can I run the Web UI read-only?

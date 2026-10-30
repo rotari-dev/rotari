@@ -37,27 +37,43 @@ from a run's merged command configuration.
 
 ## Browser notifications
 
-The Web UI records an in-page notification when a run finishes or a job reaches
-its final result while the page is open. Opening a run that had already
-finished does not notify about its jobs. This is entirely local and never sends
-data to an external service.
+Each run records its job results and its completion in the master directory
+as they happen, whether or not a Web page is open. The live Web UI shows these
+records in an in-page inbox, so a run that finished while no page was open is
+there when you open one. Records are kept for 10 days. A record that cannot be
+written is a warning and does not change the run's result. This is entirely
+local and never sends data to an external service.
 
 ### In-page inbox
 
 The live Web UI and Recent jobs page have an **Inbox (N)** button. The number
-is the unread count; opening the inbox marks its entries read. New entries
-are also announced to screen readers. The inbox keeps the latest 50 entries
-in memory for the current page; navigating away or reloading clears them.
-Use **Clear notifications** to remove all entries, or Escape to close the inbox.
+is the unread count; opening the inbox marks its entries read. It shows the
+latest 50 entries of the selected basedirs, including those recorded before
+the page was opened. Read and cleared entries stay that way after a reload or
+a restart of `rotari web`, and in every other page and browser that uses the
+same master directory. Use **Clear notifications** to remove all entries, or
+Escape to close the inbox. A server started with `--allow-control=false`
+shows the inbox but cannot save read or cleared entries; they then last only
+until the page is reloaded.
+
+Entries that arrive while a page is open are also announced to screen readers
+and, when enabled, shown as desktop notifications. Entries that were already
+recorded when the page opened, or when a basedir's bell was turned on, are
+not.
 
 This works without the desktop Notification API or its permission, including
 in embedded browsers such as VS Code's internal browser and over HTTP.
 Desktop notification permissions, the desktop on/off toggle, and
-`--notifications=false` do not disable the inbox. Project browser event and
-field settings still apply on the main Web UI; Recent jobs uses its existing
-job-result notifications and selected basedirs.
-The page must remain open and polling; this is not a background notification
-service. A supported browser can additionally show desktop notifications.
+`--notifications=false` do not disable the inbox.
+
+The inbox reads records from the master directory that `rotari web` resolves
+(`ROTARI_MASTERDIR`, `$XDG_STATE_HOME/rotari/master`, or
+`~/.local/state/rotari/master`). A run whose process resolves another master
+directory, such as one started on a host with a different home directory, is
+not shown. Runs started by a rotari version without this feature record
+nothing. A run whose process was killed records no completion; if `rotari
+unlock` later finalizes it from its complete summary, its completion is
+recorded then (and sent to the Webhook) instead.
 
 ### Enabling browser notifications
 
@@ -100,11 +116,13 @@ max_jobs = 10
 
 A run counts as a success only when its exit code is 0; a failed or cancelled
 run is reported under `run_failure`. A job is reported only after its retries
-end. Job results and a run completion
-detected in the same polling tick are merged into one notification per run.
-The first poll establishes a baseline and never reports existing history.
-`max_jobs` limits how many jobs one notification lists, and the body is
-truncated at 1000 characters.
+end, and blocked jobs and jobs cancelled before they start are failures. As
+with Webhooks, a run's job results within ten seconds of the
+first are combined into one notification, and the run's completion joins the
+pending one and records it at once. `max_jobs` limits how many jobs one
+notification lists, and the body is truncated at 1000 characters. The
+`[browser]` settings are applied when the inbox is shown, so a saved change
+also applies to entries already recorded.
 
 The defaults include `run_id`, `job_name`, and `attempt_id` so a notification
 identifies its run, job, and exact execution without repeating the job ID.
@@ -117,12 +135,12 @@ Each basedir in the sidebar has a bell that selects it for notifications;
 only the current basedir starts selected. With several basedirs registered,
 the bell beside the **Registered basedirs** heading selects all of them at
 once, or clears them when all are selected; it looks mixed while only some
-are selected. The selection lasts until `rotari web` restarts.
+are selected. The selection lasts until `rotari web` restarts. The main Web UI
+always includes the basedir it shows; Recent jobs uses only the selected bells.
 
-The current basedir's `/api/state` is checked every two seconds. Selected other
-basedirs use `/api/active-runs`. Completed run details are not repeatedly
-loaded. Static exports have no server to load notification settings, so they
-provide neither the editor nor live notifications. They show a local on/off
+The inbox is checked every two seconds. Static exports have no server to load
+notification settings or records, so they provide neither the editor nor an
+inbox. They show a local on/off
 toggle on both the main pages and Recent jobs; `--notifications` selects its
 initial value. Live-server options
 (`--host`, `--port`, `--auth-token`, and `--allow-control`) cannot be combined
@@ -171,7 +189,9 @@ event are combined, and run completion flushes the pending batch immediately.
 cover the whole run.
 
 Delivery errors are warnings and do not change the run result. Rotari keeps no
-delivery record and does not retry.
+delivery record and does not retry. A run whose process stopped before reporting its
+completion sends it when `rotari unlock` finalizes the run from its complete
+summary.
 
 ### Slack
 

@@ -183,6 +183,9 @@ func Unlock(paths state.ProjectPaths, runID string, guard Guard, assumeStopped b
 	if err != nil {
 		return UnlockResult{}, fmt.Errorf("failed to update metadata: %w", err)
 	}
+	if result.Action == "finalize" && guard.RunFinished != nil {
+		guard.RunFinished(paths, snapshot.runID, summary.ExitCode)
+	}
 	result.Applied = true
 	result.Revision, err = Revision(paths)
 	if err != nil {

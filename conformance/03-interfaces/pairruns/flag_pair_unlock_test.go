@@ -253,11 +253,52 @@ func assertPairUnlockRecovered(t *testing.T, f pairMutationFixture, result suppo
 	delete(before, lockRelative)
 	delete(after, metaRelative)
 	delete(before, metaRelative)
+	// Finalizing records the run's completion for the Web inbox once (NOT-2).
+	recordDir, err := filepath.Rel(f.E.Root, filepath.Join(f.E.Master, "notifications"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordPath := filepath.Join(recordDir, f.Run+".jsonl")
+	if got, want := pairRunCompletions(t, afterTree, recordPath), pairRunCompletions(t, seed, recordPath)+1; got != want {
+		t.Fatalf("recorded run completions = %d, want %d", got, want)
+	}
+	for _, path := range []string{recordDir, recordPath} {
+		delete(before, path)
+		delete(after, path)
+	}
 	if !reflect.DeepEqual(before, after) {
-		t.Fatalf("unlock changed project state beyond its lock, metadata and recovery evidence")
+		t.Fatalf("unlock changed project state beyond its lock, metadata, recovery evidence and notification record")
 	}
 
 	*f.Current = savePairTree(t, f.E.Root)
+}
+
+// pairRunCompletions counts the run.finished events in the notification
+// record at path in tree.
+func pairRunCompletions(t *testing.T, tree pairSavedTree, path string) int {
+	t.Helper()
+	count := 0
+	for _, file := range tree {
+		if file.Path != path {
+			continue
+		}
+		for _, line := range strings.Split(strings.TrimSpace(string(file.Data)), "\n") {
+			var record struct {
+				Events []struct {
+					Event string `json:"event"`
+				} `json:"events"`
+			}
+			if err := json.Unmarshal([]byte(line), &record); err != nil {
+				t.Fatalf("notification record %q: %v", line, err)
+			}
+			for _, event := range record.Events {
+				if event.Event == "run.finished" {
+					count++
+				}
+			}
+		}
+	}
+	return count
 }
 
 func pairUnlockContext(t *testing.T, tree pairSavedTree, path string) map[string]any {
@@ -279,6 +320,10 @@ func pairUnlockObservation(t *testing.T, tree pairSavedTree) map[string]string {
 	t.Helper()
 	normalized := append(pairSavedTree(nil), tree...)
 	for index, file := range normalized {
+		if !file.Dir && filepath.Base(filepath.Dir(file.Path)) == "notifications" && filepath.Ext(file.Path) == ".jsonl" {
+			normalized[index].Data = pairNotificationRecordShape(t, file.Data)
+			continue
+		}
 		if filepath.Base(file.Path) != "context.json" || file.Dir {
 			continue
 		}
@@ -294,6 +339,32 @@ func pairUnlockObservation(t *testing.T, tree pairSavedTree) map[string]string {
 		}
 	}
 	return normalized.Observation(t)
+}
+
+// pairNotificationRecordShape replaces the times and IDs that each
+// notification record takes from the moment it is written.
+func pairNotificationRecordShape(t *testing.T, data []byte) []byte {
+	t.Helper()
+	var shaped []string
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		var record map[string]any
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("notification record %q: %v", line, err)
+		}
+		record["created_at"], record["id"] = "<record-time>", "<record-id>"
+		events, _ := record["events"].([]any)
+		for _, value := range events {
+			if event, ok := value.(map[string]any); ok {
+				event["occurred_at"] = "<event-time>"
+			}
+		}
+		encoded, err := json.Marshal(record)
+		if err != nil {
+			t.Fatal(err)
+		}
+		shaped = append(shaped, string(encoded))
+	}
+	return []byte(strings.Join(shaped, "\n"))
 }
 
 func pairUnlockExecutionTimes(t *testing.T, record map[string]any) {

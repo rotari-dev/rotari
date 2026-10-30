@@ -80,7 +80,9 @@ flowchart LR
   all relevant attempts. Unlock either finalizes matching interrupted
   metadata through `state.FinalizeRun` with the recorded finish time and
   applicable client cleanup, or explains a release to collecting.
-  It never replays `projectrun.Runner` callbacks. Unknown executions require
+  Finalizing calls only the caller's `Guard.RunFinished`, so the run's
+  completion is notified once, as its stopped process never did; it never
+  replays other `projectrun.Runner` callbacks. Unknown executions require
   explicit attestation for repair; terminal records are not termination
   evidence. Expanded array origins use `model.TaskOrigin`, the same
   domain rule to which run planning delegates; pinned and unpinned origins
@@ -102,7 +104,9 @@ flowchart LR
    It lists registered basedirs and lightweight project/run metadata, checks
    project locks across the selected basedir, and loads a project's queue and
    run summaries only when that project is opened. Job/attempt details load
-   only for the selected run or active runs monitored for notifications.
+   only for the selected run or active runs. The notification inbox reads the
+   records runs left in the master directory (`/api/notifications`), not the
+   run state.
    The dedicated history-search API scans only the user-selected basedir,
    project, and run scopes without expanding the lightweight `/api/state` index.
    The activity API (`/api/activity`) lists runs across every registered
@@ -225,6 +229,7 @@ flowchart TB
     executor
     state
     runregistry
+    notificationlog
     attachment
     config
   end
@@ -311,6 +316,8 @@ flowchart TB
   jobstatus --> artifact
   executor --> state
   runregistry --> state
+  notificationlog --> state
+  webui --> notificationlog
   attachment --> state
   l1 --> model
   l2 --> model
@@ -335,7 +342,8 @@ are checked against this graph by
 | [internal/project](../internal/project/) | A project's run state (idle, running, interrupted) from `running.lock` and `meta.json`, removing a stale local lock the one way every reader does (SAFE-11), one run's phase (running, interrupted, finished, ended) for `wait` and the MCP run summary, consistency checks, recovery, and the queue-edit sequence: state lock, state check, load, edit, then the queue write, preceded by the metadata write only while idle. The recovery commands it prints use a location renderer that CLI commands install (`SetCommandLocation`), so they omit an implicit `--basedir` (CLI-22). | `inspect.go` (`Inspect`, `InspectRunLock`, `EnsureIdle`), `run_phase.go` (`RunPhaseOf`), `edit.go` (`EditQueue`, `CreateQueueGuarded`), `reset.go` (`Reset`), `unlock.go` (`Unlock`) |
 | [internal/resolve](../internal/resolve/) | Location and job-name rules shared by the commands that read existing state: a run ID through the run registry, an `att_` attempt ID, the latest-run fallback, run names, and job IDs or names looked up in the queue and latest runs, in one state directory or, for read-only commands without `--basedir`, across the default and registered ones. show's and wait's own selector orders build on it. | `resolve.go` (`ExistingRun`, `RunID`, `Jobs`, `JobIDsByName`), `scope.go` (`Scope`) |
 | [internal/config](../internal/config/) | Scope-aware global/cwd workspace/basedir/project discovery, location-key cycle validation, recursive file-value merging and immutable canonical TOML snapshots; YAML, TOML, JSON parsing. Runtime option meanings stay in `cmd/rotari`. | `layers.go` (`LoadScope`, `Load`, `Merge`, `Loaded.Snapshot`), `config.go` |
-| [internal/notification](../internal/notification/) | `notifications.toml`: its schema, scope lookup, validation, serialization, and the shared job/run event and batch model used by both webhook and browser notifications. It also owns the Web UI basedir route (`WebBaseDirID`) that `internal/webui` serves and webhook links point to. Delivery stays in `cmd/rotari` and the Web assets. | `config.go` (`Load`, `Marshal`), `event.go` (`NewBatch`) |
+| [internal/notification](../internal/notification/) | `notifications.toml`: its schema, scope lookup, validation, serialization, and the shared job/run event and batch model used by both webhook and browser notifications, including the browser inbox text (`NewBrowserMessage`) and the event facts a record may keep (`Event.Recordable`). It also owns the Web UI basedir route (`WebBaseDirID`) that `internal/webui` serves and webhook links point to. Delivery stays in `cmd/rotari` (`runNotificationManager` batches a run's events for the Webhook and the record) and `internal/webui`. | `config.go` (`Load`, `Marshal`), `event.go` (`NewBatch`), `browser.go` (`NewBrowserMessage`) |
+| [internal/notificationlog](../internal/notificationlog/) | The master directory's notification records for the Web inbox, `<masterdir>/notifications/<run-id>.jsonl`, one file per run appended only by that run's process or its unlock, kept for 10 days, and the inbox's shared read/cleared cursors (`inbox-state.json`). Knows nothing of HTTP or settings. | `log.go` (`Append`, `Records`, `Advance`) |
 | [internal/runregistry](../internal/runregistry/) | The master directory's run index, `<masterdir>/runs/<run-id>.json`: register, look up, unregister, and find stale entries for `gc`. | `registry.go` |
 | [internal/attachment](../internal/attachment/) | Per-client run attachments: process-held locks, host and PID-start identity, attachment aggregation, stale-client policy handoff, initiating-client startup reservations, and removal of a deleted run's attachment state (`ForgetRun`, called by `delete`). It does not render CLI output. | `session.go` |
 | [internal/projectrun](../internal/projectrun/) | One project's run against its files: `Begin` (context, command snapshot, run lock, registry, running metadata; consumes the queue only for queue-based runs), `Execute` (snapshot, plan, source revisions of the executed jobs, dispatch, summary), and `Finish` (final context, metadata finalization, lock removal). Saved-run snapshots are constructed under the project state lock without editing the next queue. Shared by sync and async runs and by cancellation. Also checks that a queue can run with the known executors (`ValidateQueue`). | `lifecycle.go`, `execute.go`, `plan.go`, `plan_revision.go` (`PlanRevision`, the revision a run preview prints and a start checks), `validate.go` |
@@ -540,7 +548,9 @@ Finish, in `Runner.Finish`:
 2. `Finalize` finalizes `meta.json`
    (`state.FinalizeRun`) after checking that the run lock is still this run's,
    then reports the finished run to the notification hook, which flushes any
-   pending job events with it.
+   pending job events with it: the batch is appended to the master
+   directory's notification record and, when configured, sent to the
+   Webhook.
 3. Remove the run lock.
 
 ### `rotari show` and the Web UI

@@ -1271,6 +1271,25 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   payload or a supported service-specific payload. Delivery errors are warnings
   and do not change run status; rotari keeps no delivery ledger and does not
   retry.
+- **NOT-2** Each run also records every batch above, before any channel's
+  event selection and whatever its Webhook settings, under the master
+  directory its process resolves: one file per run,
+  `<masterdir>/notifications/<run-id>.jsonl`, appended only by that run's
+  process or by an unlock that finalizes it, one JSON record per line written
+  in a single write. A record keeps the run's basedir, project, run ID, and
+  each event's values of the shared field vocabulary, never the job's
+  environment or executor options. A record that cannot be written is a
+  warning and does not change the run's result. A run file whose last write
+  is more than 10 days old is not read and is removed by a later append. The
+  Web inbox (WEB-21) shows these records; `unlock` finalizing a run from its
+  complete summary reports the run's completion to both the record and the
+  Webhook, exactly once, because the run's process reports it only after
+  finalizing its metadata (SAFE-15). A run killed without that finalization
+  and never finalized by `unlock` is not reported. Implemented in
+  [notificationlog](../internal/notificationlog/log.go) and
+  [webhook_batch.go](../cmd/rotari/webhook_batch.go); covered by
+  `TestWebInboxShowsNotificationsRecordedWhileClosed` and
+  `TestUnlockFinalizationRepair`.
 - Failure diagnosis is local and rule-based. It evaluates a failed job's
   recorded scheduler error and configured log against a fixed set of documented
   signatures after case, ANSI-escape, and whitespace normalization. It makes no

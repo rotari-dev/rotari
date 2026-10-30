@@ -13,7 +13,6 @@ import (
 
 	"github.com/rotari-dev/rotari/internal/diagnose"
 	"github.com/rotari-dev/rotari/internal/joblist"
-	"github.com/rotari-dev/rotari/internal/notification"
 )
 
 //go:embed assets/web_template.html
@@ -146,12 +145,7 @@ func composeWebHTML(executors []string, notifications bool, bootstrap string, ba
 }
 
 func composeWebHTMLWithSession(executors []string, notifications bool, bootstrap, notificationSession string, basedirLists ...[]webBaseDir) string {
-	return composeWebHTMLWithNotificationSettings(executors, notifications, notification.Defaults().Browser, bootstrap, notificationSession, basedirLists...)
-}
-
-func composeWebHTMLWithNotificationSettings(executors []string, notifications bool, settings notification.ChannelSettings, bootstrap, notificationSession string, basedirLists ...[]webBaseDir) string {
 	executorJSON, _ := json.Marshal(executors)
-	notificationSettingsJSON, _ := json.Marshal(settings)
 	diagnosisGuidanceJSON, _ := json.Marshal(struct {
 		NoMatchNext     string `json:"noMatchNext"`
 		UnavailableNext string `json:"unavailableNext"`
@@ -175,7 +169,6 @@ func composeWebHTMLWithNotificationSettings(executors []string, notifications bo
 	template = strings.ReplaceAll(template, "__ROTARI_BRAND_ICON__", brandIcon())
 	template = strings.Replace(template, "__ROTARI_NOTIFICATION_ICON__", faviconDataURL(webFaviconDarkSVG), 1)
 	template = strings.Replace(template, "__ROTARI_NOTIFICATION_DEFAULT__", strconv.FormatBool(notifications), 1)
-	template = strings.Replace(template, "__ROTARI_NOTIFICATION_SETTINGS__", string(notificationSettingsJSON), 1)
 	template = strings.Replace(template, "__ROTARI_NOTIFICATION_SESSION__", notificationSession, 1)
 	template = strings.Replace(template, "__ROTARI_STATIC_BOOTSTRAP__", bootstrap, 1)
 	return template
@@ -290,20 +283,7 @@ func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row,
 	}
 	builder.WriteString(`<section class="jobs-section"><table class="jobs-table"><thead><tr><th data-sort="state">State</th><th data-sort="project">Project</th><th data-sort="job">Job</th><th data-sort="attempt">Attempt</th><th data-sort="started">Started</th><th data-sort="finished">Finished</th><th data-sort="elapsed">Elapsed</th></tr></thead><tbody>`)
 	for _, row := range rows {
-		// A job that has not started has no attempt ID yet.
-		notificationID := row.AttemptID
-		if notificationID == "" {
-			notificationID = row.JobID
-		}
-		builder.WriteString(`<tr data-notification-key="`)
-		builder.WriteString(html.EscapeString(row.Project + "/" + row.RunID + "/" + notificationID))
-		builder.WriteString(`" data-project="`)
-		builder.WriteString(html.EscapeString(row.Project))
-		builder.WriteString(`" data-job="`)
-		builder.WriteString(html.EscapeString(row.JobName))
-		builder.WriteString(`" data-run-url="`)
-		builder.WriteString(html.EscapeString(homePath + "project/" + url.PathEscape(row.Project) + "/run/" + url.PathEscape(row.RunID)))
-		builder.WriteString(`"><td class="jobs-state">`)
+		builder.WriteString(`<tr><td class="jobs-state">`)
 		builder.WriteString(statusPillHTML(row.State))
 		builder.WriteString(`</td><td><a href="`)
 		builder.WriteString(html.EscapeString(homePath))
@@ -416,7 +396,7 @@ func writeJobsBasedirEntry(builder *strings.Builder, homePath string, currentPro
 	builder.WriteString(`">`)
 	builder.WriteString(basedirLabelHTML(entry))
 	builder.WriteString(`</a>`)
-	builder.WriteString(basedirBellHTML(entry, ` data-jobs-url="`+html.EscapeString(basePath+"jobs/")+`"`, "toggleJobsNotificationBasedir"))
+	builder.WriteString(basedirBellHTML(entry, "", "toggleJobsNotificationBasedir"))
 	builder.WriteString(`</div><div class="sidebar-projects basedir-contents"`)
 	if !active {
 		builder.WriteString(` hidden`)

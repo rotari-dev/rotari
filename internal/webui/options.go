@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/rotari-dev/rotari/internal/jobcontrol"
-	"github.com/rotari-dev/rotari/internal/notification"
+	"github.com/rotari-dev/rotari/internal/notificationlog"
 	"github.com/rotari-dev/rotari/internal/queueops"
 	"github.com/rotari-dev/rotari/internal/state"
 	"github.com/rotari-dev/rotari/internal/web"
@@ -40,8 +40,9 @@ type Options struct {
 	// StaticArtifactsCopied, when set, is told how many files and bytes a
 	// static export copied for StaticArtifactContents.
 	StaticArtifactsCopied func(files int, bytes int64)
-	// NotificationSettings controls which browser events and fields are shown.
-	NotificationSettings notification.ChannelSettings
+	// NotificationLog holds the notifications runs recorded, which the live
+	// inbox shows; nil for a static export.
+	NotificationLog *notificationlog.Log
 	// Launches is set when rotari web runs with --allow-exec.
 	Launches *LaunchOptions
 	// LauncherFile is where launchers.toml is read from. Explanations of why

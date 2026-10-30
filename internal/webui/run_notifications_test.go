@@ -7,6 +7,46 @@ import (
 	"testing"
 )
 
+// inboxServerJS fakes the notification endpoints for a page under test:
+// entries, newest first, each with the basedir its run belongs to; the shared
+// cursors; and, while control is off, a state endpoint that refuses writes.
+const inboxServerJS = `
+const zero = {created_at: '', id: ''};
+const after = (a, b) => a.created_at !== b.created_at ? a.created_at > b.created_at : a.id > b.id;
+const server = {entries: [], state: {read: zero, cleared: zero}, control: true, fail: '', requested: [], posts: []};
+let clock = 0;
+function addEntry(basedir, title, url) {
+  clock++;
+  const entry = {created_at: '2026-10-31T00:00:' + String(clock).padStart(2, '0') + '.000000000Z', id: 'r-' + clock, basedir, title, body: 'project: <project>', url};
+  server.entries.unshift(entry);
+  return entry;
+}
+function fakeFetch(url, init) {
+  url = String(url);
+  if (url === '/api/notifications/state') {
+    const next = JSON.parse(init.body);
+    server.posts.push(next);
+    if (!server.control) return Promise.resolve({ok: false, status: 403, text: async () => 'read-only'});
+    for (const name of ['read', 'cleared']) if (after(next[name], server.state[name])) server.state[name] = next[name];
+    if (after(server.state.cleared, server.state.read)) server.state.read = server.state.cleared;
+    return Promise.resolve({ok: true, json: async () => server.state});
+  }
+  if (url.startsWith('/api/notifications?')) {
+    if (server.fail) return Promise.resolve({ok: false, status: 500, text: async () => server.fail});
+    const ids = new URLSearchParams(url.split('?')[1]).get('basedirs').split(',');
+    server.requested.push(ids.join(','));
+    const entries = server.entries.filter(entry => ids.includes(entry.basedir) && after(entry, server.state.cleared))
+      .map(({basedir, ...entry}) => entry);
+    return Promise.resolve({ok: true, json: async () => ({entries, ...server.state})});
+  }
+  return Promise.reject(new Error('offline'));
+}
+`
+
+// The inbox shows the notifications the server recorded, so history from
+// before the page opened is there and unread. Opening it marks entries read
+// through the shared cursors, Clear hides them, and a read-only server keeps
+// both in page memory. It needs neither the desktop API nor its permission.
 func TestNotificationInboxWithoutDesktopAPI(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node is not installed")
@@ -14,9 +54,12 @@ func TestNotificationInboxWithoutDesktopAPI(t *testing.T) {
 	script := `
 const fs = require('fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
+` + inboxServerJS + `
+const basedir = process.argv[2];
 const errors = [];
 const virtualConsole = new VirtualConsole();
 virtualConsole.on('jsdomError', error => errors.push(String(error)));
+addEntry(basedir, '<b>rotari: run failed</b>', '/_basedir/' + basedir + '/project/p/run/r');
 const dom = new JSDOM(fs.readFileSync(process.argv[1], 'utf8'), {
   runScripts: 'dangerously', url: 'http://example.test/', virtualConsole,
   beforeParse(window) {
@@ -24,161 +67,145 @@ const dom = new JSDOM(fs.readFileSync(process.argv[1], 'utf8'), {
     window.isSecureContext = false;
     window.localStorage.setItem('rotari-notifications-enabled', 'false');
     window.setInterval = () => 1;
-    window.fetch = async () => { throw new Error('offline'); };
+    window.fetch = fakeFetch;
   },
 });
-setTimeout(() => {
+const settle = () => new Promise(resolve => setTimeout(resolve, 20));
+(async () => {
   try {
+    await settle();
     const w = dom.window, d = w.document;
-    const emit = () => {
-      if (typeof w.notifyRunEvent === 'function')
-        w.notifyRunEvent({projectName: '<project>', runID: 'run', basedirID: 'other', run: {exit_code: 1}},
-          [], [], true, {fields: ['project', 'link']});
-      else w.notifyJobsActivity({state: 'failed', project: '<project>', job: 'job', runURL: '/other/run'});
-    };
-    emit();
+    const poll = async () => { await w.refreshNotificationInbox(); await settle(); };
     const button = d.querySelector('.notification-inbox > button');
     const panel = d.getElementById('notification-inbox-panel');
-    if (!button || button.textContent !== 'Inbox (1)' || !panel.hidden) throw Error('missing unread badge');
-    if (!panel.textContent.includes('<project>') || panel.querySelector('project')) throw Error('unsafe content');
+    const announcement = d.querySelector('.notification-announcement');
+    if (!button || button.textContent !== 'Inbox (1)' || !panel.hidden) throw Error('history is not unread: ' + button?.textContent);
+    if (announcement.textContent) throw Error('history was announced');
+    if (!panel.textContent.includes('<b>rotari') || !panel.textContent.includes('<project>') || panel.querySelector('b'))
+      throw Error('unsafe content');
     const link = panel.querySelector('a');
-    if (!link || (typeof w.notifyRunEvent === 'function' && !link.href.includes('/_basedir/other/project/')))
-      throw Error('missing exact basedir link');
+    if (!link || !link.href.endsWith('/_basedir/' + basedir + '/project/p/run/r')) throw Error('missing run link');
     button.click();
+    await settle();
     if (panel.hidden || button.textContent !== 'Inbox (0)') throw Error('not marked read');
-    emit();
-    if (button.textContent !== 'Inbox (0)') throw Error('open inbox became unread');
+    if (server.state.read.id !== 'r-1') throw Error('read cursor not shared: ' + JSON.stringify(server.posts));
+    addEntry(basedir, 'second', '');
+    await poll();
+    if (button.textContent !== 'Inbox (0)' || announcement.textContent !== 'second') throw Error('open inbox became unread');
     d.dispatchEvent(new w.KeyboardEvent('keydown', {key: 'Escape'}));
     if (!panel.hidden || button.getAttribute('aria-expanded') !== 'false') throw Error('Escape failed');
-    for (let i = 0; i < 60; i++) emit();
-    if (panel.querySelectorAll('article').length !== 50 || button.textContent !== 'Inbox (50)')
-      throw Error('inbox not bounded');
+    addEntry(basedir, 'third', '');
+    addEntry('elsewhere', 'other basedir', '');
+    await poll();
+    if (button.textContent !== 'Inbox (1)') throw Error('new entry not unread: ' + button.textContent);
+    if (server.requested.some(ids => ids !== basedir)) throw Error('wrong basedirs: ' + server.requested);
     button.click();
     panel.querySelector('button').click();
+    await poll();
     if (panel.querySelector('article') || button.textContent !== 'Inbox (0)') throw Error('clear failed');
+    if (server.state.cleared.id !== 'r-3') throw Error('cleared cursor not shared');
+    server.control = false;
+    button.click();
+    addEntry(basedir, 'read-only', '');
+    await poll();
+    if (button.textContent !== 'Inbox (1)') throw Error('read-only entry not unread');
+    button.click();
+    await poll();
+    if (button.textContent !== 'Inbox (0)') throw Error('read-only server did not keep the page read state');
+    button.click();
+    panel.querySelector('button').click();
+    await poll();
+    if (panel.querySelector('article')) throw Error('read-only server did not keep the page clear state');
+    server.fail = 'disk full';
+    await poll();
+    if (!panel.textContent.includes('Cannot load notifications: disk full')) throw Error('load error hidden');
     if (errors.length) throw Error(errors.join('\n'));
     dom.window.close();
   } catch (error) { console.error(error); process.exit(1); }
-}, 50);
+})();
 `
+	basedirs := []webBaseDir{newWebBaseDir("current", "/state", true)}
 	for name, page := range map[string]string{
-		"application": testSite().webHTML(),
-		"recent jobs": jobsHTML("/", nil, nil, jobsSelection{}, true, true),
+		"application": siteFor("/state").webHTML(),
+		"recent jobs": jobsHTML("/", nil, nil, jobsSelection{}, true, true, basedirs),
 	} {
 		t.Run(name, func(t *testing.T) {
+			id := "current"
+			if name == "application" {
+				id = siteFor("/state").currentBaseID()
+			}
 			path := filepath.Join(t.TempDir(), "index.html")
 			if err := os.WriteFile(path, []byte(page), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if output, err := exec.Command("node", "-e", script, path).CombinedOutput(); err != nil {
+			if output, err := exec.Command("node", "-e", script, path, id).CombinedOutput(); err != nil {
 				t.Fatalf("notification inbox: %v\n%s", err, output)
 			}
 		})
 	}
 }
 
-// Browser notifications report what happened while the page watched: a run
-// that finished, or a job that ended, since the previous poll. A run or job
-// that only appears because the page loaded it, such as an older run opened
-// from its project, finished before and must not notify. A run that both
-// started and finished between two polls is newer than every run the page
-// knew, and does notify.
-func TestBrowserNotificationsReportOnlyWhatHappenedSinceThePreviousPoll(t *testing.T) {
+// A desktop notification shows only an entry that arrives while the page is
+// open. Entries already recorded when the page opens, or when a basedir's
+// bell is turned on, are history: they enter the inbox without a popup.
+func TestNotificationInboxAnnouncesOnlyNewEntries(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node is not installed")
 	}
 	script := `
 const fs = require('fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
+` + inboxServerJS + `
 const errors = [];
 const virtualConsole = new VirtualConsole();
 virtualConsole.on('jsdomError', error => errors.push(error.stack || String(error)));
 const shown = [];
+addEntry('one', 'old in one', '');
+addEntry('two', 'old in two', '');
 const dom = new JSDOM(fs.readFileSync(process.argv[1], 'utf8'), {
-	runScripts: 'dangerously',
-	url: 'https://example.test/',
-	virtualConsole,
-	beforeParse(window) {
-		window.Notification = class {
-			constructor(title, options) { shown.push(title + ' | ' + options.body); }
-		};
-		window.Notification.permission = 'granted';
-		window.Notification.requestPermission = async () => 'granted';
-		window.localStorage.setItem('rotari-notifications-enabled', 'true');
-		window.setInterval = () => 1;
-		// Notification settings fall back to the defaults: job failures, run
-		// failures, and run successes notify; job successes do not.
-		window.fetch = async () => { throw new Error('offline'); };
-	},
+  runScripts: 'dangerously', url: 'https://example.test/', virtualConsole,
+  beforeParse(window) {
+    window.Notification = class {
+      constructor(title, options) { shown.push(title + ' | ' + options.body); }
+    };
+    window.Notification.permission = 'granted';
+    window.Notification.requestPermission = async () => 'granted';
+    window.localStorage.setItem('rotari-notifications-enabled', 'true');
+    window.setInterval = () => 1;
+    window.fetch = fakeFetch;
+  },
 });
-const job = (id, status, final) => ({ id, name: id, execution_status: status, final });
-const run = (id, running, exitCode, jobs) => ({ run_id: id, running, exit_code: exitCode, jobs });
-const state = (...runs) => ({ projects: [{ project_name: 'p', runs }] });
-const older = run('20261010-090000-aaaaaaaa', false, 1);
-const latest = run('20261010-100000-bbbbbbbb', false, 0);
-const cases = [
-	{
-		name: 'a watched run finishes with a failed job',
-		before: state(run('20261010-110000-cccccccc', true, undefined, [job('j1', 'running', false)])),
-		after: state(run('20261010-110000-cccccccc', false, 1, [job('j1', 'failed', true)])),
-		want: ['rotari: run failed (1 job failed)'],
-	},
-	{
-		name: 'a job of a watched run fails',
-		before: state(run('20261010-110000-cccccccc', true, undefined, [job('j1', 'running', false), job('j2', 'running', false)])),
-		after: state(run('20261010-110000-cccccccc', true, undefined, [job('j1', 'failed', true), job('j2', 'running', false)])),
-		want: ['rotari: 1 job failed'],
-	},
-	{
-		name: 'a run starts and finishes between two polls',
-		before: state(latest, older),
-		after: state(run('20261010-120000-dddddddd', false, 0, [job('j1', 'success', true)]), latest),
-		want: ['rotari: run succeeded'],
-	},
-	{
-		name: 'an old run is opened and its jobs load',
-		before: state(latest, older),
-		after: state(latest, { ...older, jobs: [job('j1', 'failed', true), job('j2', 'failed', true)] }),
-		want: [],
-	},
-	{
-		name: 'a project page loads an older run',
-		before: state(latest),
-		after: state(latest, { ...older, jobs: [job('j1', 'failed', true)] }),
-		want: [],
-	},
-];
-setTimeout(async () => {
-	const failures = [];
-	for (const test of cases) {
-		shown.length = 0;
-		dom.window.document.querySelector('#notification-inbox-panel > button').click();
-		try {
-			await dom.window.checkRunNotifications(test.before, test.after, '');
-		} catch (error) {
-			failures.push(test.name + ': threw ' + (error.stack || error));
-			continue;
-		}
-		const titles = shown.map(text => text.split(' | ')[0]);
-		if (JSON.stringify(titles) !== JSON.stringify(test.want))
-			failures.push(test.name + ': notified ' + JSON.stringify(titles) + ', want ' + JSON.stringify(test.want));
-		const inboxTitles = [...dom.window.document.querySelectorAll('.notification-inbox-list article > a, .notification-inbox-list article > strong')].map(node => node.textContent);
-		if (JSON.stringify(inboxTitles) !== JSON.stringify(test.want))
-			failures.push(test.name + ': inbox notified ' + JSON.stringify(inboxTitles));
-	}
-	if (errors.length) failures.push(...errors);
-	if (failures.length) {
-		console.error(failures.join('\n'));
-		process.exit(1);
-	}
-}, 50);
+const settle = () => new Promise(resolve => setTimeout(resolve, 20));
+(async () => {
+  try {
+    await settle();
+    const w = dom.window, d = w.document;
+    const poll = async () => { await w.refreshNotificationInbox(); await settle(); };
+    if (shown.length) throw Error('history popped up: ' + shown);
+    addEntry('one', 'new in one', '');
+    await poll();
+    if (shown.join('\n') !== 'new in one | project: <project>') throw Error('new entry: ' + shown);
+    const other = d.querySelector('.basedir-notification-toggle[data-basedir-id="two"]');
+    other.checked = true;
+    w.toggleJobsNotificationBasedir(other);
+    await settle();
+    if (shown.length !== 1) throw Error('a newly selected basedir popped up its history: ' + shown);
+    if (!d.getElementById('notification-inbox-panel').textContent.includes('old in two')) throw Error('selected basedir history missing');
+    addEntry('two', 'new in two', '');
+    await poll();
+    if (shown.length !== 2 || !shown[1].startsWith('new in two')) throw Error('new entry in two: ' + shown);
+    if (errors.length) throw Error(errors.join('\n'));
+    dom.window.close();
+  } catch (error) { console.error(error); process.exit(1); }
+})();
 `
-	htmlPath := filepath.Join(t.TempDir(), "index.html")
-	if err := os.WriteFile(htmlPath, []byte(testSite().webHTML()), 0o600); err != nil {
+	page := jobsHTML("/", nil, nil, jobsSelection{}, true, true, []webBaseDir{newWebBaseDir("one", "/one", true), newWebBaseDir("two", "/two", false)})
+	path := filepath.Join(t.TempDir(), "index.html")
+	if err := os.WriteFile(path, []byte(page), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if output, err := exec.Command("node", "-e", script, htmlPath).CombinedOutput(); err != nil {
-		t.Fatalf("browser notifications: %v\n%s", err, output)
+	if output, err := exec.Command("node", "-e", script, path).CombinedOutput(); err != nil {
+		t.Fatalf("notification inbox: %v\n%s", err, output)
 	}
 }
 

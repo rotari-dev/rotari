@@ -159,7 +159,7 @@ func TestUnlockExecutionEvidenceOverridesTerminalOutcome(t *testing.T) {
 }
 
 func TestUnlockFinalizationRepair(t *testing.T) {
-	covers(t, "SAFE-15", "SAFE-16", "SAFE-4", "SAFE-7", "RES-7")
+	covers(t, "SAFE-15", "SAFE-16", "SAFE-4", "SAFE-7", "RES-7", "NOT-2")
 	for _, variant := range []string{"plain", "legacy", "array", "carried-array", "matrix", "incomplete", "incomplete-legacy", "duplicate"} {
 		for _, transport := range []string{"CLI", "MCP"} {
 			t.Run(variant+"/"+transport, func(t *testing.T) {
@@ -247,6 +247,7 @@ func TestUnlockFinalizationRepair(t *testing.T) {
 				writeUnlockJSON(t, contextPath, context)
 				e.MustRotari("add", "-p", "repair", "--", "false")
 				before := support.SavePairTree(t, projectDir)
+				completions := recordedRunCompletions(t, e.Master, runID)
 				var session *mcpSession
 				target := map[string]any{"project": "repair"}
 				if transport == "MCP" {
@@ -330,6 +331,15 @@ func TestUnlockFinalizationRepair(t *testing.T) {
 				if !applied.Applied || meta["phase"] != wantPhase || meta["last_run_id"] != runID {
 					t.Fatalf("applied=%+v meta=%v", applied, meta)
 				}
+				// Finalizing notifies the completion the stopped run never
+				// reported, once; releasing notifies nothing.
+				wantCompletions := completions
+				if complete {
+					wantCompletions++
+				}
+				if got := recordedRunCompletions(t, e.Master, runID); got != wantCompletions {
+					t.Fatalf("recorded run completions = %d, want %d", got, wantCompletions)
+				}
 				if complete {
 					var completion struct {
 						ExitCode int `json:"last_run_exit_code"`
@@ -364,6 +374,36 @@ func TestUnlockFinalizationRepair(t *testing.T) {
 			})
 		}
 	}
+}
+
+// recordedRunCompletions counts the run.finished events recorded for the
+// Web inbox under masterDir for runID.
+func recordedRunCompletions(t *testing.T, masterDir, runID string) int {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(masterDir, "notifications", runID+".jsonl"))
+	if os.IsNotExist(err) {
+		return 0
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		var record struct {
+			Events []struct {
+				Event string `json:"event"`
+			} `json:"events"`
+		}
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("notification record %q: %v", line, err)
+		}
+		for _, event := range record.Events {
+			if event.Event == "run.finished" {
+				count++
+			}
+		}
+	}
+	return count
 }
 
 func readUnlockJSON(t *testing.T, path string) map[string]any {
