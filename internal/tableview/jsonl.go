@@ -152,10 +152,10 @@ func decodeJSONLinesRecord(line []byte, number int) (any, error) {
 	return value, nil
 }
 
-func (table *jsonLinesTable) key() string { return table.id }
+func (table *jsonLinesTable) key() string       { return table.id }
 func (table *jsonLinesTable) notesOf() []string { return nil }
 func (table *jsonLinesTable) columns() []Column { return table.index.columns }
-func (table *jsonLinesTable) len() int { return table.index.records }
+func (table *jsonLinesTable) len() int          { return table.index.records }
 
 func (table *jsonLinesTable) scan(visit func(number int, cells []string) bool) error {
 	file, err := table.target.open(table.target.Path)

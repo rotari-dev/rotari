@@ -960,7 +960,7 @@ function fileCell(ref, table) {
             href: tableURL(ref),
             target: "_blank",
             rel: "noopener",
-          title: "Open " + ref + " in a new Table viewer",
+            title: "Open " + ref + " in a new Table viewer",
           },
           "Open table",
         )
@@ -1144,7 +1144,10 @@ async function start() {
       kind: info.preview,
       ref: info.preview_ref,
       base: "file",
-      properties: { format: info.preview === "pdf" ? "PDF" : "", size: info.size },
+      properties: {
+        format: info.preview === "pdf" ? "PDF" : "",
+        size: info.size,
+      },
     });
     return;
   }

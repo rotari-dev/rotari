@@ -64,15 +64,19 @@ const syntaxLanguageAliases = new Map([
 ]);
 
 function highlightEscape(text) {
-  return String(text).replace(/[&<>"']/g, (character) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-      character
-    ],
+  return String(text).replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        character
+      ],
   );
 }
 
 function scriptLanguage(value) {
-  let label = String(value || "").trim().toLowerCase();
+  let label = String(value || "")
+    .trim()
+    .toLowerCase();
   if (!/[./\\]/.test(label)) label = label.split(/\s+/, 1)[0];
   const name = label
     .slice(label.lastIndexOf("/") + 1)

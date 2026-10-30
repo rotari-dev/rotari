@@ -38,6 +38,7 @@ repos:
       - id: prettier
         language_version: "22.23.2"
         files: ^internal/webui/assets/.*\.(html|js|css)$
+        exclude: ^internal/webui/assets/vendor/
 
   - repo: local
     hooks:

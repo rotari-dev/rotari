@@ -7,10 +7,12 @@
 const markdownPreviewByteLimit = 2 * 1024 * 1024;
 
 function escapeMarkdownText(value) {
-  return String(value == null ? "" : value).replace(/[&<>"']/g, (character) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-      character
-    ],
+  return String(value == null ? "" : value).replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        character
+      ],
   );
 }
 
@@ -46,7 +48,9 @@ function renderMarkdownBlocks(lines) {
         typeof highlightScriptCode === "function"
           ? highlightScriptCode(body.join("\n"), language)
           : escapeMarkdownText(body.join("\n"));
-      html.push('<pre><code class="tv-markdown-code">' + code + "</code></pre>");
+      html.push(
+        '<pre><code class="tv-markdown-code">' + code + "</code></pre>",
+      );
       continue;
     }
     const heading = line.match(/^\s*(#{1,6})\s+(.*?)\s*#*\s*$/);

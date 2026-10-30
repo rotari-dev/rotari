@@ -790,13 +790,13 @@ class TabView {
       { className: "tv-tab-title" },
       el("strong", {}, media.ref),
       el("span", { className: "tv-media-properties" }, properties),
-        media.kind === "pdf"
-          ? null
-          : el(
-              "a",
-              { href: this.url, target: "_blank", rel: "noopener" },
-              "Open in a new tab",
-            ),
+      media.kind === "pdf"
+        ? null
+        : el(
+            "a",
+            { href: this.url, target: "_blank", rel: "noopener" },
+            "Open in a new tab",
+          ),
     );
     this.root.append(title);
     if (media.kind === "image") {
@@ -881,9 +881,12 @@ class TabView {
   // highlighting source by its extension.
   showText() {
     const markdown =
-      this.media.kind === "markdown" || /\.(md|markdown)$/i.test(this.media.ref);
+      this.media.kind === "markdown" ||
+      /\.(md|markdown)$/i.test(this.media.ref);
     const language =
-      typeof scriptLanguage === "function" ? scriptLanguage(this.media.ref) : "";
+      typeof scriptLanguage === "function"
+        ? scriptLanguage(this.media.ref)
+        : "";
     const text = {
       pre: el("pre", { className: "tv-text" }),
       end: 0,
