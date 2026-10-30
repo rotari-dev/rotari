@@ -1051,6 +1051,97 @@ function notificationFieldControl(channel, field, selected) {
   label.append(input, field.replaceAll("_", " "));
   return label;
 }
+// notificationFieldEditor lists the selected fields in the order a
+// notification shows them, each movable up or down, above the unselected
+// fields in their default order. Checking a field appends it to the order;
+// saving reads the checked boxes in document order.
+function notificationFieldEditor(channel, settings, fields) {
+  const container = document.createElement("div");
+  container.className = "notification-field-editor";
+  const hint = document.createElement("p");
+  hint.className = "notification-field-hint";
+  hint.textContent = "Selected fields appear in notifications in this order.";
+  const ordered = document.createElement("ol");
+  ordered.className = "notification-field-order";
+  const defaultOrder = document.createElement("button");
+  defaultOrder.type = "button";
+  defaultOrder.className = "notification-field-default-order";
+  defaultOrder.textContent = "Use default order";
+  const unselected = document.createElement("div");
+  unselected.className = "notification-field-grid";
+  const labels = new Map(
+    fields.map((field) => [
+      field,
+      notificationFieldControl(channel, field, settings.fields || []),
+    ]),
+  );
+  let order = (settings.fields || []).filter((field) => labels.has(field));
+  const changed = () =>
+    ordered.dispatchEvent(new Event("change", { bubbles: true }));
+  const moveButton = (field, index, delta) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "notification-field-move";
+    button.dataset.delta = String(delta);
+    button.textContent = delta < 0 ? "↑" : "↓";
+    button.title = (delta < 0 ? "Move up: " : "Move down: ") + field;
+    button.setAttribute("aria-label", button.title);
+    button.disabled = index + delta < 0 || index + delta >= order.length;
+    button.onclick = () => {
+      order.splice(index, 1);
+      order.splice(index + delta, 0, field);
+      render();
+      const row = ordered.children[index + delta];
+      const next = row.querySelector(
+        `.notification-field-move[data-delta="${delta}"]`,
+      );
+      (next.disabled
+        ? row.querySelector(`.notification-field-move:not([disabled])`)
+        : next
+      )?.focus();
+      changed();
+    };
+    return button;
+  };
+  const render = () => {
+    ordered.replaceChildren(
+      ...order.map((field, index) => {
+        const row = document.createElement("li");
+        row.append(
+          labels.get(field),
+          moveButton(field, index, -1),
+          moveButton(field, index, 1),
+        );
+        return row;
+      }),
+    );
+    unselected.replaceChildren(
+      ...fields
+        .filter((field) => !order.includes(field))
+        .map((field) => labels.get(field)),
+    );
+    ordered.hidden = !order.length;
+    ordered.dataset.value = order.join(",");
+    const sorted = fields.filter((field) => order.includes(field));
+    defaultOrder.disabled = sorted.join(",") === ordered.dataset.value;
+  };
+  labels.forEach((label, field) => {
+    label.querySelector("input").addEventListener("change", (event) => {
+      order = event.target.checked
+        ? [...order, field]
+        : order.filter((item) => item !== field);
+      render();
+    });
+  });
+  defaultOrder.onclick = () => {
+    order = fields.filter((field) => order.includes(field));
+    render();
+    changed();
+  };
+  render();
+  container.append(hint, ordered, defaultOrder, unselected);
+  return container;
+}
 function notificationChannelEditor(name, settings, fields, maxJobsContainer) {
   const fieldset = document.createElement("fieldset");
   const legend = document.createElement("legend");
@@ -1090,14 +1181,7 @@ function notificationChannelEditor(name, settings, fields, maxJobsContainer) {
   const contentHeading = document.createElement("h3");
   contentHeading.textContent = "Information to send";
   contentGroup.append(contentHeading);
-  const fieldGroup = document.createElement("div");
-  fieldGroup.className = "notification-field-grid";
-  fields.forEach((field) =>
-    fieldGroup.append(
-      notificationFieldControl(name, field, settings.fields || []),
-    ),
-  );
-  contentGroup.append(fieldGroup);
+  contentGroup.append(notificationFieldEditor(name, settings, fields));
   const maxLabel = document.createElement("label");
   maxLabel.className = "notification-max-jobs";
   const maxText = document.createElement("span");
@@ -1127,11 +1211,15 @@ function readNotificationChannel(form, name) {
   };
 }
 function updateNotificationConfigDirty(form) {
-  const dirty = [...form.querySelectorAll("input,select")].some((control) => {
-    const value =
-      control.type === "checkbox" ? String(control.checked) : control.value;
-    return value !== control.dataset.initialValue;
-  });
+  const dirty =
+    [...form.querySelectorAll("input,select")].some((control) => {
+      const value =
+        control.type === "checkbox" ? String(control.checked) : control.value;
+      return value !== control.dataset.initialValue;
+    }) ||
+    [...form.querySelectorAll(".notification-field-order")].some(
+      (list) => list.dataset.value !== list.dataset.initialValue,
+    );
   form.classList.toggle("dirty", dirty);
   form
     .querySelectorAll("fieldset")
@@ -1141,6 +1229,9 @@ function initializeNotificationConfigDirtyState(form) {
   form.querySelectorAll("input,select").forEach((control) => {
     control.dataset.initialValue =
       control.type === "checkbox" ? String(control.checked) : control.value;
+  });
+  form.querySelectorAll(".notification-field-order").forEach((list) => {
+    list.dataset.initialValue = list.dataset.value;
   });
   form.oninput = () => updateNotificationConfigDirty(form);
   form.onchange = () => updateNotificationConfigDirty(form);

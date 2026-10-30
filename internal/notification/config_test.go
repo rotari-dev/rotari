@@ -3,6 +3,7 @@ package notification
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -105,6 +106,11 @@ func TestDefaultNotificationFieldsIncludeRunAndAttemptIDs(t *testing.T) {
 					t.Errorf("%s default fields list %q after %q: %v", channel, name, id, fields)
 				}
 			}
+		}
+		available := AvailableFields()
+		ordered := slices.DeleteFunc(slices.Clone(available), func(field string) bool { return !selected[field] })
+		if !slices.Equal(ordered, fields) {
+			t.Errorf("%s default fields %v do not follow the available field order %v", channel, fields, available)
 		}
 	}
 }

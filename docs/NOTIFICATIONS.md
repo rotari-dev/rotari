@@ -9,7 +9,10 @@ the same event and field vocabulary, while keeping independent settings.
 The Web UI is the easiest way to change these settings. In `rotari web`, open
 **Settings** on a project or run page and choose **Notification config**. It
 edits both channels' events, fields, `max_jobs`, and Webhook destination as a
-form, and saves to the file that is currently in effect. When no file exists
+form, and saves to the file that is currently in effect. Selected fields are
+listed in the order notifications show them: move one with its up and down
+buttons, or choose **Use default order**. A newly checked field is added at the
+end, and unselected fields follow in their default order. When no file exists
 yet, it offers the global, basedir, and (on a project) project locations to
 create one from the template; **Generate notification config** creates or
 replaces a template at a chosen location. A saved Webhook URL is never sent
@@ -257,7 +260,9 @@ For Make, Zapier, Pipedream, or an internal HTTP service, use the default
 ## Events and fields
 
 Both channels independently select job failures, job successes, run failures,
-and run successes. `fields` selects values in display order. Fields that do
+and run successes. `fields` selects values in display order; the default
+order leads with the project, job name, and outcome and ends with `run_id`,
+`job_id`, `attempt_id`, and `link`. Fields that do
 not apply to an event are omitted, and multiple diagnoses produce repeated
 diagnosis fields. The event type, payload schema version, and creation time are
 always present in generic JSON.

@@ -335,6 +335,15 @@ Implemented by [internal/config/layers.go](../internal/config/layers.go),
   with its other configs, so later edits do not change that run. `rotari web`
   reads browser settings for its own basedir and serves per-project settings
   from `/api/notification-settings`.
+- `fields` order is the order notifications show values. The Web UI editor
+  shows a saved order as it is, lets each selected field move up or down, and
+  saves the fields in the order shown; unselected fields and **Use default
+  order** follow `notification.AvailableFields`, which puts the project, job
+  name, and outcome before IDs. Built-in defaults follow the same order.
+  Covered by `TestDefaultNotificationFieldsIncludeRunAndAttemptIDs` in
+  [`internal/notification/config_test.go`](../internal/notification/config_test.go)
+  and `TestNotificationConfigEditorOrdersFields` in
+  [`internal/webui/notification_field_order_test.go`](../internal/webui/notification_field_order_test.go).
 - The Web UI's `notification-config`, `generate-notification-config`, and
   `save-notification-config` endpoints are control-gated, accept a project name
   rather than a filesystem path, validate content before writing, and write

@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -19,25 +19,30 @@ import (
 
 const FileName = "notifications.toml"
 
-var fields = map[string]bool{
-	"project": true, "run_id": true, "run_name": true, "job_id": true,
-	"job_name": true, "stage": true, "array_task_id": true, "attempt_id": true,
-	"run_status": true, "job_status": true, "exit_code": true, "error": true,
-	"success_count": true, "failure_count": true, "total_count": true,
-	"started_at": true, "finished_at": true, "duration": true,
-	"executor": true, "hosts": true, "working_directory": true, "command": true,
-	"diagnosis_status": true, "diagnosis_name": true, "diagnosis_evidence": true,
-	"diagnosis_suggestion": true, "diagnosis_rules": true, "diagnosis_outdated": true,
-	"link": true,
+// fieldOrder lists every field from most to least useful at a glance: what
+// happened to which job first, then run context and details, and opaque IDs
+// last. Defaults follow it, and the Web UI editor offers fields in this order.
+var fieldOrder = []string{
+	"project", "job_name", "job_status", "exit_code", "error",
+	"diagnosis_name", "diagnosis_suggestion", "diagnosis_evidence",
+	"diagnosis_status", "diagnosis_rules", "diagnosis_outdated",
+	"run_name", "run_status", "success_count", "failure_count", "total_count",
+	"duration", "started_at", "finished_at", "stage", "array_task_id",
+	"executor", "hosts", "working_directory", "command",
+	"run_id", "job_id", "attempt_id", "link",
 }
 
-func AvailableFields() []string {
-	names := make([]string, 0, len(fields))
-	for name := range fields {
-		names = append(names, name)
+var fields = func() map[string]bool {
+	known := make(map[string]bool, len(fieldOrder))
+	for _, name := range fieldOrder {
+		known[name] = true
 	}
-	sort.Strings(names)
-	return names
+	return known
+}()
+
+// AvailableFields returns every field in its default display order.
+func AvailableFields() []string {
+	return slices.Clone(fieldOrder)
 }
 
 type ChannelSettings struct {
