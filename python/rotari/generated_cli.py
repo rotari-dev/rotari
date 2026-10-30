@@ -3476,8 +3476,8 @@ CLI_SCHEMA: dict[str, Any] = {
         },
         {
             "description": "view a delimited or JSON Lines table, a Markdown or "
-            "script file, a PDF, or a directory's files in the Web UI's Table "
-            "viewer",
+            "script file, a PDF, or a directory's files in the Web "
+            "UI's Table viewer",
             "flags": [
                 {
                     "command_line_only": True,
@@ -3504,13 +3504,13 @@ CLI_SCHEMA: dict[str, Any] = {
                 {
                     "command_line_only": True,
                     "description": "write a static snapshot of the Table viewer "
-                    "for a delimited or JSON Lines file (up to 10,000 "
-                    "rows, with its media files up to 10 MiB each, "
-                    "100 MiB in all) instead of serving; filters are "
-                    "fixed, and delimited files also keep their "
-                    "separator and header row; "
-                    "cannot be combined with --host, --port, or "
-                    "--auth-token",
+                    "for a delimited or JSON Lines file (up to "
+                    "10,000 rows, with its media files up to 10 "
+                    "MiB each, 100 MiB in all) instead of "
+                    "serving; filters are fixed, and delimited "
+                    "files also keep their separator and header "
+                    "row; cannot be combined with --host, --port, "
+                    "or --auth-token",
                     "name": "static-dir",
                     "value_name": "DIR",
                 },
