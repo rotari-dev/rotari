@@ -6,8 +6,8 @@
 "use strict";
 
 // The page's query names the source; API requests pass it through and add
-// the view's own parameters.
-const sourceQuery = new URLSearchParams(location.search);
+// the view's own parameters. Moving to another directory changes it.
+let sourceQuery = new URLSearchParams(location.search);
 
 const separatorChoices = [
   { label: "Comma ,", value: "," },
@@ -74,6 +74,9 @@ const view = {
   sort: null,
   describe: false,
 };
+// defaultView is the view a source starts with when the fragment sets
+// nothing.
+const defaultView = JSON.stringify(view);
 // draft is the condition being written in the filter bar.
 const draft = { column: 0, op: "contains", value: "" };
 
@@ -186,6 +189,7 @@ function formatBytes(size) {
 }
 
 function readView() {
+  Object.assign(view, JSON.parse(defaultView));
   const fragment = new URLSearchParams(location.hash.slice(1));
   if (fragment.has("sep")) view.sep = fragment.get("sep");
   if (fragment.get("listing") === "stems") view.listing = "stems";
@@ -245,10 +249,10 @@ function writeView() {
   history.replaceState(null, "", "#" + fragment);
 }
 
-// apiURL is an API route relative to the page, with the source's query and
-// the given parameters.
-function apiURL(route, extra) {
-  const query = new URLSearchParams(sourceQuery);
+// apiURL is an API route relative to the page, with the source's query, or
+// the given one, and the given parameters.
+function apiURL(route, extra, source) {
+  const query = new URLSearchParams(source ?? sourceQuery);
   Object.entries(extra || {}).forEach(([name, value]) => {
     if (Array.isArray(value)) {
       query.delete(name);
@@ -273,13 +277,111 @@ function showError(message) {
   error.textContent = message || "";
 }
 
+// currentChild is the path inside the source's directory this page shows,
+// or "" for the source itself.
+function currentChild() {
+  return sourceQuery.get("child") || "";
+}
+
+// childOf is a path a cell names inside the directory this page shows, as
+// a path inside the source's directory.
+function childOf(ref) {
+  const parent = currentChild();
+  return parent ? parent + "/" + ref : ref;
+}
+
+// childURL is the viewer's page for a path inside the source's directory,
+// "" naming the source itself.
+function childURL(child) {
+  const query = new URLSearchParams(sourceQuery);
+  if (child) query.set("child", child);
+  else query.delete("child");
+  return "?" + query;
+}
+
+// plainClick tells a plain click on a link, which the page handles itself,
+// from one with a modifier, which the browser handles, such as opening a
+// new tab.
+function plainClick(event) {
+  return !(event.ctrlKey || event.metaKey || event.shiftKey || event.button);
+}
+
+// moveLink is a link to a path inside the source's directory that a plain
+// click shows in this window.
+function moveLink(child, attributes, ...children) {
+  return el(
+    "a",
+    Object.assign({}, attributes, {
+      href: childURL(child),
+      onclick: (event) => {
+        if (!plainClick(event)) return;
+        event.preventDefault();
+        moveTo(child);
+      },
+    }),
+    ...children,
+  );
+}
+
+// rootName is the source's own name: the server names a child as the
+// source's name, a slash, and the child.
+function rootName() {
+  const child = currentChild();
+  return child && info.name.endsWith("/" + child)
+    ? info.name.slice(0, -child.length - 1)
+    : info.name;
+}
+
+// renderName shows where this page is as a path whose directories link to
+// their own pages, after a link up to the parent directory.
+function renderName() {
+  const child = currentChild();
+  const parts = child ? child.split("/") : [];
+  const crumbs = [rootName()].concat(parts);
+  const name = [];
+  crumbs.forEach((crumb, index) => {
+    if (index) name.push(el("span", { className: "tv-crumb-sep" }, "/"));
+    const target = parts.slice(0, index).join("/");
+    name.push(
+      index === crumbs.length - 1
+        ? el("span", { "aria-current": "page" }, crumb)
+        : moveLink(target, { className: "tv-crumb" }, crumb),
+    );
+  });
+  setChildren(document.getElementById("tv-name"), name);
+  const up = document.getElementById("tv-up");
+  up.hidden = !child && info.kind !== "directory";
+  setChildren(
+    up,
+    child
+      ? moveLink(
+          parts.slice(0, -1).join("/"),
+          {
+            className: "tv-up",
+            title: "Up to the parent directory (Alt+↑)",
+            "aria-label": "Up to the parent directory",
+          },
+          "↑",
+        )
+      : el(
+          "span",
+          {
+            className: "tv-up",
+            "aria-disabled": "true",
+            title: "This is the top directory the viewer can show",
+          },
+          "↑",
+        ),
+  );
+}
+
 function renderHeader() {
   document.title = info.name + " · Table viewer · rotari";
   document.getElementById("tv-trail").textContent = (info.trail || [])
     .filter(Boolean)
     .concat("Table viewer")
     .join(" › ");
-  document.getElementById("tv-name").textContent = info.name;
+  renderName();
   const kind = document.getElementById("tv-kind");
   kind.hidden = info.kind !== "directory";
   kind.textContent = info.kind;
@@ -870,24 +972,42 @@ async function toggleDirectory(directory) {
   }
 }
 
+// directoryCell is a Files listing's directory: its name expands it in
+// place, and the arrow shows it in this window, or with a modifier in a new
+// tab.
+function directoryCell(row, text) {
+  const expanded = view.expanded.includes(row.directory);
+  return el(
+    "span",
+    { className: "tv-directory-cell" },
+    el(
+      "button",
+      {
+        type: "button",
+        className: "tv-directory tv-link-button",
+        "aria-expanded": String(expanded),
+        "aria-label": (expanded ? "Collapse " : "Expand ") + row.directory,
+        onclick: () => toggleDirectory(row.directory),
+      },
+      (expanded ? "▾ " : "▸ ") + text,
+    ),
+    moveLink(
+      childOf(row.directory),
+      {
+        className: "tv-enter",
+        title: "Open " + row.directory + " here (Ctrl+click: new tab)",
+        "aria-label": "Open " + row.directory,
+      },
+      "→",
+    ),
+  );
+}
+
 function tableCell(row, index) {
   const text = row.cells[index] ?? "";
   const content =
     row.directory && index === 0
-      ? el(
-          "button",
-          {
-            type: "button",
-            className: "tv-directory tv-link-button",
-            "aria-expanded": String(view.expanded.includes(row.directory)),
-            "aria-label":
-              (view.expanded.includes(row.directory)
-                ? "Collapse "
-                : "Expand ") + row.directory,
-            onclick: () => toggleDirectory(row.directory),
-          },
-          (view.expanded.includes(row.directory) ? "▾ " : "▸ ") + text,
-        )
+      ? directoryCell(row, text)
       : row.media && row.media[index]
         ? mediaCell(row.media[index])
         : info.kind === "directory" &&
@@ -926,15 +1046,6 @@ function openRowButton(row) {
     : null;
 }
 
-// tableURL is the viewer's page for a table file a directory's cell names,
-// as the child of the directory this page shows.
-function tableURL(ref) {
-  const query = new URLSearchParams(sourceQuery);
-  const parent = query.get("child");
-  query.set("child", parent ? parent + "/" + ref : ref);
-  return "?" + query.toString();
-}
-
 // fileCell is a directory's path to a file that is not media, which opens
 // as text in the active pane; a table file also opens in a Table viewer of
 // its own in a new tab.
@@ -957,7 +1068,7 @@ function fileCell(ref, table) {
           "a",
           {
             className: "tv-open-table",
-            href: tableURL(ref),
+            href: childURL(childOf(ref)),
             target: "_blank",
             rel: "noopener",
             title: "Open " + ref + " in a new Table viewer",
@@ -979,11 +1090,29 @@ function cellContent(text, column) {
   return formatCell(text, column);
 }
 
+// placeMedia is a file a cell names as a pane keeps it: with the source
+// query its path resolves under, which stays when the page moves to
+// another directory, and its path inside the source's directory to show.
+function placeMedia(media) {
+  if (media.source !== undefined) return media;
+  const child = currentChild();
+  const inDirectory =
+    info && info.kind === "directory" && child && !media.ref.startsWith("/");
+  return Object.assign({}, media, {
+    source: sourceQuery.toString(),
+    path: inDirectory ? child + "/" + media.ref : media.ref,
+  });
+}
+
 // mediaURL requests the file a cell names, as the server resolved it, or
 // its copy in a static snapshot.
 function mediaURL(media) {
   if (media.url) return media.url;
-  return apiURL("api/media", { ref: media.ref, base: media.base || undefined });
+  return apiURL(
+    "api/media",
+    { ref: media.ref, base: media.base || undefined },
+    media.source,
+  );
 }
 
 // mediaCell shows a path that names an image, audio, or video file: the
@@ -1005,13 +1134,7 @@ function mediaCell(media) {
             // A plain click opens the file in a pane; with a modifier the
             // browser opens the link as usual.
             onclick: (event) => {
-              if (
-                event.ctrlKey ||
-                event.metaKey ||
-                event.shiftKey ||
-                event.button
-              )
-                return;
+              if (!plainClick(event)) return;
               event.preventDefault();
               openMedia(media);
             },
@@ -1127,19 +1250,35 @@ function renderPager() {
   pager.replaceChildren(count, buttons, size);
 }
 
-async function start() {
-  readView();
+// loadSource shows the source the page's query names: its header, and its
+// table or document.
+async function loadSource() {
+  const sequence = ++loadSequence;
+  rows = null;
+  description = null;
+  let loaded;
   try {
-    info = await fetchJSON(apiURL("api/info"));
+    loaded = await fetchJSON(apiURL("api/info"));
   } catch (error) {
+    if (sequence !== loadSequence) return;
+    // Nothing of the page left before stays on show under the new query.
+    document.querySelector(".tv-table-area").hidden = false;
+    ["tv-toolbar", "tv-filterbar", "tv-table", "tv-pager"].forEach((id) =>
+      setChildren(document.getElementById(id)),
+    );
+    document.getElementById("tv-summary").textContent = "";
+    if (info) renderName();
     showError(error.message);
     return;
   }
+  if (sequence !== loadSequence) return;
+  info = loaded;
+  showError("");
   if (!view.sep) view.sep = info.separator || ",";
-  startPanesHandle();
   renderHeader();
+  document.querySelector(".tv-table-area").hidden = Boolean(info.preview);
   if (info.preview) {
-    document.querySelector(".tv-table-area").hidden = true;
+    renderToolbar();
     openMedia({
       kind: info.preview,
       ref: info.preview_ref,
@@ -1153,6 +1292,35 @@ async function start() {
   }
   renderToolbar();
   await loadRows();
+}
+
+// moveTo shows a directory or file inside the source's directory in this
+// window, as a new history entry. Its view starts afresh, keeping only Files
+// or Group by stem; open panes stay.
+function moveTo(child) {
+  const listing = view.listing;
+  history.pushState(null, "", childURL(child));
+  sourceQuery = new URLSearchParams(location.search);
+  readView();
+  view.listing = listing;
+  return loadSource();
+}
+
+async function start() {
+  readView();
+  startPanesHandle();
+  window.addEventListener("popstate", () => {
+    sourceQuery = new URLSearchParams(location.search);
+    readView();
+    loadSource();
+  });
+  document.addEventListener("keydown", (event) => {
+    const child = currentChild();
+    if (!event.altKey || event.key !== "ArrowUp" || !child) return;
+    event.preventDefault();
+    moveTo(child.split("/").slice(0, -1).join("/"));
+  });
+  await loadSource();
 }
 
 start();

@@ -1051,7 +1051,16 @@ clicking again collapses it and removes its descendants from the expanded
 scope. Expansion preserves the filters, sort, and current page (clamping
 the page if collapse reduces the page count); a failed expansion is shown
 as an error and the previous scope is restored. Group by stem shares this scope and never expands directories
-implicitly. Implemented by
+implicitly. A directory row's arrow shows that directory in the same window
+as the source's `child`, a new history entry, so Back returns; the page's
+name is the path from the source, each directory above linking to its own
+page, after an up link (also Alt+↑) to the parent, which is disabled at the
+source itself: the viewer never moves above the directory it was opened on.
+These links open in a new tab with a modifier, as links do. Moving keeps
+Files or Group by stem and starts the rest of the view afresh; open panes
+stay, each file still read from where it was opened and titled by its path
+from the source. A directory that cannot be shown leaves its error and no
+rows of the page before. Implemented by
 [internal/tableview](../internal/tableview/), including
 [jsonl.go](../internal/tableview/jsonl.go), and
 [internal/webui/table_view.go](../internal/webui/table_view.go), with the page in
@@ -1070,7 +1079,8 @@ the page checked by `TestTableViewPagesInBrowser` and
 `TestTableViewFiltersInBrowser`, `TestTableViewShowsMediaInBrowser`,
 `TestTableViewExpandsDirectoriesInBrowser`, `TestTableViewGroupsStemsInBrowser`, `TestTableViewOpensFilesInPanesInBrowser`,
 `TestTableViewMovesTabsAndLinksPanesInBrowser`,
-`TestTableViewOpensTableFilesInBrowser`, `TestTableViewShowsTextFilesInBrowser`,
+`TestTableViewOpensTableFilesInBrowser`, `TestTableViewMovesBetweenDirectoriesInBrowser`,
+`TestTableViewShowsTextFilesInBrowser`,
 `TestTableViewChoosesAChannelInBrowser`, `TestChannelSamplesMixesChannels`,
 `TestTableViewPlotsComputeOnceInBrowser`, and `TestSpectrogramFindsATone`, and the row's link by
 `TestLaunchWithOpensTheTableViewerInBrowser` in

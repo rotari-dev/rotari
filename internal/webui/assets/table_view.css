@@ -76,6 +76,23 @@ a:hover {
   font-family: var(--font-mono);
   overflow-wrap: anywhere;
 }
+.tv-crumb-sep {
+  margin: 0 2px;
+  color: var(--text-2);
+}
+.tv-up {
+  display: inline-block;
+  min-width: 24px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 14px;
+  text-decoration: none;
+}
+.tv-up[aria-disabled="true"] {
+  color: var(--muted);
+}
 .tv-kind {
   font-size: 11px;
   font-weight: 600;
@@ -681,6 +698,15 @@ a:hover {
   font-family: var(--font-mono);
   font-size: 12px;
   text-align: left;
+}
+.tv-directory-cell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.tv-enter {
+  font-size: 12px;
+  text-decoration: none;
 }
 .tv-media-properties,
 .tv-media-error {

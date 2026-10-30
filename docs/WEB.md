@@ -187,7 +187,12 @@ directory, **Group by stem** puts
 and find missing ones. In a directory, clicking any other file shows it in a
 pane, rendering Markdown and highlighting supported source files; PDFs open
 in the browser viewer. A table file also has **Open table**, which opens it in
-its own viewer in a new tab. The URL keeps the view, so a link can be shared. Try
+its own viewer in a new tab. A directory row's **→** shows that directory in
+the same window (Ctrl+click opens a new tab); the path above the table links
+back to each directory up to the one the viewer was opened on, **↑** (or
+Alt+↑) goes up one level, and the browser's Back returns. Files open in panes
+stay open while you move, so `ref/u1.wav` and `hyp/u1.wav` can be compared
+from their own directories. The URL keeps the view, so a link can be shared. Try
 it in the [Table viewer demo](https://rotari-dev.github.io/rotari/tableview/),
 an evaluation table whose cells name WAV files; it is a static snapshot
 (below), so filters are off there.

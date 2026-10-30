@@ -75,12 +75,17 @@ function activePane() {
 }
 
 function sameMedia(a, b) {
-  return a.ref === b.ref && (a.base || "") === (b.base || "");
+  return (
+    a.ref === b.ref &&
+    (a.base || "") === (b.base || "") &&
+    a.source === b.source
+  );
 }
 
 // openMedia opens a file in a tab of the active pane, or shows its tab
 // there if it is already open.
-function openMedia(media) {
+function openMedia(opened) {
+  const media = placeMedia(opened);
   if (!panes.layout) {
     panes.layout = newPane();
     panes.active = panes.layout.id;
@@ -100,7 +105,7 @@ function openMediaRow(list) {
   if (!list.length) return;
   tabViews.forEach((tabView) => tabView.dispose());
   tabViews.clear();
-  const row = list.map((media) => newPane([newTab(media)]));
+  const row = list.map((media) => newPane([newTab(placeMedia(media))]));
   panes.layout =
     row.length === 1
       ? row[0]
@@ -321,7 +326,7 @@ function renderPane(pane) {
         role: "tab",
         "aria-selected": String(tab.id === pane.current),
         "data-tab": tab.id,
-        title: tab.media.ref,
+        title: tab.media.path,
         draggable: true,
         ondragstart: (event) => {
           dragging = { pane: pane.id, tab: tab.id };
@@ -788,7 +793,7 @@ class TabView {
     const title = el(
       "div",
       { className: "tv-tab-title" },
-      el("strong", {}, media.ref),
+      el("strong", {}, media.path),
       el("span", { className: "tv-media-properties" }, properties),
       media.kind === "pdf"
         ? null
@@ -931,7 +936,7 @@ class TabView {
       el(
         "div",
         { className: "tv-tab-title" },
-        el("strong", {}, this.media.ref),
+        el("strong", {}, this.media.path),
         text.toggle,
       ),
       text.status,
@@ -960,11 +965,15 @@ class TabView {
     text.more.disabled = true;
     try {
       const response = await fetch(
-        apiURL("api/text", {
-          ref: this.media.ref,
-          base: this.media.base || undefined,
-          offset: text.end || undefined,
-        }),
+        apiURL(
+          "api/text",
+          {
+            ref: this.media.ref,
+            base: this.media.base || undefined,
+            offset: text.end || undefined,
+          },
+          this.media.source,
+        ),
       );
       const body = await response.text();
       if (!response.ok)

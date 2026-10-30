@@ -891,6 +891,68 @@ func TestTableViewOpensTableFilesInBrowser(t *testing.T) {
 `)
 }
 
+// A directory row's arrow shows that directory in the same window, the path
+// above links back to each directory up to the source, Back returns, and
+// files open in panes stay open, read from where they were opened.
+func TestTableViewMovesBetweenDirectoriesInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	write(t, filepath.Join(f.work, "eval", "ref", "u1.txt"), "ref one\n")
+	write(t, filepath.Join(f.work, "eval", "hyp", "u1.txt"), "hyp one\n")
+	write(t, filepath.Join(f.work, "eval", "scores.csv"), "id\nu1\n")
+	runTableViewScript(t, testOptions(f.baseDir, false), f, "wd", "#pattern=eval%2F**&sort=0&desc=1", `
+  const enter = path => document.querySelector('#tv-table a.tv-enter[aria-label="Open ' + path + '"]');
+  const crumbs = () => [...document.querySelectorAll('#tv-name a.tv-crumb')].map(a => a.textContent);
+  const current = () => document.querySelector('#tv-name [aria-current="page"]').textContent;
+  const up = () => document.querySelector('#tv-up .tv-up');
+  const paths = () => cells().map(row => row[1].replace(/^[▸▾] /, '').replace(/(→|Open table)$/, ''));
+  await until('source', () => enter('eval'));
+  if (up().getAttribute('aria-disabled') !== 'true' || crumbs().length) fail('top directory up', document.getElementById('tv-up').innerHTML);
+  // A modifier leaves the link to the browser: a new tab.
+  const modified = new window.MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true });
+  enter('eval').dispatchEvent(modified);
+  if (window.location.search.includes('child=')) fail('ctrl-click moved', window.location.href);
+  enter('eval').click();
+  await until('eval', () => current() === 'eval' && enter('ref'));
+  const query = new window.URLSearchParams(window.location.search);
+  if (query.get('child') !== 'eval' || query.get('entry') !== 'wd') fail('query', window.location.search);
+  if (fragment().has('sort') || fragment().get('pattern') !== '**/*') fail('view not reset', window.location.hash);
+  if (paths().join() !== 'hyp/,ref/,scores.csv') fail('eval rows', paths());
+  enter('ref').click();
+  await until('eval/ref', () => current() === 'ref' && paths().join() === 'u1.txt');
+  if (crumbs().length !== 2 || crumbs()[1] !== 'eval') fail('crumbs', crumbs());
+  document.querySelector('#tv-table .tv-text-file').click();
+  const text = () => document.querySelector('.tv-pane-active .tv-text')?.textContent;
+  await until('ref text', () => text() === 'ref one\n');
+  if (!document.querySelector('.tv-pane-active .tv-tab-title').textContent.includes('eval/ref/u1.txt')) fail('pane title');
+  up().click();
+  await until('up to eval', () => current() === 'eval' && enter('hyp'));
+  enter('hyp').click();
+  await until('eval/hyp', () => current() === 'hyp' && paths().join() === 'u1.txt');
+  if (text() !== 'ref one\n') fail('pane changed', text());
+  document.querySelector('#tv-table .tv-text-file').click();
+  await until('hyp text', () => text() === 'hyp one\n');
+  if (document.querySelectorAll('.tv-pane-active .tv-tab').length !== 2) fail('tabs', document.querySelectorAll('.tv-tab').length);
+  // The other tab still reads the file from eval/ref.
+  [...document.querySelectorAll('.tv-tab')].find(tab => tab.title === 'eval/ref/u1.txt').querySelector('.tv-tab-name').click();
+  await until('ref tab', () => text() === 'ref one\n');
+  window.history.back();
+  await until('back to eval', () => current() === 'eval' && enter('ref'));
+  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true }));
+  await until('Alt+Up to the source', () => !crumbs().length && enter('eval') && !window.location.search.includes('child='));
+  enter('eval').click();
+  await until('eval again', () => current() === 'eval');
+  window.history.pushState(null, '', document.querySelector('#tv-table a.tv-open-table').getAttribute('href'));
+  window.dispatchEvent(new window.PopStateEvent('popstate'));
+  await until('table file', () => current() === 'scores.csv' && headings().includes('id'));
+  document.querySelector('#tv-name a.tv-crumb:last-of-type').click();
+  await until('table file up', () => current() === 'eval' && enter('ref'));
+  window.history.pushState(null, '', '?' + new window.URLSearchParams({ ...Object.fromEntries(query), child: 'eval/missing' }));
+  window.dispatchEvent(new window.PopStateEvent('popstate'));
+  await until('missing directory', () => document.getElementById('tv-error').textContent && !document.querySelector('#tv-table tbody'));
+  if (current() !== 'missing') fail('missing name', current());
+`)
+}
+
 // A directory's file that is not media opens as text in the active pane,
 // whatever its name, a page at a time; a binary file says so.
 func TestTableViewShowsTextFilesInBrowser(t *testing.T) {
