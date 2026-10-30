@@ -15,8 +15,10 @@ import (
 	"github.com/rotari-dev/rotari/internal/tableview"
 )
 
-// The Table viewer shows a delimited file, or a directory's files, as a
-// paged table. rotari web
+// The Table viewer shows delimited and JSON Lines files as paged tables,
+// Markdown and script text or PDF files as documents, or a directory's files
+// as rows.
+// rotari web
 // offers it under Launch with for an artifact and serves it under
 // /tableview/. The page's own query names the source, for an artifact as a
 // content request does; the page passes it through to its API requests and
@@ -73,6 +75,30 @@ func (view tableView) handler() http.Handler {
 	mux.HandleFunc("GET /table_view_panes.js", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set(headerContentType, "text/javascript; charset=utf-8")
 		_, _ = writer.Write([]byte(tableViewPanesJS))
+	})
+	mux.HandleFunc("GET /web_app_highlight.js", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set(headerContentType, "text/javascript; charset=utf-8")
+		_, _ = writer.Write([]byte(webAppHighlightJS))
+	})
+	mux.HandleFunc("GET /highlight.min.js", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set(headerContentType, "text/javascript; charset=utf-8")
+		_, _ = writer.Write([]byte(highlightJS))
+	})
+	mux.HandleFunc("GET /highlightjs-license.txt", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set(headerContentType, "text/plain; charset=utf-8")
+		_, _ = writer.Write([]byte(highlightLicense))
+	})
+	mux.HandleFunc("GET /web_app_previews.js", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set(headerContentType, "text/javascript; charset=utf-8")
+		_, _ = writer.Write([]byte(webAppPreviewsJS))
+	})
+	mux.HandleFunc("GET /web_app_markdown.js", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set(headerContentType, "text/javascript; charset=utf-8")
+		_, _ = writer.Write([]byte(webAppMarkdownJS))
+	})
+	mux.HandleFunc("GET /web_app_highlight.css", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set(headerContentType, "text/css; charset=utf-8")
+		_, _ = writer.Write([]byte(webAppHighlightCSS))
 	})
 	mux.HandleFunc("GET /table_view.css", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set(headerContentType, "text/css; charset=utf-8")
@@ -186,11 +212,14 @@ func tableViewPage(stylesheets []string, scripts string) string {
 // tableViewInfo is the /api/info response: what the page shows before any
 // rows.
 type tableViewInfo struct {
-	Name     string   `json:"name"`
-	Trail    []string `json:"trail,omitempty"`
-	Kind     string   `json:"kind"`
-	Size     int64    `json:"size"`
-	Download string   `json:"download,omitempty"`
+	Name       string   `json:"name"`
+	Trail      []string `json:"trail,omitempty"`
+	Kind       string   `json:"kind"`
+	Format     string   `json:"format,omitempty"`
+	Preview    string   `json:"preview,omitempty"`
+	PreviewRef string   `json:"preview_ref,omitempty"`
+	Size       int64    `json:"size"`
+	Download   string   `json:"download,omitempty"`
 	// Separator is the one a file's extension suggests.
 	Separator string           `json:"separator,omitempty"`
 	Bases     []tableview.Base `json:"bases"`
@@ -210,7 +239,15 @@ func tableViewInfoOf(source tableViewSource) (tableViewInfo, error) {
 		view.Kind, view.Size = "directory", 0
 		return view, nil
 	}
-	view.Separator = suggestedSeparator(source.target.Path)
+	if preview := tableview.DocumentPreview(source.target.Path); preview != "" {
+		view.Preview, view.PreviewRef = preview, filepath.Base(source.target.Path)
+	} else if tableview.MediaKind(source.target.Path) == "pdf" {
+		view.Preview, view.PreviewRef = "pdf", filepath.Base(source.target.Path)
+	} else if strings.EqualFold(filepath.Ext(source.target.Path), ".jsonl") {
+		view.Format = "jsonl"
+	} else {
+		view.Separator = suggestedSeparator(source.target.Path)
+	}
 	return view, nil
 }
 
@@ -228,8 +265,9 @@ func suggestedSeparator(path string) string {
 }
 
 // openTableView reads a source as its query asks: a directory with view,
-// pattern, expanded, group, suffix_sep, and incomplete, a file with sep and header.
-// Parameters for the other kind are refused, not ignored.
+// pattern, expanded, group, suffix_sep, and incomplete; or a delimited file
+// with sep and header. JSON Lines and document files have no extra parameters.
+// Parameters that do not apply are refused, not ignored.
 func openTableView(source tableViewSource, query url.Values) (*tableview.Table, error) {
 	directoryParams, fileParams := []string{"view", "pattern", "expanded", "group", "suffix_sep", "incomplete"}, []string{"sep", "header"}
 	given, other := fileParams, directoryParams
@@ -252,6 +290,24 @@ func openTableView(source tableViewSource, query url.Values) (*tableview.Table, 
 		}
 		return tableview.OpenDirectory(source.target, listing)
 	}
+	if preview := tableview.DocumentPreview(source.target.Path); preview != "" {
+		if preview == "markdown" {
+			return nil, fmt.Errorf("%s is a Markdown document; it has no table rows", source.name)
+		}
+		return nil, fmt.Errorf("%s is a text document; it has no table rows", source.name)
+	}
+	if tableview.MediaKind(source.target.Path) == "pdf" {
+		return nil, fmt.Errorf("%s is a PDF document; it has no table rows", source.name)
+	}
+	if strings.EqualFold(filepath.Ext(source.target.Path), ".jsonl") {
+		if query.Has("sep") {
+			return nil, fmt.Errorf("sep does not apply to a JSON Lines file")
+		}
+		if query.Has("header") {
+			return nil, fmt.Errorf("header does not apply to a JSON Lines file")
+		}
+		return tableview.OpenJSONLines(source.target)
+	}
 	separator, size := utf8.DecodeRuneInString(query.Get("sep"))
 	if size == 0 || size != len(query.Get("sep")) {
 		return nil, fmt.Errorf("sep must be one character")
@@ -267,9 +323,9 @@ func openTableView(source tableViewSource, query url.Values) (*tableview.Table, 
 	return tableview.OpenFile(source.target, tableview.Format{Separator: separator, Header: header})
 }
 
-// serveTableViewMedia streams the image, audio, or video file a cell names,
-// inline and with range requests so media can seek, with the same headers
-// as an artifact's content.
+// serveTableViewMedia streams the image, audio, video, or PDF file a cell
+// names, inline and with range requests so media can seek, with the same
+// headers as an artifact's content.
 func serveTableViewMedia(writer http.ResponseWriter, request *http.Request, source tableViewSource, base, ref string) {
 	path, err := source.target.ResolveMedia(source.directory, base, ref)
 	if err != nil {
@@ -405,7 +461,7 @@ func (s site) artifactTableView(baseDir string, query url.Values) (tableViewSour
 // otherwise, next to the Web UI's.
 const TableViewPort = DefaultPort + 1
 
-// TableViewHandler serves the Table viewer for one delimited file or
+// TableViewHandler serves the Table viewer for one table, document, or
 // directory named on the command line (rotari tableview), with the fonts
 // and design tokens its page links. It reads only under that directory, or
 // the file's: the only root, and the only base media paths resolve from.
@@ -418,7 +474,7 @@ func TableViewHandler(path string) (http.Handler, error) {
 	}
 	view := tableView{
 		resolve:     func(query url.Values) (tableViewSource, error) { return source.child(query.Get("child")) },
-		stylesheets: []string{"/web_fonts.css", "/web_tokens.css"},
+		stylesheets: []string{"/web_fonts.css", "/web_tokens.css", "/web_app_highlight.css"},
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/", view.handler())
@@ -430,6 +486,10 @@ func TableViewHandler(path string) (http.Handler, error) {
 	mux.HandleFunc("/web_tokens.css", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set(headerContentType, "text/css; charset=utf-8")
 		_, _ = writer.Write([]byte(webTokensCSS))
+	})
+	mux.HandleFunc("/web_app_highlight.css", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set(headerContentType, "text/css; charset=utf-8")
+		_, _ = writer.Write([]byte(webAppHighlightCSS))
 	})
 	return mux, nil
 }

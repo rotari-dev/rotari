@@ -85,8 +85,7 @@ type Page struct {
 }
 
 // Row is a row of a page; Number counts data rows from 1 in the source.
-// Media describes the cells, by column, that name an image, audio, or
-// video file.
+// Media describes the cells, by column, that name a previewable file.
 type Row struct {
 	Number int            `json:"number"`
 	Cells  []string       `json:"cells"`
@@ -98,7 +97,8 @@ type Row struct {
 	Tables []int `json:"tables,omitempty"`
 }
 
-// Page reads the rows a query selects.
+// Page reads the rows a query selects, and describes previewable files named
+// by their cells.
 func (table *Table) Page(query Query) (Page, error) {
 	if query.Offset < 0 {
 		return Page{}, fmt.Errorf("offset must not be negative")

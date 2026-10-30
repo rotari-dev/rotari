@@ -22,8 +22,10 @@ var tableViewStaticJS string
 // row, and its order under each sort, is in the page.
 const staticTableViewRowLimit = 10_000
 
-// staticTableViewNote is what a static snapshot's page says it cannot do.
+// staticTableViewNote and staticJSONLinesNote say what a static snapshot
+// cannot change.
 const staticTableViewNote = "This is a static snapshot: filters, the separator, and the header row can be changed only in rotari tableview."
+const staticJSONLinesNote = "This is a static snapshot: filters can be changed only in rotari tableview."
 
 // staticTableView is what a static snapshot embeds, read by
 // table_view_static.js.
@@ -51,19 +53,29 @@ type StaticTableViewCopy struct {
 }
 
 // GenerateStaticTableView writes a static snapshot of the Table viewer for
-// one delimited file to outputDir (rotari tableview --static-dir): the
-// file read with the separator its extension suggests and a header row,
-// every row with its order under each sort and its Describe, and the media
-// files its cells name, copied beside the page. The page is titled with the
-// file's name alone. It reads only under the file's directory, as rotari
-// tableview does.
+// one delimited or JSON Lines file to outputDir (rotari tableview --static-dir).
+// A delimited file uses the separator its extension suggests and a header
+// row; JSON Lines records keep their object keys as columns. The snapshot
+// contains every row with its order under each sort and its Describe, and
+// the media files its cells name, copied beside the page. The page is titled
+// with the file's name alone. It reads only under the file's directory, as
+// rotari tableview does.
 func GenerateStaticTableView(path, outputDir string) (StaticTableViewCopy, error) {
 	source, err := commandTableViewSource(path)
 	if err != nil {
 		return StaticTableViewCopy{}, err
 	}
 	if source.directory {
-		return StaticTableViewCopy{}, fmt.Errorf("%s is a directory; a static snapshot takes a delimited file", path)
+		return StaticTableViewCopy{}, fmt.Errorf("%s is a directory; a static snapshot takes a delimited file or JSON Lines table", path)
+	}
+	if preview := tableview.DocumentPreview(source.target.Path); preview != "" {
+		if preview == "markdown" {
+			return StaticTableViewCopy{}, fmt.Errorf("%s is a Markdown document; a static snapshot takes a table file", path)
+		}
+		return StaticTableViewCopy{}, fmt.Errorf("%s is a text document; a static snapshot takes a table file", path)
+	}
+	if tableview.MediaKind(source.target.Path) == "pdf" {
+		return StaticTableViewCopy{}, fmt.Errorf("%s is a PDF document; a static snapshot takes a table file", path)
 	}
 	output, err := filepath.Abs(outputDir)
 	if err != nil {
@@ -85,7 +97,7 @@ func GenerateStaticTableView(path, outputDir string) (StaticTableViewCopy, error
 	json.HTMLEscape(&escaped, data)
 	scripts := "<script>\nwindow.__ROTARI_TABLE_VIEW_STATIC__ = " + escaped.String() + ";\n</script>\n" +
 		`    <script src="table_view_static.js"></script>`
-	page := tableViewPage([]string{"web_fonts.css", "web_tokens.css"}, scripts)
+	page := tableViewPage([]string{"web_fonts.css", "web_tokens.css", "web_app_highlight.css"}, scripts)
 	if err := os.RemoveAll(outputDir); err != nil {
 		return StaticTableViewCopy{}, err
 	}
@@ -93,13 +105,19 @@ func GenerateStaticTableView(path, outputDir string) (StaticTableViewCopy, error
 		return StaticTableViewCopy{}, err
 	}
 	for name, contents := range map[string]string{
-		"index.html":           page,
-		"table_view.js":        tableViewJS,
-		"table_view_panes.js":  tableViewPanesJS,
-		"table_view_static.js": tableViewStaticJS,
-		"table_view.css":       tableViewCSS,
-		"web_fonts.css":        fontFaceCSS("fonts/"),
-		"web_tokens.css":       webTokensCSS,
+		"index.html":              page,
+		"table_view.js":           tableViewJS,
+		"table_view_panes.js":     tableViewPanesJS,
+		"highlight.min.js":        highlightJS,
+		"highlightjs-license.txt": highlightLicense,
+		"web_app_highlight.js":    webAppHighlightJS,
+		"web_app_previews.js":     webAppPreviewsJS,
+		"web_app_markdown.js":     webAppMarkdownJS,
+		"web_app_highlight.css":   webAppHighlightCSS,
+		"table_view_static.js":    tableViewStaticJS,
+		"table_view.css":          tableViewCSS,
+		"web_fonts.css":           fontFaceCSS("fonts/"),
+		"web_tokens.css":          webTokensCSS,
 	} {
 		if err := writeStaticWebPage(filepath.Join(outputDir, name), contents); err != nil {
 			return StaticTableViewCopy{}, err
@@ -125,9 +143,18 @@ func snapshotTableView(source tableViewSource) (staticTableView, map[string]stri
 		return staticTableView{}, nil, err
 	}
 	// A snapshot is for publishing: it names the file, not where it was.
-	info.Name, info.Static = filepath.Base(source.target.Path), staticTableViewNote
-	separator, _ := utf8.DecodeRuneInString(info.Separator)
-	table, err := tableview.OpenFile(source.target, tableview.Format{Separator: separator, Header: true})
+	info.Name = filepath.Base(source.target.Path)
+	info.Static = staticTableViewNote
+	if info.Format == "jsonl" {
+		info.Static = staticJSONLinesNote
+	}
+	var table *tableview.Table
+	if info.Format == "jsonl" {
+		table, err = tableview.OpenJSONLines(source.target)
+	} else {
+		separator, _ := utf8.DecodeRuneInString(info.Separator)
+		table, err = tableview.OpenFile(source.target, tableview.Format{Separator: separator, Header: true})
+	}
 	if err != nil {
 		return staticTableView{}, nil, err
 	}

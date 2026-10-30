@@ -1,0 +1,40 @@
+/* Shared Highlight.js token colours and PDF frame for both Web viewers. */
+.hljs-keyword,
+.hljs-literal,
+.hljs-selector-tag,
+.hljs-doctag {
+  color: var(--c5);
+  font-weight: 600;
+}
+.hljs-built_in,
+.hljs-type,
+.hljs-title,
+.hljs-name,
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-property {
+  color: var(--link);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-meta .hljs-string {
+  color: var(--s-ok);
+}
+.hljs-comment {
+  color: var(--muted);
+  font-style: italic;
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--accent-text);
+}
+.artifact-pdf-frame {
+  display: block;
+  width: 100%;
+  height: min(72vh, 900px);
+  border: 0;
+  background: var(--surface-2);
+}

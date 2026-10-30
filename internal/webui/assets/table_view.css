@@ -305,6 +305,91 @@ a:hover {
   font-size: 12px;
   white-space: pre;
 }
+.tv-highlighted {
+  font-family: inherit;
+}
+.tv-markdown {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 10px;
+  overflow-wrap: anywhere;
+}
+.tv-markdown h1,
+.tv-markdown h2,
+.tv-markdown h3 {
+  margin: 1em 0 0.45em;
+  line-height: 1.25;
+}
+.tv-markdown h1 {
+  font-size: 1.5em;
+}
+.tv-markdown h2 {
+  font-size: 1.25em;
+}
+.tv-markdown h3 {
+  font-size: 1.1em;
+}
+.tv-markdown p,
+.tv-markdown ul,
+.tv-markdown ol,
+.tv-markdown blockquote {
+  margin: 0.6em 0;
+}
+.tv-markdown ul,
+.tv-markdown ol {
+  padding-left: 1.8em;
+}
+.tv-markdown blockquote {
+  padding-left: 1em;
+  border-left: 3px solid var(--line);
+  color: var(--text-2);
+}
+.tv-markdown code {
+  font-family: var(--font-mono);
+  background: var(--code-bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.tv-markdown pre {
+  overflow: auto;
+  background: var(--code-bg);
+  padding: 10px;
+  border-radius: 6px;
+}
+.tv-markdown pre code {
+  padding: 0;
+  background: transparent;
+}
+.tv-markdown .markdown-table {
+  overflow: auto;
+}
+.tv-markdown table {
+  border-collapse: collapse;
+}
+.tv-markdown th,
+.tv-markdown td {
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+}
+.tv-pdf {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  background: var(--surface-2);
+}
+.tv-pdf-note {
+  margin: 0;
+  font-size: 12px;
+}
+.tv-format-label {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 12px;
+}
 .tv-image,
 .tv-video {
   flex: 1;
@@ -409,6 +494,9 @@ a:hover {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+.tv-table-area[hidden] {
+  display: none;
 }
 .tv-toolbar {
   display: flex;

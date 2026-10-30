@@ -1,7 +1,8 @@
-// The Table viewer: a delimited file as a paged table. The server parses,
-// filters, and pages the file (internal/tableview); this script keeps the
-// view's settings in the URL fragment, so a reload or a shared link shows
-// the same view, and lays out what the server returns.
+// The Table viewer: delimited or JSON Lines files as paged tables, with
+// document previews. The server parses, filters, and pages the table
+// (internal/tableview); this script keeps the view's settings in the URL
+// fragment, so a reload or a shared link shows the same view, and lays out
+// what the server returns.
 "use strict";
 
 // The page's query names the source; API requests pass it through and add
@@ -225,6 +226,8 @@ function writeView() {
       if (view.group === "suffix") fragment.set("suffix_sep", view.suffixSep);
       if (view.incomplete) fragment.set("incomplete", "1");
     }
+  } else if (info.format === "jsonl") {
+    if (view.base) fragment.set("base", view.base);
   } else {
     fragment.set("sep", view.sep);
     if (view.base) fragment.set("base", view.base);
@@ -421,8 +424,46 @@ function renderDirectoryToolbar(toolbar) {
 
 function renderToolbar() {
   const toolbar = document.getElementById("tv-toolbar");
+  if (info.preview) {
+    setChildren(toolbar);
+    return;
+  }
   if (info.kind === "directory") {
     renderDirectoryToolbar(toolbar);
+    return;
+  }
+  if (info.format === "jsonl") {
+    const bases = info.bases || [];
+    const base = el(
+      "select",
+      {
+        "aria-label": "Resolve media paths from",
+        disabled: !!info.static,
+        onchange: (event) => {
+          view.base = event.target.value;
+          loadRows();
+        },
+      },
+      bases.map((item, index) =>
+        el(
+          "option",
+          {
+            value: item.id,
+            selected: view.base ? item.id === view.base : index === 0,
+          },
+          item.label,
+        ),
+      ),
+    );
+    setChildren(
+      toolbar,
+      el("span", { className: "tv-format-label" }, "JSON Lines"),
+      bases.length > 1
+        ? el("label", {}, el("span", {}, "Resolve media paths from"), base)
+        : null,
+      el("span", { className: "tv-spacer" }),
+      describeToggle(),
+    );
     return;
   }
   const known = separatorChoices.some((choice) => choice.value === view.sep);
@@ -540,6 +581,12 @@ function tableParams() {
       group: stems && view.group ? view.group : undefined,
       suffix_sep: stems && view.group === "suffix" ? view.suffixSep : undefined,
       incomplete: stems && view.incomplete ? "1" : undefined,
+      filters,
+    };
+  }
+  if (info.format === "jsonl") {
+    return {
+      base: view.base || undefined,
       filters,
     };
   }
@@ -900,7 +947,7 @@ function fileCell(ref, table) {
       {
         type: "button",
         className: "tv-media-path tv-link-button tv-text-file",
-        title: "Open as text in the active pane",
+        title: "Open in the active pane",
         onclick: () => openMedia({ kind: "text", ref }),
       },
       ref,
@@ -913,7 +960,7 @@ function fileCell(ref, table) {
             href: tableURL(ref),
             target: "_blank",
             rel: "noopener",
-            title: "Open " + ref + " in a new Table viewer",
+          title: "Open " + ref + " in a new Table viewer",
           },
           "Open table",
         )
@@ -1091,6 +1138,16 @@ async function start() {
   if (!view.sep) view.sep = info.separator || ",";
   startPanesHandle();
   renderHeader();
+  if (info.preview) {
+    document.querySelector(".tv-table-area").hidden = true;
+    openMedia({
+      kind: info.preview,
+      ref: info.preview_ref,
+      base: "file",
+      properties: { format: info.preview === "pdf" ? "PDF" : "", size: info.size },
+    });
+    return;
+  }
   renderToolbar();
   await loadRows();
 }

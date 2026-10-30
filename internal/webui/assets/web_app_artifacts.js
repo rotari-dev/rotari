@@ -15,7 +15,42 @@ const artifactTextTypes = [
   "toml",
   "py",
   "sh",
+  "bash",
+  "zsh",
+  "js",
+  "mjs",
+  "cjs",
+  "ts",
+  "tsx",
+  "go",
+  "rs",
+  "java",
+  "c",
+  "h",
+  "cc",
+  "cpp",
+  "cxx",
+  "hpp",
+  "cs",
+  "rb",
+  "php",
+  "swift",
+  "kt",
+  "kts",
+  "lua",
+  "pl",
+  "r",
+  "sql",
   "md",
+  "markdown",
+  "xml",
+  "html",
+  "htm",
+  "css",
+  "dockerfile",
+  "makefile",
+  "diff",
+  "patch",
   "cfg",
   "ini",
   "conf",
@@ -340,6 +375,17 @@ async function renderArtifactPreview(index, child, type) {
     );
     return;
   }
+  if (extension === "pdf") {
+    setArtifactPreview(
+      header +
+        pdfPreviewMarkup(
+          artifactURL("/api/artifact-file", index, child),
+          artifactTitle(index, child),
+          "",
+        ),
+    );
+    return;
+  }
   if (
     artifactAudioTypes.includes(extension) ||
     artifactVideoTypes.includes(extension)
@@ -432,10 +478,70 @@ function artifactFailure(index, child, error) {
 // loadArtifactText shows a text file a page at a time: from the end with
 // earlier pages on demand, or from the start with later pages on demand.
 async function loadArtifactText(index, child, from) {
-  const state = { index, child, from, text: "", start: 0, end: 0, size: 0 };
+  const state = {
+    index,
+    child,
+    from,
+    text: "",
+    start: 0,
+    end: 0,
+    size: 0,
+    showSource: false,
+  };
   selectedArtifacts.text = state;
   await moreArtifactText();
 }
+
+function artifactTextMarkup(state) {
+  const extension = artifactExtension(state.index, state.child);
+  const language = scriptLanguage(artifactTitle(state.index, state.child));
+  const markdown = extension === "md" || extension === "markdown";
+  const canRenderMarkdown = state.end <= markdownPreviewByteLimit;
+  const more =
+    state.from === "end"
+      ? state.start > 0
+        ? '<button type="button" onclick="moreArtifactText()">Load earlier</button>'
+        : ""
+      : state.end < state.size
+        ? '<button type="button" onclick="moreArtifactText()">Load more</button>'
+        : "";
+
+  if (markdown && canRenderMarkdown) {
+    const toggle =
+      '<button type="button" onclick="toggleArtifactMarkdown()">' +
+      (state.showSource ? "Render Markdown" : "Show source") +
+      "</button>";
+    const content = state.showSource
+      ? '<pre class="log artifact-text">' + esc(state.text) + "</pre>"
+      : '<div class="artifact-markdown markdown-view">' +
+        renderMarkdown(state.text) +
+        "</div>";
+    return toggle + more + content;
+  }
+
+  const content = language
+    ? '<pre class="log artifact-text"><code class="tv-highlighted">' +
+      highlightScriptCode(state.text, language) +
+      "</code></pre>"
+    : '<pre class="log artifact-text">' + esc(state.text) + "</pre>";
+  const note = markdown
+    ? '<p class="meta">Markdown preview limit is 2 MiB; showing source.</p>'
+    : language && state.end > highlightPreviewByteLimit
+      ? '<p class="meta">Syntax highlighting limit is 2 MiB; showing source.</p>'
+      : "";
+  return note + more + content;
+}
+
+function toggleArtifactMarkdown() {
+  const state = selectedArtifacts.text;
+  if (!state) return;
+  state.showSource = !state.showSource;
+  setArtifactPreview(
+    artifactHeader(state.index, state.child, "file") +
+      artifactTextMarkup(state),
+  );
+}
+
 async function moreArtifactText() {
   const state = selectedArtifacts.text;
   const offset =
@@ -464,18 +570,9 @@ async function moreArtifactText() {
   } catch (error) {
     return artifactFailure(state.index, state.child, error);
   }
-  const more =
-    state.from === "end"
-      ? state.start > 0
-        ? '<button type="button" onclick="moreArtifactText()">Load earlier</button>'
-        : ""
-      : state.end < state.size
-        ? '<button type="button" onclick="moreArtifactText()">Load more</button>'
-        : "";
-  const pre = '<pre class="log artifact-text">' + esc(state.text) + "</pre>";
   setArtifactPreview(
     artifactHeader(state.index, state.child, "file") +
-      (state.from === "end" ? more + pre : pre + more),
+      artifactTextMarkup(state),
   );
 }
 // loadArtifactTable shows a CSV or TSV file as a table of the rows loaded so

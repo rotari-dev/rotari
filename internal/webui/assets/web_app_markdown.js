@@ -4,6 +4,16 @@
 // Every piece of text is escaped first, and a link keeps only an http(s)
 // target, so text written by a job or an agent cannot add markup or script.
 // Syntax it does not cover stays visible as text.
+const markdownPreviewByteLimit = 2 * 1024 * 1024;
+
+function escapeMarkdownText(value) {
+  return String(value == null ? "" : value).replace(/[&<>"']/g, (character) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+      character
+    ],
+  );
+}
+
 function renderMarkdown(source) {
   const lines = String(source || "")
     .replace(/\r\n?/g, "\n")
@@ -31,7 +41,12 @@ function renderMarkdownBlocks(lines) {
       while (index < lines.length && !lines[index].trim().startsWith(fence[1]))
         body.push(lines[index++]);
       index++;
-      html.push("<pre><code>" + esc(body.join("\n")) + "</code></pre>");
+      const language = fence[2].trim().split(/\s+/)[0].toLowerCase();
+      const code =
+        typeof highlightScriptCode === "function"
+          ? highlightScriptCode(body.join("\n"), language)
+          : escapeMarkdownText(body.join("\n"));
+      html.push('<pre><code class="tv-markdown-code">' + code + "</code></pre>");
       continue;
     }
     const heading = line.match(/^\s*(#{1,6})\s+(.*?)\s*#*\s*$/);
@@ -187,7 +202,7 @@ function renderMarkdownInline(text) {
       if (close !== -1) {
         let code = text.slice(index + ticks[0].length, close);
         if (/^ .* $/.test(code)) code = code.slice(1, -1);
-        html += "<code>" + esc(code) + "</code>";
+        html += "<code>" + escapeMarkdownText(code) + "</code>";
         index = close + ticks[0].length;
         continue;
       }
@@ -198,7 +213,7 @@ function renderMarkdownInline(text) {
     if (link) {
       html +=
         '<a href="' +
-        esc(link[2]) +
+        escapeMarkdownText(link[2]) +
         '" target="_blank" rel="noopener noreferrer">' +
         renderMarkdownInline(link[1]) +
         "</a>";
@@ -218,7 +233,7 @@ function renderMarkdownInline(text) {
       continue;
     }
     if (text[index] === "\n") html += "<br>";
-    else html += esc(text[index]);
+    else html += escapeMarkdownText(text[index]);
     index++;
   }
   return html;

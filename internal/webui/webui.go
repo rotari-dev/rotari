@@ -348,6 +348,14 @@ func (s site) baseHandler() http.Handler {
 		writer.Header().Set("Content-Type", "text/css; charset=utf-8")
 		_, _ = writer.Write([]byte(webStylesCSS))
 	})
+	mux.HandleFunc("/web_app_highlight.css", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "text/css; charset=utf-8")
+		_, _ = writer.Write([]byte(webAppHighlightCSS))
+	})
+	mux.HandleFunc("/highlightjs-license.txt", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = writer.Write([]byte(highlightLicense))
+	})
 	mux.HandleFunc("/web_shell.css", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "text/css; charset=utf-8")
 		_, _ = writer.Write([]byte(webShellCSS))
@@ -658,7 +666,7 @@ func (s site) baseHandler() http.Handler {
 	s.registerLaunchRoutes(mux, baseDir)
 	mux.Handle("/tableview/", http.StripPrefix("/tableview", tableView{
 		resolve:     func(query url.Values) (tableViewSource, error) { return s.artifactTableView(baseDir, query) },
-		stylesheets: []string{"/web_fonts.css", "/web_tokens.css"},
+		stylesheets: []string{"/web_fonts.css", "/web_tokens.css", "/web_app_highlight.css"},
 	}.handler()))
 	s.registerLauncherConfigRoutes(mux)
 	for path, serve := range map[string]func(string, http.ResponseWriter, *http.Request){
@@ -1827,6 +1835,7 @@ func (s site) generateStaticWeb(outputDir string) error {
 	template := strings.Replace(baseTemplate, `href="/web_fonts.css"`, `href="web_fonts.css"`, 1)
 	template = strings.Replace(template, `href="/web_tokens.css"`, `href="web_tokens.css"`, 1)
 	template = strings.Replace(template, `href="/web_styles.css"`, `href="web_styles.css"`, 1)
+	template = strings.Replace(template, `href="/web_app_highlight.css"`, `href="web_app_highlight.css"`, 1)
 	template = strings.Replace(template, `href="/web_shell.css"`, `href="web_shell.css"`, 1)
 	if template == baseTemplate {
 		return errors.New("web HTML static stylesheet marker not found")
@@ -2017,6 +2026,14 @@ func writeStaticStylesheet(outputDir, directory string) error {
 	}
 	if err := os.WriteFile(filepath.Join(directory, "web_styles.css"), []byte(webStylesCSS), 0o644); err != nil {
 		return err
+	}
+	if err := os.WriteFile(filepath.Join(directory, "web_app_highlight.css"), []byte(webAppHighlightCSS), 0o644); err != nil {
+		return err
+	}
+	if directory == outputDir {
+		if err := os.WriteFile(filepath.Join(directory, "highlightjs-license.txt"), []byte(highlightLicense), 0o644); err != nil {
+			return err
+		}
 	}
 	return os.WriteFile(filepath.Join(directory, "web_shell.css"), []byte(webShellCSS), 0o644)
 }

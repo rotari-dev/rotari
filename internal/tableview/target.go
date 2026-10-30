@@ -1,8 +1,8 @@
-// Package tableview reads what the Table viewer shows: a delimited text file
-// or a directory's files as rows of cells, a page at a time, and the image,
-// audio, and video files its cells name. It knows nothing of jobs, runs, or
-// HTTP: callers supply a Target, the file or directory and the roots whose
-// files may be read.
+// Package tableview reads what the Table viewer shows: delimited text and
+// JSON Lines files or a directory's files as rows of cells, a page at a
+// time, and the image, audio, video, and PDF files its cells name. It knows
+// nothing of jobs, runs, or HTTP: callers supply a Target, the file or
+// directory and the roots whose files may be read.
 package tableview
 
 import (
@@ -13,8 +13,8 @@ import (
 	"strings"
 )
 
-// Target is what a viewer shows: a delimited file or a directory, by
-// absolute path, under one of Roots. Every file the viewer reads, the
+// Target is what a viewer shows: a table or document file, or a directory,
+// by absolute path, under one of Roots. Every file the viewer reads, the
 // target and the media its cells name, is opened through os.Root under a
 // root that lexically contains it, so a symlink cannot leave the roots.
 type Target struct {
@@ -91,16 +91,16 @@ func (target Target) AllBases(directory bool) []Base {
 	return append(bases, Base{ID: FileBase, Label: "this file's directory", Path: filepath.Dir(target.Path)})
 }
 
-// ResolveMedia returns the absolute path of the image, audio, or video file
-// a cell names: an absolute path as it is, or a relative one joined to the
-// base with that ID. The file must be under a root; whether it exists is
-// found when it is opened.
+// ResolveMedia returns the absolute path of a supported preview file a cell
+// names: an absolute path as it is, or a relative one joined to the base
+// with that ID. The file must be under a root; whether it exists is found
+// when it is opened.
 func (target Target) ResolveMedia(directory bool, baseID, ref string) (string, error) {
 	if ref == "" || strings.ContainsRune(ref, 0) {
 		return "", fmt.Errorf("a media path is required")
 	}
 	if MediaKind(ref) == "" {
-		return "", fmt.Errorf("%s is not an image, audio, or video file", ref)
+		return "", fmt.Errorf("%s is not a supported preview file", ref)
 	}
 	return target.ResolvePath(directory, baseID, ref)
 }
@@ -150,22 +150,48 @@ func (target Target) base(directory bool, id string) (Base, error) {
 }
 
 // MediaTypes are the files shown inline, by lower-case extension: images,
-// audio, and video, which a page shows with img, audio, and video elements.
+// audio, video, and PDFs.
 var MediaTypes = map[string]string{
 	".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
 	".gif": "image/gif", ".svg": "image/svg+xml",
 	".wav": "audio/wav", ".mp3": "audio/mpeg", ".flac": "audio/flac",
 	".ogg": "audio/ogg", ".oga": "audio/ogg", ".opus": "audio/ogg", ".m4a": "audio/mp4",
 	".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
+	".pdf": "application/pdf",
 }
 
-// MediaKind is "image", "audio", or "video" for a name MediaTypes lists,
-// and "" for any other.
+// MediaKind is "image", "audio", "video", or "pdf" for a name
+// MediaTypes lists, and "" for any other.
 func MediaKind(name string) string {
 	contentType, ok := MediaTypes[strings.ToLower(filepath.Ext(name))]
 	if !ok {
 		return ""
 	}
 	kind, _, _ := strings.Cut(contentType, "/")
+	if kind == "application" {
+		return "pdf"
+	}
 	return kind
+}
+
+// DocumentPreview reports a document the viewer opens directly: it is
+// "markdown" for Markdown files, "text" for supported source/config files,
+// and empty for other names. Media types such as PDF are classified separately.
+func DocumentPreview(name string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".md", ".markdown":
+		return "markdown"
+	case ".py", ".sh", ".bash", ".zsh", ".js", ".mjs", ".cjs", ".ts", ".tsx",
+		".go", ".rs", ".java", ".c", ".h", ".cc", ".cpp", ".cxx", ".hpp",
+		".cs", ".rb", ".php", ".swift", ".kt", ".kts", ".lua", ".pl", ".r",
+		".sql", ".json", ".yaml", ".yml", ".xml", ".html", ".htm", ".css",
+		".ini", ".cfg", ".conf", ".toml", ".diff", ".patch":
+		return "text"
+	default:
+		base := filepath.Base(name)
+		if strings.EqualFold(base, "Dockerfile") || strings.EqualFold(base, "Makefile") {
+			return "text"
+		}
+		return ""
+	}
 }

@@ -145,8 +145,8 @@ The package map, process roles, and per-command walkthroughs are in
   `internal/launcher` runs commands a user registered for artifacts and owns
   their processes; it imports no rotari package and no HTTP code, so callers
   supply the command, target, and environment.
-  `internal/tableview` reads what the Table viewer shows, a delimited file
-  or a directory and the media its cells name, under roots its callers supply; it imports
+  `internal/tableview` reads what the Table viewer shows, delimited and JSON
+  Lines files or a directory and the previewable files its cells name, under roots its callers supply; it imports
   no rotari package and no HTTP code.
   Executors implement job execution only.
 - Renderers do not read status files themselves: `show`, `jobs`, `report`,

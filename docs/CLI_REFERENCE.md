@@ -773,7 +773,7 @@ serve the web status UI
 
 ### `rotari tableview`
 
-view a CSV or TSV file, or a directory's files, in the Web UI's Table viewer
+view a delimited or JSON Lines table, a Markdown or script file, a PDF, or a directory's files in the Web UI's Table viewer
 
 Usage: `rotari tableview PATH`
 
@@ -782,7 +782,7 @@ Usage: `rotari tableview PATH`
 | `--host` | `HOST` | `CLI only` | HTTP listen host |
 | `--port` | `PORT` | `CLI only` | HTTP listen port; without it, the next free port after the default |
 | `--auth-token` | `TOKEN` | `ROTARI_WEB_AUTH_TOKEN` | require this token in Authorization: Bearer or X-Rotari-Token; prefer ROTARI_WEB_AUTH_TOKEN for secrets; cannot be combined with --static-dir |
-| `--static-dir` | `DIR` | `CLI only` | write a static snapshot of the Table viewer for a delimited file (up to 10,000 rows, with its media files up to 10 MiB each, 100 MiB in all) instead of serving; filters, the separator, and the header row are fixed; cannot be combined with --host, --port, or --auth-token |
+| `--static-dir` | `DIR` | `CLI only` | write a static snapshot of the Table viewer for a delimited or JSON Lines file (up to 10,000 rows, with its media files up to 10 MiB each, 100 MiB in all) instead of serving; filters are fixed, and delimited files also keep their separator and header row; cannot be combined with --host, --port, or --auth-token |
 
 ### `rotari mcp`
 

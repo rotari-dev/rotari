@@ -104,9 +104,13 @@ them with `rotari add --artifact PATH`, which may use
 `rotari show -j JOB --artifacts` lists them in a terminal.
 
 In the Web UI, a job's **Artifacts** button lists them, while the job runs
-too. Files can be previewed (images, audio, video, NumPy arrays, tables,
-text) or downloaded, and directories opened. A file of another type, such
-as one without an extension, has **Open as text**. The first row, `.`, is the
+too. Files can be previewed (images, audio, video, PDF, NumPy arrays, tables,
+Markdown, common source/config formats, and other text) or downloaded, and
+directories opened. Markdown rendering, syntax highlighting, and PDF previews
+use the same local renderers in the artifact preview and Table viewer.
+Markdown rendering and syntax highlighting stop at 2 MiB and show the source.
+A file of another type, such as one without an extension, has **Open as text**.
+The first row, `.`, is the
 job's working directory, where trackers such as MLflow and Aim write by
 default. The run toolbar's **Files** opens the experiment directory around
 `.rotari-state`, where jobs can share one TensorBoard log directory or
@@ -160,38 +164,53 @@ one store per job, or a tracking server.
 
 ### Viewing tables
 
-A table file (`.csv`, `.tsv`, `.scp`, and similar) or a directory has a
-**Table viewer** button, available without `--allow-exec`. It pages through
-files with millions of rows and offers filters, sorting, and per-column
-statistics (**Describe**) over the whole file. A cell holding the path of an
-image, audio, or video file opens it in a pane above the table (the table keeps
-its height, and the page scrolls), with a
-waveform and spectrogram for audio; **Channel** picks one channel of a
-multichannel file to draw and to play from both speakers, or **Mix** to
-draw their mean and play the file as it is. For a directory, **Group by stem** puts
+A table file (`.csv`, `.tsv`, `.jsonl`, `.scp`, and similar), a Markdown or
+script file, a PDF, or a directory has a **Table viewer** button, available without
+`--allow-exec`. It pages through
+delimited and JSON Lines files and offers filters, sorting, and per-column
+statistics (**Describe**) over the whole file. JSON Lines records are one JSON
+value per line: object keys become sorted columns, and arrays or scalar values
+go in a `value` column. Blank lines are skipped; malformed records are shown
+as errors. A cell holding the path of an image, audio, video, or PDF file opens
+it in a pane above the table (the table keeps its height, and the page scrolls),
+with a waveform and spectrogram for audio; **Channel** picks one channel of a
+multichannel file to draw and to play from both speakers, or **Mix** to draw
+their mean and play the file as it is. Markdown files use the same safe
+renderer as run reports, with a **Show source** toggle (rendering is limited
+to the first 2 MiB); source and config files supported by the bundled
+Highlight.js build get syntax highlighting, including Python, shell,
+JavaScript, TypeScript, Go, Rust, Java, C/C++, Ruby, JSON, and YAML. PDFs use
+the browser's built-in viewer and can also
+be opened in a new tab. For a
+directory, **Group by stem** puts
 `ref/u1.wav`, `hyp/u1.wav`, and `plots/u1.png` in one row to compare outputs
-and find missing ones. In a directory, clicking any other file shows it as
-text in a pane, and a table file also has **Open table**, which opens it in
-a Table viewer of its own in a new tab. The URL keeps the view, so a link can be shared. Try
+and find missing ones. In a directory, clicking any other file shows it in a
+pane, rendering Markdown and highlighting supported source files; PDFs open
+in the browser viewer. A table file also has **Open table**, which opens it in
+its own viewer in a new tab. The URL keeps the view, so a link can be shared. Try
 it in the [Table viewer demo](https://rotari-dev.github.io/rotari/tableview/),
 an evaluation table whose cells name WAV files; it is a static snapshot
 (below), so filters are off there.
 
-`rotari tableview PATH` opens the same viewer outside any project:
+`rotari tableview PATH` opens the same viewer outside any project for a
+delimited or JSON Lines table, a Markdown or script file, a PDF, or a directory:
 
 ```sh
 rotari tableview metadata.csv
 rotari tableview eval/ --port 8090
 ```
 
-`rotari tableview --static-dir DIR FILE` writes a snapshot of one table file
+`rotari tableview --static-dir DIR FILE` writes a snapshot of one delimited or
+JSON Lines table file
 that you can publish or open without a server, as in the
 [demo](https://rotari-dev.github.io/rotari/tableview/). It holds every row
-(at most 10,000) and copies the media files the cells name (up to 10 MiB
+(at most 10,000) and copies the image, audio, video, and PDF files the cells name (up to 10 MiB
 each, 100 MiB in all), so share it only with readers who may see them.
 Paging, sorting, **Describe** over the whole file, and the panes work;
-filters, the separator, and the header row can be changed only in the live
-viewer. `DIR` is replaced.
+filters can be changed only in the live viewer. Delimited tables also keep
+their separator and header row fixed in the snapshot. Markdown, script, and
+PDF previews are available in the live viewer, not as table snapshots. `DIR` is
+replaced.
 
 ```sh
 rotari tableview --static-dir site/eval eval/utterances.csv

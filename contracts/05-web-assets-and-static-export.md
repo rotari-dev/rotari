@@ -145,6 +145,12 @@ internal/webui/assets/
 ├── web_app_core.js
 ├── web_app_actions.js
 ├── web_app_logs.js
+├── vendor/
+│   ├── highlight.min.js
+│   └── highlightjs-license.txt
+├── web_app_highlight.js
+├── web_app_previews.js
+├── web_app_markdown.js
 ├── web_app_artifacts.js
 ├── web_app_tables.js
 ├── web_app_charts.js
@@ -166,17 +172,31 @@ order and delivered as one script; they intentionally share the global scope:
 1. `web_app_core.js`
 2. `web_app_actions.js`
 3. `web_app_logs.js`
-4. `web_app_artifacts.js`
-5. `web_app_tables.js`
-6. `web_app_charts.js`
-7. `web_app_matrix.js`
-8. `web_app_notifications.js`
-9. `web_app_search.js`
-10. `web_app_bootstrap.js`
+4. `vendor/highlight.min.js`
+5. `web_app_highlight.js`
+6. `web_app_previews.js`
+7. `web_app_markdown.js`
+8. `web_app_artifacts.js`
+9. `web_app_launches.js`
+10. `web_app_tables.js`
+11. `web_app_charts.js`
+12. `web_app_matrix.js`
+13. `web_app_notifications.js`
+14. `web_app_search.js`
+15. `web_app_activity.js`
+16. `web_app_bootstrap.js`
 
-Do not reorder these files without running the full Web test suite. The
-separation is for source readability and ownership, not JavaScript module
-isolation. `web_app_notifications.js` must load before `web_app_bootstrap.js`:
+The local Highlight.js browser bundle is generated from the pinned
+`@highlightjs/cdn-assets` package (`package.json` and `package-lock.json`) by
+[`scripts/build_highlight.js`](../scripts/build_highlight.js). Run
+`npm run build:highlight` after changing its version. The bundle is embedded
+in the Web UI, served to Tableviewer pages, and copied to Tableviewer static
+snapshots; no CDN is required. Its BSD-3-Clause notice is available at
+`/highlightjs-license.txt` and is copied into static exports.
+
+This sequence is dependency order, not JavaScript module isolation: the
+highlighter and PDF helper precede the Markdown renderer and artifact view.
+`web_app_notifications.js` must load before `web_app_bootstrap.js`:
 it wraps the global `refresh()` function, and bootstrap both calls `refresh()`
 immediately and passes it to `setInterval`, so the wrap must already be in
 place by then.
@@ -691,7 +711,7 @@ listing JSON carries too) and which is not a candidate: it is served under
 the same roots, so not for an untrusted record without `--artifact-root`;
 a refused request is 403, a
 missing file 404. Images (png, jpg, jpeg, gif, svg), audio (wav, mp3, flac,
-ogg, oga, opus, m4a), and video (mp4, webm, mov) are served inline, with
+ogg, oga, opus, m4a), video (mp4, webm, mov), and PDF files are served inline, with
 range requests so media can seek, and every other file, or any file with
 `download=1`, as an attachment, all with `Cache-Control: no-store`,
 `X-Content-Type-Options: nosniff`, and a `sandbox` Content-Security-Policy,
@@ -710,12 +730,22 @@ children, directories first and then by name, 200 per page, reading at most
 `--static-dir`; static exports contain listings but no file contents unless
 WEB-7 applies. The
 handlers are in [internal/webui/artifact_files.go](../internal/webui/artifact_files.go)
-and the view in [web_app_artifacts.js](../internal/webui/assets/web_app_artifacts.js);
-covered by `TestWebPreviewsArtifactsUnderAllowedRoots` and
+and the view in [web_app_artifacts.js](../internal/webui/assets/web_app_artifacts.js).
+The artifact modal and Table viewer share the local Markdown renderer,
+Highlight.js highlighter, and PDF iframe helper from
+[`web_app_markdown.js`](../internal/webui/assets/web_app_markdown.js),
+[`web_app_highlight.js`](../internal/webui/assets/web_app_highlight.js), and
+[`web_app_previews.js`](../internal/webui/assets/web_app_previews.js). Markdown
+rendering and syntax highlighting are each limited to 2 MiB; larger previews
+show source. Highlight.js uses an explicit language selected from a filename
+extension or fence label; it does not auto-detect. PDFs use the
+browser's inline viewer. The same scripts are included in static Web exports
+when artifact contents are copied; covered by
+`TestWebPreviewsArtifactsUnderAllowedRoots` and
 `TestWebServesArtifactsOnlyFromTrustedRecords` in
 [conformance/05-web/artifacts_test.go](../conformance/05-web/artifacts_test.go).
 The Table viewer (WEB-19) also serves, inline with the same headers, the
-image, audio, and video files a served table's cells name, and any such
+image, audio, video, and PDF files a served table's cells name, and any such
 file as text pages, only under the same roots; the ownership rule is `artifactRecordsTrust` in
 [internal/webui/artifact_trust.go](../internal/webui/artifact_trust.go).
 Opening an entry, including a directory child, scrolls to the rendered preview
@@ -904,7 +934,13 @@ them or through an escaping symlink, 404 when missing), at
 `/tableview/?<the content request's query>`. Each artifact row and preview
 title line offers it, as a link that opens in a new tab, for every directory and for files whose names
 match `*.csv`, `*.tsv`, `*.tab`, `*.psv`, `*.txt`, `*.scp`, `*.lst`,
-`*.list`, or `*.dat` (and `*.CSV`, `*.TSV`), on every live server: it runs no command, so it needs no
+`*.list`, `*.dat`, or `*.jsonl` (with the corresponding uppercase variants),
+and Markdown, PDF, and source/config files for Python, shell, JavaScript/TypeScript,
+Go, Rust, Java, C/C++, C#, Ruby, PHP, Swift, Kotlin, Lua, Perl, R, SQL,
+JSON/YAML/XML/HTML/CSS/INI/TOML, diff, Dockerfile, and Makefile. Their exact
+case-sensitive file patterns are `documentPatterns` in
+[internal/tableview/delimited.go](../internal/tableview/delimited.go). The viewer
+runs no command, so it needs no
 `--allow-exec` and is listed in `/api/launchers` as `viewers` whether or not
 launching is available. `/tableview/api/rows` splits the file into records
 on line breaks and cells on `sep`, which must be exactly one character other
@@ -928,7 +964,13 @@ cells, for up to 1,000,000 rows. Rows keep their numbers in the file.
 select, as pandas' `describe` does: non-blank cells, distinct values (up to
 100,000, then `unique_over`), and over the cells that read as numbers their
 count, mean, sample standard deviation, minimum, maximum, and sum.
-A cell whose trimmed text ends in an image, audio, or video extension (as
+A `.jsonl` file instead has one JSON value per nonblank line. Object keys
+across all records become columns in sorted name order; arrays and scalar
+values use a `value` column. Strings and numbers become text, nested arrays
+and objects become compact JSON, and null or missing values are blank.
+Malformed records and records over 16 MiB are errors. It uses the same
+filtering, sorting, paging, and Describe behavior as delimited tables.
+A cell whose trimmed text ends in an image, audio, video, or PDF extension (as
 WEB-6 lists them) names a file: absolute as it is, or relative to the base
 `base` names, `basedir` (the default), `wd` (the job's recorded working
 directory), or `file` (the table's own directory). Each such cell of a page
@@ -939,7 +981,7 @@ images and video; size; and a bitrate, the format's own for PCM WAV and
 constant-bitrate MP3 and otherwise size over duration), or with why it is
 not shown: outside the roots, through an escaping symlink, or missing.
 `/tableview/api/media?ref=&base=` serves that file under the same roots and
-refusals, and nothing that is not an image, audio, or video file.
+refusals, and nothing that is not an image, audio, video, or PDF file.
 A directory is read as a table instead, through the same roots without
 following directory symlinks and reading at most 100,000 entries. Initially
 only its immediate children are read. Repeated `expanded` parameters name
@@ -965,8 +1007,8 @@ refused as for media but of any type, as text pages the way
 `/api/artifact-text` does (`from`, `offset`, 64 KiB on line boundaries, a
 NUL byte refusing it); a directory's page opens a path cell that names no
 media or directory that way, in a pane.
-In either view a row's `tables` lists its path cells naming a table file
-(by the base-name patterns Launch with offers the viewer for), which the
+In either view a row's `tables` lists its path cells naming a delimited or
+JSON Lines table file (by the table-file base-name patterns), which the
 page links to a viewer of its own in a new tab: the same query with
 `child` naming the file inside the directory, as for any artifact.
 Filters, sorting, and Describe cover only this opened scope.
@@ -982,7 +1024,15 @@ out, or that the listing was cut short. A directory's media paths are
 relative to it. A file's parameters are refused for a directory and a
 directory's for a file, rather than ignored.
 `/tableview/api/info` names the file or directory, a file's size, download,
-and the separator its extension suggests, and the bases. The page opens a cell's media in tabs of the active pane of panes
+and the separator its extension suggests, and the bases; a JSON Lines file
+names its format, and text documents name their preview. The page renders
+Markdown with a source toggle and safely highlights supported source/config
+languages from the local Highlight.js bundle in text panes; rendering and
+highlighting are limited to the first 2 MiB, after which
+the source is shown. PDFs use the browser's inline PDF viewer and also link to a new
+tab. Opening a Markdown, script, or PDF file directly shows its content, and
+table row APIs refuse to treat it as a delimited table. The
+page opens a cell's media in tabs of the active pane of panes
 above the table, which keeps the height of the page below its header, so
 open panes scroll the page rather than shrink the table; panes
 split right or down, one pane always active; tabs move between panes by
@@ -1002,10 +1052,14 @@ scope. Expansion preserves the filters, sort, and current page (clamping
 the page if collapse reduces the page count); a failed expansion is shown
 as an error and the previous scope is restored. Group by stem shares this scope and never expands directories
 implicitly. Implemented by
-[internal/tableview](../internal/tableview/) and
+[internal/tableview](../internal/tableview/), including
+[jsonl.go](../internal/tableview/jsonl.go), and
 [internal/webui/table_view.go](../internal/webui/table_view.go), with the page in
 [table_view.js](../internal/webui/assets/table_view.js) and
-[table_view_panes.js](../internal/webui/assets/table_view_panes.js); covered by
+[table_view_panes.js](../internal/webui/assets/table_view_panes.js),
+[web_app_highlight.js](../internal/webui/assets/web_app_highlight.js),
+[web_app_previews.js](../internal/webui/assets/web_app_previews.js), and
+[web_app_markdown.js](../internal/webui/assets/web_app_markdown.js); covered by
 `TestWebTableViewerReadsArtifacts` in
 [conformance/05-web/table_view_test.go](../conformance/05-web/table_view_test.go), with
 the rules in [internal/tableview/filter_test.go](../internal/tableview/filter_test.go),
@@ -1023,11 +1077,13 @@ the page checked by `TestTableViewPagesInBrowser` and
 [internal/webui/table_view_test.go](../internal/webui/table_view_test.go).
 
 **WEB-20** `rotari tableview PATH` serves the Table viewer (WEB-19) for one
-delimited file or directory outside any project: the directory, or the
+delimited or JSON Lines table, Markdown or supported source/config text, PDF
+document, or directory outside
+any project: the directory, or the
 file's, is the only root anything is read under and the only base its
 relative media paths resolve from, through `os.Root`, with the same
 refusals. For a directory, `child` names a file or directory inside it to
-view instead, under the same root, so a table file it lists opens as
+view instead, under the same root, so a table or document file it lists opens as
 WEB-19 describes; `child` is refused for a file, and when it is not a
 clean relative path, leaves the root through a symlink, or is missing. It listens on `--host` (default `127.0.0.1`) and `--port`
 (default 8788, or the next free port when `--port` is not given), prints
@@ -1041,22 +1097,24 @@ in [internal/webui/table_view.go](../internal/webui/table_view.go); covered by
 [conformance/05-web/tableview_command_test.go](../conformance/05-web/tableview_command_test.go).
 
 **WEB-22** `rotari tableview --static-dir DIR FILE` writes a static snapshot
-of the Table viewer for one delimited file instead of serving, reading under
-the file's directory as WEB-20 does. The file is read with the separator its
-extension suggests and a header row; the snapshot embeds every row (at most
+of the Table viewer for one delimited or JSON Lines table instead of serving,
+reading under the file's directory as WEB-20 does. A delimited file is read
+with the separator its extension suggests and a header row; a JSON Lines file
+uses its record keys as columns. The snapshot embeds every row (at most
 10,000, more fail), each column's ascending and descending order, and
-Describe over the whole file, and copies each media file its cells name
+Describe over the whole file, and copies each image, audio, video, or PDF file its cells name
 that the live viewer would show (at most 10 MiB each and 100 MiB in all, or
 the export fails) into `media/`, and prints how many rows and media files,
 and how many bytes of them, it wrote. The page is named by the file's base name,
 not its path. `table_view_static.js` answers the page's `api/info`,
 `api/rows` (paging and sorting), and `api/describe` from the snapshot and
-links media cells to their copies; the page disables the separator, header,
-and media-base controls and shows the reason in place of the filter form,
-and a request with filters, another separator or header, or another base
+links media cells to their copies; the page disables the separator and header
+controls for delimited files, and shows the reason in place of the filter
+form. Filters, and delimited separator/header settings, cannot be changed;
+a request with filters, another delimited separator or header, or another base
 answers 400 with the reason. `--host`, `--port`, and `--auth-token` (also
 from `ROTARI_WEB_AUTH_TOKEN`) are refused with `--static-dir`, as is a
-directory, and an output directory that contains the file, since the export
+Markdown/script/PDF document, a directory, and an output directory that contains the file, since the export
 replaces it. Implemented by `GenerateStaticTableView` in
 [internal/webui/table_view_static.go](../internal/webui/table_view_static.go)
 and `table_view_static.js`; covered by

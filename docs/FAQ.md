@@ -497,9 +497,10 @@ command. A command whose program is not installed is shown disabled. See
 [Launching commands](WEB.md#launching-commands).
 A command that serves HTTP, such as TensorBoard, opens through the
 `rotari web` port, so it needs no extra SSH port forward. See
-[Services](CONFIGURATION.md#services). A CSV or TSV file opens in the built-in
-**Table viewer** from the same menu even without `--allow-exec`, and
-`rotari tableview PATH` opens any file or directory in it; see
+[Services](CONFIGURATION.md#services). A delimited or JSON Lines table,
+Markdown or script file, PDF, or directory opens in the built-in **Table viewer**
+from the same menu even without `--allow-exec`, and `rotari tableview PATH`
+opens one directly; see
 [Viewing tables](WEB.md#viewing-tables).
 
 ### What does the Recent jobs link show?

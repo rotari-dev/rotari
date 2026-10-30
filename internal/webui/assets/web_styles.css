@@ -1707,6 +1707,11 @@ pre,
   max-height: 60vh;
   overflow: auto;
 }
+.artifact-markdown {
+  height: auto;
+  max-height: 60vh;
+  padding-right: 0.75rem;
+}
 .artifact-media {
   display: block;
   max-width: 100%;

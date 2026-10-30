@@ -10,9 +10,9 @@ import (
 	"sync"
 )
 
-// Properties describe an image, audio, or video file from its headers,
-// without decoding it. A field is zero when the format does not record it
-// or the file could not be read that far.
+// Properties describe a supported preview file from its headers, without
+// decoding it. A field is zero when the format does not record it or the
+// file could not be read that far.
 type Properties struct {
 	Format string `json:"format"`
 	Size   int64  `json:"size"`
@@ -29,7 +29,7 @@ type Properties struct {
 	Height  int `json:"height,omitempty"`
 }
 
-// Media is what a cell names: an image, audio, or video file, with its
+// Media is what a cell names: an image, audio, video, or PDF file, with its
 // properties or why they are not shown. Ref and Base request the file from
 // the viewer's media route.
 type Media struct {
@@ -43,7 +43,7 @@ type Media struct {
 // mediaRefLimit bounds the cells read as media paths.
 const mediaRefLimit = 4096
 
-// mediaRef returns the path a cell names, or "" when it names no media.
+// mediaRef returns the path a cell names, or "" when it names no preview file.
 func mediaRef(cell string) string {
 	ref := strings.TrimSpace(cell)
 	if ref == "" || len(ref) > mediaRefLimit || strings.ContainsAny(ref, "\n\r") || MediaKind(ref) == "" {

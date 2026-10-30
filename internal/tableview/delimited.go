@@ -7,13 +7,40 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
 
-// TablePatterns are the base names of the files the viewer offers to read
-// as tables; any delimited file can be read when named directly.
-var TablePatterns = []string{"*.csv", "*.CSV", "*.tsv", "*.TSV", "*.tab", "*.psv", "*.txt", "*.scp", "*.lst", "*.list", "*.dat"}
+// TablePatterns are the base names of table files the viewer opens as rows.
+// Any delimited file can be read as a table when named directly.
+var TablePatterns = []string{
+	"*.csv", "*.CSV", "*.tsv", "*.TSV", "*.tab", "*.TAB", "*.psv", "*.PSV",
+	"*.txt", "*.TXT", "*.scp", "*.SCP", "*.lst", "*.LST", "*.list", "*.LIST",
+	"*.dat", "*.DAT", "*.jsonl", "*.JSONL",
+}
+
+var documentPatterns = []string{
+	"*.md", "*.MD", "*.markdown", "*.MARKDOWN", "*.pdf", "*.PDF",
+	"*.py", "*.PY", "*.sh", "*.SH", "*.bash", "*.BASH", "*.zsh", "*.ZSH",
+	"*.js", "*.JS", "*.mjs", "*.MJS", "*.cjs", "*.CJS",
+	"*.ts", "*.TS", "*.tsx", "*.TSX", "*.go", "*.GO", "*.rs", "*.RS",
+	"*.java", "*.JAVA", "*.c", "*.C", "*.h", "*.H", "*.cc", "*.CC",
+	"*.cpp", "*.CPP", "*.cxx", "*.CXX", "*.hpp", "*.HPP",
+	"*.cs", "*.CS", "*.rb", "*.RB", "*.php", "*.PHP", "*.swift", "*.SWIFT",
+	"*.kt", "*.KT", "*.kts", "*.KTS", "*.lua", "*.LUA", "*.pl", "*.PL",
+	"*.r", "*.R", "*.sql", "*.SQL", "*.json", "*.JSON", "*.yaml", "*.YAML",
+	"*.yml", "*.YML", "*.xml", "*.XML", "*.html", "*.HTML", "*.htm", "*.HTM",
+	"*.css", "*.CSS", "*.ini", "*.INI", "*.cfg", "*.CFG", "*.conf", "*.CONF",
+	"*.toml", "*.TOML", "*.diff", "*.DIFF", "*.patch", "*.PATCH",
+	"Dockerfile", "dockerfile", "Makefile", "makefile",
+}
+
+// ViewerPatterns lists file names that open directly in the Table viewer,
+// as tables or document previews.
+func ViewerPatterns() []string {
+	return append(slices.Clone(TablePatterns), documentPatterns...)
+}
 
 // IsTableFile reports whether a file of base name name is one TablePatterns
 // offers as a table.

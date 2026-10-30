@@ -222,10 +222,10 @@ type webViewer struct {
 }
 
 // webViewers are the viewers Launch with offers besides commands.
-// The Table viewer reads table files by name, and any directory.
+// The Table viewer opens table and document files by name, and any directory.
 var webViewers = []webViewer{{
 	Name: "Table viewer", Path: "/tableview/", Targets: []launcher.TargetKind{launcher.TargetFile},
-	Patterns: tableview.TablePatterns,
+	Patterns: tableview.ViewerPatterns(),
 }, {
 	Name: "Table viewer", Path: "/tableview/", Targets: []launcher.TargetKind{launcher.TargetDirectory},
 }}

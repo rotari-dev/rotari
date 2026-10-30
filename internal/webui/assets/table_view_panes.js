@@ -1,8 +1,9 @@
 // The Table viewer's panes: files a table names, opened in tabs, in panes
 // split right or down. One pane is active, and files clicked in the table
-// open there. Images and video show as they are; audio has a player, its
+// open there. Images, video, and PDFs show inline; audio has a player, its
 // waveform, and its spectrogram, which the browser computes from the
-// decoded samples for the time range in view; any other file shows as text.
+// decoded samples for the time range in view; text can render Markdown or
+// highlight supported source and config languages.
 "use strict";
 
 // panes is the layout: a tree of splits whose leaves are panes, or null when
@@ -777,7 +778,7 @@ class TabView {
     this.cache = {};
     this.selection = null;
     this.root = el("div", { className: "tv-tab-view" });
-    if (media.kind === "text") {
+    if (media.kind === "text" || media.kind === "markdown") {
       this.showText();
       return;
     }
@@ -789,17 +790,25 @@ class TabView {
       { className: "tv-tab-title" },
       el("strong", {}, media.ref),
       el("span", { className: "tv-media-properties" }, properties),
-      el(
-        "a",
-        { href: this.url, target: "_blank", rel: "noopener" },
-        "Open in a new tab",
-      ),
+        media.kind === "pdf"
+          ? null
+          : el(
+              "a",
+              { href: this.url, target: "_blank", rel: "noopener" },
+              "Open in a new tab",
+            ),
     );
     this.root.append(title);
     if (media.kind === "image") {
       this.root.append(
         el("img", { className: "tv-image", src: this.url, alt: media.ref }),
       );
+      return;
+    }
+    if (media.kind === "pdf") {
+      const preview = el("div", { className: "tv-pdf-preview" });
+      preview.innerHTML = pdfPreviewMarkup(this.url, this.media.ref, "tv-pdf");
+      this.root.append(preview);
       return;
     }
     if (media.kind === "video") {
@@ -868,10 +877,45 @@ class TabView {
     }
   }
 
-  // showText shows the file as text a page at a time, as an artifact's
-  // text is shown; a binary file says so.
+  // showText shows a file a page at a time, rendering Markdown and
+  // highlighting source by its extension.
   showText() {
-    const text = { pre: el("pre", { className: "tv-text" }), end: 0 };
+    const markdown =
+      this.media.kind === "markdown" || /\.(md|markdown)$/i.test(this.media.ref);
+    const language =
+      typeof scriptLanguage === "function" ? scriptLanguage(this.media.ref) : "";
+    const text = {
+      pre: el("pre", { className: "tv-text" }),
+      end: 0,
+      content: "",
+      markdown,
+      rendered: markdown,
+      language,
+    };
+    if (language) {
+      text.code = el("code", { className: "tv-highlighted" });
+      text.pre.append(text.code);
+    }
+    if (markdown) {
+      text.preview = el("div", { className: "tv-markdown markdown-view" });
+      text.pre.hidden = true;
+      text.toggle = el(
+        "button",
+        {
+          type: "button",
+          "aria-pressed": "true",
+          onclick: () => {
+            text.rendered = !text.rendered;
+            text.toggle.textContent = text.rendered
+              ? "Show source"
+              : "Render Markdown";
+            text.toggle.setAttribute("aria-pressed", String(text.rendered));
+            this.updateMarkdownPane(text);
+          },
+        },
+        "Show source",
+      );
+    }
     text.status = el("p", { className: "tv-analysis-status" }, "Loading…");
     text.more = el(
       "button",
@@ -885,12 +929,27 @@ class TabView {
         "div",
         { className: "tv-tab-title" },
         el("strong", {}, this.media.ref),
+        text.toggle,
       ),
       text.status,
+      text.preview,
       text.pre,
       text.more,
     );
     this.moreText();
+  }
+
+  // updateMarkdownPane renders a bounded preview and keeps the source
+  // available as text when the user switches views.
+  updateMarkdownPane(text) {
+    if (!text.markdown) return;
+    text.preview.hidden = !text.rendered;
+    text.pre.hidden = text.rendered;
+    if (text.rendered) {
+      text.preview.innerHTML = renderMarkdown(text.content);
+    } else {
+      text.pre.textContent = text.content;
+    }
   }
 
   async moreText() {
@@ -908,12 +967,40 @@ class TabView {
       if (!response.ok)
         throw new Error(body.trim() || "HTTP " + response.status);
       const page = JSON.parse(body);
-      text.pre.append(page.text);
+      if (text.markdown) {
+        text.content += page.text;
+        if (page.end > markdownPreviewByteLimit) {
+          text.rendered = false;
+          text.toggle.disabled = true;
+          text.toggle.textContent = "Markdown preview limit reached";
+        }
+        this.updateMarkdownPane(text);
+      } else if (text.language) {
+        text.content += page.text;
+        if (page.end > highlightPreviewByteLimit) {
+          text.highlightingLimited = true;
+          text.language = "";
+          text.pre.textContent = text.content;
+        } else {
+          text.code.insertAdjacentHTML(
+            "beforeend",
+            highlightScriptChunk(page.text, text.language),
+          );
+        }
+      } else {
+        text.pre.append(page.text);
+      }
       text.end = page.end;
       text.status.textContent =
-        page.end < page.size
+        (page.end < page.size
           ? formatBytes(page.end) + " of " + formatBytes(page.size)
-          : "";
+          : "") +
+        (text.markdown && page.end > markdownPreviewByteLimit
+          ? " · showing source after the 2 MiB Markdown preview limit"
+          : "") +
+        (text.highlightingLimited
+          ? " · showing source after the 2 MiB syntax highlighting limit"
+          : "");
       text.more.hidden = page.end >= page.size;
     } catch (error) {
       text.status.textContent = "Cannot show as text: " + error.message;
