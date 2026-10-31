@@ -129,20 +129,27 @@ const dom = new JSDOM(fs.readFileSync(process.argv[1], 'utf8'), {
       : Promise.reject(Error('offline'));
   },
 });
-const settle = () => new Promise(resolve => setTimeout(resolve, 200));
+// until waits for the page's requests to the real server, however slow.
+const until = async (check, what) => {
+  for (const deadline = Date.now() + 15000; Date.now() < deadline; ) {
+    if (await check()) return;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  throw Error(what);
+};
 (async () => {
   try {
-    await settle();
     const w = dom.window, d = w.document;
-    const button = d.querySelector('.notification-inbox > button');
-    if (!button || button.textContent !== 'Inbox (1)') throw Error('recorded history is not unread: ' + button?.textContent);
-    button.click();
-    await settle();
+    const button = () => d.querySelector('.notification-inbox > button');
+    await until(() => button()?.textContent === 'Inbox (1)', 'recorded history is not unread: ' + button()?.textContent);
+    button().click();
     const panel = d.getElementById('notification-inbox-panel');
-    if (panel.hidden || button.textContent !== 'Inbox (0)' || !panel.querySelector('a'))
+    if (panel.hidden || button().textContent !== 'Inbox (0)' || !panel.querySelector('a'))
       throw Error('inbox not readable');
-    const shared = await (await fetch(base + '/api/notifications?basedirs=' + process.argv[3])).json();
-    if (!shared.read.id) throw Error('opening the inbox did not mark it read on the server');
+    await until(async () => {
+      const shared = await (await fetch(base + '/api/notifications?basedirs=' + process.argv[3])).json();
+      return !!shared.read.id;
+    }, 'opening the inbox did not mark it read on the server');
     if (errors.length) throw Error(errors.join('\n'));
     w.close();
   } catch (error) { process.stderr.write(String(error)); process.exit(1); }

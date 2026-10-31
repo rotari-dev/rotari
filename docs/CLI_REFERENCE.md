@@ -373,6 +373,22 @@ Usage: `rotari runs [PROJECT]`
 | `--filter-cancelled` | `` | `CLI only` | select runs in the cancelled lifecycle |
 | `--cancelled` | `` | `CLI only` | short form of --filter-cancelled |
 
+### `rotari notifications`
+
+list the notifications runs recorded for the Web inbox across known state directories, without marking them read
+
+Usage: `rotari notifications [PROJECT]`
+
+| Option | Value | Environment | Description |
+| --- | --- | --- | --- |
+| `--config` | `FILE` | `CLI only` | config file to use |
+| `-b` / `--basedir` | `DIR` | `ROTARI_BASEDIR` | state directory |
+| `-p` / `--project-name` | `NAME` | `ROTARI_PROJECT_NAME` | project name |
+| `--masterdir` | `DIR` | `ROTARI_MASTERDIR` | master registry directory |
+| `--since` | `DURATION` | `ROTARI_NOTIFICATIONS_SINCE` | include notifications recorded in this time window (default 1d), such as 24h or 7d; notifications are kept for 10 days |
+| `--unread` | `` | `ROTARI_NOTIFICATIONS_UNREAD` | list only notifications the Web inbox has not marked read |
+| `--json` | `` | `ROTARI_NOTIFICATIONS_JSON` | print machine-readable JSON |
+
 ### `rotari show`
 
 show details for a project, run, job, or attempt

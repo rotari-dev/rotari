@@ -1,8 +1,7 @@
 # Plan: Persistent Notifications
 
 Created: 2026-10-31
-Status: Implemented (phases 1-6); see [work-log.md](work-log.md). A CLI
-command to read the records remains a later, separate plan.
+Status: Implemented (phases 1-7); see [work-log.md](work-log.md).
 
 ## Purpose
 
@@ -31,9 +30,8 @@ button, unread count, panel, Clear notifications, desktop popups, toggle,
 
 ## Non-goals
 
-- A CLI command to read notifications. It is planned separately later; the
-  storage format should not preclude it.
-- Python client and MCP access.
+- MCP access. The Python client reaches `rotari notifications` through its
+  generated CLI schema, like other commands.
 - Static exports: they keep the local toggle and have no inbox history.
 - Changing Webhook delivery, its settings, or its payload.
 - New `notifications.toml` settings. Recording is always on.
@@ -185,6 +183,24 @@ write the cursors; its read and cleared state stay in page memory, as today.
   metadata, so a run that needs repair never reported it.
 - `/api/active-runs`, `/api/notification-settings`, and the notification-only
   parts of `/api/state` were kept for API clients; see ISSUES.md.
+
+### Phase 7: `rotari notifications` (decided 2026-11-01)
+
+A read-only CLI listing of the records, named like the other list commands
+(`runs`, `jobs`) rather than `inbox`, because it does not manage read state.
+
+- `rotari notifications [PROJECT]` with `-b/--basedir`, `-p/--project-name`,
+  `--masterdir`, `--since` (default `1d`, as `runs` and `jobs`), `--unread`,
+  and `--json`; basedir and project scope follow `rotari runs`
+  (`projectRunListing` in `cmd/rotari/config.go`, `projectListingFilter`).
+- Entries are the inbox's: `notificationlog.Entries` renders records with
+  each project's current `[browser]` settings for both the Web handler and
+  the CLI. Listed oldest first.
+- Never writes the inbox state. `--unread` and the unread marks only read
+  the shared read cursor; the cleared cursor does not hide records here.
+- Contract NOT-3; conformance
+  `TestNotificationsListRecordedNotificationsWithoutReadingThem`; the command
+  joins the read-only flag-pair adapter.
 
 ## Known limitations to document
 

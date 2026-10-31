@@ -37,9 +37,9 @@ rotari info --json
 Add `--json` for structured output. Use the lists below to find other jobs,
 runs, projects, or state directories, and `show` to inspect details.
 
-## Lists: jobs, runs, projects, basedirs
+## Lists: jobs, runs, projects, basedirs, notifications
 
-The four list commands differ in what each row represents:
+The list commands differ in what each row represents:
 
 | Command | Lists |
 | --- | --- |
@@ -47,6 +47,7 @@ The four list commands differ in what each row represents:
 | `rotari runs` | Active, interrupted, and recently finished runs |
 | `rotari projects` | Projects, with their latest run status |
 | `rotari basedirs` | Known state directories (not job working directories) |
+| `rotari notifications` | Notifications runs recorded for the Web inbox, as the inbox shows them |
 
 Use these lists to find a project, run, or job, then use `show` for its details.
 The `runs` list shows run `STATUS` separately from `CLIENT`. `CLIENT` describes

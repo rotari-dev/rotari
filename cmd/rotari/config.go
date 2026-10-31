@@ -73,7 +73,7 @@ func loadCLIConfig(args []string) error {
 	if help {
 		cliIgnoreImplicitLocationDefaults = nil
 	}
-	if len(positional) > 0 && (cliConfigCommand == "check" || cliConfigCommand == "reset" || cliConfigCommand == "unlock" || cliConfigCommand == "jobs" || cliConfigCommand == "runs") && projectName == "" {
+	if len(positional) > 0 && (cliConfigCommand == "check" || cliConfigCommand == "reset" || cliConfigCommand == "unlock" || cliConfigCommand == "jobs" || projectRunListing(cliConfigCommand)) && projectName == "" {
 		projectName = positional[0]
 	}
 	cliLocationExplicit = map[string]bool{
@@ -112,7 +112,7 @@ func loadCLIConfig(args []string) error {
 	cliConfig = config.Merge(nil, cliFileConfig.Values)
 	// Registry-wide listings have no single basedir or project config scope.
 	// Global/workspace defaults (e.g. masterdir) still apply.
-	if cliConfigCommand == "basedirs" || cliConfigCommand == "projects" && baseDir == "" || cliConfigCommand == "runs" && baseDir == "" {
+	if cliConfigCommand == "basedirs" || cliConfigCommand == "projects" && baseDir == "" || projectRunListing(cliConfigCommand) && baseDir == "" {
 		for _, source := range cliFileConfig.Sources {
 			cliConfigPath = source.Path
 		}
@@ -205,7 +205,7 @@ func loadCLIConfig(args []string) error {
 			return err
 		}
 	}
-	skipProjectConfig := cliConfigCommand == "projects" || (cliConfigCommand == "runs" || cliConfigCommand == "jobs") && !cliLocationExplicit["basedir"]
+	skipProjectConfig := cliConfigCommand == "projects" || (projectRunListing(cliConfigCommand) || cliConfigCommand == "jobs") && !cliLocationExplicit["basedir"]
 	if projectName != "" && !skipProjectConfig {
 		if aggregate && cliConfigCommand == "jobs" && len(positional) == 0 && len(invocationOptions["project-name"]) == 0 {
 			projectName = ""
@@ -236,6 +236,13 @@ func loadCLIConfig(args []string) error {
 	return nil
 }
 
+// projectRunListing reports whether command lists runs or what they
+// recorded across the registered state directories, optionally narrowed to
+// one project given as PROJECT or --project-name: runs and notifications.
+func projectRunListing(command string) bool {
+	return command == "runs" || command == "notifications"
+}
+
 func aggregateCommandInvocation(command string, options map[string][]string, positional []string) bool {
 	for arg := range options {
 		if arg == "help" || arg == "h" {
@@ -243,7 +250,7 @@ func aggregateCommandInvocation(command string, options map[string][]string, pos
 		}
 	}
 	switch command {
-	case "basedirs", "projects", "runs":
+	case "basedirs", "projects", "runs", "notifications":
 		return true
 	case "jobs":
 		return true
@@ -262,7 +269,7 @@ func ignoredImplicitLocationDefaults(command string, aggregate bool) map[string]
 	ignored := map[string]bool{}
 	// These list scopes never use implicit locations, even when a project
 	// filter makes aggregateCommandInvocation return false.
-	if command == "basedirs" || command == "projects" || command == "runs" {
+	if command == "basedirs" || command == "projects" || projectRunListing(command) {
 		ignored["basedir"] = true
 		ignored["project-name"] = true
 		return ignored
@@ -335,7 +342,7 @@ func configProjectName(baseDir, requested string) (string, error) {
 }
 
 func configRunIDArg(args []string) string {
-	if cliConfigCommand == "add" || cliConfigCommand == "config" || cliConfigCommand == "init" || cliConfigCommand == "basedirs" || cliConfigCommand == "projects" || cliConfigCommand == "runs" {
+	if cliConfigCommand == "add" || cliConfigCommand == "config" || cliConfigCommand == "init" || cliConfigCommand == "basedirs" || cliConfigCommand == "projects" || projectRunListing(cliConfigCommand) {
 		return ""
 	}
 	options, positional := configInvocationOptions(args)

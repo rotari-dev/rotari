@@ -75,6 +75,26 @@ nothing. A run whose process was killed records no completion; if `rotari
 unlock` later finalizes it from its complete summary, its completion is
 recorded then (and sent to the Webhook) instead.
 
+### Reading notifications from the command line
+
+`rotari notifications` lists the same notifications as the inbox, oldest
+first, with their time, project, run ID, and the inbox text:
+
+```sh
+rotari notifications              # every known state directory, last day
+rotari notifications demo --since 7d
+rotari notifications --unread     # only what the inbox has not marked read
+rotari notifications --json
+```
+
+Like `rotari runs`, it covers every state directory known to the master
+directory unless `--basedir` names one, and `PROJECT` or `--project-name`
+narrows it to one project. `--since` (default `1d`) selects how far back to
+look; records are kept for 10 days. Listing never marks anything read: the
+read state belongs to the Web inbox, and `--unread` and the `(unread)` marks
+(the `unread` field in JSON) only report it. A record that cannot be read is
+reported as a warning on stderr.
+
 ### Enabling browser notifications
 
 Open `rotari web` and click `Enable notifications` in the top bar.

@@ -117,6 +117,8 @@ func dispatch(args []string) int {
 		return cmdProjects(args[1:])
 	case "runs":
 		return cmdRuns(args[1:])
+	case "notifications":
+		return cmdNotifications(args[1:])
 	case "lineage":
 		return cmdLineage(args[1:])
 	case "jobs":

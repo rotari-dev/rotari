@@ -72,7 +72,7 @@ func completionConfigInvocation(args []string) (string, []string, error) {
 	if command == "" {
 		return "", args, nil
 	}
-	if command == "runs" || command == "projects" || command == "jobs" {
+	if projectRunListing(command) || command == "projects" || command == "jobs" {
 		// The completion kind is not a positional project selector.
 		if len(filtered) == 0 {
 			return "", nil, fmt.Errorf("missing completion kind")
@@ -119,7 +119,7 @@ func cmdComplete(args []string) int {
 	if args[0] != "job-id" {
 		runID = ""
 	}
-	if command == "runs" || command == "projects" || command == "jobs" {
+	if projectRunListing(command) || command == "projects" || command == "jobs" {
 		return completeListing(args[0], command, basedir, projectName)
 	}
 	if basedir == "" {

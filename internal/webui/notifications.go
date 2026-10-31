@@ -67,35 +67,20 @@ func (s site) handleNotifications(writer http.ResponseWriter, request *http.Requ
 		http.Error(writer, "read notification history: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	response := inboxResponse{Entries: []inboxEntry{}, InboxState: inbox, Problems: problems}
-	settings := map[string]notification.ChannelSettings{}
+	shown := make([]notificationlog.Record, 0, len(records))
 	for _, record := range records {
-		if len(response.Entries) == inboxLimit || !record.Cursor().After(inbox.Cleared) {
+		if !record.Cursor().After(inbox.Cleared) {
 			break
 		}
-		baseDirID := notification.WebBaseDirID(record.BaseDir)
-		if !selected[baseDirID] {
-			continue
+		if selected[notification.WebBaseDirID(record.BaseDir)] {
+			shown = append(shown, record)
 		}
-		key := record.BaseDir + "\x00" + record.Project
-		browser, ok := settings[key]
-		if !ok {
-			loaded, err := notification.Load(record.BaseDir, record.Project)
-			if err != nil {
-				response.Entries = append(response.Entries, inboxEntry{Cursor: record.Cursor(), Title: "rotari: notification settings unreadable",
-					Body: fmt.Sprintf("project: %s\nrun id: %s\nerror: %v", record.Project, record.RunID, err)})
-				continue
-			}
-			browser = loaded.Settings.Browser
-			settings[key] = browser
-		}
-		message, ok := notification.NewBrowserMessage(record.Events, browser)
-		if !ok {
-			continue
-		}
-		entry := inboxEntry{Cursor: record.Cursor(), Title: message.Title, Body: message.Body}
-		if message.Link {
-			entry.URL = notification.WebBaseDirRoutePrefix + baseDirID + "/project/" + url.PathEscape(record.Project) + "/run/" + url.PathEscape(record.RunID)
+	}
+	response := inboxResponse{Entries: []inboxEntry{}, InboxState: inbox, Problems: problems}
+	for _, rendered := range notificationlog.Entries(shown, inboxLimit) {
+		entry := inboxEntry{Cursor: rendered.Cursor, Title: rendered.Title, Body: rendered.Body}
+		if rendered.Link {
+			entry.URL = notification.WebBaseDirRoutePrefix + notification.WebBaseDirID(rendered.BaseDir) + "/project/" + url.PathEscape(rendered.Project) + "/run/" + url.PathEscape(rendered.RunID)
 		}
 		response.Entries = append(response.Entries, entry)
 	}

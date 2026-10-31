@@ -1367,6 +1367,60 @@ CLI_SCHEMA: dict[str, Any] = {
             "positional": "[PROJECT]",
         },
         {
+            "description": "list the notifications runs recorded for the Web inbox "
+            "across known state directories, without marking them "
+            "read",
+            "flags": [
+                {
+                    "command_line_only": True,
+                    "description": "config file to use",
+                    "name": "config",
+                    "value_name": "FILE",
+                },
+                {
+                    "description": "state directory",
+                    "environment": "ROTARI_BASEDIR",
+                    "name": "basedir",
+                    "short": "b",
+                    "value_name": "DIR",
+                },
+                {
+                    "description": "project name",
+                    "environment": "ROTARI_PROJECT_NAME",
+                    "name": "project-name",
+                    "short": "p",
+                    "value_name": "NAME",
+                },
+                {
+                    "description": "master registry directory",
+                    "environment": "ROTARI_MASTERDIR",
+                    "name": "masterdir",
+                    "value_name": "DIR",
+                },
+                {
+                    "description": "include notifications recorded in this time "
+                    "window (default 1d), such as 24h or 7d; "
+                    "notifications are kept for 10 days",
+                    "environment": "ROTARI_NOTIFICATIONS_SINCE",
+                    "name": "since",
+                    "value_name": "DURATION",
+                },
+                {
+                    "description": "list only notifications the Web inbox has "
+                    "not marked read",
+                    "environment": "ROTARI_NOTIFICATIONS_UNREAD",
+                    "name": "unread",
+                },
+                {
+                    "description": "print machine-readable JSON",
+                    "environment": "ROTARI_NOTIFICATIONS_JSON",
+                    "name": "json",
+                },
+            ],
+            "name": "notifications",
+            "positional": "[PROJECT]",
+        },
+        {
             "description": "show details for a project, run, job, or attempt",
             "flags": [
                 {
@@ -4351,6 +4405,27 @@ CLI_SCHEMA: dict[str, Any] = {
             "description": "Default for rotari runs --json.",
             "job": False,
             "name": "ROTARI_RUNS_JSON",
+        },
+        {
+            "array": False,
+            "cli_default": True,
+            "description": "Default for rotari notifications --since.",
+            "job": False,
+            "name": "ROTARI_NOTIFICATIONS_SINCE",
+        },
+        {
+            "array": False,
+            "cli_default": True,
+            "description": "Default for rotari notifications --unread.",
+            "job": False,
+            "name": "ROTARI_NOTIFICATIONS_UNREAD",
+        },
+        {
+            "array": False,
+            "cli_default": True,
+            "description": "Default for rotari notifications --json.",
+            "job": False,
+            "name": "ROTARI_NOTIFICATIONS_JSON",
         },
         {
             "array": False,

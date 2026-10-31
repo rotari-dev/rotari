@@ -1290,6 +1290,18 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   [webhook_batch.go](../cmd/rotari/webhook_batch.go); covered by
   `TestWebInboxShowsNotificationsRecordedWhileClosed` and
   `TestUnlockFinalizationRepair`.
+- **NOT-3** `rotari notifications [PROJECT]` lists the recorded notifications
+  oldest first, rendered as the Web inbox renders them
+  (`notificationlog.Entries`, shared with WEB-21), of every state directory
+  known to the master directory or only the one `--basedir` names, and of one
+  project when `PROJECT` or `--project-name` names it (not both; a name with
+  `/` or `\` is refused). `--since DURATION` (default `1d`) bounds the
+  records' age. It reads the inbox's read cursor, marks each entry unread
+  after it, and lists only those with `--unread`, but never writes the inbox
+  state. `--json` prints `created_at`, `id`, `basedir`, `project`, `run_id`,
+  `title`, `body`, and `unread`; an unreadable record is a warning on stderr.
+  Implemented in [notifications.go](../cmd/rotari/notifications.go); covered
+  by `TestNotificationsListRecordedNotificationsWithoutReadingThem`.
 - Failure diagnosis is local and rule-based. It evaluates a failed job's
   recorded scheduler error and configured log against a fixed set of documented
   signatures after case, ANSI-escape, and whitespace normalization. It makes no

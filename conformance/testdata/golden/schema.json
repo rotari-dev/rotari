@@ -895,6 +895,39 @@
           "value_name": "NAME"
         },
         {
+          "name": "masterdir",
+          "value_name": "DIR"
+        },
+        {
+          "name": "since",
+          "value_name": "DURATION"
+        },
+        {
+          "name": "unread"
+        },
+        {
+          "name": "json"
+        }
+      ],
+      "name": "notifications"
+    },
+    {
+      "flags": [
+        {
+          "name": "config",
+          "value_name": "FILE"
+        },
+        {
+          "name": "basedir",
+          "short": "b",
+          "value_name": "DIR"
+        },
+        {
+          "name": "project-name",
+          "short": "p",
+          "value_name": "NAME"
+        },
+        {
           "name": "run-id",
           "short": "r",
           "value_name": "ID"

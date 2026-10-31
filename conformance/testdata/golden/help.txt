@@ -5,40 +5,41 @@ Coding agents: run `rotari guide` first for the recommended workflow; `rotari CO
 Usage: rotari COMMAND [options] [arguments]
 
 Commands:
-  info        show the current Rotari context and active run state
-  init        write cwd workspace location defaults without creating state
-  config      generate a config file template
-  check       check whether a project is ready to run
-  reset       discard the current, not-yet-run queue
-  cancel      cancel the active run or running jobs
-  suspend     suspend running jobs
-  resume      resume suspended jobs
-  delete      delete saved run history
-  gc          find and remove orphan run registry entries
-  unlock      recover an interrupted run after assessing its coordinator and managed executions
-  change      change queued jobs, or with --run-id the jobs of that run, which replace the queue first; a command after the options replaces the jobs' command
-  export      export the current queue or saved runs as a workflow manifest
-  import      validate and replace a queue from a workflow manifest
-  remove      remove queued jobs, or with --run-id jobs of that run, which replace the queue first
-  basedirs    list state directories known to the master registry
-  projects    list projects across known state directories
-  runs        list active runs and recently finished runs across known state directories
-  show        show details for a project, run, job, or attempt
-  note        add a note to a run or to one job attempt: why it was made or what its result showed
-  lineage     list runs, summarize one run, or compare two runs
-  jobs        list running and recently finished jobs across known state directories
-  wait        wait for a run by project, run name, or run ID
-  add         add a command to a queue
-  copy        copy the latest run's jobs into the queue
-  run         execute queued commands, optionally selecting jobs from a run; jobs that depend on a selected job execute too
-  retry       run failed and unfinished jobs; with --job-id, run those jobs; jobs that depend on them execute too
-  server      manage the background server
-  web         serve the web status UI
-  tableview   view a delimited or JSON Lines table, a Markdown or script file, a PDF, or a directory's files in the Web UI's Table viewer
-  mcp         serve rotari's tools for agents over MCP on stdio
-  completion  print shell completion script
-  schema      print the CLI schema as JSON
-  guide       print a usage guide for coding agents
-  version     print version
-  env         list ROTARI environment variables
-  bug-report  collect evidence for a rotari bug report, with secrets removed
+  info           show the current Rotari context and active run state
+  init           write cwd workspace location defaults without creating state
+  config         generate a config file template
+  check          check whether a project is ready to run
+  reset          discard the current, not-yet-run queue
+  cancel         cancel the active run or running jobs
+  suspend        suspend running jobs
+  resume         resume suspended jobs
+  delete         delete saved run history
+  gc             find and remove orphan run registry entries
+  unlock         recover an interrupted run after assessing its coordinator and managed executions
+  change         change queued jobs, or with --run-id the jobs of that run, which replace the queue first; a command after the options replaces the jobs' command
+  export         export the current queue or saved runs as a workflow manifest
+  import         validate and replace a queue from a workflow manifest
+  remove         remove queued jobs, or with --run-id jobs of that run, which replace the queue first
+  basedirs       list state directories known to the master registry
+  projects       list projects across known state directories
+  runs           list active runs and recently finished runs across known state directories
+  notifications  list the notifications runs recorded for the Web inbox across known state directories, without marking them read
+  show           show details for a project, run, job, or attempt
+  note           add a note to a run or to one job attempt: why it was made or what its result showed
+  lineage        list runs, summarize one run, or compare two runs
+  jobs           list running and recently finished jobs across known state directories
+  wait           wait for a run by project, run name, or run ID
+  add            add a command to a queue
+  copy           copy the latest run's jobs into the queue
+  run            execute queued commands, optionally selecting jobs from a run; jobs that depend on a selected job execute too
+  retry          run failed and unfinished jobs; with --job-id, run those jobs; jobs that depend on them execute too
+  server         manage the background server
+  web            serve the web status UI
+  tableview      view a delimited or JSON Lines table, a Markdown or script file, a PDF, or a directory's files in the Web UI's Table viewer
+  mcp            serve rotari's tools for agents over MCP on stdio
+  completion     print shell completion script
+  schema         print the CLI schema as JSON
+  guide          print a usage guide for coding agents
+  version        print version
+  env            list ROTARI environment variables
+  bug-report     collect evidence for a rotari bug report, with secrets removed

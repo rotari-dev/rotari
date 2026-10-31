@@ -182,24 +182,13 @@ func cmdRuns(args []string) int {
 	if err := cliParse(fs, args); err != nil {
 		return 1
 	}
-	if len(fs.Args()) > 1 || (len(fs.Args()) == 1 && cliOptionSet(fs, "project-name")) {
-		printError("usage: " + cliUsage("runs"))
+	projectFilter, ok := projectListingFilter(fs, "runs", *projectName)
+	if !ok {
 		return 1
 	}
 	window, err := joblist.ParseSince(*since)
 	if err != nil {
 		printErrorf("invalid --since duration %q", *since)
-		return 1
-	}
-	projectFilter := ""
-	if cliOptionSet(fs, "project-name") {
-		projectFilter = *projectName
-	}
-	if len(fs.Args()) == 1 {
-		projectFilter = fs.Args()[0]
-	}
-	if (cliOptionSet(fs, "project-name") || len(fs.Args()) == 1) && !state.IsValidPathElement(projectFilter) {
-		printErrorf("invalid project name %q", projectFilter)
 		return 1
 	}
 	baseDirs, err := jobsBaseDirs(valueIfSet(fs, "basedir", *basedir), *masterdir)
@@ -230,6 +219,29 @@ func cmdRuns(args []string) int {
 	}
 	printRunRows(rows, len(baseDirs) > 1)
 	return 0
+}
+
+// projectListingFilter returns the project that PROJECT or --project-name
+// names for a projectRunListing command, or "" for every project. It reports
+// false, after printing why, for both forms together, extra arguments, or an
+// invalid name.
+func projectListingFilter(fs *flag.FlagSet, command, projectName string) (string, bool) {
+	if len(fs.Args()) > 1 || (len(fs.Args()) == 1 && cliOptionSet(fs, "project-name")) {
+		printError("usage: " + cliUsage(command))
+		return "", false
+	}
+	projectFilter := ""
+	if cliOptionSet(fs, "project-name") {
+		projectFilter = projectName
+	}
+	if len(fs.Args()) == 1 {
+		projectFilter = fs.Args()[0]
+	}
+	if (cliOptionSet(fs, "project-name") || len(fs.Args()) == 1) && !state.IsValidPathElement(projectFilter) {
+		printErrorf("invalid project name %q", projectFilter)
+		return "", false
+	}
+	return projectFilter, true
 }
 
 func valueIfSet(fs *flag.FlagSet, name, value string) string {

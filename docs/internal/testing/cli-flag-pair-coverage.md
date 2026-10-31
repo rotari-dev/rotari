@@ -31,7 +31,8 @@ implementation imports. The staged rollout is tracked in the
   is not exhaustive value coverage; changes to descriptions/types without a
   name change are not detected by the fingerprint.
 - `TestCLIFlagPairs` executes both orders of all `show`, `basedirs`, `projects`,
-  `runs`, `jobs`, `check`, `info`, and `lineage` pairs, from the same read-only fixture.
+  `runs`, `notifications`, `jobs`, `check`, `info`, and `lineage` pairs, from
+  the same read-only fixture.
   `check` has a runnable restored queue, and `lineage` has a fixed run
   positional (no duplicate location flags are injected). It compares exit
   code, stdout, and stderr exactly. Completed jobs, a fixed fixture, and
@@ -219,10 +220,10 @@ at least two advertised flags have adapters; only `bug-report`'s and
 | `tableview` | 6 | An adapter that starts the server on a temporary file in each order of `--host`, `--port`, and `--auth-token` and compares the pages it serves, and checks that each of them paired with `--static-dir` is refused the same way in both orders |
 | `schema`, `completion`, `guide`, `version`, `env`, `init` | 0 | Fewer than two advertised flags; subcommand/positional coverage is separate |
 
-The 8,506 executed pairs consist of 1,407 read-only, 42 file-output, 179
+The 8,527 executed pairs consist of 1,428 read-only, 42 file-output, 179
 queue-mutation, 1,782 edit, 4,422 run/retry previews, 21 unlock, 45 wait,
 6 gc/server, 1 MCP, 66 web static-export, 532 job-control, and 3 note pairs,
-as `TestCLIFlagPairInventory` reported on 2026-10-24; it is authoritative when
+as `TestCLIFlagPairInventory` reported on 2026-11-01; it is authoritative when
 these counts drift. When the edit adapter had 1,648 pairs, its loop accepted
 1,309 and explicitly rejected 339 pairs in 3,296 invocations; one run took 43s
 on the edit loop alone.

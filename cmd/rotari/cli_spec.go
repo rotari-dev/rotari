@@ -309,6 +309,17 @@ var cliCommandSpecs = []cliCommandSpec{
 		Positional: "[PROJECT]",
 	},
 	{
+		Name:        "notifications",
+		Description: "list the notifications runs recorded for the Web inbox across known state directories, without marking them read",
+		Flags: append(commonCLIFlags(),
+			cliFlagSpec{Name: "masterdir", Description: "master registry directory", ValueName: "DIR"},
+			cliFlagSpec{Name: "since", Description: "include notifications recorded in this time window (default 1d), such as 24h or 7d; notifications are kept for 10 days", ValueName: "DURATION"},
+			cliFlagSpec{Name: "unread", Description: "list only notifications the Web inbox has not marked read"},
+			cliFlagSpec{Name: "json", Description: "print machine-readable JSON"},
+		),
+		Positional: "[PROJECT]",
+	},
+	{
 		Name:        "show",
 		Description: "show details for a project, run, job, or attempt",
 		Flags: append(append(commonCLIFlags(),
