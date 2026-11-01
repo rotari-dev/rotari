@@ -57,3 +57,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** `go vet ./...`, `gofmt`, and `prettier --check` passed. `go test` passed for `internal/notificationlog`, `internal/notification`, `internal/webui`, `cmd/rotari`, `conformance`, `conformance/02-lifecycle`, `conformance/05-web`, and `conformance/03-interfaces/...`; `-race` passed for `internal/notificationlog` and `internal/webui`. The full suite was not rerun.
 
 **Remaining:** As before.
+
+## Report runs that unlock releases
+
+**Commits:** 2026-11-02 08:35:04 `b0a404df`.
+
+**Change:** `internal/notification` gained the `run.interrupted` event (`NewInterruptedRunEvent`), selected by `run_failure` and titled "rotari: run interrupted" in the inbox. `project.Guard.RunInterrupted` is called when `unlock` releases a run, with the run's name and start time from its partial summary or lock; `cmd/rotari` unlock and the MCP unlock tools pass `runNotificationManager.RunInterrupted`, which records and sends at once. Webhook titles it "rotari run interrupted" in the failure color. NOT-2, SAFE-4, `docs/NOTIFICATIONS.md`, `OPERATIONS.md`, `MCP.md`, the plan, and the `ISSUES.md` entry (renamed "Abnormally terminated runs are notified only when unlocked") were updated.
+
+**Reason:** Plan phase 8, requested by the user on 2026-11-02 as a first step toward notifying abnormally terminated runs.
+
+**Plan impact:** Abnormal termination is now reported when `unlock` recovers the run; reporting it when it stops stays open.
+
+**Validation:** `go vet ./...` and `gofmt` passed. `go test` passed for `internal/notification`, `internal/notificationlog`, `internal/project`, `internal/mcp`, `internal/webui`, `cmd/rotari`, `conformance`, `conformance/02-lifecycle`, `conformance/05-web`, and `conformance/03-interfaces/...` (including `TestUnlockFinalizationRepair`, which now checks one `run.interrupted` record per released variant over CLI and MCP); `-race` passed for `internal/project` and `internal/notification`. The full suite was not rerun.
+
+**Remaining:** The `ISSUES.md` entry for reporting the stop itself, and "Notification-only Web API routes have no page client".
