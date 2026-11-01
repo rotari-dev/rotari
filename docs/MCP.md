@@ -103,10 +103,7 @@ not enable attestation blindly in existing automation. See the
 Preview/apply also share `action` (`finalize` or `release`) and `repair`
 (`complete`, `reason`, `executions`). A complete matching summary repairs
 management metadata to finished, preserving recorded results and finish time
-and completing applicable client status. It sends the run's completion
-notification, which the stopped run never sent, and replays no other
-notification or hook. Releasing a run without such a summary sends a
-`run.interrupted` notification instead.
+and completing applicable client status without replaying notifications.
 The inventory includes earlier attempts and carried origins. Verified active
 executions always block repair, even with attestation or terminal results;
 unknown executions require explicit `assume_stopped`. All stopped executions

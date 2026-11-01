@@ -159,7 +159,7 @@ func TestUnlockExecutionEvidenceOverridesTerminalOutcome(t *testing.T) {
 }
 
 func TestUnlockFinalizationRepair(t *testing.T) {
-	covers(t, "SAFE-15", "SAFE-16", "SAFE-4", "SAFE-7", "RES-7", "NOT-2")
+	covers(t, "SAFE-15", "SAFE-16", "SAFE-4", "SAFE-7", "RES-7")
 	for _, variant := range []string{"plain", "legacy", "array", "carried-array", "matrix", "incomplete", "incomplete-legacy", "duplicate"} {
 		for _, transport := range []string{"CLI", "MCP"} {
 			t.Run(variant+"/"+transport, func(t *testing.T) {
@@ -247,8 +247,6 @@ func TestUnlockFinalizationRepair(t *testing.T) {
 				writeUnlockJSON(t, contextPath, context)
 				e.MustRotari("add", "-p", "repair", "--", "false")
 				before := support.SavePairTree(t, projectDir)
-				completions := recordedRunEvents(t, e.Master, runID, "run.finished")
-				interruptions := recordedRunEvents(t, e.Master, runID, "run.interrupted")
 				var session *mcpSession
 				target := map[string]any{"project": "repair"}
 				if transport == "MCP" {
@@ -332,20 +330,6 @@ func TestUnlockFinalizationRepair(t *testing.T) {
 				if !applied.Applied || meta["phase"] != wantPhase || meta["last_run_id"] != runID {
 					t.Fatalf("applied=%+v meta=%v", applied, meta)
 				}
-				// Finalizing notifies the completion the stopped run never
-				// reported, once; releasing notifies the interruption once.
-				wantCompletions, wantInterruptions := completions, interruptions
-				if complete {
-					wantCompletions++
-				} else {
-					wantInterruptions++
-				}
-				if got := recordedRunEvents(t, e.Master, runID, "run.finished"); got != wantCompletions {
-					t.Fatalf("recorded run completions = %d, want %d", got, wantCompletions)
-				}
-				if got := recordedRunEvents(t, e.Master, runID, "run.interrupted"); got != wantInterruptions {
-					t.Fatalf("recorded run interruptions = %d, want %d", got, wantInterruptions)
-				}
 				if complete {
 					var completion struct {
 						ExitCode int `json:"last_run_exit_code"`
@@ -380,36 +364,6 @@ func TestUnlockFinalizationRepair(t *testing.T) {
 			})
 		}
 	}
-}
-
-// recordedRunEvents counts the events of kind recorded for the Web inbox
-// under masterDir for runID.
-func recordedRunEvents(t *testing.T, masterDir, runID, kind string) int {
-	t.Helper()
-	data, err := os.ReadFile(filepath.Join(masterDir, "notifications", runID+".jsonl"))
-	if os.IsNotExist(err) {
-		return 0
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	count := 0
-	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
-		var record struct {
-			Events []struct {
-				Event string `json:"event"`
-			} `json:"events"`
-		}
-		if err := json.Unmarshal([]byte(line), &record); err != nil {
-			t.Fatalf("notification record %q: %v", line, err)
-		}
-		for _, event := range record.Events {
-			if event.Event == kind {
-				count++
-			}
-		}
-	}
-	return count
 }
 
 func readUnlockJSON(t *testing.T, path string) map[string]any {

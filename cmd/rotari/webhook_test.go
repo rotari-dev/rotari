@@ -13,23 +13,6 @@ import (
 	"github.com/rotari-dev/rotari/internal/state"
 )
 
-// An interrupted run is titled by its event alone and drawn as a failure.
-func TestWebhookTitlesAnInterruptedRun(t *testing.T) {
-	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	event := notification.NewInterruptedRunEvent("demo", model.RunSummary{RunID: "run-1"}, now)
-	batch := notification.NewBatch([]notification.Event{event}, notification.Defaults().Webhook.ChannelSettings, now)
-	payload := notification.NewPayload(batch, []string{"project", "run_id", "run_status"}, "", "")
-	if len(payload.Events) != 1 || payload.Events[0].Event != "run.interrupted" {
-		t.Fatalf("payload = %#v", payload)
-	}
-	if title := eventTitle(payload.Events[0]); title != "rotari run interrupted" {
-		t.Fatalf("title = %q", title)
-	}
-	if color := payloadColor(payload, "ok", "bad"); color != "bad" {
-		t.Fatalf("color = %q", color)
-	}
-}
-
 func TestSlackWebhookEncoder(t *testing.T) {
 	input := notification.Payload{Events: []notification.PayloadEvent{{Event: notification.JobFinished, Fields: []notification.Field{
 		{Name: "project", Value: "demo"}, {Name: "job_name", Value: "train"}, {Name: "job_status", Value: "failed"}, {Name: "diagnosis_suggestion", Value: "inspect logs"},

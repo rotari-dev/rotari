@@ -50,7 +50,7 @@ func NewBrowserMessage(events []Event, settings ChannelSettings) (BrowserMessage
 			continue
 		}
 		switch {
-		case event.Kind == RunFinished || event.Kind == RunInterrupted:
+		case event.Kind == RunFinished:
 			run = &events[index]
 		case event.JobStatus == model.StatusSuccess:
 			if len(succeeded) < settings.MaxJobs {
@@ -72,9 +72,7 @@ func NewBrowserMessage(events []Event, settings ChannelSettings) (BrowserMessage
 	switch {
 	case run != nil:
 		outcome := "succeeded"
-		if run.Kind == RunInterrupted {
-			outcome = "interrupted"
-		} else if run.ExitCode != 0 {
+		if run.ExitCode != 0 {
 			outcome = "failed"
 		}
 		title = "rotari: run " + outcome

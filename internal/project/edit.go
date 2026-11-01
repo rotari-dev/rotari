@@ -22,15 +22,6 @@ type Guard struct {
 	IfRevision string
 	// Report, when set, receives the edit's outcome once it succeeds.
 	Report func(Outcome)
-	// RunFinished, when set, is called after the edit finalizes a run, as
-	// unlock does when it repairs a run's finalization, so the run's
-	// completion is notified as its own process would have.
-	RunFinished func(paths state.ProjectPaths, runID string, exitCode int)
-	// RunInterrupted, when set, is called after the edit releases a run that
-	// stopped without finishing, as unlock does without a complete summary.
-	// run has the run's ID and, when they were recorded, its name and start
-	// time.
-	RunInterrupted func(paths state.ProjectPaths, run model.RunSummary)
 }
 
 // Outcome describes a guarded edit.

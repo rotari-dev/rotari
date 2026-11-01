@@ -41,7 +41,6 @@ func (tools writeTools) unlock(input UnlockInput, guard project.Guard) (UnlockOu
 	if err != nil {
 		return UnlockOutput{}, err
 	}
-	guard.RunFinished, guard.RunInterrupted = tools.options.RunFinished, tools.options.RunInterrupted
 	result, err := project.Unlock(paths, input.RunID, guard, input.AssumeStopped)
 	if err != nil {
 		var refusal *project.UnlockRefusedError

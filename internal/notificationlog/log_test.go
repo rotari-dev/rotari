@@ -76,8 +76,8 @@ func TestRecordsReportUnreadableRecordsAndSkipOneBeingWritten(t *testing.T) {
 	if err != nil || len(records) != 1 || len(problems) != 0 {
 		t.Fatalf("records %d, problems %v, err %v", len(records), problems, err)
 	}
-	// A later record, as unlock appends, still starts on its own line; the
-	// cut record is then reported, not dropped silently.
+	// A later record still starts on its own line; the cut record is then
+	// reported, not dropped silently.
 	now = now.Add(time.Second)
 	if err := log.Append("/state", []notification.Event{jobEvent("run-a", "second", 1)}); err != nil {
 		t.Fatal(err)

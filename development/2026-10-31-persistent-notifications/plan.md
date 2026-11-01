@@ -1,7 +1,7 @@
 # Plan: Persistent Notifications
 
 Created: 2026-10-31
-Status: Implemented (phases 1-8); see [work-log.md](work-log.md).
+Status: Implemented (phases 1-7); see [work-log.md](work-log.md).
 
 ## Purpose
 
@@ -35,8 +35,7 @@ button, unread count, panel, Clear notifications, desktop popups, toggle,
 - Static exports: they keep the local toggle and have no inbox history.
 - Changing Webhook delivery, its settings, or its payload.
 - New `notifications.toml` settings. Recording is always on.
-- Notifying abnormally terminated runs when they stop (see Known
-  limitations); `unlock` reports them when it recovers them (phase 8).
+- Notifying abnormally terminated runs (see Known limitations).
 
 ## Current behavior
 
@@ -69,14 +68,12 @@ rules: the Web UI shows what the run process decided.
 Finalization by repair (`internal/project/repair.go`, reached only from an
 explicit `rotari unlock` or the MCP unlock tool) does not call `RunFinished`
 today, so neither a Webhook nor, after this change, an inbox entry would
-report such a run. The page's diff currently does notice it. Repair happens
-only when the run's complete summary exists but its process stopped before
-finalizing, which is exactly the point where `RunFinished` would have fired;
-job events were already delivered while the run executed. So repair calls
-`RunFinished` too: it records a `run.finished` entry and sends the Webhook
-the run never sent, using the run's snapshotted settings. Delivery is late
-(at unlock time) but not duplicated. The unlock process flushes the batch
-synchronously before it exits.
+report such a run. The page's diff currently does notice it. Repair was at
+first made to call `RunFinished` (and, later, releasing to report
+`run.interrupted`), but on 2026-11-02 the user dropped both: whoever runs
+`unlock` already knows the run stopped, so a notification at that point says
+nothing new. `unlock` reports nothing, and SAFE-15's "never replays
+notifications" stands as before.
 
 ### Unit of record: the existing batch
 
@@ -182,10 +179,6 @@ write the cursors; its read and cleared state stay in page memory, as today.
 - Recent jobs shows the same entries as the main page, so its old titles
   ("rotari: job failed", "project / job") are replaced by the shared ones, and
   blocked or cancelled-before-start jobs are reported as failures there too.
-- SAFE-15 previously said repair never replays notifications. It now reports
-  the run's completion once and still replays no job notification or other
-  hook; the run's process reports completion only after finalizing its
-  metadata, so a run that needs repair never reported it.
 - `/api/active-runs`, `/api/notification-settings`, and the notification-only
   parts of `/api/state` were kept for API clients; see ISSUES.md.
 
@@ -207,17 +200,6 @@ A read-only CLI listing of the records, named like the other list commands
   `TestNotificationsListRecordedNotificationsWithoutReadingThem`; the command
   joins the read-only flag-pair adapter.
 
-### Phase 8: report runs that unlock releases (decided 2026-11-02)
-
-`unlock` that releases a run without a complete summary reports a new
-`run.interrupted` event to the record and the Webhook, once, through
-`project.Guard.RunInterrupted` (CLI and MCP). It is selected by
-`run_failure`, carries the run's project, ID, name and start time when
-recorded (partial summary, else the run lock) and `run_status`
-`interrupted`, and has no exit code or counts. The inbox titles it
-"rotari: run interrupted"; Webhook titles it "rotari run interrupted" in the
-failure color. The time of the report is the unlock's, not the stop's.
-
 ## Known limitations to document
 
 - Runs whose process resolves a different master directory than the Web
@@ -227,15 +209,15 @@ failure color. The time of the report is the unlock's, not the stop's.
   a home directory share the record. Accepted on 2026-10-31.
 - Runs started by an older rotari binary record nothing.
 - A run process killed before flushing loses its pending batch (as Webhooks
-  do today); its completion is recorded only when `unlock` recovers the run.
+  do today); its completion is not recorded.
 - An abnormally terminated run (coordinator killed, host lost) is not
-  reported when it stops; its run directory stays running until `unlock`.
-  The page diff used to report such a run as failed when some command on the
-  same host happened to remove its dead local lock while a page was open,
-  never for a run on another host; Webhooks never reported it. Since
-  2026-11-02 (phase 8), `unlock` reports it when it recovers the run.
-  Reporting it when it stops needs its own design; see "Abnormally terminated
-  runs are notified only when unlocked" in [ISSUES.md](../ISSUES.md).
+  reported; its run directory stays running until `unlock`. This is a
+  regression for the inbox only: the page diff reported such a run as failed
+  when some command on the same host happened to remove its dead local lock
+  while a page was open, never for a run on another host. Webhooks never
+  reported it. Reporting interrupted runs needs its own design and is out of
+  scope (decided 2026-10-31); see "Abnormally terminated runs are never
+  notified" in [ISSUES.md](../ISSUES.md).
 
 ## Implementation phases
 
@@ -244,11 +226,10 @@ failure color. The time of the report is the unlock's, not the stop's.
    Unit tests: concurrent runs, incomplete trailing line, invalid run IDs,
    expiry, cursor monotonicity.
 2. **Producer.** Refactor `webhookNotificationManager` into a notification
-   dispatcher with inbox and Webhook sinks; call `RunFinished` from repair
-   finalization. Keep existing Webhook tests unchanged and passing; add tests
-   that a run without a Webhook URL still records and that unlock repair
-   records and sends exactly one `run.finished`. Update the unlock contract
-   in `contracts/04-coordination-and-safety.md` and `docs/OPERATIONS.md`.
+   dispatcher with inbox and Webhook sinks. Keep existing Webhook tests
+   unchanged and passing; add tests that a run without a Webhook URL still
+   records. (Unlock reporting, added here at first, was removed on
+   2026-11-02.)
 3. **Server.** Notification endpoints, Go rendering with `[browser]`
    settings, control gating, basedir filtering. Handler tests.
 4. **Pages.** Replace poll-diff detection in `web_app_notifications.js` and

@@ -3,8 +3,8 @@
 //
 // The master directory holds one file per run, <masterdir>/notifications/
 // <run-id>.jsonl, with one record per notification batch. Only the run's own
-// process, or a later unlock that finalizes it, appends to a file, so
-// concurrent runs never write the same file, even on NFS. Records are kept
+// process appends to a file, so concurrent runs never write the same file,
+// even on NFS. Records are kept
 // for Retention; inbox-state.json holds the shared read and cleared cursors
 // of each basedir.
 package notificationlog

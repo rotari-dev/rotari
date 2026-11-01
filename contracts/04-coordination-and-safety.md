@@ -234,7 +234,6 @@ A project is in one of three states, derived from `running.lock` and
   finalization under SAFE-15; otherwise recovery returns to collecting and
   names the `retry --run-id` command that reruns the failed/unfinished jobs,
   since the run took them from the queue when it started (CORE-3, RUN-12).
-  Releasing reports the run as interrupted (NOT-2).
   `rotari unlock` and the MCP
   unlock tools share `project.Unlock` in
   [internal/project/unlock.go](../internal/project/unlock.go), covered by
@@ -318,10 +317,7 @@ A project is in one of three states, derived from `running.lock` and
   Only entries established never launched need no execution attestation.
   Repair uses `state.FinalizeRun`, preserves results, commands, origins, run
   ID and recorded finish time, completes applicable client status, and never
-  replays job notifications or other hooks or consumes the next queue.
-  Finalizing reports the run's completion (NOT-2) once: the run's process
-  reports it only after finalizing its metadata, so a run that needs repair
-  never did. Recovery evidence
+  replays notifications/hooks or consumes the next queue. Recovery evidence
   precedes mutation; partial cleanup can be retried. A readable but incomplete
   or inconsistent summary permits only `release` to collecting, with an
   explicit explanation, never invented results. Malformed/unreadable repair

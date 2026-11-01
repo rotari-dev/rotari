@@ -1275,25 +1275,18 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   event selection and whatever its Webhook settings, under the master
   directory its process resolves: one file per run,
   `<masterdir>/notifications/<run-id>.jsonl`, appended only by that run's
-  process or by an unlock that finalizes it, one JSON record per line written
+  process, one JSON record per line written
   in a single write. A record keeps the run's basedir, project, run ID, and
   each event's values of the shared field vocabulary, never the job's
   environment or executor options. A record that cannot be written is a
   warning and does not change the run's result. A run file whose last write
   is more than 10 days old is not read and is removed by a later append. The
-  Web inbox (WEB-21) shows these records; `unlock` finalizing a run from its
-  complete summary reports the run's completion to both the record and the
-  Webhook, exactly once, because the run's process reports it only after
-  finalizing its metadata (SAFE-15). `unlock` releasing a run without a
-  complete summary (SAFE-4) reports a `run.interrupted` event to both, once,
-  selected by `run_failure`: the run's project, ID, name and start time when
-  recorded (from the partial summary or the run lock), and `run_status`
-  `interrupted`, with no exit code or counts. A run killed and never
-  recovered by `unlock` is not reported. Implemented in
+  Web inbox (WEB-21) shows these records. A run whose process stops before
+  finalizing reports no completion, and `unlock` recovering it reports
+  nothing (SAFE-15). Implemented in
   [notificationlog](../internal/notificationlog/log.go) and
   [webhook_batch.go](../cmd/rotari/webhook_batch.go); covered by
-  `TestWebInboxShowsNotificationsRecordedWhileClosed` and
-  `TestUnlockFinalizationRepair`.
+  `TestWebInboxShowsNotificationsRecordedWhileClosed`.
 - **NOT-3** `rotari notifications [PROJECT]` lists the recorded notifications
   oldest first, rendered as the Web inbox renders them
   (`notificationlog.Entries`, shared with WEB-21), of every state directory

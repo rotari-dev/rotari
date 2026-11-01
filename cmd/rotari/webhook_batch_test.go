@@ -119,25 +119,3 @@ func TestRunNotificationManagerRecordsEveryBatch(t *testing.T) {
 		})
 	}
 }
-
-// A run that unlock releases unfinished is recorded and sent at once.
-func TestRunNotificationManagerReportsAnInterruptedRunAtOnce(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv(envWebhookURL, "")
-	paths := testWebhookPaths(t)
-	if err := os.WriteFile(filepath.Join(paths.BaseDir, notification.FileName), []byte("[webhook]\nurl = \"https://example.invalid/hook\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	masterDir := t.TempDir()
-	manager := newRunNotificationManager(masterDir)
-	var sent []notification.Batch
-	manager.send = func(_ notification.WebhookSettings, _ string, batch notification.Batch) { sent = append(sent, batch) }
-	manager.RunInterrupted(paths, model.RunSummary{RunID: "run-stopped", RunName: "nightly", StartedAt: "2026-01-02T03:00:00Z"})
-	if len(sent) != 1 || len(sent[0].Events) != 1 || sent[0].Events[0].Kind != notification.RunInterrupted || sent[0].Events[0].RunName != "nightly" {
-		t.Fatalf("sent batches = %#v", sent)
-	}
-	records, _, err := notificationlog.Open(masterDir).Records()
-	if err != nil || len(records) != 1 || records[0].Events[0].Kind != notification.RunInterrupted {
-		t.Fatalf("records = %#v, %v", records, err)
-	}
-}

@@ -239,16 +239,14 @@ example blocked dependencies or pre-dispatch cancellation) need no execution
 attestation. A live coordinator always blocks.
 
 Repair preserves the original summary/results, commands, origins, run ID,
-and recorded finish time; it completes applicable client status. It reports
-the run's completion, which the stopped run never did, to the Web inbox and
-the Webhook, and replays no job notification or other hook. It consumes no
-queued work and executes no jobs. A retry after partial cleanup is safe. An
+and recorded finish time; it completes applicable client status without
+replaying completion notifications or hooks. It consumes no queued work and
+executes no jobs. A retry after partial cleanup is safe. An
 idle project without a lock remains a no-op.
 
 Without a complete trustworthy summary, preview reports `action: "release"`
 and explains why it cannot finalize. Apply returns to collecting without
-inventing a summary, and reports the run as interrupted to the Web inbox and
-the Webhook (under `run_failure`). Retry is a separate command. Malformed/unreadable repair
+inventing a summary. Retry is a separate command. Malformed/unreadable repair
 records are explicit errors, not permission to skip validation. Apply rereads
 the summary and execution inventory under the state lock; a preview does not
 freeze the evidence.

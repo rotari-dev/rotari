@@ -170,17 +170,6 @@ func Unlock(paths state.ProjectPaths, runID string, guard Guard, assumeStopped b
 	if err := state.SaveContext(store, snapshot.runDir, context); err != nil {
 		return result, fmt.Errorf("record recovery evidence: %w", err)
 	}
-	// A released run's name and start come from its partial summary or, before
-	// it is removed, its lock.
-	interrupted := model.RunSummary{RunID: snapshot.runID, RunName: summary.RunName, StartedAt: summary.StartedAt}
-	if lockExists && lock.RunID == snapshot.runID {
-		if interrupted.RunName == "" {
-			interrupted.RunName = lock.RunName
-		}
-		if interrupted.StartedAt == "" {
-			interrupted.StartedAt = lock.StartedAt
-		}
-	}
 	if lockExists {
 		if err := os.Remove(paths.LockFile); err != nil {
 			return UnlockResult{}, fmt.Errorf("failed to remove run lock: %w", err)
@@ -193,12 +182,6 @@ func Unlock(paths state.ProjectPaths, runID string, guard Guard, assumeStopped b
 	}
 	if err != nil {
 		return UnlockResult{}, fmt.Errorf("failed to update metadata: %w", err)
-	}
-	if result.Action == "finalize" && guard.RunFinished != nil {
-		guard.RunFinished(paths, snapshot.runID, summary.ExitCode)
-	}
-	if result.Action == "release" && guard.RunInterrupted != nil {
-		guard.RunInterrupted(paths, interrupted)
 	}
 	result.Applied = true
 	result.Revision, err = Revision(paths)

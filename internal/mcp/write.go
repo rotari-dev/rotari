@@ -35,10 +35,6 @@ type Options struct {
 	// Actor labels the runs this server starts (ROTARI_ACTOR); empty leaves
 	// them unlabelled.
 	Actor string
-	// RunFinished notifies a run's completion when unlock finalizes it.
-	RunFinished func(paths state.ProjectPaths, runID string, exitCode int)
-	// RunInterrupted notifies a run that unlock releases unfinished.
-	RunInterrupted func(paths state.ProjectPaths, run model.RunSummary)
 }
 
 type ImportInput struct {

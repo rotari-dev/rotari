@@ -2,7 +2,6 @@ package project
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -228,16 +227,8 @@ func TestUnlockRepairInventory(t *testing.T) {
 				test.change(t, paths, &summary)
 			}
 			repairWrite(t, filepath.Join(paths.RunsDir, repairRunID, "summary.json"), summary)
-			// Only an applied finalization notifies the run's completion.
-			var finished []string
-			notify := func(_ state.ProjectPaths, runID string, exitCode int) {
-				finished = append(finished, fmt.Sprintf("%s:%d", runID, exitCode))
-			}
-			interrupt := func(_ state.ProjectPaths, run model.RunSummary) {
-				finished = append(finished, "interrupted:"+run.RunID)
-			}
 			attestPreview := !test.complete || test.executions == 0
-			preview, err := Unlock(paths, "", Guard{DryRun: true, RunFinished: notify, RunInterrupted: interrupt}, attestPreview)
+			preview, err := Unlock(paths, "", Guard{DryRun: true}, attestPreview)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -249,7 +240,7 @@ func TestUnlockRepairInventory(t *testing.T) {
 					t.Fatalf("unattested repair allowed: %+v", preview)
 				}
 				contextBefore, _ := os.ReadFile(filepath.Join(paths.RunsDir, repairRunID, "context.json"))
-				result, err := Unlock(paths, "", Guard{IfRevision: preview.Revision, RunFinished: notify, RunInterrupted: interrupt}, false)
+				result, err := Unlock(paths, "", Guard{IfRevision: preview.Revision}, false)
 				var refused *UnlockRefusedError
 				if !errors.As(err, &refused) || result.Applied {
 					t.Fatalf("apply=%+v, %v", result, err)
@@ -262,20 +253,9 @@ func TestUnlockRepairInventory(t *testing.T) {
 				t.Fatalf("unexpected refusal: %+v", preview)
 			}
 			attest := !test.complete || test.executions > 0
-			if len(finished) != 0 {
-				t.Fatalf("notified before applying: %v", finished)
-			}
-			applied, err := Unlock(paths, "", Guard{IfRevision: preview.Revision, RunFinished: notify, RunInterrupted: interrupt}, attest)
+			applied, err := Unlock(paths, "", Guard{IfRevision: preview.Revision}, attest)
 			if err != nil {
 				t.Fatal(err)
-			}
-			// Finalizing reports the completion; releasing, the interruption.
-			wantFinished := "interrupted:" + repairRunID
-			if test.complete {
-				wantFinished = fmt.Sprintf("%s:%d", repairRunID, summary.ExitCode)
-			}
-			if strings.Join(finished, ",") != wantFinished {
-				t.Fatalf("run completions notified = %v, want %q", finished, wantFinished)
 			}
 			meta, err := state.LoadMeta(paths.MetaFile)
 			if err != nil {
