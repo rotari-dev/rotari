@@ -133,7 +133,11 @@ fresh.
 
 Opening the inbox marks every entry read; Clear notifications hides every
 current entry. Both are recorded as cursors in `inbox-state.json` (record
-time plus record ID), written atomically, and only advanced. The state is
+time plus record ID), written atomically, and only advanced. Each basedir has
+its own pair (changed 2026-11-02): a single pair let reading a page that
+showed basedir A mark older entries of an unshown basedir B read, so turning
+B's bell on later hid them. Opening or clearing moves only the cursors of the
+basedirs the page shows. The state is
 deliberately shared (decided 2026-10-31) by every page that uses the same
 master directory, so reading in one tab clears the unread count in others on
 their next poll.

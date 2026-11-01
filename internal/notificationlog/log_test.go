@@ -141,31 +141,41 @@ func TestAppendRejectsUnsafeOrMixedRuns(t *testing.T) {
 	}
 }
 
-func TestInboxCursorsOnlyAdvance(t *testing.T) {
+func TestInboxCursorsOnlyAdvanceAndStayPerBasedir(t *testing.T) {
 	now := time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)
 	log := testLog(t, &now)
 	cursor := func(second int, id string) Cursor {
 		return Cursor{CreatedAt: now.Add(time.Duration(second) * time.Second).Format(timeLayout), ID: id}
 	}
-	if inbox, err := log.State(); err != nil || inbox != (InboxState{}) {
+	if inbox, err := log.State(); err != nil || len(inbox.BaseDirs) != 0 || inbox.For("/one") != (Cursors{}) {
 		t.Fatalf("initial state = %#v, %v", inbox, err)
 	}
-	inbox, err := log.Advance(cursor(2, "b"), Cursor{})
-	if err != nil || inbox.Read != cursor(2, "b") {
+	inbox, err := log.Advance(map[string]Cursors{"/one": {Read: cursor(2, "b")}})
+	if err != nil || inbox.For("/one").Read != cursor(2, "b") {
 		t.Fatalf("read = %#v, %v", inbox, err)
 	}
+	// Reading one basedir leaves the others unread.
+	if inbox.For("/two") != (Cursors{}) {
+		t.Fatalf("another basedir was read: %#v", inbox)
+	}
 	// Another page that saw less does not move the cursor back.
-	if inbox, err = log.Advance(cursor(1, "a"), Cursor{}); err != nil || inbox.Read != cursor(2, "b") {
+	if inbox, err = log.Advance(map[string]Cursors{"/one": {Read: cursor(1, "a")}}); err != nil || inbox.For("/one").Read != cursor(2, "b") {
 		t.Fatalf("read moved back: %#v, %v", inbox, err)
 	}
-	// Clearing also reads.
-	if inbox, err = log.Advance(Cursor{}, cursor(3, "c")); err != nil || inbox != (InboxState{Read: cursor(3, "c"), Cleared: cursor(3, "c")}) {
+	// Clearing also reads, and only in its basedir.
+	inbox, err = log.Advance(map[string]Cursors{"/two": {Cleared: cursor(3, "c")}})
+	if err != nil || inbox.For("/two") != (Cursors{Read: cursor(3, "c"), Cleared: cursor(3, "c")}) || inbox.For("/one") != (Cursors{Read: cursor(2, "b")}) {
 		t.Fatalf("clear = %#v, %v", inbox, err)
 	}
-	if stored, err := log.State(); err != nil || stored != inbox {
+	if stored, err := log.State(); err != nil || stored.For("/one") != inbox.For("/one") || stored.For("/two") != inbox.For("/two") {
 		t.Fatalf("stored state = %#v, %v", stored, err)
 	}
-	if _, err := log.Advance(Cursor{CreatedAt: "yesterday", ID: "x"}, Cursor{}); err == nil {
-		t.Fatal("invalid cursor accepted")
+	for name, changes := range map[string]map[string]Cursors{
+		"invalid cursor":   {"/one": {Read: Cursor{CreatedAt: "yesterday", ID: "x"}}},
+		"relative basedir": {"one": {Read: cursor(4, "d")}},
+	} {
+		if _, err := log.Advance(changes); err == nil {
+			t.Fatalf("%s accepted", name)
+		}
 	}
 }

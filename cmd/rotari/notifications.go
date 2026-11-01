@@ -29,7 +29,8 @@ type notificationJSON struct {
 // cmdNotifications lists the notifications runs recorded for the Web inbox,
 // oldest first, as the inbox renders them, across all known state
 // directories; --basedir limits the listing to one directory. It never moves
-// the inbox's shared read cursor; --unread lists only what is after it.
+// the inbox's shared read cursors; --unread lists only what is after its
+// basedir's.
 func cmdNotifications(args []string) int {
 	fs := flag.NewFlagSet("notifications", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -89,7 +90,7 @@ func cmdNotifications(args []string) int {
 		if !inScope[record.BaseDir] || (projectFilter != "" && record.Project != projectFilter) {
 			continue
 		}
-		if *unreadOnly && !record.Cursor().After(inbox.Read) {
+		if *unreadOnly && !record.Cursor().After(inbox.For(record.BaseDir).Read) {
 			continue
 		}
 		selected = append(selected, record)
@@ -103,7 +104,7 @@ func cmdNotifications(args []string) int {
 		rows := make([]notificationJSON, 0, len(entries))
 		for _, entry := range entries {
 			rows = append(rows, notificationJSON{CreatedAt: entry.CreatedAt, ID: entry.ID, BaseDir: entry.BaseDir, Project: entry.Project, RunID: entry.RunID,
-				Title: entry.Title, Body: entry.Body, Unread: entry.Cursor.After(inbox.Read)})
+				Title: entry.Title, Body: entry.Body, Unread: entry.Cursor.After(inbox.For(entry.BaseDir).Read)})
 		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
@@ -123,7 +124,7 @@ func cmdNotifications(args []string) int {
 	}
 	for _, entry := range entries {
 		header := model.FormatDisplayTimestamp(entry.CreatedAt) + "  " + entry.Title
-		if entry.Cursor.After(inbox.Read) {
+		if entry.Cursor.After(inbox.For(entry.BaseDir).Read) {
 			header += "  " + yellow("(unread)")
 		}
 		fmt.Println(header)

@@ -411,14 +411,18 @@ seconds, and at once when a basedir bell changes, the page reads
 ([notifications.go](../internal/webui/notifications.go)). The main page asks
 for its own basedir and the other basedirs whose bell is on; Recent jobs asks
 for the basedirs whose bell is on. An unknown basedir ID answers 400. The
-server answers the latest 50 entries after the cleared cursor, newest first,
-each rendered with its project's current `[browser]` settings by
-`notification.NewBrowserMessage`, plus the read and cleared cursors and a
-description of each record it could not read, which the inbox shows. A
-cursor is a record's creation time and ID; entries after the read cursor are
-unread. Opening the inbox moves the read cursor to the newest entry, and
-**Clear notifications** moves both cursors there, through
-`POST /api/notifications/state`; the server only moves cursors forward, so
+server answers the latest 50 entries, newest first, each after its basedir's
+cleared cursor, naming its basedir ID and rendered with its project's current
+`[browser]` settings by `notificationlog.Entries`, plus the read and cleared
+cursors of each requested basedir and a description of each record it could
+not read, which the inbox shows. A cursor is a record's creation time and ID;
+each basedir has its own pair in `inbox-state.json`, and an entry after its
+basedir's read cursor is unread. Opening the inbox moves the read cursor of
+each basedir it shows to that basedir's newest shown entry, and **Clear
+notifications** moves both cursors there, through
+`POST /api/notifications/state` with `{"basedirs": {ID: cursors}}`; other
+basedirs' cursors do not move, so a basedir whose bell is turned on later
+still shows its unread entries. The server only moves cursors forward, so
 pages using the same master directory share them across reloads and
 restarts. Without control (`--allow-control=false`) that POST answers 403 and
 the page keeps its own cursors until it is reloaded. Entries are announced to
@@ -431,7 +435,7 @@ setting. Static exports have no inbox. Covered by
 `TestNotificationInboxAnnouncesOnlyNewEntries` in
 [run_notifications_test.go](../internal/webui/run_notifications_test.go), and
 `TestNotificationsListSelectedBasedirsWithProjectSettings` and
-`TestNotificationStateIsSharedAndNeedsControl` in
+`TestNotificationStateIsPerBasedirSharedAndNeedsControl` in
 [notifications_test.go](../internal/webui/notifications_test.go). The built
 binary is checked by `TestWebNotificationInboxWithoutDesktopPermission` and
 `TestWebInboxShowsNotificationsRecordedWhileClosed` in

@@ -5,7 +5,8 @@
 // <run-id>.jsonl, with one record per notification batch. Only the run's own
 // process, or a later unlock that finalizes it, appends to a file, so
 // concurrent runs never write the same file, even on NFS. Records are kept
-// for Retention; inbox-state.json holds the shared read and cleared cursors.
+// for Retention; inbox-state.json holds the shared read and cleared cursors
+// of each basedir.
 package notificationlog
 
 import (
@@ -78,11 +79,42 @@ func (cursor Cursor) Valid() bool {
 	return err == nil && cursor.ID != ""
 }
 
-// InboxState is the inbox's shared state: records up to Read are read, and
-// records up to Cleared are no longer shown.
-type InboxState struct {
+// Cursors is one basedir's inbox state: its records up to Read are read,
+// and its records up to Cleared are no longer shown.
+type Cursors struct {
 	Read    Cursor `json:"read"`
 	Cleared Cursor `json:"cleared"`
+}
+
+// Valid reports whether both cursors are valid.
+func (cursors Cursors) Valid() bool {
+	return cursors.Read.Valid() && cursors.Cleared.Valid()
+}
+
+// advance moves each cursor forward to next's, never back, so concurrent
+// pages cannot undo each other. Clearing a record also reads it.
+func (cursors Cursors) advance(next Cursors) Cursors {
+	if next.Cleared.After(cursors.Cleared) {
+		cursors.Cleared = next.Cleared
+	}
+	for _, cursor := range []Cursor{next.Read, cursors.Cleared} {
+		if cursor.After(cursors.Read) {
+			cursors.Read = cursor
+		}
+	}
+	return cursors
+}
+
+// InboxState is the inbox's shared state, kept per basedir so that reading or
+// clearing the records of the basedirs a page shows leaves the others alone.
+type InboxState struct {
+	// BaseDirs maps an absolute basedir to its cursors.
+	BaseDirs map[string]Cursors `json:"basedirs"`
+}
+
+// For returns baseDir's cursors; a basedir never read has zero cursors.
+func (inbox InboxState) For(baseDir string) Cursors {
+	return inbox.BaseDirs[baseDir]
 }
 
 // Log is the record store under one master directory.
@@ -344,12 +376,13 @@ func (log Log) State() (InboxState, error) {
 	return inbox, nil
 }
 
-// Advance moves the read and cleared cursors forward to read and cleared;
-// a cursor never moves back, so concurrent pages cannot undo each other.
-// Clearing a record also reads it.
-func (log Log) Advance(read, cleared Cursor) (InboxState, error) {
-	if !read.Valid() || !cleared.Valid() {
-		return InboxState{}, errors.New("invalid inbox cursor")
+// Advance moves the cursors of each basedir in changes forward; other
+// basedirs keep theirs.
+func (log Log) Advance(changes map[string]Cursors) (InboxState, error) {
+	for baseDir, cursors := range changes {
+		if !filepath.IsAbs(baseDir) || !cursors.Valid() {
+			return InboxState{}, fmt.Errorf("invalid inbox cursors for basedir %q", baseDir)
+		}
 	}
 	if err := os.MkdirAll(log.dir, state.DirectoryMode()); err != nil {
 		return InboxState{}, err
@@ -363,13 +396,11 @@ func (log Log) Advance(read, cleared Cursor) (InboxState, error) {
 	if err != nil {
 		return InboxState{}, err
 	}
-	if cleared.After(inbox.Cleared) {
-		inbox.Cleared = cleared
+	if inbox.BaseDirs == nil {
+		inbox.BaseDirs = map[string]Cursors{}
 	}
-	for _, cursor := range []Cursor{read, inbox.Cleared} {
-		if cursor.After(inbox.Read) {
-			inbox.Read = cursor
-		}
+	for baseDir, cursors := range changes {
+		inbox.BaseDirs[filepath.Clean(baseDir)] = inbox.For(filepath.Clean(baseDir)).advance(cursors)
 	}
 	if err := state.WriteJSON(filepath.Join(log.dir, stateFileName), inbox); err != nil {
 		return InboxState{}, fmt.Errorf("write inbox state: %w", err)

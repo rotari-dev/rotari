@@ -24,8 +24,16 @@ type inboxResponse struct {
 		Body  string `json:"body"`
 		URL   string `json:"url"`
 	} `json:"entries"`
+	BaseDirs map[string]inboxCursors `json:"basedirs"`
+}
+
+type inboxCursors struct {
 	Read    inboxCursor `json:"read"`
 	Cleared inboxCursor `json:"cleared"`
+}
+
+func readThrough(id string, cursor inboxCursor) map[string]any {
+	return map[string]any{"basedirs": map[string]inboxCursors{id: {Read: cursor}}}
 }
 
 func currentBasedirID(t *testing.T, e *support.Env, base string) string {
@@ -80,18 +88,18 @@ func TestWebInboxShowsNotificationsRecordedWhileClosed(t *testing.T) {
 		entry.URL != "/_basedir/"+id+"/project/"+run.Project+"/run/"+run.RunID {
 		t.Fatalf("entry = %+v", entry)
 	}
-	if inbox.Read != (inboxCursor{}) {
-		t.Fatalf("history is already read: %+v", inbox.Read)
+	if inbox.BaseDirs[id] != (inboxCursors{}) {
+		t.Fatalf("history is already read: %+v", inbox.BaseDirs)
 	}
 
 	readOnly := e.StartWeb("--allow-control=false")
-	if response := e.HTTPPostJSON(readOnly+"/api/notifications/state", map[string]any{"read": entry.inboxCursor, "cleared": inboxCursor{}}); response.Status != 403 {
+	if response := e.HTTPPostJSON(readOnly+"/api/notifications/state", readThrough(id, entry.inboxCursor)); response.Status != 403 {
 		t.Fatalf("read-only POST = %d: %s", response.Status, response.Body)
 	}
-	if response := e.HTTPPostJSON(base+"/api/notifications/state", map[string]any{"read": entry.inboxCursor, "cleared": inboxCursor{}}); response.Status != 200 {
+	if response := e.HTTPPostJSON(base+"/api/notifications/state", readThrough(id, entry.inboxCursor)); response.Status != 200 {
 		t.Fatalf("POST = %d: %s", response.Status, response.Body)
 	}
-	if restarted := getInbox(t, e, e.StartWeb(), id); restarted.Read != entry.inboxCursor || len(restarted.Entries) != 1 {
+	if restarted := getInbox(t, e, e.StartWeb(), id); restarted.BaseDirs[id].Read != entry.inboxCursor || len(restarted.Entries) != 1 {
 		t.Fatalf("read state after a restart = %+v", restarted)
 	}
 
@@ -148,7 +156,7 @@ const until = async (check, what) => {
       throw Error('inbox not readable');
     await until(async () => {
       const shared = await (await fetch(base + '/api/notifications?basedirs=' + process.argv[3])).json();
-      return !!shared.read.id;
+      return !!shared.basedirs[process.argv[3]].read.id;
     }, 'opening the inbox did not mark it read on the server');
     if (errors.length) throw Error(errors.join('\n'));
     w.close();

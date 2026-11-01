@@ -83,32 +83,48 @@ func TestNotificationsListSelectedBasedirsWithProjectSettings(t *testing.T) {
 	}
 }
 
-// Clearing hides records up to the cleared cursor for every page, and the
+// Each basedir has its own shared cursors: reading or clearing the records
+// of one basedir leaves older records of another unread and shown. The
 // cursors are written only by a server with control enabled.
-func TestNotificationStateIsSharedAndNeedsControl(t *testing.T) {
+func TestNotificationStateIsPerBasedirSharedAndNeedsControl(t *testing.T) {
 	options, current, other := inboxFixture(t, true)
 	handler := Handler(options)
 	_, inbox, _ := getInbox(t, handler, current+","+other)
-	newest := inbox.Entries[0].Cursor
-	post := func(handler http.Handler, state notificationlog.InboxState) *httptest.ResponseRecorder {
-		body, _ := json.Marshal(state)
+	if len(inbox.Entries) != 2 || inbox.Entries[0].BaseDir != other || inbox.Entries[1].BaseDir != current {
+		t.Fatalf("entries = %#v", inbox.Entries)
+	}
+	newest, older := inbox.Entries[0].Cursor, inbox.Entries[1].Cursor
+	post := func(handler http.Handler, changes map[string]notificationlog.Cursors) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(inboxCursors{BaseDirs: changes})
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/notifications/state", bytes.NewReader(body)))
 		return recorder
 	}
 	readOnly := options
 	readOnly.AllowControl = false
-	if recorder := post(Handler(readOnly), notificationlog.InboxState{Read: newest}); recorder.Code != http.StatusForbidden {
+	if recorder := post(Handler(readOnly), map[string]notificationlog.Cursors{other: {Read: newest}}); recorder.Code != http.StatusForbidden {
 		t.Fatalf("read-only POST = %d %s", recorder.Code, recorder.Body.String())
 	}
-	if recorder := post(handler, notificationlog.InboxState{Read: newest, Cleared: inbox.Entries[1].Cursor}); recorder.Code != http.StatusOK {
+	if recorder := post(handler, map[string]notificationlog.Cursors{other: {Read: newest}}); recorder.Code != http.StatusOK {
 		t.Fatalf("POST = %d %s", recorder.Code, recorder.Body.String())
 	}
-	_, after, _ := getInbox(t, Handler(readOnly), current+","+other)
-	if len(after.Entries) != 1 || after.Entries[0].Cursor != newest || after.Read != newest {
-		t.Fatalf("after clearing = %#v", after)
+	_, read, _ := getInbox(t, Handler(readOnly), current+","+other)
+	if read.BaseDirs[other].Read != newest || read.BaseDirs[current] != (notificationlog.Cursors{}) {
+		t.Fatalf("reading one basedir = %#v", read.BaseDirs)
 	}
-	if recorder := post(handler, notificationlog.InboxState{Read: notificationlog.Cursor{CreatedAt: "now", ID: "x"}}); recorder.Code != http.StatusBadRequest {
-		t.Fatalf("invalid cursor = %d", recorder.Code)
+	if recorder := post(handler, map[string]notificationlog.Cursors{current: {Cleared: older}}); recorder.Code != http.StatusOK {
+		t.Fatalf("POST = %d %s", recorder.Code, recorder.Body.String())
+	}
+	_, cleared, _ := getInbox(t, Handler(readOnly), current+","+other)
+	if len(cleared.Entries) != 1 || cleared.Entries[0].Cursor != newest || cleared.BaseDirs[current].Read != older || cleared.BaseDirs[other].Cleared != (notificationlog.Cursor{}) {
+		t.Fatalf("after clearing one basedir = %#v", cleared)
+	}
+	for name, changes := range map[string]map[string]notificationlog.Cursors{
+		"invalid cursor":  {current: {Read: notificationlog.Cursor{CreatedAt: "now", ID: "x"}}},
+		"unknown basedir": {"unknown": {Read: newest}},
+	} {
+		if recorder := post(handler, changes); recorder.Code != http.StatusBadRequest {
+			t.Fatalf("%s = %d", name, recorder.Code)
+		}
 	}
 }

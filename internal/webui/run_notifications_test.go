@@ -9,11 +9,13 @@ import (
 
 // inboxServerJS fakes the notification endpoints for a page under test:
 // entries, newest first, each with the basedir its run belongs to; the shared
-// cursors; and, while control is off, a state endpoint that refuses writes.
+// cursors of each basedir; and, while control is off, a state endpoint that
+// refuses writes.
 const inboxServerJS = `
 const zero = {created_at: '', id: ''};
 const after = (a, b) => a.created_at !== b.created_at ? a.created_at > b.created_at : a.id > b.id;
-const server = {entries: [], state: {read: zero, cleared: zero}, control: true, fail: '', requested: [], posts: []};
+const server = {entries: [], state: {}, control: true, fail: '', requested: [], posts: []};
+const cursorsOf = id => server.state[id] || {read: zero, cleared: zero};
 let clock = 0;
 function addEntry(basedir, title, url) {
   clock++;
@@ -24,20 +26,25 @@ function addEntry(basedir, title, url) {
 function fakeFetch(url, init) {
   url = String(url);
   if (url === '/api/notifications/state') {
-    const next = JSON.parse(init.body);
-    server.posts.push(next);
+    const changes = JSON.parse(init.body).basedirs;
+    server.posts.push(changes);
     if (!server.control) return Promise.resolve({ok: false, status: 403, text: async () => 'read-only'});
-    for (const name of ['read', 'cleared']) if (after(next[name], server.state[name])) server.state[name] = next[name];
-    if (after(server.state.cleared, server.state.read)) server.state.read = server.state.cleared;
-    return Promise.resolve({ok: true, json: async () => server.state});
+    const answered = {};
+    for (const [id, next] of Object.entries(changes)) {
+      const cursors = {...cursorsOf(id)};
+      for (const name of ['read', 'cleared']) if (after(next[name], cursors[name])) cursors[name] = next[name];
+      if (after(cursors.cleared, cursors.read)) cursors.read = cursors.cleared;
+      server.state[id] = answered[id] = cursors;
+    }
+    return Promise.resolve({ok: true, json: async () => ({basedirs: answered})});
   }
   if (url.startsWith('/api/notifications?')) {
     if (server.fail) return Promise.resolve({ok: false, status: 500, text: async () => server.fail});
     const ids = new URLSearchParams(url.split('?')[1]).get('basedirs').split(',');
     server.requested.push(ids.join(','));
-    const entries = server.entries.filter(entry => ids.includes(entry.basedir) && after(entry, server.state.cleared))
-      .map(({basedir, ...entry}) => entry);
-    return Promise.resolve({ok: true, json: async () => ({entries, ...server.state})});
+    const entries = server.entries.filter(entry => ids.includes(entry.basedir) && after(entry, cursorsOf(entry.basedir).cleared));
+    const basedirs = Object.fromEntries(ids.map(id => [id, cursorsOf(id)]));
+    return Promise.resolve({ok: true, json: async () => ({entries, basedirs})});
   }
   return Promise.reject(new Error('offline'));
 }
@@ -88,7 +95,7 @@ const settle = () => new Promise(resolve => setTimeout(resolve, 20));
     button.click();
     await settle();
     if (panel.hidden || button.textContent !== 'Inbox (0)') throw Error('not marked read');
-    if (server.state.read.id !== 'r-1') throw Error('read cursor not shared: ' + JSON.stringify(server.posts));
+    if (cursorsOf(basedir).read.id !== 'r-1') throw Error('read cursor not shared: ' + JSON.stringify(server.posts));
     addEntry(basedir, 'second', '');
     await poll();
     if (button.textContent !== 'Inbox (0)' || announcement.textContent !== 'second') throw Error('open inbox became unread');
@@ -103,7 +110,7 @@ const settle = () => new Promise(resolve => setTimeout(resolve, 20));
     panel.querySelector('button').click();
     await poll();
     if (panel.querySelector('article') || button.textContent !== 'Inbox (0)') throw Error('clear failed');
-    if (server.state.cleared.id !== 'r-3') throw Error('cleared cursor not shared');
+    if (cursorsOf(basedir).cleared.id !== 'r-3' || server.state.elsewhere) throw Error('cleared cursor not shared, or moved an unshown basedir: ' + JSON.stringify(server.state));
     server.control = false;
     button.click();
     addEntry(basedir, 'read-only', '');
@@ -148,6 +155,8 @@ const settle = () => new Promise(resolve => setTimeout(resolve, 20));
 // A desktop notification shows only an entry that arrives while the page is
 // open. Entries already recorded when the page opens, or when a basedir's
 // bell is turned on, are history: they enter the inbox without a popup.
+// Reading the inbox reads only the basedirs it showed, so a basedir whose
+// bell is turned on later still has its older entries unread.
 func TestNotificationInboxAnnouncesOnlyNewEntries(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node is not installed")
@@ -185,12 +194,18 @@ const settle = () => new Promise(resolve => setTimeout(resolve, 20));
     addEntry('one', 'new in one', '');
     await poll();
     if (shown.join('\n') !== 'new in one | project: <project>') throw Error('new entry: ' + shown);
+    const button = d.querySelector('.notification-inbox > button');
+    button.click();
+    await settle();
+    button.click();
+    if (button.textContent !== 'Inbox (0)' || cursorsOf('one').read.id !== 'r-3') throw Error('basedir one not read');
     const other = d.querySelector('.basedir-notification-toggle[data-basedir-id="two"]');
     other.checked = true;
     w.toggleJobsNotificationBasedir(other);
     await settle();
     if (shown.length !== 1) throw Error('a newly selected basedir popped up its history: ' + shown);
     if (!d.getElementById('notification-inbox-panel').textContent.includes('old in two')) throw Error('selected basedir history missing');
+    if (button.textContent !== 'Inbox (1)' || server.state.two) throw Error('reading basedir one read basedir two: ' + button.textContent);
     addEntry('two', 'new in two', '');
     await poll();
     if (shown.length !== 2 || !shown[1].startsWith('new in two')) throw Error('new entry in two: ' + shown);

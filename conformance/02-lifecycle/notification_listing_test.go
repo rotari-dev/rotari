@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -75,11 +76,13 @@ func TestNotificationsListRecordedNotificationsWithoutReadingThem(t *testing.T) 
 		}
 	}
 
-	// The Web inbox reads the first two; the listing then marks only the
-	// last one unread, and --unread lists only it.
+	// The Web inbox reads the newest notification, of the other basedir.
+	// Read state is per basedir, so the older ones of the default basedir stay
+	// unread, and --unread lists only them.
 	base := e.StartWeb()
-	read := map[string]string{"created_at": all[1].CreatedAt, "id": all[1].ID}
-	if response := e.HTTPPostJSON(base+"/api/notifications/state", map[string]any{"read": read, "cleared": map[string]string{"created_at": "", "id": ""}}); response.Status != 200 {
+	read := map[string]string{"created_at": all[2].CreatedAt, "id": all[2].ID}
+	otherID := base64.RawURLEncoding.EncodeToString([]byte(all[2].BaseDir))
+	if response := e.HTTPPostJSON(base+"/api/notifications/state", map[string]any{"basedirs": map[string]any{otherID: map[string]any{"read": read}}}); response.Status != 200 {
 		t.Fatalf("POST = %d: %s", response.Status, response.Body)
 	}
 	statePath := filepath.Join(e.Master, "notifications", "inbox-state.json")
@@ -87,11 +90,11 @@ func TestNotificationsListRecordedNotificationsWithoutReadingThem(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := notificationTitles(listNotifications(t, e, "--unread")); !reflect.DeepEqual(got, want[2:]) {
-		t.Fatalf("--unread = %v, want %v", got, want[2:])
+	if got := notificationTitles(listNotifications(t, e, "--unread")); !reflect.DeepEqual(got, want[:2]) {
+		t.Fatalf("--unread = %v, want %v", got, want[:2])
 	}
 	text := e.MustRotari("notifications").Stdout
-	if strings.Count(text, "(unread)") != 1 || !strings.Contains(text, "rotari: run failed (1 job failed)") || !strings.Contains(text, "job name: bad") {
+	if strings.Count(text, "(unread)") != 2 || !strings.Contains(text, "rotari: run failed (1 job failed)") || !strings.Contains(text, "job name: bad") {
 		t.Fatalf("text listing:\n%s", text)
 	}
 	if after, err := os.ReadFile(statePath); err != nil || string(after) != string(before) {

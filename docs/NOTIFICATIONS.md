@@ -51,8 +51,11 @@ is the unread count; opening the inbox marks its entries read. It shows the
 latest 50 entries of the selected basedirs, including those recorded before
 the page was opened. Read and cleared entries stay that way after a reload or
 a restart of `rotari web`, and in every other page and browser that uses the
-same master directory. Use **Clear notifications** to remove all entries, or
-Escape to close the inbox. A server started with `--allow-control=false`
+same master directory. Each basedir keeps its own read and cleared state, so
+opening or clearing the inbox affects only the basedirs it shows: turning on
+another basedir's bell later still shows that basedir's unread entries. Use
+**Clear notifications** to remove the shown entries, or Escape to close the
+inbox. A server started with `--allow-control=false`
 shows the inbox but cannot save read or cleared entries; they then last only
 until the page is reloaded.
 

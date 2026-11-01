@@ -40,9 +40,10 @@
   window.closeSettingsMenu = () => setMenuOpen(false);
 
   // The inbox shows the notifications runs recorded for the selected
-  // basedirs, read from /api/notifications on every 2-second poll. Its read
-  // and cleared cursors are shared through the server; on a read-only server
-  // they stay in page memory. Entries seen for the first time after the
+  // basedirs, read from /api/notifications on every 2-second poll. Each
+  // basedir has its own read and cleared cursors, shared through the server,
+  // so reading or clearing moves only those of the basedirs shown; on a
+  // read-only server they stay in page memory. Entries seen for the first time after the
   // first poll of a selection are announced and passed to options.desktop;
   // history, including that of a newly selected basedir, is not.
   const zeroCursor = { created_at: "", id: "" };
@@ -52,34 +53,47 @@
   let inbox = [];
   let inboxProblems = [];
   let inboxError = "";
-  let serverState = { read: zeroCursor, cleared: zeroCursor };
-  let localState = { read: zeroCursor, cleared: zeroCursor };
+  const zeroCursors = { read: zeroCursor, cleared: zeroCursor };
+  // Cursors by basedir ID: the server's and the page's own.
+  let serverState = {};
+  const localState = {};
   const seen = new Set();
   let selectionKey = null;
   let inboxPanel;
   let inboxButton;
   let inboxOptions;
-  const inboxState = () => {
-    const cleared = later(serverState.cleared, localState.cleared);
-    return {
-      cleared,
-      read: later(later(serverState.read, localState.read), cleared),
-    };
+  const cursorsOf = (id) => {
+    const server = serverState[id] || zeroCursors;
+    const local = localState[id] || zeroCursors;
+    const cleared = later(server.cleared, local.cleared);
+    return { cleared, read: later(later(server.read, local.read), cleared) };
   };
-  // saveInboxState advances the shared cursors, or the page's own when the
-  // server cannot save them.
-  const saveInboxState = async (next) => {
-    localState = {
-      read: later(localState.read, next.read),
-      cleared: later(localState.cleared, next.cleared),
-    };
+  // newestByBasedir returns each basedir's newest entry position; entries
+  // come newest first.
+  const newestByBasedir = (entries) => {
+    const newest = {};
+    for (const item of entries)
+      newest[item.basedir] ??= { created_at: item.created_at, id: item.id };
+    return newest;
+  };
+  // saveInboxState advances the shared cursors of the basedirs in changes,
+  // or the page's own when the server cannot save them.
+  const saveInboxState = async (changes) => {
+    for (const [id, next] of Object.entries(changes)) {
+      const local = localState[id] || zeroCursors;
+      localState[id] = {
+        read: later(local.read, next.read),
+        cleared: later(local.cleared, next.cleared),
+      };
+    }
     try {
       const response = await fetch("/api/notifications/state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(next),
+        body: JSON.stringify({ basedirs: changes }),
       });
-      if (response.ok) serverState = await response.json();
+      if (response.ok)
+        Object.assign(serverState, (await response.json()).basedirs);
     } catch (error) {
       // The page keeps its own cursors until the server is reachable.
     }
@@ -111,19 +125,19 @@
     inboxPanel.append(clear, list);
     toggle.before(container);
     const visible = () =>
-      inbox.filter((item) => after(item, inboxState().cleared));
+      inbox.filter((item) => after(item, cursorsOf(item.basedir).cleared));
     const markRead = () => {
-      const newest = visible()[0];
-      if (newest && after(newest, inboxState().read))
-        saveInboxState({
-          read: { created_at: newest.created_at, id: newest.id },
-          cleared: inboxState().cleared,
-        });
+      const changes = {};
+      for (const [id, newest] of Object.entries(newestByBasedir(visible())))
+        if (after(newest, cursorsOf(id).read))
+          changes[id] = { read: newest, cleared: cursorsOf(id).cleared };
+      if (Object.keys(changes).length) saveInboxState(changes);
     };
     const render = () => {
       const entries = visible();
-      const read = inboxState().read;
-      const unread = entries.filter((item) => after(item, read)).length;
+      const unread = entries.filter((item) =>
+        after(item, cursorsOf(item.basedir).read),
+      ).length;
       inboxButton.textContent = "Inbox (" + unread + ")";
       inboxButton.classList.toggle("notifications-on", unread > 0);
       list.replaceChildren();
@@ -150,7 +164,7 @@
       const ids = [...new Set(inboxOptions.basedirIDs())].sort();
       const key = ids.join(",");
       const baseline = key !== selectionKey;
-      let data = { entries: [], read: zeroCursor, cleared: zeroCursor };
+      let data = { entries: [], basedirs: {} };
       if (ids.length) {
         let response;
         try {
@@ -168,12 +182,12 @@
           return;
         }
         data = await response.json();
-        if (!Array.isArray(data.entries) || !data.read || !data.cleared)
+        if (!Array.isArray(data.entries) || !data.basedirs)
           throw new Error("unexpected response from /api/notifications");
       }
       inboxError = "";
       selectionKey = key;
-      serverState = { read: data.read, cleared: data.cleared };
+      serverState = data.basedirs;
       inboxProblems = (data.problems || []).map(
         (problem) => "Unreadable notification record: " + problem,
       );
@@ -182,7 +196,9 @@
       inbox = data.entries;
       const announced = baseline
         ? []
-        : arrived.filter((item) => after(item, inboxState().cleared));
+        : arrived.filter((item) =>
+            after(item, cursorsOf(item.basedir).cleared),
+          );
       if (announced.length) {
         announcement.textContent = announced[0].title;
         announced
@@ -200,11 +216,10 @@
       render();
     };
     clear.onclick = () => {
-      const newest = visible()[0];
-      if (newest) {
-        const cursor = { created_at: newest.created_at, id: newest.id };
-        saveInboxState({ read: cursor, cleared: cursor });
-      }
+      const changes = {};
+      for (const [id, newest] of Object.entries(newestByBasedir(visible())))
+        changes[id] = { read: newest, cleared: newest };
+      if (Object.keys(changes).length) saveInboxState(changes);
       render();
     };
     document.addEventListener("keydown", (event) => {
