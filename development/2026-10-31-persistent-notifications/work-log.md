@@ -71,3 +71,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** `go vet ./...` and `gofmt` passed. `go test` passed for `internal/notification`, `internal/notificationlog`, `internal/project`, `internal/mcp`, `internal/webui`, `cmd/rotari`, `conformance`, `conformance/02-lifecycle`, `conformance/05-web`, and `conformance/03-interfaces/...` (including `TestUnlockFinalizationRepair`, which now checks one `run.interrupted` record per released variant over CLI and MCP); `-race` passed for `internal/project` and `internal/notification`. The full suite was not rerun.
 
 **Remaining:** The `ISSUES.md` entry for reporting the stop itself, and "Notification-only Web API routes have no page client".
+
+## Stop notifying runs that unlock recovers
+
+**Commits:** 2026-11-02 08:44:10 `f6e2e8d6`.
+
+**Change:** Reverted `b0a404df` (`run.interrupted` on release) and removed the `run.finished` report on finalize that `d91d35ef` added: `project.Guard.RunFinished`, its calls in `project.Unlock`, the CLI and MCP wiring, and the tests that counted unlock's records (`repair_test.go`, `TestUnlockFinalizationRepair`, the flag-pair unlock allowance and record normalization). NOT-2, SAFE-15, `docs/NOTIFICATIONS.md`, `OPERATIONS.md`, `MCP.md`, `ARCHITECTURE.md`, the `notificationlog` package comment, the plan, and the `ISSUES.md` entry were updated.
+
+**Reason:** The user's decision on 2026-11-02: whoever runs `unlock` already knows the run stopped, so a notification then adds nothing.
+
+**Plan impact:** Reverses the 2026-10-31 repair-notification decision and phase 8; SAFE-15's "never replays notifications" holds again. Notifying a run when it stops stays open.
+
+**Validation:** `go vet ./...` and `gofmt` passed. `go test` passed for `internal/notification`, `internal/notificationlog`, `internal/project`, `internal/mcp`, `cmd/rotari`, `conformance`, `conformance/02-lifecycle`, and `conformance/03-interfaces/...`; the restored flag-pair unlock tests compare the whole state tree, master directory included, so they also check that unlock records nothing. The full suite was not rerun.
+
+**Remaining:** `ISSUES.md` entries "Abnormally terminated runs are never notified" and "Notification-only Web API routes have no page client".

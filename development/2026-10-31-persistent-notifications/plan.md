@@ -1,7 +1,7 @@
 # Plan: Persistent Notifications
 
 Created: 2026-10-31
-Status: Implemented (phases 1-7); see [work-log.md](work-log.md).
+Status: Implemented (phases 1-7; unlock reporting was dropped); see [work-log.md](work-log.md).
 
 ## Purpose
 
