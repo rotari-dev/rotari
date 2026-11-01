@@ -247,7 +247,8 @@ func TestUnlockFinalizationRepair(t *testing.T) {
 				writeUnlockJSON(t, contextPath, context)
 				e.MustRotari("add", "-p", "repair", "--", "false")
 				before := support.SavePairTree(t, projectDir)
-				completions := recordedRunCompletions(t, e.Master, runID)
+				completions := recordedRunEvents(t, e.Master, runID, "run.finished")
+				interruptions := recordedRunEvents(t, e.Master, runID, "run.interrupted")
 				var session *mcpSession
 				target := map[string]any{"project": "repair"}
 				if transport == "MCP" {
@@ -332,13 +333,18 @@ func TestUnlockFinalizationRepair(t *testing.T) {
 					t.Fatalf("applied=%+v meta=%v", applied, meta)
 				}
 				// Finalizing notifies the completion the stopped run never
-				// reported, once; releasing notifies nothing.
-				wantCompletions := completions
+				// reported, once; releasing notifies the interruption once.
+				wantCompletions, wantInterruptions := completions, interruptions
 				if complete {
 					wantCompletions++
+				} else {
+					wantInterruptions++
 				}
-				if got := recordedRunCompletions(t, e.Master, runID); got != wantCompletions {
+				if got := recordedRunEvents(t, e.Master, runID, "run.finished"); got != wantCompletions {
 					t.Fatalf("recorded run completions = %d, want %d", got, wantCompletions)
+				}
+				if got := recordedRunEvents(t, e.Master, runID, "run.interrupted"); got != wantInterruptions {
+					t.Fatalf("recorded run interruptions = %d, want %d", got, wantInterruptions)
 				}
 				if complete {
 					var completion struct {
@@ -376,9 +382,9 @@ func TestUnlockFinalizationRepair(t *testing.T) {
 	}
 }
 
-// recordedRunCompletions counts the run.finished events recorded for the
-// Web inbox under masterDir for runID.
-func recordedRunCompletions(t *testing.T, masterDir, runID string) int {
+// recordedRunEvents counts the events of kind recorded for the Web inbox
+// under masterDir for runID.
+func recordedRunEvents(t *testing.T, masterDir, runID, kind string) int {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(masterDir, "notifications", runID+".jsonl"))
 	if os.IsNotExist(err) {
@@ -398,7 +404,7 @@ func recordedRunCompletions(t *testing.T, masterDir, runID string) int {
 			t.Fatalf("notification record %q: %v", line, err)
 		}
 		for _, event := range record.Events {
-			if event.Event == "run.finished" {
+			if event.Event == kind {
 				count++
 			}
 		}

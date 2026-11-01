@@ -74,9 +74,10 @@ The inbox reads records from the master directory that `rotari web` resolves
 `~/.local/state/rotari/master`). A run whose process resolves another master
 directory, such as one started on a host with a different home directory, is
 not shown. Runs started by a rotari version without this feature record
-nothing. A run whose process was killed records no completion; if `rotari
-unlock` later finalizes it from its complete summary, its completion is
-recorded then (and sent to the Webhook) instead.
+nothing. A run whose process was killed records no completion when it stops.
+When `rotari unlock` later recovers it, the run is reported then (and sent to
+the Webhook): as finished when unlock finalizes it from its complete summary,
+or as interrupted (`rotari: run interrupted`) when it can only release it.
 
 ### Reading notifications from the command line
 
@@ -138,7 +139,8 @@ max_jobs = 10
 ```
 
 A run counts as a success only when its exit code is 0; a failed or cancelled
-run is reported under `run_failure`. A job is reported only after its retries
+run, and an interrupted run that `rotari unlock` releases, is reported under
+`run_failure`. A job is reported only after its retries
 end, and blocked jobs and jobs cancelled before they start are failures. As
 with Webhooks, a run's job results within ten seconds of the
 first are combined into one notification, and the run's completion joins the
@@ -212,9 +214,13 @@ event are combined, and run completion flushes the pending batch immediately.
 cover the whole run.
 
 Delivery errors are warnings and do not change the run result. Rotari keeps no
-delivery record and does not retry. A run whose process stopped before reporting its
-completion sends it when `rotari unlock` finalizes the run from its complete
-summary.
+delivery record and does not retry. A run whose process stopped before
+reporting its completion is sent when `rotari unlock` recovers it: a
+`run.finished` event when unlock finalizes the run from its complete summary,
+or a `run.interrupted` event, selected by `run_failure`, when it releases the
+run. A `run.interrupted` event carries the run's identity, `run_status`
+`interrupted`, and its start time when one was recorded; it has no exit code
+or counts.
 
 ### Slack
 

@@ -89,6 +89,12 @@ func (manager *runNotificationManager) RunFinished(paths state.ProjectPaths, run
 	manager.add(paths, runID, notification.NewRunEvent(paths.ProjectName, summary, manager.now()), true)
 }
 
+// RunInterrupted reports run, released by unlock without a complete summary,
+// at once.
+func (manager *runNotificationManager) RunInterrupted(paths state.ProjectPaths, run model.RunSummary) {
+	manager.add(paths, run.RunID, notification.NewInterruptedRunEvent(paths.ProjectName, run, manager.now()), true)
+}
+
 func (manager *runNotificationManager) add(paths state.ProjectPaths, runID string, event notification.Event, flush bool) {
 	key := paths.BaseDir + "\x00" + paths.ProjectName + "\x00" + runID
 	manager.mu.Lock()

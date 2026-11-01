@@ -41,7 +41,8 @@ func cmdMCP(args []string) int {
 		printErrorf("invalid %s: %v", envActor, err)
 		return 1
 	}
-	options := rotarimcp.Options{NewJobID: makeJobID, StartRun: startRunForMCP, Actor: actor, RunFinished: newRunNotificationManager(masterDir).RunFinished}
+	notifications := newRunNotificationManager(masterDir)
+	options := rotarimcp.Options{NewJobID: makeJobID, StartRun: startRunForMCP, Actor: actor, RunFinished: notifications.RunFinished, RunInterrupted: notifications.RunInterrupted}
 	if err := mcpStdioError(rotarimcp.NewServer(masterDir, options).Run(context.Background(), &mcpsdk.StdioTransport{})); err != nil {
 		printErrorf("MCP server failed: %v", err)
 		return 1

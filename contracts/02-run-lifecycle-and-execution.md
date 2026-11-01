@@ -1284,8 +1284,12 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   Web inbox (WEB-21) shows these records; `unlock` finalizing a run from its
   complete summary reports the run's completion to both the record and the
   Webhook, exactly once, because the run's process reports it only after
-  finalizing its metadata (SAFE-15). A run killed without that finalization
-  and never finalized by `unlock` is not reported. Implemented in
+  finalizing its metadata (SAFE-15). `unlock` releasing a run without a
+  complete summary (SAFE-4) reports a `run.interrupted` event to both, once,
+  selected by `run_failure`: the run's project, ID, name and start time when
+  recorded (from the partial summary or the run lock), and `run_status`
+  `interrupted`, with no exit code or counts. A run killed and never
+  recovered by `unlock` is not reported. Implemented in
   [notificationlog](../internal/notificationlog/log.go) and
   [webhook_batch.go](../cmd/rotari/webhook_batch.go); covered by
   `TestWebInboxShowsNotificationsRecordedWhileClosed` and

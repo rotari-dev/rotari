@@ -1,7 +1,7 @@
 # Plan: Persistent Notifications
 
 Created: 2026-10-31
-Status: Implemented (phases 1-7); see [work-log.md](work-log.md).
+Status: Implemented (phases 1-8); see [work-log.md](work-log.md).
 
 ## Purpose
 
@@ -35,7 +35,8 @@ button, unread count, panel, Clear notifications, desktop popups, toggle,
 - Static exports: they keep the local toggle and have no inbox history.
 - Changing Webhook delivery, its settings, or its payload.
 - New `notifications.toml` settings. Recording is always on.
-- Notifying abnormally terminated runs (see Known limitations).
+- Notifying abnormally terminated runs when they stop (see Known
+  limitations); `unlock` reports them when it recovers them (phase 8).
 
 ## Current behavior
 
@@ -206,6 +207,17 @@ A read-only CLI listing of the records, named like the other list commands
   `TestNotificationsListRecordedNotificationsWithoutReadingThem`; the command
   joins the read-only flag-pair adapter.
 
+### Phase 8: report runs that unlock releases (decided 2026-11-02)
+
+`unlock` that releases a run without a complete summary reports a new
+`run.interrupted` event to the record and the Webhook, once, through
+`project.Guard.RunInterrupted` (CLI and MCP). It is selected by
+`run_failure`, carries the run's project, ID, name and start time when
+recorded (partial summary, else the run lock) and `run_status`
+`interrupted`, and has no exit code or counts. The inbox titles it
+"rotari: run interrupted"; Webhook titles it "rotari run interrupted" in the
+failure color. The time of the report is the unlock's, not the stop's.
+
 ## Known limitations to document
 
 - Runs whose process resolves a different master directory than the Web
@@ -215,15 +227,15 @@ A read-only CLI listing of the records, named like the other list commands
   a home directory share the record. Accepted on 2026-10-31.
 - Runs started by an older rotari binary record nothing.
 - A run process killed before flushing loses its pending batch (as Webhooks
-  do today); its completion is recorded only if repair finalizes it.
+  do today); its completion is recorded only when `unlock` recovers the run.
 - An abnormally terminated run (coordinator killed, host lost) is not
-  reported; its run directory stays running until `unlock`. This is a
-  regression for the inbox only: the page diff reported such a run as failed
-  when some command on the same host happened to remove its dead local lock
-  while a page was open, never for a run on another host. Webhooks never
-  reported it. Reporting interrupted runs needs its own design and is out of
-  scope (decided 2026-10-31); see "Abnormally terminated runs are never
-  notified" in [ISSUES.md](../ISSUES.md).
+  reported when it stops; its run directory stays running until `unlock`.
+  The page diff used to report such a run as failed when some command on the
+  same host happened to remove its dead local lock while a page was open,
+  never for a run on another host; Webhooks never reported it. Since
+  2026-11-02 (phase 8), `unlock` reports it when it recovers the run.
+  Reporting it when it stops needs its own design; see "Abnormally terminated
+  runs are notified only when unlocked" in [ISSUES.md](../ISSUES.md).
 
 ## Implementation phases
 

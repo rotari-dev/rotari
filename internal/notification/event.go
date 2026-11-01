@@ -11,6 +11,9 @@ type EventKind string
 const (
 	JobFinished EventKind = "job.finished"
 	RunFinished EventKind = "run.finished"
+	// RunInterrupted is a run whose process stopped before finishing it,
+	// reported when unlock releases it without a complete summary.
+	RunInterrupted EventKind = "run.interrupted"
 )
 
 type Event struct {
@@ -70,7 +73,17 @@ func NewRunEvent(project string, summary model.RunSummary, occurredAt time.Time)
 	return event
 }
 
+// NewInterruptedRunEvent reports run, which has its ID and, when they were
+// recorded, its name and start time, as interrupted.
+func NewInterruptedRunEvent(project string, run model.RunSummary, occurredAt time.Time) Event {
+	return Event{Kind: RunInterrupted, OccurredAt: occurredAt.UTC().Format(time.RFC3339Nano), Project: project, RunID: run.RunID, RunName: run.RunName,
+		RunStatus: "interrupted", StartedAt: run.StartedAt}
+}
+
 func (settings ChannelSettings) Includes(event Event) bool {
+	if event.Kind == RunInterrupted {
+		return settings.RunFailure
+	}
 	if event.Kind == JobFinished {
 		if event.JobStatus == model.StatusSuccess {
 			return settings.JobSuccess

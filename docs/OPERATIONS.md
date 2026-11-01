@@ -247,7 +247,8 @@ idle project without a lock remains a no-op.
 
 Without a complete trustworthy summary, preview reports `action: "release"`
 and explains why it cannot finalize. Apply returns to collecting without
-inventing a summary. Retry is a separate command. Malformed/unreadable repair
+inventing a summary, and reports the run as interrupted to the Web inbox and
+the Webhook (under `run_failure`). Retry is a separate command. Malformed/unreadable repair
 records are explicit errors, not permission to skip validation. Apply rereads
 the summary and execution inventory under the state lock; a preview does not
 freeze the evidence.

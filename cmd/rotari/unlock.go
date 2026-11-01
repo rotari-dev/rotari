@@ -68,7 +68,7 @@ func cmdUnlock(args []string) int {
 		printErrorf("failed to resolve paths: %v", err)
 		return 1
 	}
-	result, err := project.Unlock(paths, *runID, project.Guard{DryRun: *dryRun, RunFinished: runNotifications.RunFinished}, *assumeStopped)
+	result, err := project.Unlock(paths, *runID, project.Guard{DryRun: *dryRun, RunFinished: runNotifications.RunFinished, RunInterrupted: runNotifications.RunInterrupted}, *assumeStopped)
 	if *jsonOutput {
 		if encodeErr := json.NewEncoder(os.Stdout).Encode(result); encodeErr != nil {
 			printError(encodeErr)

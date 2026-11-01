@@ -234,6 +234,7 @@ A project is in one of three states, derived from `running.lock` and
   finalization under SAFE-15; otherwise recovery returns to collecting and
   names the `retry --run-id` command that reruns the failed/unfinished jobs,
   since the run took them from the queue when it started (CORE-3, RUN-12).
+  Releasing reports the run as interrupted (NOT-2).
   `rotari unlock` and the MCP
   unlock tools share `project.Unlock` in
   [internal/project/unlock.go](../internal/project/unlock.go), covered by

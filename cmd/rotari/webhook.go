@@ -152,9 +152,13 @@ func payloadSummary(payload notification.Payload) string {
 
 func eventTitle(event notification.PayloadEvent) string {
 	title := "rotari " + strings.ReplaceAll(string(event.Event), ".", " ")
-	statusName := "job_status"
-	if event.Event == notification.RunFinished {
-		statusName = "run_status"
+	if event.Event == notification.RunInterrupted {
+		// The event name is its status.
+		return title
+	}
+	statusName := "run_status"
+	if event.Event == notification.JobFinished {
+		statusName = "job_status"
 	}
 	if status, ok := fieldValue(event.Fields, statusName); ok {
 		title += ": " + notification.FormatValue(status)
