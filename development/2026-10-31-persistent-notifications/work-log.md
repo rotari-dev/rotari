@@ -29,3 +29,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** `go vet ./...` and `tsc -p internal/webui/tsconfig.json` passed. Full `go test -timeout 15m ./...` passed after fixing `TestCLIFlagPairUnlock*`, which compare the whole state tree and now allow and check the notification record. In the race step, `cmd/rotari` hit the known webhook-timer/color race (one of three repeated `-race` runs; recorded under the existing `ISSUES.md` entry), and `TestSSHJobReadsAsRunning` failed once and then passed three isolated `-race` runs (new `ISSUES.md` entry). `prettier --check` (3.9.8, not the pinned v4 alpha) and `gofmt -l` were clean; `pre-commit` is not installed.
 
 **Remaining:** A CLI command to read the records (separate plan); "Abnormally terminated runs are never notified" and "Notification-only Web API routes have no page client" in `ISSUES.md`.
+
+## Add `rotari notifications`
+
+**Commits:** 2026-11-01 22:18:00 `d19e20c1`.
+
+**Change:** New `cmd/rotari/notifications.go` and its command spec, dispatch, completion and config scope (`projectRunListing` now names `runs` and `notifications`; `projectListingFilter` is shared with `runs`). `notificationlog.Entries` now renders records for both the Web handler and the command. Contract NOT-3, `docs/NOTIFICATIONS.md`, `INSPECT.md`, `ARCHITECTURE.md`, the flag-pair coverage document, regenerated `CLI_REFERENCE.md`, `ENVIRONMENT_VARIABLES.md` and `python/rotari/generated_cli.py`, the help/schema goldens, and the flag-pair inventory (read-only adapter). The Web inbox conformance test now waits for its condition instead of a fixed 200 ms.
+
+**Reason:** Plan phase 7, decided with the user on 2026-11-01: name `notifications`, read only, `--unread` to narrow to unread.
+
+**Plan impact:** All planned phases are done.
+
+**Validation:** Generator `--check` runs, `ruff check`/`ruff format --check`, `gofmt`, and `go vet ./...` passed. In the full `go test ./...` at a load average near 40, `TestCLIFlagPairSuspend` timed out (new `ISSUES.md` entry; an isolated rerun passed in 15 s) and `TestWebNotificationInboxWithoutDesktopPermission` failed once, which led to the wait fix (three isolated repetitions then passed). The race step failed only in `TestCLIFlagPairSuspend`. Every other package passed. Python tests were not run: `pytest` is not installed.
+
+**Remaining:** `ISSUES.md` entries "Abnormally terminated runs are never notified" and "Notification-only Web API routes have no page client".
