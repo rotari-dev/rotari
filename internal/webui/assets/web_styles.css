@@ -1831,10 +1831,23 @@ pre,
 .launch-reason {
   margin: 0 0 0.5rem;
 }
-.launch-view {
+.launch-view,
+.recover-view {
   overflow: auto;
   max-height: 75vh;
   padding: 0.5rem;
+}
+.recover-view .recover-refusal {
+  color: var(--s-bad);
+}
+.recover-view td {
+  overflow-wrap: anywhere;
+}
+.recover-view .recover-attest {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin: 0.75rem 0;
 }
 .launch-table td {
   overflow-wrap: anywhere;

@@ -1630,6 +1630,9 @@ function projectRunsHTML(q) {
               "/runs/" +
               r.run_id,
           ),
+          r.lifecycle === "interrupted"
+            ? recoverRunButton(q.project_name, r.run_id)
+            : "",
           deleteRunButton(q.project_name, r.run_id),
         ]) +
         "</tr>",
@@ -2009,6 +2012,9 @@ function runActionsHTML(q, run, runID) {
       ? ' title="View the configuration saved with this run"'
       : ' disabled title="No config snapshot"') +
     ">View config snapshot</button>" +
+    (run.lifecycle === "interrupted"
+      ? recoverRunButton(q.project_name, runID)
+      : "") +
     (run.running
       ? '<button type="button" class="cancel-run"' +
         data +

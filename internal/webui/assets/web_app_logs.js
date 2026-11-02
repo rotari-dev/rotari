@@ -411,11 +411,13 @@ function openOutputModal(compact) {
     view === "artifacts" ||
     view === "launches" ||
     view === "launcher-config" ||
+    view === "recover" ||
     renderedReport;
   document.getElementById("modal-markdown").hidden = !renderedReport;
   document.getElementById("artifact-view").hidden = view !== "artifacts";
   document.getElementById("launch-view").hidden =
     view !== "launches" && view !== "launcher-config";
+  document.getElementById("recover-view").hidden = view !== "recover";
   ensureModalOutput().classList.toggle(
     "log-error",
     view === "log" && !!selectedLog && !!selectedLog.error,

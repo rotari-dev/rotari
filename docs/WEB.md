@@ -81,7 +81,9 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
   **History search** searches project, run, and job history (live server only).
 - **Control** (not in read-only mode): copy, change, remove, cancel, and clear
   jobs, and **Create queue** or **Append to queue**, which a separate
-  `rotari run` executes.
+  `rotari run` executes. **Recover…** on an interrupted run does what
+  `rotari unlock` does; see
+  [Operations](OPERATIONS.md#shared-filesystem-use).
 - **Artifacts:** preview and download what jobs wrote, open tables, and
   launch TensorBoard and other viewers on it; see [Artifacts](#artifacts).
 - **Config:** **Generate config** and **View config** edit one config source at

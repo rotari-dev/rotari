@@ -3,6 +3,7 @@ package interfaces
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -159,9 +160,9 @@ func TestUnlockExecutionEvidenceOverridesTerminalOutcome(t *testing.T) {
 }
 
 func TestUnlockFinalizationRepair(t *testing.T) {
-	covers(t, "SAFE-15", "SAFE-16", "SAFE-4", "SAFE-7", "RES-7")
+	covers(t, "SAFE-15", "SAFE-16", "SAFE-4", "SAFE-7", "RES-7", "WEB-25")
 	for _, variant := range []string{"plain", "legacy", "array", "carried-array", "matrix", "incomplete", "incomplete-legacy", "duplicate"} {
-		for _, transport := range []string{"CLI", "MCP"} {
+		for _, transport := range []string{"CLI", "MCP", "Web"} {
 			t.Run(variant+"/"+transport, func(t *testing.T) {
 				e := support.NewEnv(t)
 				args := []string{"add", "-p", "repair"}
@@ -253,12 +254,18 @@ func TestUnlockFinalizationRepair(t *testing.T) {
 					session = startMCP(t, e)
 					target["basedir_ref"] = baseDirRef(t, session, "repair")
 				}
+				web := ""
+				if transport == "Web" {
+					web = e.StartWeb()
+				}
 				var preview unlockAssessment
 				if transport == "CLI" {
 					result := e.MustRotari("unlock", "-p", "repair", "--dry-run", "--json")
 					if err := json.Unmarshal([]byte(result.Stdout), &preview); err != nil {
 						t.Fatal(err)
 					}
+				} else if transport == "Web" {
+					webUnlock(t, e, web, http.MethodGet, nil, http.StatusOK, &preview)
 				} else if message := session.call("rotari_preview_unlock", target, &preview); message != "" {
 					t.Fatal(message)
 				}
@@ -289,6 +296,12 @@ func TestUnlockFinalizationRepair(t *testing.T) {
 						if refused.Code != 1 || !strings.Contains(refused.Stderr, "execution_unknown") {
 							t.Fatalf("refusal=%s", refused)
 						}
+					} else if transport == "Web" {
+						var refused unlockAssessment
+						webUnlock(t, e, web, http.MethodPost, map[string]any{"project_name": "repair", "if_revision": preview.Revision}, http.StatusConflict, &refused)
+						if refused.Applied || refused.RefusalCode != "execution_unknown" {
+							t.Fatalf("refusal=%+v", refused)
+						}
 					} else {
 						target["if_revision"] = preview.Revision
 						var refused struct {
@@ -316,6 +329,8 @@ func TestUnlockFinalizationRepair(t *testing.T) {
 					if err := json.Unmarshal([]byte(result.Stdout), &applied); err != nil {
 						t.Fatal(err)
 					}
+				} else if transport == "Web" {
+					webUnlock(t, e, web, http.MethodPost, map[string]any{"project_name": "repair", "if_revision": preview.Revision, "assume_stopped": unknown}, http.StatusOK, &applied)
 				} else {
 					target["assume_stopped"], target["if_revision"] = unknown, preview.Revision
 					if message := session.call("rotari_unlock", target, &applied); message != "" {
@@ -363,6 +378,25 @@ func TestUnlockFinalizationRepair(t *testing.T) {
 				e.MustRotari("unlock", "-p", "repair", "--assume-stopped")
 			})
 		}
+	}
+}
+
+// webUnlock calls the Web unlock route of the server at base: a GET preview
+// of project repair, or a POST apply of body. It fails unless the status is
+// want, and decodes the result into result.
+func webUnlock(t *testing.T, e *support.Env, base, method string, body map[string]any, want int, result *unlockAssessment) {
+	t.Helper()
+	var response support.HTTPResult
+	if method == http.MethodGet {
+		response = e.HTTPGet(base + "/api/unlock?project_name=repair")
+	} else {
+		response = e.HTTPPostJSON(base+"/api/unlock", body)
+	}
+	if response.Status != want {
+		t.Fatalf("%s /api/unlock = %d, want %d: %s", method, response.Status, want, response.Body)
+	}
+	if err := json.Unmarshal([]byte(response.Body), result); err != nil {
+		t.Fatalf("%s /api/unlock: %v: %s", method, err, response.Body)
 	}
 }
 

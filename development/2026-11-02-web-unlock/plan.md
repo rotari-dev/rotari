@@ -1,7 +1,8 @@
 # Plan: Recover Interrupted Runs from the Web UI
 
 Created: 2026-11-02
-Status: Planned; no implementation yet.
+Status: Implemented (phases 1-4); see [work-log.md](work-log.md). A manual
+check in `rotari web` remains.
 
 ## Purpose
 
@@ -112,6 +113,14 @@ So the Web needs an adapter and a careful UI, not new recovery rules.
 - CLI and MCP: unchanged.
 - Python client: unchanged (it wraps the CLI).
 - Static export: no control and no API, as for other control actions.
+
+### Implementation notes
+
+- The Web UI has no read-only flag on the page; every control button is
+  shown and a read-only server answers 403. Recover follows that: on a
+  `--allow-control=false` server the dialog still previews, and applying
+  shows the 403 reason. Contract WEB-25.
+- The dialog reuses the output modal (`recover-view`).
 
 ## Implementation phases
 

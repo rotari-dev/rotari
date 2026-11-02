@@ -479,6 +479,40 @@ disabled, and its title gives the reason from `notificationUnavailableReason`
 in `web_shell.js`. Covered by
 `TestNotificationToggleExplainsWhyItIsUnavailable`.
 
+## Recovering interrupted runs
+
+**WEB-25** The live server previews and applies `rotari unlock` (SAFE-4)
+for one project of the basedir in its URL mount through `project.Unlock`, as
+the MCP preview and apply tools do
+([unlock.go](../internal/webui/unlock.go)).
+`GET /api/unlock?project_name=NAME[&run_id=ID][&assume_stopped=true]` is a
+dry run: it answers the `UnlockResult` (`run_id`, `action`, `coordinator`,
+`repair` with each execution's evidence, `allowed`, `refusal_code`,
+`revision`, and the rest), plus `refusal` (the CLI's explanation) when
+refused and `rerun_command` (`project.RerunCommand`) for a release. A
+project with no interrupted run answers `allowed: true` and no `run_id`.
+`POST /api/unlock` with `project_name`, optional `run_id`, the preview's
+`if_revision` (required), and `assume_stopped` applies it; a refusal or a
+changed project answers 409 with the result and `error`, a read-only server
+answers 403, and an invalid name (`/` or `\`) or missing project answers
+400. Neither route stops jobs.
+
+The run page's toolbar and each interrupted run's row on the project page
+have **Recover…**, which opens a dialog with the preview: Finalize or
+Release, the coordinator's state and reason, each managed execution's state,
+reason, source, and observation time, and the refusal. `coordinator_live`
+and `execution_active` keep the apply button disabled. For
+`coordinator_unknown` and `execution_unknown` it offers a tick ("I confirmed
+that the coordinator and all of the run's jobs have stopped"); ticking it
+previews again with `assume_stopped=true`, and only then can the user apply.
+The apply sends the preview's revision and the tick; a 409 asks for a new
+preview. After a release the dialog names the rerun command and starts
+nothing. Covered by `TestWebUnlockPreviewsAndAppliesThroughProjectUnlock`
+and `TestRecoverDialogFollowsThePreview` in
+[unlock_test.go](../internal/webui/unlock_test.go), and through the binary
+by the Web variants of `TestUnlockFinalizationRepair` and by
+`TestUnlockRefusesLiveExecutions`.
+
 ## Web UI model and reports
 
 The Web UI is a projection of the same persisted model, not a separate

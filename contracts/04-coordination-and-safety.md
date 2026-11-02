@@ -234,8 +234,9 @@ A project is in one of three states, derived from `running.lock` and
   finalization under SAFE-15; otherwise recovery returns to collecting and
   names the `retry --run-id` command that reruns the failed/unfinished jobs,
   since the run took them from the queue when it started (CORE-3, RUN-12).
-  `rotari unlock` and the MCP
-  unlock tools share `project.Unlock` in
+  `rotari unlock`, the MCP
+  unlock tools, and the Web UI's Recover dialog (`/api/unlock`) share
+  `project.Unlock` in
   [internal/project/unlock.go](../internal/project/unlock.go), covered by
   `TestUnlockByProjectState`. A `--run-id` must name that run. It
   refuses a run whose durable coordinator identity is verified alive,
@@ -269,8 +270,11 @@ A project is in one of three states, derived from `running.lock` and
   [internal/project/inspect.go](../internal/project/inspect.go) over
   `state.LatestAttemptDirs`; checked by
   `TestUnlockRefusesLiveExecutions` and `TestMCPUnlockRecoversAnInterruptedRun`.
-  CLI dry-run and MCP preview also report coordinator ownership, permission,
-  execution evidence, and refusal codes through shared `project.Unlock`.
+  CLI dry-run, MCP preview, and the Web preview (`GET /api/unlock`) also
+  report coordinator ownership, permission, execution evidence, and refusal
+  codes through shared `project.Unlock`; `TestUnlockFinalizationRepair` runs
+  each variant over all three, and `TestUnlockRefusesLiveExecutions` checks
+  the Web's refusal too.
   Both finalization and ordinary release check execution evidence under
   SAFE-16; active always refuses, unknown requires attestation, and
   `execution_checked` is true only for a nonempty inventory with scoped

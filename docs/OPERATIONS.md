@@ -146,6 +146,17 @@ rotari unlock -p sweep --run-id RUN_ID
 
 `unlock` verifies the run ID, removes a matching lock, and either repairs
 finalization or returns the project to queue collection (see below).
+
+In `rotari web`, an interrupted run has **Recover…** on its run page and in
+its row on the project page. The dialog shows the same assessment as
+`--dry-run`: whether it will finalize or release, the coordinator and each
+job's execution evidence, and why recovery is refused. Live work keeps it
+refused. When the evidence cannot be verified, tick "I confirmed that the
+coordinator and all of the run's jobs have stopped" (the Web's
+`--assume-stopped`) before applying. After a release it shows the
+`rotari retry --run-id` command to rerun the failed and unfinished jobs. A
+server started with `--allow-control=false` shows the assessment but cannot
+apply it.
 Never use it while the run may still be executing, or a
 second run could start for the same queue.
 

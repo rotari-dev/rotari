@@ -1050,6 +1050,7 @@ func (s site) baseHandler() http.Handler {
 		}
 		writeWebJSON(writer, map[string]string{"message": message})
 	})
+	mux.HandleFunc("/api/unlock", s.handleUnlock(baseDir))
 	mux.HandleFunc("/api/cancel-run", func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			methodNotAllowed(writer)

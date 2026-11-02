@@ -72,8 +72,9 @@ flowchart LR
   explicit attestation, and stopped permits recovery. Execution probes run
   outside the state lock; unlock then reacquires it and compares a recovery
   fingerprint covering queue/meta and relevant run evidence before applying.
-  CLI dry-run and MCP preview return the same policy
-  evidence without mutation; CLI, MCP and Python expose the attestation.
+  CLI dry-run, MCP preview, and the Web's `GET /api/unlock` return the same
+  policy evidence without mutation; CLI, MCP, Python, and the Web's Recover
+  dialog (`internal/webui/unlock.go`) expose the attestation.
   Recovery authorization is recorded in the existing run context, without
   changing the coordinator record. `project`'s `repair.go` validates summary
   completeness against expanded commands, carried origins/status marks and

@@ -405,3 +405,155 @@ async function removeQueueJob(queue, jobID, label) {
   }
   await refresh();
 }
+// recoverRunButton opens the Recover dialog for an interrupted run.
+function recoverRunButton(project, runID) {
+  return (
+    '<button type="button" class="recover-run" data-project="' +
+    esc(project) +
+    '" data-run="' +
+    esc(runID) +
+    '" title="Recover the interrupted run, as rotari unlock does" onclick="showRecoverRun(this.dataset.project, this.dataset.run)">Recover…</button>'
+  );
+}
+// recoverActionText says what applying the preview does.
+function recoverActionText(preview) {
+  if (preview.action === "finalize")
+    return "Finalize: the run is marked finished from its recorded results and finish time.";
+  return "Release: the project returns to idle without inventing results; the run's failed and unfinished jobs can be rerun afterwards.";
+}
+// recoverEvidenceHTML shows the coordinator assessment and each managed
+// execution's evidence, as rotari unlock --dry-run prints them.
+function recoverEvidenceHTML(preview) {
+  const coordinator = preview.coordinator || {};
+  const rows = (preview.repair?.executions || [])
+    .map(
+      (execution) =>
+        "<tr><td>" +
+        esc(execution.job_id) +
+        "</td><td>" +
+        statusPill(execution.state) +
+        "</td><td>" +
+        esc(execution.reason || "") +
+        "</td><td>" +
+        esc(execution.source || "-") +
+        '</td><td class="time-cell">' +
+        esc(execution.observed_at || "-") +
+        "</td></tr>",
+    )
+    .join("");
+  return (
+    "<p>Coordinator: " +
+    statusPill(coordinator.state || "unknown") +
+    " " +
+    esc(coordinator.reason || "") +
+    "</p>" +
+    (rows
+      ? '<table class="recover-executions"><thead><tr><th>Job</th><th>State</th><th>Reason</th><th>Source</th><th>Observed</th></tr></thead><tbody>' +
+        rows +
+        "</tbody></table>"
+      : '<p class="meta">No managed executions are recorded.</p>')
+  );
+}
+// showRecoverRun previews `rotari unlock` for an interrupted run and offers
+// to apply it. A live coordinator or execution keeps it refused; unknown
+// evidence needs the user's confirmation that the work stopped, sent as
+// assume_stopped. The apply carries the preview's revision.
+async function showRecoverRun(project, runID, assumeStopped = false) {
+  const modal = document.getElementById("output-modal");
+  modal.dataset.view = "recover";
+  modal.querySelector("strong").textContent = "Recover run";
+  if (followTimer) clearInterval(followTimer);
+  followTimer = null;
+  selectedLog = null;
+  selectedOutput = "";
+  openOutputModal(true);
+  const view = document.getElementById("recover-view");
+  view.innerHTML = '<p class="meta">Assessing the run...</p>';
+  const params = new URLSearchParams({ project_name: project, run_id: runID });
+  if (assumeStopped) params.set("assume_stopped", "true");
+  let preview;
+  try {
+    const response = await fetch("/api/unlock?" + params, {
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error((await response.text()).trim());
+    preview = await response.json();
+  } catch (error) {
+    view.innerHTML =
+      '<p class="recover-refusal">Cannot assess the run: ' +
+      esc(error.message) +
+      "</p>";
+    return;
+  }
+  if (!preview.run_id) {
+    view.innerHTML =
+      '<p class="meta">The project has no interrupted run; nothing to recover.</p>';
+    return;
+  }
+  const unverified = ["coordinator_unknown", "execution_unknown"].includes(
+    preview.refusal_code,
+  );
+  const attestable = unverified || (assumeStopped && preview.allowed);
+  view.innerHTML =
+    "<p><strong>" +
+    esc(recoverActionText(preview)) +
+    "</strong></p>" +
+    (preview.repair?.reason
+      ? '<p class="meta">' + esc(preview.repair.reason) + "</p>"
+      : "") +
+    recoverEvidenceHTML(preview) +
+    (preview.refusal && !(unverified && assumeStopped)
+      ? '<p class="recover-refusal">' + esc(preview.refusal) + "</p>"
+      : "") +
+    (attestable
+      ? '<label class="recover-attest"><input type="checkbox" class="recover-assume-stopped"' +
+        (assumeStopped ? " checked" : "") +
+        "> <span>I confirmed that the coordinator and all of the run's jobs have stopped. rotari cannot verify this.</span></label>"
+      : "") +
+    '<p class="meta">Recovery never stops jobs.</p>' +
+    '<div class="toolbar"><button type="button" class="recover-apply"' +
+    (preview.allowed ? "" : " disabled") +
+    ">" +
+    (preview.action === "finalize" ? "Finalize run" : "Release run") +
+    '</button></div><p class="recover-outcome" role="status"></p>';
+  const attest = view.querySelector(".recover-assume-stopped");
+  if (attest)
+    attest.onchange = () => showRecoverRun(project, runID, attest.checked);
+  view.querySelector(".recover-apply").onclick = async () => {
+    const button = view.querySelector(".recover-apply");
+    const outcome = view.querySelector(".recover-outcome");
+    button.disabled = true;
+    const response = await fetch("/api/unlock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_name: project,
+        run_id: runID,
+        if_revision: preview.revision,
+        assume_stopped: assumeStopped,
+      }),
+    });
+    const text = await response.text();
+    let result = {};
+    try {
+      result = JSON.parse(text);
+    } catch {
+      result = { error: text.trim() };
+    }
+    if (!response.ok) {
+      outcome.className = "recover-outcome recover-refusal";
+      outcome.textContent =
+        "Not recovered: " +
+        (result.error || text.trim()) +
+        (response.status === 409 ? " Preview again before applying." : "");
+      return;
+    }
+    outcome.className = "recover-outcome";
+    outcome.textContent =
+      result.action === "finalize"
+        ? "Finalized: recorded results and finish time were preserved."
+        : "Released. Rerun its failed and unfinished jobs with: " +
+          result.rerun_command;
+    await refresh();
+  };
+}

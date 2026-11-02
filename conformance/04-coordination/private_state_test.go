@@ -720,7 +720,7 @@ func writeFile(t *testing.T, path, content string) {
 // TestUnlockRefusesLiveExecutions stops only the supervisor, leaving the job
 // live; unlock must report active evidence and keep the run interrupted.
 func TestUnlockRefusesLiveExecutions(t *testing.T) {
-	covers(t, "SAFE-7")
+	covers(t, "SAFE-7", "WEB-25")
 	e := support.NewEnv(t)
 	e.StartRun("live", 1, true)
 	support.WaitUntil(t, 15*time.Second, func() (bool, string) {
@@ -736,6 +736,22 @@ func TestUnlockRefusesLiveExecutions(t *testing.T) {
 	}
 	if r := e.Rotari("unlock", "live"); r.Code != 1 || !strings.Contains(r.Stderr, "execution_active") || !strings.Contains(r.Stdout, "execution=active") {
 		t.Fatalf("unlock with a live execution: %s", r)
+	}
+	// The Web preview shows the same live evidence, and its apply is refused
+	// even with the user's attestation.
+	base := e.StartWeb()
+	preview := e.HTTPGet(base + "/api/unlock?project_name=live&assume_stopped=true")
+	if preview.Status != 200 || !strings.Contains(preview.Body, `"refusal_code":"execution_active"`) || !strings.Contains(preview.Body, `"state":"active"`) {
+		t.Fatalf("Web preview with a live execution: %d %s", preview.Status, preview.Body)
+	}
+	var previewed struct {
+		Revision string `json:"revision"`
+	}
+	if err := json.Unmarshal([]byte(preview.Body), &previewed); err != nil {
+		t.Fatal(err)
+	}
+	if applied := e.HTTPPostJSON(base+"/api/unlock", map[string]any{"project_name": "live", "if_revision": previewed.Revision, "assume_stopped": true}); applied.Status != 409 || !strings.Contains(applied.Body, "execution_active") {
+		t.Fatalf("Web apply with a live execution: %d %s", applied.Status, applied.Body)
 	}
 	if alive := support.JobProcesses(t, e.Root, ""); alive != 1 {
 		t.Fatalf("refused unlock stopped job: %d processes", alive)
