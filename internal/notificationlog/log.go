@@ -3,8 +3,9 @@
 //
 // The master directory holds one file per run, <masterdir>/notifications/
 // <run-id>.jsonl, with one record per notification batch. Only the run's own
-// process appends to a file, so concurrent runs never write the same file,
-// even on NFS. Records are kept
+// process appends to a file while it runs, so concurrent runs never write the
+// same file, even on NFS; once it has stopped, rotari web may add one
+// run.interrupted record through AppendOnce. Records are kept
 // for Retention; inbox-state.json holds the shared read and cleared cursors
 // of each basedir.
 package notificationlog
@@ -33,6 +34,7 @@ const (
 	recordExtension     = ".jsonl"
 	stateFileName       = "inbox-state.json"
 	stateLockFileName   = "inbox-state.lock"
+	onceLockFileName    = "append-once.lock"
 	// timeLayout has a fixed width, so record times order as strings.
 	timeLayout = "2006-01-02T15:04:05.000000000Z"
 )
@@ -201,6 +203,44 @@ func (log Log) Append(baseDir string, events []notification.Event) error {
 		return fmt.Errorf("remove expired notification records: %w", err)
 	}
 	return nil
+}
+
+// AppendOnce appends event, of one run under baseDir, unless the run's file
+// already records an event of its kind. Callers of AppendOnce, in this and
+// other processes, take turns, so the event is recorded once. It reports
+// whether it appended.
+func (log Log) AppendOnce(baseDir string, event notification.Event) (bool, error) {
+	path, err := log.runFile(event.RunID)
+	if err != nil {
+		return false, err
+	}
+	if err := os.MkdirAll(log.dir, state.DirectoryMode()); err != nil {
+		return false, err
+	}
+	release, err := state.AcquireStateLock(filepath.Join(log.dir, onceLockFileName))
+	if err != nil {
+		return false, fmt.Errorf("lock notification records: %w", err)
+	}
+	defer release()
+	// codeql[go/path-injection]: path is the validated run file path.
+	data, err := os.ReadFile(path) // NOSONAR: path is validated by runFile.
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	for _, line := range bytes.Split(data, []byte("\n")) {
+		var record Record
+		// Records reports an unreadable line; here it only cannot show that
+		// the event was recorded.
+		if json.Unmarshal(line, &record) != nil {
+			continue
+		}
+		for _, recorded := range record.Events {
+			if recorded.Kind == event.Kind {
+				return false, nil
+			}
+		}
+	}
+	return true, log.Append(baseDir, []notification.Event{event})
 }
 
 func endsWithNewline(path string, size int64) bool {

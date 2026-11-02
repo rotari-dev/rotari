@@ -179,3 +179,42 @@ func TestInboxCursorsOnlyAdvanceAndStayPerBasedir(t *testing.T) {
 		}
 	}
 }
+
+// AppendOnce records an event once per run and kind, even when several
+// callers race, and leaves other kinds and runs alone.
+func TestAppendOnceRecordsAnEventOncePerRun(t *testing.T) {
+	now := time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)
+	log := Open(t.TempDir())
+	interrupted := func(runID string) notification.Event {
+		return notification.NewInterruptedRunEvent("demo", model.RunSummary{RunID: runID}, now)
+	}
+	if err := log.Append("/state", []notification.Event{jobEvent("run-a", "job", 1)}); err != nil {
+		t.Fatal(err)
+	}
+	added := make(chan bool, 8)
+	for range 8 {
+		go func() {
+			ok, err := log.AppendOnce("/state", interrupted("run-a"))
+			if err != nil {
+				t.Error(err)
+			}
+			added <- ok
+		}()
+	}
+	count := 0
+	for range 8 {
+		if <-added {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("appended %d times, want once", count)
+	}
+	if ok, err := log.AppendOnce("/state", interrupted("run-b")); err != nil || !ok {
+		t.Fatalf("another run = %v, %v", ok, err)
+	}
+	records, problems, err := log.Records()
+	if err != nil || len(problems) != 0 || len(records) != 3 {
+		t.Fatalf("records = %d, problems %v, err %v", len(records), problems, err)
+	}
+}

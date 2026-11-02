@@ -182,3 +182,38 @@ const until = async (check, what) => {
 		})
 	}
 }
+
+// rotari web finds a run whose coordinator was killed and records it once as
+// interrupted, whether or not a page is open; the inbox and
+// `rotari notifications` show it, and another server does not record it again.
+func TestWebRecordsInterruptedRunsOnce(t *testing.T) {
+	covers(t, "NOT-4")
+	e := support.NewEnv(t)
+	e.OrphanRun("p", "sleep 2; exit 7")
+	base := e.StartWeb()
+	id := currentBasedirID(t, e, base)
+	var inbox inboxResponse
+	support.WaitUntil(t, 15*time.Second, func() (bool, string) {
+		inbox = getInbox(t, e, base, id)
+		for _, entry := range inbox.Entries {
+			if entry.Title == "rotari: run interrupted" {
+				return true, ""
+			}
+		}
+		return false, "no interrupted run in the inbox"
+	})
+	entry := inbox.Entries[0]
+	if entry.Title != "rotari: run interrupted" || !strings.Contains(entry.Body, "run status: interrupted") || !strings.Contains(entry.URL, "/project/p/run/") {
+		t.Fatalf("entry = %+v", entry)
+	}
+	listed := e.MustRotari("notifications", "--json").Stdout
+	if strings.Count(listed, `"rotari: run interrupted"`) != 1 {
+		t.Fatalf("notifications --json:\n%s", listed)
+	}
+	// Another server's first pass finds the same run and records nothing.
+	other := e.StartWeb()
+	time.Sleep(time.Second)
+	if again := getInbox(t, e, other, id); len(again.Entries) != len(inbox.Entries) {
+		t.Fatalf("entries after another server = %+v, want %+v", again.Entries, inbox.Entries)
+	}
+}

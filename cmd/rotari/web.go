@@ -8,12 +8,15 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/rotari-dev/rotari/internal/basedirregistry"
 	"github.com/rotari-dev/rotari/internal/notification"
 	"github.com/rotari-dev/rotari/internal/notificationlog"
+	"github.com/rotari-dev/rotari/internal/runwatch"
 	stateinternal "github.com/rotari-dev/rotari/internal/state"
 	"github.com/rotari-dev/rotari/internal/webui"
 )
@@ -136,6 +139,35 @@ func generateStaticWeb(output string, options webui.Options) int {
 	return 0
 }
 
+// watchInterruptedRuns records the interrupted runs of baseDir and the
+// registered basedirs for the Web inbox now and every runwatch.Interval
+// while rotari web serves. A failure is warned about when it first appears
+// or changes, not on every pass.
+func watchInterruptedRuns(log notificationlog.Log, baseDir string, registered func() ([]string, error)) {
+	lastProblem := ""
+	for {
+		baseDirs, err := registered()
+		if err == nil {
+			var current string
+			if current, err = filepath.Abs(baseDir); err == nil && !slices.Contains(baseDirs, current) {
+				baseDirs = append(baseDirs, current)
+			}
+		}
+		if err == nil {
+			_, err = runwatch.ReportInterrupted(log, baseDirs, time.Now())
+		}
+		problem := ""
+		if err != nil {
+			problem = err.Error()
+		}
+		if problem != "" && problem != lastProblem {
+			printErrorf("WARNING: cannot record interrupted runs for the Web inbox: %v", err)
+		}
+		lastProblem = problem
+		time.Sleep(runwatch.Interval)
+	}
+}
+
 func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int {
 	registry, err := basedirregistry.Default()
 	if err != nil {
@@ -154,6 +186,7 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 		return 1
 	}
 	options.NotificationLog = &notificationLog
+	go watchInterruptedRuns(notificationLog, baseDir, registry.BaseDirs)
 	options.ArtifactRoots = flags.artifactRoots
 	if flags.allowExec {
 		launches, err := newWebLaunches()

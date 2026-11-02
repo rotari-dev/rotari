@@ -74,9 +74,18 @@ The inbox reads records from the master directory that `rotari web` resolves
 `~/.local/state/rotari/master`). A run whose process resolves another master
 directory, such as one started on a host with a different home directory, is
 not shown. Runs started by a rotari version without this feature record
-nothing. A run whose process was killed records no completion, and
-recovering it with `rotari unlock` reports nothing either: whoever unlocks it
-already knows that it stopped.
+nothing.
+
+A run whose process was killed cannot report it. While `rotari web` runs, it
+looks for such runs at startup and every 30 seconds, across its basedir and
+the registered basedirs, and records each one once as **rotari: run
+interrupted**, which the inbox and `rotari notifications` then show. It finds
+only runs whose coordinator ran on the same host (and PID namespace) as
+`rotari web`; a run on another host looks the same as a running one and is
+not reported. A run that stopped while no `rotari web` was running is found
+when one starts. Interrupted runs are selected by `run_failure` and are never
+sent to the Webhook. Recovering a run with `rotari unlock` reports nothing:
+whoever unlocks it already knows that it stopped.
 
 ### Reading notifications from the command line
 
@@ -138,7 +147,8 @@ max_jobs = 10
 ```
 
 A run counts as a success only when its exit code is 0; a failed or cancelled
-run is reported under `run_failure`. A job is reported only after its retries
+run, and an interrupted run that `rotari web` finds, is reported under
+`run_failure`. A job is reported only after its retries
 end, and blocked jobs and jobs cancelled before they start are failures. As
 with Webhooks, a run's job results within ten seconds of the
 first are combined into one notification, and the run's completion joins the

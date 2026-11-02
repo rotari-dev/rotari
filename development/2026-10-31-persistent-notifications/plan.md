@@ -1,7 +1,7 @@
 # Plan: Persistent Notifications
 
 Created: 2026-10-31
-Status: Implemented (phases 1-7; unlock reporting was dropped); see [work-log.md](work-log.md).
+Status: Implemented (phases 1-8; unlock reporting was dropped); see [work-log.md](work-log.md).
 
 ## Purpose
 
@@ -35,7 +35,9 @@ button, unread count, panel, Clear notifications, desktop popups, toggle,
 - Static exports: they keep the local toggle and have no inbox history.
 - Changing Webhook delivery, its settings, or its payload.
 - New `notifications.toml` settings. Recording is always on.
-- Notifying abnormally terminated runs (see Known limitations).
+- Notifying abnormally terminated runs on other hosts, or to the Webhook (see
+  Known limitations); `rotari web` records same-host ones for the inbox
+  (phase 8).
 
 ## Current behavior
 
@@ -200,6 +202,26 @@ A read-only CLI listing of the records, named like the other list commands
   `TestNotificationsListRecordedNotificationsWithoutReadingThem`; the command
   joins the read-only flag-pair adapter.
 
+### Phase 8: `rotari web` records interrupted runs (decided 2026-11-02)
+
+Reporting at `unlock` was dropped (whoever unlocks already knows). Instead
+the server, which may run while nobody looks, records them for the inbox
+only (NOT-4):
+
+- `runwatch.ReportInterrupted`, at startup and every 30 seconds from
+  `cmd/rotari/web.go`, inspects every project of the server's basedir and
+  the registered basedirs with `project.Inspect` under the shared state lock
+  (a held lock skips the project until the next pass), so a starting or
+  finishing run is never mistaken for an interrupted one.
+- Each interrupted run gets one `run.interrupted` record through
+  `notificationlog.Log.AppendOnce`, which checks the run's file under a lock
+  in the notification directory, so several servers record it once.
+- Selected by `run_failure`; never sent to the Webhook, since the server
+  would then need to send once across servers and own outbound delivery.
+- Limits: coordinators on other hosts count as running; nothing is found
+  while no server runs (the next server's first pass finds it); an expired
+  record is recorded again if the run is still interrupted.
+
 ## Known limitations to document
 
 - Runs whose process resolves a different master directory than the Web
@@ -210,14 +232,13 @@ A read-only CLI listing of the records, named like the other list commands
 - Runs started by an older rotari binary record nothing.
 - A run process killed before flushing loses its pending batch (as Webhooks
   do today); its completion is not recorded.
-- An abnormally terminated run (coordinator killed, host lost) is not
-  reported; its run directory stays running until `unlock`. This is a
-  regression for the inbox only: the page diff reported such a run as failed
-  when some command on the same host happened to remove its dead local lock
-  while a page was open, never for a run on another host. Webhooks never
-  reported it. Reporting interrupted runs needs its own design and is out of
-  scope (decided 2026-10-31); see "Abnormally terminated runs are never
-  notified" in [ISSUES.md](../ISSUES.md).
+- An abnormally terminated run (coordinator killed, host lost) cannot report
+  itself. The page diff used to report such a run as failed when some
+  command on the same host happened to remove its dead local lock while a
+  page was open; since phase 8, `rotari web` records it for the inbox when
+  its coordinator was on the server's host. Runs on other hosts, and the
+  Webhook, remain unreported; see "Abnormally terminated runs on other hosts
+  are never notified" in [ISSUES.md](../ISSUES.md).
 
 ## Implementation phases
 

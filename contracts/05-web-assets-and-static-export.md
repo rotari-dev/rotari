@@ -443,7 +443,8 @@ binary is checked by `TestWebNotificationInboxWithoutDesktopPermission` and
 
 `rotari web` and the run processes never talk to each other directly: runs
 append records and the server reads them per request. The pages detect no
-events themselves. A run reports a job once its retries end, as a failure
+events themselves; the server itself records only the interrupted runs it
+finds (NOT-4). A run reports a job once its retries end, as a failure
 when its exit code is not 0 (including blocked jobs and jobs cancelled before
 they start), and its own completion as a success only when its exit code is
 0; events within one batch window share one entry (NOT-1).

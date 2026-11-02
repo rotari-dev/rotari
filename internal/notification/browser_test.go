@@ -42,6 +42,7 @@ func TestNewBrowserMessageAppliesSelection(t *testing.T) {
 	run := func(exitCode int) Event {
 		return NewRunEvent("demo", model.RunSummary{RunID: "run-1", ExitCode: exitCode}, now)
 	}
+	interrupted := NewInterruptedRunEvent("demo", model.RunSummary{RunID: "run-1", RunName: "nightly", StartedAt: "2026-01-02T03:00:00Z"}, now)
 	defaults := Defaults().Browser
 	for _, test := range []struct {
 		name     string
@@ -58,6 +59,9 @@ func TestNewBrowserMessageAppliesSelection(t *testing.T) {
 		{name: "a successful run", events: []Event{run(0)}, settings: func(s *ChannelSettings) { s.Fields = []string{"run_status"} },
 			title: "rotari: run succeeded", body: "run status: success"},
 		{name: "a run's exit code is its outcome", events: []Event{run(2)}, settings: func(s *ChannelSettings) { s.RunFailure = false }},
+		{name: "an interrupted run", events: []Event{interrupted}, settings: func(s *ChannelSettings) { s.Fields = []string{"run_name", "run_status", "started_at", "exit_code"} },
+			title: "rotari: run interrupted", body: "run name: nightly\nrun status: interrupted\nstarted at: 2026-01-02T03:00:00Z"},
+		{name: "an interrupted run is a run failure", events: []Event{interrupted}, settings: func(s *ChannelSettings) { s.RunFailure = false; s.RunSuccess = true }},
 		{name: "a run without a selected completion", events: []Event{job("bad", 1), run(0)}, settings: func(s *ChannelSettings) { s.RunSuccess = false; s.Fields = nil },
 			title: "rotari: 1 job failed"},
 	} {

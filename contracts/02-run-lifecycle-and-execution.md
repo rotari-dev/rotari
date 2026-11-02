@@ -1299,6 +1299,26 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   `title`, `body`, and `unread`; an unreadable record is a warning on stderr.
   Implemented in [notifications.go](../cmd/rotari/notifications.go); covered
   by `TestNotificationsListRecordedNotificationsWithoutReadingThem`.
+- **NOT-4** While `rotari web` serves, at startup and every 30 seconds, it
+  inspects every project of its basedir and the registered basedirs under
+  the shared state lock (skipping a project whose lock is held) and, for each
+  run `project.Inspect` finds interrupted (SAFE-1: its local coordinator is
+  gone, or no lock remains while metadata still records it running), records
+  one `run.interrupted` event in the run's notification file unless the file
+  already has one; records are made one at a time across processes, so
+  several servers record a run once. The event carries the run's project, ID,
+  name and start time when its lock or partial summary recorded them, and
+  `run_status` `interrupted`, with no exit code or counts; `[browser]`
+  `run_failure` selects it, and the inbox titles it "rotari: run
+  interrupted". It is recorded for the Web inbox and `rotari notifications`
+  only, never sent to the Webhook. A run whose coordinator is on another host
+  or PID namespace counts as running and is not found; a run that stopped
+  while no server ran is found by the next server's first pass; a record that
+  expired is recorded again if the run is still interrupted. A failing pass
+  is a warning on stderr when its error first appears or changes. Implemented
+  in [runwatch](../internal/runwatch/runwatch.go) and
+  `notificationlog.Log.AppendOnce`; covered by
+  `TestWebRecordsInterruptedRunsOnce`.
 - Failure diagnosis is local and rule-based. It evaluates a failed job's
   recorded scheduler error and configured log against a fixed set of documented
   signatures after case, ANSI-escape, and whitespace normalization. It makes no
