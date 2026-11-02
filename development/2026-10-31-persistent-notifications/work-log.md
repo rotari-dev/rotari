@@ -85,3 +85,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** `go vet ./...` and `gofmt` passed. `go test` passed for `internal/notification`, `internal/notificationlog`, `internal/project`, `internal/mcp`, `cmd/rotari`, `conformance`, `conformance/02-lifecycle`, and `conformance/03-interfaces/...`; the restored flag-pair unlock tests compare the whole state tree, master directory included, so they also check that unlock records nothing. The full suite was not rerun.
 
 **Remaining:** `ISSUES.md` entries "Abnormally terminated runs are never notified" and "Notification-only Web API routes have no page client".
+
+## Let rotari web record interrupted runs
+
+**Commits:** 2026-11-02 09:42:31 `495a734a2209`.
+
+**Change:** New `internal/runwatch` (`ReportInterrupted`) and `notificationlog.Log.AppendOnce`; `cmd/rotari/web.go` runs the watcher at startup and every 30 seconds and warns when a pass's error first appears or changes. The `run.interrupted` event (`NewInterruptedRunEvent`, selected by `run_failure`, titled "rotari: run interrupted") came back from the reverted `b0a404df`, without its Webhook or unlock parts. Contract NOT-4, WEB-21's note, `docs/NOTIFICATIONS.md`, `ARCHITECTURE.md`, the plan, and the `ISSUES.md` entry (now "Abnormally terminated runs on other hosts are never notified") were updated.
+
+**Reason:** Plan phase 8, decided with the user on 2026-11-02: since unlock reports nothing, let the Web server find killed runs, for the inbox only.
+
+**Plan impact:** Same-host interrupted runs reach the inbox while `rotari web` runs; runs on other hosts and Webhook delivery stay open.
+
+**Validation:** `go vet ./...` and `gofmt` passed. `go test` passed for `internal/notification`, `internal/notificationlog`, `internal/runwatch`, `internal/project`, `internal/webui`, `cmd/rotari`, `conformance`, `conformance/02-lifecycle`, `conformance/04-coordination`, `conformance/05-web` (including `TestWebRecordsInterruptedRunsOnce`, which kills a real supervisor), and `conformance/03-interfaces/...`; `-race` passed for `internal/runwatch`, `internal/notificationlog`, and `conformance/05-web`. The full suite was not rerun.
+
+**Remaining:** The `ISSUES.md` entries for runs on other hosts and for notification-only Web API routes.
