@@ -15,6 +15,7 @@ This FAQ gives short answers about rotari's behavior. See the [README](https://g
 - [Client control and job cancellation](#client-control-and-job-cancellation)
 - [Python interface](#python-interface)
 - [Web UI](#web-ui)
+- [Notifications](#notifications)
 - [Background server (supervisor)](#background-server-supervisor)
 - [Timestamps and environment](#timestamps-and-environment)
 
@@ -563,10 +564,6 @@ Use the arrow beside the attempt ID and select an attempt. Its status, timestamp
 
 Its `summary.json` or `commands.json` was written by a newer rotari, whose state format this version cannot read safely. The run's page shows the message; upgrade rotari to see it. The CLI refuses the same run with the same message, and the project's other runs are unaffected.
 
-### Can the Web UI notify me when a run finishes?
-
-Yes. It uses browser notifications locally and sends nothing to an external service. See [Notifications](NOTIFICATIONS.md#browser-notifications).
-
 ### Does the Web UI have a light theme?
 
 Yes. By default it follows the operating system's light or dark setting. The `Theme` choice in the `Settings` menu at the top right sets `Light` or `Dark` instead; the browser remembers it for every page of the live server and the static export, and `System` returns to following the operating system.
@@ -600,17 +597,6 @@ new cryptographically random token at startup and prints it to stderr. If
 Chrome still warns for that generated token, check which saved credential
 Chrome is warning about and whether it belongs to this rotari server.
 
-### Do notifications work in VS Code's internal browser?
-
-The live Web UI's **Inbox (N)** works without browser notification permission,
-including in embedded browsers. It shows an unread count and the latest 50
-notifications that runs recorded, including those from while no page was
-open; opening the inbox marks them read, and reloading keeps them. Desktop
-popups, for notifications that arrive while the page is open, additionally
-require a browser that supports the Notification API and grants permission;
-use an external browser if the embedded one does not. See
-[Notifications](NOTIFICATIONS.md#in-page-inbox).
-
 ### Can I run the Web UI read-only?
 
 Yes. `--allow-control=false` (or `ROTARI_WEB_ALLOW_CONTROL=false`) keeps state, logs, recent jobs, and docs pages available and returns `403 Forbidden` for control and file-write APIs.
@@ -629,6 +615,59 @@ limited to the basedir used to generate them.
 A basedir registered after `rotari web` started appears after Refresh or a
 page reload; the server does not need a restart. The automatic 2-second update
 does not reread the basedir list.
+
+## Notifications
+
+### What's the difference between the Inbox, desktop notifications, and Webhooks?
+
+They are three ways to see the same events: job results (after their retries end) and run completions. The **Inbox** in `rotari web` lists what runs recorded in the master directory over the last 10 days, including what happened while no page was open. **Desktop notifications** are pop-ups for entries that arrive while a page is open, if the browser allows them. **Webhooks** are sent by the run itself to Slack, Teams, Discord, or any HTTP endpoint, whether or not `rotari web` runs. The Inbox and desktop notifications follow the `[browser]` settings and Webhooks the `[webhook]` settings of `notifications.toml`. See [Notifications](NOTIFICATIONS.md).
+
+### Can the Web UI notify me when a run finishes?
+
+Yes. Runs record their job results and completion, and the live Web UI shows them in its **Inbox (N)**; a browser that allows it also shows desktop notifications. Nothing is sent to an external service. See [Notifications](NOTIFICATIONS.md#browser-notifications).
+
+### What do the bell icons next to the basedirs do?
+
+A bell selects a basedir for the Inbox and desktop notifications; it does not change what is recorded. Every run records its notifications whatever the bells say, so turning a bell on shows that basedir's recorded entries, including older unread ones, without popping them up. The main Web UI always includes the basedir it shows, plus the basedirs whose bell is on; Recent jobs shows only the basedirs whose bell is on. The bell beside **Registered basedirs** turns all of them on or off. Only the current basedir starts selected, and the selection lasts until `rotari web` restarts. Webhooks and `rotari notifications` ignore the bells.
+
+### Why did an entry appear in the Inbox without a desktop notification?
+
+Desktop notifications show only entries that arrive while the page is open. Entries already recorded when the page loads, or when you turn on a basedir's bell, enter the Inbox quietly. A pop-up also needs the browser's permission, the **Notification on** toggle, and HTTPS or a `localhost` address; the toggle's tooltip says which is missing. The Inbox needs none of these.
+
+### Do notifications work in VS Code's internal browser?
+
+The live Web UI's **Inbox (N)** works without browser notification permission,
+including in embedded browsers. It shows an unread count and the latest 50
+notifications that runs recorded, including those from while no page was
+open; opening the inbox marks them read, and reloading keeps them. Desktop
+popups, for notifications that arrive while the page is open, additionally
+require a browser that supports the Notification API and grants permission;
+use an external browser if the embedded one does not. See
+[Notifications](NOTIFICATIONS.md#in-page-inbox).
+
+### Are notifications lost when no Web page is open?
+
+No. The run's own process records them in `<masterdir>/notifications/`, and any page opened within 10 days shows them, unread. They are missing only for runs whose process used another master directory (for example on a host with a different home directory) or an older rotari version, and for a run killed before it could record them.
+
+### Why did opening the Inbox in one tab mark it read in another?
+
+Read and cleared entries are shared through `rotari web` by every page, browser, and server that uses the same master directory, so they survive reloads and restarts. They are kept per basedir: opening or clearing the Inbox affects only the basedirs it shows. A server started with `--allow-control=false` cannot save them, so its pages keep them only until reloaded. `rotari notifications` never marks anything read.
+
+### Why was there no notification when my run's process was killed?
+
+A killed process cannot report itself. While `rotari web` runs, it checks every 30 seconds for such runs and records **rotari: run interrupted** in the Inbox, but only for runs whose coordinator ran on the same host as `rotari web`; a run on another host looks the same as a running one. Webhooks never report interrupted runs, and recovering a run with `rotari unlock` (or **Recover…** in the Web UI) sends nothing, since you already know it stopped.
+
+### Why do job notifications arrive a few seconds late?
+
+A run combines its job results within ten seconds of the first into one notification, so a burst of failures becomes one entry rather than many. The run's completion is added at once, so the final notification is not delayed. Webhooks use the same batches.
+
+### Which settings decide what the Inbox shows?
+
+The `[browser]` section of the project's `notifications.toml` (or the basedir's or global one) selects the events, fields, and `max_jobs`. `rotari web` applies the current file whenever it shows the Inbox, so a change also applies to entries already recorded. Webhooks instead use the settings a run saved when it started. Edit both in **Settings** → **Notification config**.
+
+### Can I read notifications from the command line?
+
+Yes: `rotari notifications` lists what the Inbox shows, oldest first, across known basedirs; add a project name, `--basedir`, `--since 7d`, `--unread`, or `--json`. It marks entries unread as the Inbox does but never marks them read. See [Notifications](NOTIFICATIONS.md#reading-notifications-from-the-command-line).
 
 ## Background server (supervisor)
 
