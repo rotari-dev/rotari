@@ -174,14 +174,21 @@ export page, and the Table viewer, and clicks their controls. It passes on the
 current code. Weakening `esc`, `jsArg`, or the Markdown escape, or restoring the
 original `showArtifacts` bug, makes it fail.
 
+It stores these values: basedir paths; project, job, stage, matrix, and array
+names; commands, working directories, and executor options; logs, diagnoses, notes,
+and config files; artifact names and contents; and launcher names, targets, and
+output. Each page lists text it must show at some point, so a view that stops
+showing a value fails the test instead of passing with nothing to check.
+
 Gaps:
 
 - It runs in jsdom, not a browser, and finds script by its effects. A construct
   jsdom does not run, such as an image's `onerror`, is found only as markup.
-- It does not store hostile basedir paths, config file contents, diagnoses,
-  executor options, or an interrupted run for the recovery dialog.
-- POST requests are blocked, so views shown only after a successful one, such as
-  a started launch, are not rendered.
+- The recovery dialog is opened, but the CLI cannot put a hostile value in its
+  reasons, so those rest on review.
+- The page's own POST requests are blocked, so a view shown only after one
+  succeeds, such as a service launch's progress, is not rendered. A launch started
+  through the API is listed with its output.
 
 ## Phase 2: Content-Security-Policy on live pages
 

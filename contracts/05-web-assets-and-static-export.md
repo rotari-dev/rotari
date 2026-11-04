@@ -1262,10 +1262,11 @@ and `TestLoadJobsShowsRunningAttemptID` in
 They do not become markup or run, when a live page, a static export page, or the
 Table viewer renders them or when a control on the page is clicked. Handlers
 take such values through `jsArg` or `this.dataset`, since `esc` alone does not
-protect a JavaScript argument. `TestStoredValuesStayText` covers project, job,
-stage, matrix, and array names, commands, working directories, logs, notes, and
-artifact names and contents, in jsdom. It does not yet cover basedir paths,
-config file contents, diagnoses, executor options, or the recovery dialog.
+protect a JavaScript argument. `TestStoredValuesStayText` covers basedir paths;
+project, job, stage, matrix, and array names; commands, working directories, and
+executor options; logs, diagnoses, notes, and config files; artifact names and
+contents; and launcher names, targets, and output, in jsdom. It also opens the
+recovery dialog, whose reasons the CLI cannot make hostile.
 
 **WEB-26** Values go into a page's template in one pass that never searches
 what it inserted, so a project name, job command, or other value containing the

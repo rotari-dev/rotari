@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"io/fs"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -80,7 +81,12 @@ async function check(page) {
   const dom = await open(page);
   const window = dom.window, document = window.document;
   const found = [];
+  const missing = new Set(page.expect || []);
   const inspect = (when) => {
+    const text = (document.body.textContent || '') + [...document.querySelectorAll('input, textarea')].map((node) => node.value).join(' ');
+    for (const expected of [...missing]) {
+      if (expected.startsWith('selector:') ? document.querySelector(expected.slice(9)) : text.includes(expected)) missing.delete(expected);
+    }
     if (window.__injected !== undefined && !found.some((item) => item.startsWith('ran')))
       found.push('ran as code ' + when);
     document.querySelectorAll('[data-injected]').forEach((node) => {
@@ -109,7 +115,7 @@ async function check(page) {
       fresh++;
       clicks++;
       try { control.click(); } catch {}
-      await wait(10);
+      await wait(40);
       inspect('after clicking ' + key.slice(0, 120));
     }
     if (!fresh) break;
@@ -117,7 +123,7 @@ async function check(page) {
   }
   await wait(200);
   inspect('at the end');
-  const result = { name: page.name, shown, clicks, found };
+  const result = { name: page.name, shown, clicks, found, missing: [...missing] };
   window.close();
   return result;
 }
@@ -126,7 +132,7 @@ async function check(page) {
   const results = [];
   for (const page of pages) {
     try { results.push(await check(page)); }
-    catch (error) { results.push({ name: page.name, shown: false, clicks: 0, found: ['failed: ' + (error.stack || error)] }); }
+    catch (error) { results.push({ name: page.name, shown: false, clicks: 0, found: ['failed: ' + (error.stack || error)], missing: [] }); }
   }
   console.log(JSON.stringify(results));
   process.exit(0);
@@ -140,6 +146,9 @@ type hostilePage struct {
 	Search bool   `json:"search,omitempty"`
 	// Scripts loads the page's script files, which only the Table viewer has.
 	Scripts bool `json:"scripts,omitempty"`
+	// Expect lists text, or a selector after "selector:", that must appear at
+	// some point, so that a view that stopped showing a value fails the test.
+	Expect []string `json:"expect,omitempty"`
 }
 
 // TestStoredValuesStayText records hostile values through the CLI wherever a
@@ -161,8 +170,10 @@ func TestStoredValuesStayText(t *testing.T) {
 
 func checkStoredValueStaysText(t *testing.T, node, hostileValue string) {
 	t.Helper()
-	base := support.NewEnv(t)
-	e := base.WithVar("ROTARI_WEB_AUTH_TOKEN", launchToken)
+	e := support.NewEnv(t)
+	// The basedir's own path is a value pages show.
+	e.Base = filepath.Join(e.Root, "base-"+hostileValue)
+	e.Setenv("ROTARI_BASEDIR", e.Base)
 
 	work := filepath.Join(e.Root, hostileValue)
 	if err := os.MkdirAll(filepath.Join(work, hostileValue), 0o755); err != nil {
@@ -182,7 +193,15 @@ func checkStoredValueStaysText(t *testing.T, node, hostileValue string) {
 	}
 
 	project := hostileValue
-	script := `printf '%s\n' "$HOSTILE"; printf '%s\n' "$HOSTILE" >&2; exit 1`
+	projectDir := filepath.Join(e.Base, "projects", project)
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectDir, "config.toml"), []byte("# config-"+hostileValue+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The Python exception is a diagnosis, whose evidence is this line.
+	script := `printf '%s\n' "$HOSTILE"; printf 'Traceback (most recent call last):\nRuntimeError: diagnosis-%s\n' "$HOSTILE" >&2; exit 1`
 	common := []string{"-p", project, "--working-directory", work, "--env", "HOSTILE=" + hostileValue}
 	add := func(extra ...string) {
 		t.Helper()
@@ -199,31 +218,43 @@ func checkStoredValueStaysText(t *testing.T, node, hostileValue string) {
 	run := hostileRunID(t, note.Stdout)
 	e.MustRotari("note", "-p", project, run, hostileValue+"\n\n[link](javascript:window.__injected=1)")
 	e.Rotari("retry", "-p", project, "--quiet")
-	add("--job-name", "pending-job")
+	add("--job-name", "pending-job", "-e", "slurm", "--executor-option", "option-"+hostileValue)
+
+	// A run its supervisor left behind offers the recovery dialog.
+	interrupted := "interrupted-" + hostileValue
+	interruptedRun := e.StartRun(interrupted, 1, false)
+	support.KillStrays(t, e.Root)
+	support.WaitForInterrupted(t, e, interrupted)
+
+	// A launch that has started is listed with its target and output.
+	writeLaunchers(t, e, launcherEntry("launcher-"+hostileValue, `printf 'launch-output-%s\n' "$ROTARI_LAUNCHER_ARTIFACT"`, `"file"`, "command"))
 
 	escaped := url.PathEscape(project)
 	projectPath := "/project/" + escaped
-	live := e.StartWeb("--allow-exec")
+	live := e.WithVar("ROTARI_WEB_AUTH_TOKEN", launchToken).StartWeb("--allow-exec")
+	startHostileLaunch(t, e, live, project, run, hostileValue)
 	pages := []hostilePage{}
 	for _, page := range []struct {
 		name, path string
 		search     bool
+		expect     []string
 	}{
-		{"projects", "/", false},
-		{"project", projectPath, false},
-		{"run", projectPath + "/run/" + url.PathEscape(run), false},
-		{"recent jobs", "/jobs/", false},
-		{"activity", "/activity/", false},
-		{"history search", "/search/", true},
+		{"projects", "/", false, []string{"base-hostile-mark", "launcher-hostile-mark"}},
+		{"project", projectPath, false, []string{"option-hostile-mark"}},
+		{"run", projectPath + "/run/" + url.PathEscape(run), false, []string{"diagnosis-hostile-mark", "config-hostile-mark", "launch-output-"}},
+		{"interrupted run", "/project/" + url.PathEscape(interrupted) + "/run/" + url.PathEscape(interruptedRun.RunID), false, []string{"selector:.recover-executions"}},
+		{"recent jobs", "/jobs/", false, nil},
+		{"activity", "/activity/", false, nil},
+		{"history search", "/search/", true, nil},
 	} {
-		pages = append(pages, hostilePage{Name: "live " + page.name, URL: live + page.path, Search: page.search})
+		pages = append(pages, hostilePage{Name: "live " + page.name, URL: live + page.path, Search: page.search, Expect: page.expect})
 	}
 	if results := renderHostilePages(t, node, pages, launchToken); len(results) != len(pages) {
 		t.Fatalf("results = %d, want %d", len(results), len(pages))
 	}
 
 	export := filepath.Join(e.Root, "export")
-	base.MustRotari("web", "--static-dir", export)
+	e.MustRotari("web", "--static-dir", export)
 	static := []hostilePage{}
 	if err := filepath.WalkDir(export, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr == nil && entry.Name() == "index.html" {
@@ -239,9 +270,49 @@ func checkStoredValueStaysText(t *testing.T, node, hostileValue string) {
 
 	viewers := []hostilePage{}
 	for name, path := range map[string]string{"table": table, "Markdown": document} {
-		viewers = append(viewers, hostilePage{Name: "Table viewer " + name, URL: base.StartTableView(path), Scripts: true})
+		viewers = append(viewers, hostilePage{Name: "Table viewer " + name, URL: e.StartTableView(path), Scripts: true})
 	}
 	renderHostilePages(t, node, viewers, "")
+}
+
+// startHostileLaunch runs the registered command on the job's text artifact.
+func startHostileLaunch(t *testing.T, e *support.Env, live, project, run, value string) {
+	t.Helper()
+	jobs := api(e, http.MethodGet, live+"/api/run?"+url.Values{"project_name": {project}, "run_id": {run}}.Encode(), "")
+	var detail struct {
+		Jobs []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"jobs"`
+	}
+	if err := json.Unmarshal([]byte(jobs.Body), &detail); err != nil {
+		t.Fatalf("/api/run: %v\n%s", err, jobs.Body)
+	}
+	for _, job := range detail.Jobs {
+		if job.Name != value {
+			continue
+		}
+		query := url.Values{"project_name": {project}, "run_id": {run}, "job_id": {job.ID}}
+		listed := api(e, http.MethodGet, live+"/api/artifacts?"+query.Encode(), "")
+		var listing struct {
+			Entries []struct {
+				DisplayPath string `json:"display_path"`
+			} `json:"entries"`
+		}
+		if err := json.Unmarshal([]byte(listed.Body), &listing); err != nil {
+			t.Fatalf("/api/artifacts: %v\n%s", err, listed.Body)
+		}
+		for index, entry := range listing.Entries {
+			if !strings.HasSuffix(entry.DisplayPath, ".txt") {
+				continue
+			}
+			body, _ := json.Marshal(map[string]any{"project_name": project, "run_id": run, "job_id": job.ID, "entry": index, "name": "launcher-" + value})
+			started := decodeLaunch(t, api(e, http.MethodPost, live+"/api/launch", string(body)))
+			waitLaunch(t, e, live, started.ID, func(record launchRecord) bool { return record.State == "exited" || record.ExitCode != nil })
+			return
+		}
+	}
+	t.Fatalf("no job %q with a text artifact in %s", value, jobs.Body)
 }
 
 func hostileRunID(t *testing.T, listing string) string {
@@ -278,6 +349,9 @@ func renderHostilePages(t *testing.T, node string, pages []hostilePage, token st
 		if !result.Shown {
 			t.Errorf("%s does not show the value, so it checks nothing", result.Name)
 		}
+		for _, missing := range result.Missing {
+			t.Errorf("%s never showed %q, so it checks nothing there", result.Name, missing)
+		}
 		for _, found := range result.Found {
 			t.Errorf("%s: %s", result.Name, found)
 		}
@@ -286,8 +360,9 @@ func renderHostilePages(t *testing.T, node string, pages []hostilePage, token st
 }
 
 type hostileResult struct {
-	Name   string   `json:"name"`
-	Shown  bool     `json:"shown"`
-	Clicks int      `json:"clicks"`
-	Found  []string `json:"found"`
+	Name    string   `json:"name"`
+	Shown   bool     `json:"shown"`
+	Clicks  int      `json:"clicks"`
+	Found   []string `json:"found"`
+	Missing []string `json:"missing"`
 }
