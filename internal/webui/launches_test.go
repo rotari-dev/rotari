@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -175,8 +176,8 @@ func TestLaunchAvailabilityNamesRestartedCommands(t *testing.T) {
 			t.Fatalf("hint = %q, want %q", got, want)
 		}
 	}
-	if got := hint("?kind=file&name=app.py"); !strings.Contains(got, "run Streamlit (") || strings.Contains(got, "TensorBoard") {
-		t.Fatalf("hint for app.py = %q, want only Streamlit", got)
+	if got := hint("?kind=file&name=app.py"); !strings.Contains(got, "run Streamlit (") || !strings.Contains(got, "marimo (") || strings.Contains(got, "TensorBoard") {
+		t.Fatalf("hint for app.py = %q, want only Streamlit and marimo", got)
 	}
 	if got := hint("?kind=file&name=data.bin"); !strings.Contains(got, "No command it would load accepts this file.") {
 		t.Fatalf("hint for data.bin = %q", got)
@@ -821,8 +822,33 @@ func TestBuiltinServicesThroughProxy(t *testing.T) {
 	}
 	write(t, filepath.Join(work, "nb", "note.txt"), "x")
 	write(t, filepath.Join(work, "mlflow.db"), "")
+	write(t, filepath.Join(work, "data.db"), "")
+	write(t, filepath.Join(work, "panel_app.py"), "import panel as pn\npn.panel('hello from rotari').servable()\n")
+	write(t, filepath.Join(work, "gradio_app.py"), "import gradio as gr\ndemo = gr.Interface(lambda x: x, 'text', 'text')\ndemo.launch()\n")
+	notebook := "import marimo\napp = marimo.App()\n\nif __name__ == '__main__':\n    app.run()\n"
+	write(t, filepath.Join(work, "nb.py"), notebook)
+	write(t, filepath.Join(work, "nb", "notebook.py"), notebook)
 	if output, err := exec.Command("aim", "init", "--repo", filepath.Join(work, "aimrepo")).CombinedOutput(); err != nil {
 		t.Fatalf("aim init: %v\n%s", err, output)
+	}
+	// checkMarimo needs the proxy's credentials for the notebook and its
+	// kernel, so another user who reaches the port directly cannot run code.
+	checkMarimo := func(session string) func(t *testing.T, base string, launch launcher.Launch) {
+		return func(t *testing.T, base string, launch launcher.Launch) {
+			if code, body := get(base+"/", nil); code != http.StatusOK || !strings.Contains(body, "marimo") {
+				t.Errorf("marimo page = %d %.200q", code, body)
+			}
+			if line := handshake(base + "/ws?session_id=rotari-test" + session); !strings.Contains(line, "101") {
+				t.Errorf("marimo WebSocket = %q, want 101", line)
+			}
+			direct := "http://" + net.JoinHostPort(launcher.LoopbackHost, strconv.Itoa(launch.Port)) + launch.BasePath
+			if code, body := get(direct+"/api/status", nil); code != http.StatusUnauthorized {
+				t.Errorf("marimo without the token = %d %.200q", code, body)
+			}
+			if line := handshake(direct + "/ws?session_id=rotari-direct" + session); strings.Contains(line, "101") {
+				t.Errorf("marimo WebSocket without the token = %q", line)
+			}
+		}
 	}
 	for _, test := range []struct {
 		name   string
@@ -885,6 +911,29 @@ func TestBuiltinServicesThroughProxy(t *testing.T) {
 			}
 			if code, body := get(base+"/api/projects/", nil); code != http.StatusOK {
 				t.Errorf("Aim API = %d %.300q", code, body)
+			}
+		}},
+		{"Datasette", "data.db", launcher.TargetFile, func(t *testing.T, base string, _ launcher.Launch) {
+			if code, body := get(base+"/data.json", nil); code != http.StatusOK || !strings.Contains(body, `"database"`) {
+				t.Errorf("Datasette database = %d %.200q", code, body)
+			}
+			if info, err := os.Stat(filepath.Join(work, "data.db")); err != nil || info.Size() != 0 {
+				t.Errorf("Datasette changed the database: %+v, %v", info, err)
+			}
+		}},
+		{"marimo", "nb.py", launcher.TargetFile, checkMarimo("")},
+		{"marimo (directory)", "nb", launcher.TargetDirectory, checkMarimo("&file=notebook.py")},
+		{"Panel", "panel_app.py", launcher.TargetFile, func(t *testing.T, base string, _ launcher.Launch) {
+			code, body := get(base+"/panel_app", nil)
+			if code != http.StatusOK || !strings.Contains(body, "static/extensions/panel") {
+				t.Errorf("Panel page = %d %.200q", code, body)
+			}
+		}},
+		{"Gradio", "gradio_app.py", launcher.TargetFile, func(t *testing.T, base string, _ launcher.Launch) {
+			// The page's root is the address the browser used, not the
+			// service's loopback port.
+			if code, body := get(base+"/config", nil); code != http.StatusOK || !strings.Contains(body, `"root":"`+base+`"`) {
+				t.Errorf("Gradio config = %d %.300q, want root %s", code, body, base)
 			}
 		}},
 		{"Streamlit", "app.py", launcher.TargetFile, func(t *testing.T, base string, _ launcher.Launch) {

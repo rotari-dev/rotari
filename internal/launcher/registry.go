@@ -116,6 +116,25 @@ const (
 	// Development mode, which Streamlit assumes when it is not installed in
 	// site-packages, would refuse --server.port.
 	streamlitCommand = `streamlit run "$ROTARI_LAUNCHER_ARTIFACT" --global.developmentMode false --server.address 127.0.0.1 --server.port "$ROTARI_LAUNCHER_PORT" --server.baseUrlPath "$ROTARI_LAUNCHER_BASE_PATH" --server.headless true --browser.gatherUsageStats false`
+	// Datasette 0.65 opens the SQLite file read-only.
+	datasetteCommand = `datasette "$ROTARI_LAUNCHER_ARTIFACT" -h 127.0.0.1 -p "$ROTARI_LAUNCHER_PORT" --setting base_url "$ROTARI_LAUNCHER_BASE_PATH"/`
+	// Panel 1.9: the artifact is the app's .py file. The proxy keeps
+	// cross-site requests out (WithExecGuard), so Panel's own WebSocket Origin
+	// check, which would compare the browser's Origin with the proxy's
+	// upstream Host, allows every origin.
+	panelCommand = `panel serve "$ROTARI_LAUNCHER_ARTIFACT" --address 127.0.0.1 --port "$ROTARI_LAUNCHER_PORT" --prefix "$ROTARI_LAUNCHER_BASE_PATH" --allow-websocket-origin='*'`
+	// Gradio 6.31: the artifact is the app's .py file. `gradio` rather than
+	// `python` so that a host without Gradio shows it unavailable. An app
+	// that sets its own address or port in launch() does not work.
+	gradioCommand = `GRADIO_ANALYTICS_ENABLED=False GRADIO_SERVER_NAME=127.0.0.1 GRADIO_SERVER_PORT="$ROTARI_LAUNCHER_PORT" GRADIO_ROOT_PATH="$ROTARI_LAUNCHER_BASE_PATH" gradio "$ROTARI_LAUNCHER_ARTIFACT"`
+	// marimo 0.25: the artifact is a notebook, or a directory of them. The
+	// launch token is its password, which only the proxy presents
+	// (its Basic credentials), so other local users who reach its port cannot
+	// run code. It goes through standard input because they can read a
+	// process's arguments, and -q keeps the sign-in URL out of the output.
+	marimoCommand = `marimo -q edit "$ROTARI_LAUNCHER_ARTIFACT" --headless --skip-update-check --host 127.0.0.1 --port "$ROTARI_LAUNCHER_PORT" --base-url "$ROTARI_LAUNCHER_BASE_PATH" --token --token-password-file - <<EOF
+$ROTARI_LAUNCHER_TOKEN
+EOF`
 )
 
 // BuiltinCommands are registered without a launcher file. An entry in the
@@ -138,6 +157,18 @@ func BuiltinCommands() []Command {
 	mlflow.Patterns = []string{"mlruns"}
 	mlflowSQLite := service("MLflow (SQLite)", mlflowSQLiteCommand, []TargetKind{TargetFile}, "/health")
 	mlflowSQLite.Patterns = []string{"mlflow.db"}
+	datasette := service("Datasette", datasetteCommand, []TargetKind{TargetFile}, DefaultReadyPath)
+	datasette.Patterns = []string{"*.db", "*.sqlite", "*.sqlite3"}
+	marimoHeaders := map[string]string{"Authorization": "Basic $" + ProxyBasicAuth}
+	marimo := service("marimo", marimoCommand, []TargetKind{TargetFile}, "/health")
+	marimo.Patterns = []string{"*.py"}
+	marimo.ProxyHeaders = marimoHeaders
+	marimoDirectory := service("marimo (directory)", marimoCommand, directory, "/health")
+	marimoDirectory.ProxyHeaders = marimoHeaders
+	panel := service("Panel", panelCommand, []TargetKind{TargetFile}, DefaultReadyPath)
+	panel.Patterns = []string{"*.py"}
+	gradio := service("Gradio", gradioCommand, []TargetKind{TargetFile}, DefaultReadyPath)
+	gradio.Patterns = []string{"*.py"}
 	return []Command{
 		service("TensorBoard", tensorBoardCommand, directory, DefaultReadyPath),
 		jupyter,
@@ -145,6 +176,11 @@ func BuiltinCommands() []Command {
 		mlflowSQLite,
 		service("Aim", aimCommand, directory, DefaultReadyPath),
 		streamlit,
+		datasette,
+		marimo,
+		marimoDirectory,
+		panel,
+		gradio,
 	}
 }
 
@@ -496,9 +532,11 @@ func Template() []byte {
 #
 # Built in, without an entry here: TensorBoard, Jupyter Lab (requires the
 # launch token), MLflow (a directory named mlruns), MLflow (SQLite) (a file
-# named mlflow.db), Aim, and Streamlit (*.py files). Each is shown disabled
-# while its program is not installed. An entry with the same name replaces
-# one.
+# named mlflow.db), Aim, Streamlit (*.py files), Datasette (*.db, *.sqlite,
+# and *.sqlite3 files), marimo (*.py files, requires the launch token),
+# marimo (directory), Panel (*.py files), and Gradio (*.py files). Each is
+# shown disabled while its program is not installed. An entry with the same
+# name replaces one.
 
 # TensorBoard is built in: rotari registers it without an entry here, as
 #   tensorboard --logdir "$ROTARI_LAUNCHER_ARTIFACT" --host 127.0.0.1

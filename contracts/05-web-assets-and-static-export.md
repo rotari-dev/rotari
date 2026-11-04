@@ -869,7 +869,7 @@ request without `Origin`. Covered by `TestWebLaunchGuardsRequests` in
 [conformance/05-web/launch_test.go](../conformance/05-web/launch_test.go).
 
 **WEB-15** Only the built-in commands (TensorBoard, Jupyter Lab, MLflow, MLflow
-(SQLite), Aim, and Streamlit) and the commands in the global config
+(SQLite), Aim, Streamlit, Datasette, marimo, marimo (directory), Panel, and Gradio) and the commands in the global config
 directory's `launchers.toml` (`$XDG_CONFIG_HOME/rotari/launchers.toml`) can
 run; an entry there with a built-in's name replaces it, and a copy of the file in a basedir, project,
 or workspace is never read. `GET /api/launchers` marks a command

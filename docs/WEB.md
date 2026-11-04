@@ -127,7 +127,7 @@ state; `--artifact-root DIR` allows more. See
 
 With `rotari web --allow-exec`, each row of Artifacts and **Files** has a
 button per command that accepts it: TensorBoard, Jupyter Lab, MLflow, Aim,
-Streamlit, and the commands in your global `launchers.toml`
+Streamlit, Datasette, marimo, Panel, Gradio, and the commands in your global `launchers.toml`
 (`rotari config --launchers` writes a template). The UI shows what will run
 before **Launch**; a service such as TensorBoard then opens through the Web
 UI's own port, so it needs no extra SSH forward. **Launches** in the top bar

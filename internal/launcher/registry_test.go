@@ -17,12 +17,17 @@ func TestBuiltinCommands(t *testing.T) {
 		patterns   []string
 		readyPath  string
 	}{
-		"TensorBoard":     {"tensorboard", []TargetKind{TargetDirectory}, nil, DefaultReadyPath},
-		"Jupyter Lab":     {"jupyter", []TargetKind{TargetDirectory}, nil, "/api"},
-		"MLflow":          {"mlflow", []TargetKind{TargetDirectory}, []string{"mlruns"}, "/health"},
-		"MLflow (SQLite)": {"mlflow", []TargetKind{TargetFile}, []string{"mlflow.db"}, "/health"},
-		"Aim":             {"aim", []TargetKind{TargetDirectory}, nil, DefaultReadyPath},
-		"Streamlit":       {"streamlit", []TargetKind{TargetFile}, []string{"*.py"}, "/_stcore/health"},
+		"TensorBoard":        {"tensorboard", []TargetKind{TargetDirectory}, nil, DefaultReadyPath},
+		"Jupyter Lab":        {"jupyter", []TargetKind{TargetDirectory}, nil, "/api"},
+		"MLflow":             {"mlflow", []TargetKind{TargetDirectory}, []string{"mlruns"}, "/health"},
+		"MLflow (SQLite)":    {"mlflow", []TargetKind{TargetFile}, []string{"mlflow.db"}, "/health"},
+		"Aim":                {"aim", []TargetKind{TargetDirectory}, nil, DefaultReadyPath},
+		"Streamlit":          {"streamlit", []TargetKind{TargetFile}, []string{"*.py"}, "/_stcore/health"},
+		"Datasette":          {"datasette", []TargetKind{TargetFile}, []string{"*.db", "*.sqlite", "*.sqlite3"}, DefaultReadyPath},
+		"marimo":             {"marimo", []TargetKind{TargetFile}, []string{"*.py"}, "/health"},
+		"marimo (directory)": {"marimo", []TargetKind{TargetDirectory}, nil, "/health"},
+		"Panel":              {"panel", []TargetKind{TargetFile}, []string{"*.py"}, DefaultReadyPath},
+		"Gradio":             {"gradio", []TargetKind{TargetFile}, []string{"*.py"}, DefaultReadyPath},
 	}
 	builtins := BuiltinCommands()
 	if len(builtins) != len(want) {
@@ -256,12 +261,12 @@ func TestLoadRegistryReplacesBuiltins(t *testing.T) {
 		return strings.Join(names, ",")
 	}
 	registry := write(plot)
-	if got := names(registry); got != "TensorBoard,Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Plot" {
+	if got := names(registry); got != "TensorBoard,Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,marimo (directory),Panel,Gradio,Plot" {
 		t.Fatalf("file without built-in names = %s", got)
 	}
 	registry = write(plot + "[[launcher]]\nname = \"TensorBoard\"\ncommand = \"conda run -n tb tensorboard\"\ntargets = [\"directory\"]\nmode = \"service\"\n")
 	replaced := registry.Commands[len(registry.Commands)-1]
-	if got := names(registry); got != "Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Plot,TensorBoard" ||
+	if got := names(registry); got != "Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,marimo (directory),Panel,Gradio,Plot,TensorBoard" ||
 		replaced.Builtin || replaced.Command != "conda run -n tb tensorboard" {
 		t.Fatalf("file replacing TensorBoard = %s, %+v", got, replaced)
 	}

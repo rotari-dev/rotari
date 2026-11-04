@@ -80,7 +80,7 @@ reports how many it copied.
 
 Launching is off by default. `rotari web --allow-exec` lets anyone who can
 sign in run the built-in services (TensorBoard, Jupyter Lab, MLflow, Aim,
-Streamlit) and commands registered in your global `launchers.toml`, as you,
+Streamlit, Datasette, marimo, Panel, Gradio) and commands registered in your global `launchers.toml`, as you,
 against the job artifacts the Web UI may serve. See
 [Launching commands](WEB.md#launching-commands).
 
@@ -112,9 +112,9 @@ connection, it checks that the listening process belongs to the launch
 A launched service also listens on that loopback port, which other users of
 the host can reach directly without rotari's token. A service that can require
 a secret should use the launch's `ROTARI_LAUNCHER_TOKEN`, which the proxy
-presents through `proxy_headers`, as is or as HTTP Basic credentials. The built-in Jupyter Lab does, so its
-kernels serve only through the proxy. TensorBoard, MLflow, Aim, and Streamlit
-cannot, so another user who finds their port can read what they show.
+presents through `proxy_headers`, as is or as HTTP Basic credentials. The built-in Jupyter Lab and marimo do, so
+their kernels serve only through the proxy. TensorBoard, MLflow, Aim, Streamlit,
+Datasette, Panel, and Gradio cannot, so another user who finds their port can read what they show.
 WebSocket handshakes, used by services such as Jupyter and Streamlit, need
 the same `Origin` as other mutating requests.
 

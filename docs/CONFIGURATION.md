@@ -213,7 +213,8 @@ file. For the event settings, fields, and Slack/Teams/Discord setup, see
 ## Launcher commands
 
 `rotari web --allow-exec` can run the built-in services (TensorBoard, Jupyter
-Lab, MLflow, Aim, and Streamlit; see [Built-in services](#built-in-services))
+Lab, MLflow, Aim, Streamlit, Datasette, marimo, Panel, and Gradio; see
+[Built-in services](#built-in-services))
 and the commands `launchers.toml` registers, against a job's artifacts from
 the Web UI (see
 [Launching commands](WEB.md#launching-commands)).
@@ -329,11 +330,17 @@ the same name replaces it:
 | MLflow (SQLite) | files named `mlflow.db` | `sqlite:///` tracking database |
 | Aim | directories | an Aim repository (`aim init`); Aim refuses other directories |
 | Streamlit | `*.py` files | runs the app |
+| Datasette | `*.db`, `*.sqlite`, and `*.sqlite3` files | browses and queries a SQLite file, read-only |
+| marimo | `*.py` files | opens the notebook; requires the launch token (below) |
+| marimo (directory) | directories | lists the directory's notebooks; requires the launch token (below) |
+| Panel | `*.py` files | runs the app |
+| Gradio | `*.py` files | runs the app; one that sets its own address or port in `launch()` does not work |
 
 MLflow is limited to those names because it creates its default experiment, or
 its tables, in whatever it opens. Each was checked through the proxy, including
-Jupyter's kernel and Streamlit's WebSocket connections: TensorBoard 2.21,
-JupyterLab 4, MLflow 3.17, Aim 3, and Streamlit 1.65.
+Jupyter's kernel and Streamlit's and marimo's WebSocket connections: TensorBoard
+2.21, JupyterLab 4, MLflow 3.17, Aim 3, Streamlit 1.65, Datasette 0.65,
+marimo 0.25, Panel 1.9, and Gradio 6.31.
 
 #### Tokens for services
 
@@ -355,15 +362,17 @@ proxy_headers = { Authorization = "token $ROTARI_LAUNCHER_TOKEN" }
 
 A service that takes the token as an HTTP Basic password uses
 `$ROTARI_LAUNCHER_BASIC_AUTH`, which `proxy_headers` replaces with the Base64 of
-`rotari:` and the token; it is not in the command's environment. For example,
-marimo 0.25 (`-q` keeps the sign-in URL out of the launch's output, and the
+`rotari:` and the token; it is not in the command's environment. The built-in
+marimo does (`-q` keeps the sign-in URL out of the launch's output, and the
 token goes through standard input because other users of the host can read a
 process's arguments):
 
 ```toml
 [[launcher]]
 name = "marimo"
-command = '''printf %s "$ROTARI_LAUNCHER_TOKEN" | marimo -q edit "$ROTARI_LAUNCHER_ARTIFACT" --headless --skip-update-check --host 127.0.0.1 --port "$ROTARI_LAUNCHER_PORT" --base-url "$ROTARI_LAUNCHER_BASE_PATH" --token --token-password-file -'''
+command = '''marimo -q edit "$ROTARI_LAUNCHER_ARTIFACT" --headless --skip-update-check --host 127.0.0.1 --port "$ROTARI_LAUNCHER_PORT" --base-url "$ROTARI_LAUNCHER_BASE_PATH" --token --token-password-file - <<EOF
+$ROTARI_LAUNCHER_TOKEN
+EOF'''
 targets = ["file"]
 mode = "service"
 patterns = ["*.py"]
@@ -372,8 +381,8 @@ proxy_headers = { Authorization = "Basic $ROTARI_LAUNCHER_BASIC_AUTH" }
 ```
 
 The browser never sees the token, and the proxy drops the browser's own
-`Authorization` header. TensorBoard, MLflow, Aim, and Streamlit cannot require
-a token, so another user of the host who finds their port can read what they
+`Authorization` header. TensorBoard, MLflow, Aim, Streamlit, Datasette, Panel,
+and Gradio cannot require a token, so another user of the host who finds their port can read what they
 show; launch them only where that is acceptable.
 
 `patterns = ["*.py"]` limits any command to targets whose name matches one of
