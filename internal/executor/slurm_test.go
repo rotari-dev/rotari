@@ -337,6 +337,41 @@ func TestWaitSlurmJobFailureBoundariesWithFakeSlurm(t *testing.T) {
 			wantError:  "failed",
 		},
 		{
+			name:      "accounting names the signal that ended the job",
+			squeue:    "",
+			sacct:     "FAILED|0:6",
+			wantCode:  134,
+			wantError: "failed",
+		},
+		{
+			name:      "accounting keeps the exit code over a signal",
+			squeue:    "",
+			sacct:     "FAILED|2:15",
+			wantCode:  2,
+			wantError: "failed",
+		},
+		{
+			name:      "accounting code that is not a signal number",
+			squeue:    "",
+			sacct:     "OUT_OF_MEMORY|0:125",
+			wantCode:  1,
+			wantError: "out_of_memory",
+		},
+		{
+			name:      "node failure without a code",
+			squeue:    "",
+			sacct:     "NODE_FAIL|0:0",
+			wantCode:  1,
+			wantError: "node_fail",
+		},
+		{
+			name:      "cancelled while running names its signal",
+			squeue:    "",
+			sacct:     "CANCELLED by 22156|0:15",
+			wantCode:  143,
+			wantError: "cancelled",
+		},
+		{
 			name:      "cancelled while pending reports exit code zero",
 			squeue:    "",
 			sacct:     "CANCELLED by 22156|0:0\n",
@@ -489,7 +524,7 @@ printf '%%s\n' %q
 }
 
 func TestParseSlurmExitCode(t *testing.T) {
-	cases := map[string]int{"0:0": 0, "1:0": 1, "2:15": 2, "invalid": 1}
+	cases := map[string]int{"0:0": 0, "1:0": 1, "2:15": 2, "invalid": 1, "0:9": 137, "0:6": 134, "0:11": 139, "0:125": 0, "0:invalid": 0}
 	for input, want := range cases {
 		if got := parseSlurmExitCode(input); got != want {
 			t.Errorf("parseSlurmExitCode(%q) = %d, want %d", input, got, want)

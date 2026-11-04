@@ -367,6 +367,10 @@ func parsePBSAccounting(output []byte) (int, string, bool, error) {
 	if parseErr != nil {
 		return 0, "", false, nil
 	}
+	// PBS reports a job it killed by a signal as 256+N.
+	if code := signalExitCode(exitCode - 256); code != 0 {
+		exitCode = code
+	}
 	return exitCode, "", true, nil
 }
 

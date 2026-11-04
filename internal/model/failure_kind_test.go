@@ -16,6 +16,7 @@ func TestFailureKindsReadOOMAsAWord(t *testing.T) {
 		{text: "container OOMKilled", want: true},
 		{text: "oom_killer invoked", want: true},
 		{text: "out of memory", want: true},
+		{text: "out_of_memory", want: true},
 		{text: "exceeded memory limit", want: true},
 		{text: "no room left in the queue"},
 		{text: "zoom client failed"},

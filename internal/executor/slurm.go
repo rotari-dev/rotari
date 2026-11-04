@@ -384,11 +384,18 @@ func runSlurmCommand(name string, args ...string) ([]byte, error) {
 	return output, err
 }
 
+// parseSlurmExitCode reads sacct's "code:signal". A job ended by a signal
+// reports code 0, so the signal gives its exit code as a shell would report it.
 func parseSlurmExitCode(value string) int {
-	value = strings.SplitN(value, ":", 2)[0]
-	code, err := strconv.Atoi(value)
+	codeText, signalText, _ := strings.Cut(value, ":")
+	code, err := strconv.Atoi(codeText)
 	if err != nil {
 		return 1
+	}
+	if code == 0 {
+		if signal, err := strconv.Atoi(signalText); err == nil {
+			return signalExitCode(signal)
+		}
 	}
 	return code
 }

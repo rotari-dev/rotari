@@ -47,7 +47,7 @@ func FailureKinds(result JobResult) []string {
 	if strings.HasPrefix(text, "blocked") {
 		kinds = append(kinds, FailureKindBlocked)
 	}
-	if strings.Contains(text, "out of memory") || oomWord.MatchString(text) || strings.Contains(text, "memory limit") {
+	if strings.Contains(text, "out of memory") || strings.Contains(text, "out_of_memory") || oomWord.MatchString(text) || strings.Contains(text, "memory limit") {
 		kinds = append(kinds, FailureKindOOM)
 	}
 	if result.ExitCode > 128 {

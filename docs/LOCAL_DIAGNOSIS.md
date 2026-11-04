@@ -29,6 +29,11 @@ evidence: 127 for a missing command, and 129, 132, 134, 135, 136, 137, 139, and
 table below. A job can choose such a code itself, so treat the diagnosis as a
 starting point. A cancelled job gets no diagnosis from its exit code.
 
+A scheduler job whose wrapper could not record a status, as when its node
+fails, has a result from scheduler accounting: its error is the sacct state,
+such as `node_fail`, and a job ended by a signal records the code a shell would
+report, 128+N, from Slurm's `0:N` or PBS's `256+N`.
+
 This is a historical, informational snapshot; it does not affect job status,
 retries, dependencies, or scheduler control. Every finalized failed job records
 one of three outcomes in `diagnosis_status`: `matched` with its recognized
@@ -64,17 +69,17 @@ the evidence and suggested next steps.
 | Container image unavailable or pull failed | Docker `pull access denied`, `manifest unknown`, `no matching manifest`, image-pull failures; Apptainer/Singularity `While pulling ... image` or `Unable to handle docker://` | Check image URI, tag and target architecture, registry availability and authentication; on restricted compute nodes, pull or cache the image before the job starts. |
 | Container creation or mount failed | `OCI runtime create failed`, `failed to create shim task`, `error during container init`, `container creation failed`, mount-hook or mount failures | Check the container runtime and bind-mount source paths, permissions and options; confirm the host or cluster permits the requested mounts. |
 | Container GPU runtime unavailable | Docker `could not select device driver ... with capabilities: [[gpu]]`, `nvidia-container-cli` initialization/requirement errors, NVML `driver not loaded` | Check host NVIDIA driver/GPU health and NVIDIA Container Toolkit/runtime compatibility; verify the job's GPU request and visible devices. |
-| Slurm memory limit exceeded | `slurmstepd: error: Detected ... oom-kill`, `exceeded job memory limit`, `State=OUT_OF_MEMORY`, `srun: error: ...: Out Of Memory` | Request more Slurm memory if permitted or reduce memory use; inspect `sacct` for state and peak memory. |
+| Slurm memory limit exceeded | `slurmstepd: error: Detected ... oom-kill`, `exceeded job memory limit`, `State=OUT_OF_MEMORY`, `srun: error: ...: Out Of Memory`, the recorded state `out_of_memory` | Request more Slurm memory if permitted or reduce memory use; inspect `sacct` for state and peak memory. |
 | Job timeout reached | rotari's own `--timeout` stop: the job log line `rotari: job timed out after DURATION` or the recorded error `timed out after DURATION` | Raise the timeout with `change --timeout` if the job needs longer, or find why it was slower than expected, such as waiting on input or a hung process. |
-| Slurm time limit exceeded | Slurm messages containing `time limit`, `CANCELLED ... DUE TO TIME LIMIT`, `State=TIME_LIMIT` | Increase the Slurm time limit if permitted, or reduce runtime and checkpoint before allocation expiry. |
-| Slurm node failure | `State=NODE_FAIL`, `State=BOOT_FAIL`, `DUE TO NODE FAILURE` | Treat the allocated node as unhealthy: inspect `sacct` and scheduler node state, report repeated failures to the cluster administrator, and retry on another node. |
+| Slurm time limit exceeded | Slurm messages containing `time limit`, `CANCELLED ... DUE TO TIME LIMIT`, `State=TIME_LIMIT`, the recorded state `deadline` | Increase the Slurm time limit if permitted, or reduce runtime and checkpoint before allocation expiry. |
+| Slurm node failure | `State=NODE_FAIL`, `State=BOOT_FAIL`, `DUE TO NODE FAILURE`, the recorded states `node_fail` and `boot_fail` | Treat the allocated node as unhealthy: inspect `sacct` and scheduler node state, report repeated failures to the cluster administrator, and retry on another node. |
 | PBS resource or walltime limit exceeded | `walltime ... exceeded`, `exceeded ... walltime`, `job exceeded ... resource limit`, `PBS: job killed: ... exceeded limit` | Increase the requested PBS walltime or resource limit if permitted, or reduce runtime and resource use. |
 | LSF memory limit exceeded | `TERM_MEMLIMIT`, `TERM_SWAP` | Increase the LSF memory limit if permitted, or reduce memory use. |
 | LSF run time limit exceeded | `TERM_RUNLIMIT`, `TERM_CPULIMIT` | Increase the LSF run or CPU time limit if permitted, or reduce runtime and checkpoint. |
 | SGE resource limit exceeded | `qmaster enforced h_rt, h_cpu, or h_vmem limit`, `exceeds job hard limit` | Increase the requested SGE runtime or memory limit, such as `h_rt` or `h_vmem`, if permitted, or reduce runtime and memory use; inspect `qacct` for the job. |
 | Scheduler submission failed | `sbatch: error:`, `srun`/`salloc` allocation, step, and submit failures, scheduler-error forms of `qsub:` / `bsub:`, SGE `Unable to run job:` | Check the scheduler command, account/project, partition/queue, requested resources, and submission permissions. |
 | Invalid scheduler resource request | `Invalid qos specification`, `Invalid partition`, `invalid account`, `invalid generic resource`, PBS/LSF invalid-resource messages | Check partition/queue, account, QOS, GPU/resource names, and requested limits. |
-| Scheduler cancelled job | Slurm `CANCELLED` state or `slurmstepd ... cancelled`, PBS job-deletion messages, LSF `TERM_OWNER`, `TERM_ADMIN`, `TERM_PREEMPT` | Inspect scheduler accounting for the cancellation reason and actor; resolve policy, preemption, dependency, or administrator-cancellation conditions before retrying. |
+| Scheduler cancelled job | Slurm `CANCELLED` state or `slurmstepd ... cancelled`, PBS job-deletion messages, LSF `TERM_OWNER`, `TERM_ADMIN`, `TERM_PREEMPT`, the recorded state `preempted` | Inspect scheduler accounting for the cancellation reason and actor; resolve policy, preemption, dependency, or administrator-cancellation conditions before retrying. |
 | Host memory exhausted | `out of memory: kill process`, `oom-kill`, `memory cgroup out of memory`, `Killed process ... out of memory` | Request more host memory or reduce use; inspect scheduler memory limits and kernel OOM messages. |
 | JavaScript runtime error | `TypeError: Cannot read properties of undefined`/`null`, `TypeError: ... is not a function`, `SyntaxError: Unexpected token`, `ReferenceError: ... is not defined` | Inspect the JavaScript stack trace and the failing value or input; check for undefined values and malformed JSON or source. |
 | Runtime memory exhausted | JVM `OutOfMemoryError`, Go `fatal error: out of memory`, Node.js JavaScript-heap exhaustion, Rust allocation failure, `Cannot allocate memory`, `ENOMEM`, `std::bad_alloc`, PyTorch `DefaultCPUAllocator` | Reduce application memory use or concurrency, and request a larger memory limit if permitted. |

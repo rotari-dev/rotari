@@ -22,6 +22,11 @@ func TestAnalyzeResultRecordsStatusAndRules(t *testing.T) {
 	if exitCode.DiagnosisStatus != model.DiagnosisMatched || len(exitCode.Diagnoses) != 1 || exitCode.Diagnoses[0].Name != "Process killed" {
 		t.Fatalf("AnalyzeResult(exit 137) = %#v", exitCode)
 	}
+	// A scheduler result with no wrapper status has only its state and code.
+	accounting := AnalyzeResult(model.JobResult{ID: "job-1", ExitCode: 134, Error: "failed"}, "", nil)
+	if accounting.DiagnosisStatus != model.DiagnosisMatched || len(accounting.Diagnoses) != 1 || accounting.Diagnoses[0].Name != "Process aborted" {
+		t.Fatalf("AnalyzeResult(accounting exit 134) = %#v", accounting)
+	}
 	unavailable := AnalyzeResult(model.JobResult{ID: "job-1", ExitCode: 1}, "CUDA out of memory", errors.New("output unreadable"))
 	if unavailable.DiagnosisStatus != model.DiagnosisUnavailable || unavailable.DiagnosisNote != "output unreadable" || len(unavailable.Diagnoses) != 0 ||
 		unavailable.LastOutputLine != "" {

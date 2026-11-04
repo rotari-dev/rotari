@@ -202,6 +202,9 @@ func TestPBSAccountingReadsTorqueAndOpenPBSRecords(t *testing.T) {
 	}{
 		{name: "Torque exit status", record: "    job_state = C\n    exit_status = 3\n", wantCode: 3, wantOK: true},
 		{name: "OpenPBS finished job", record: "    job_state = F\n    substate = 92\n    Exit_status = 4\n", wantCode: 4, wantOK: true},
+		{name: "PBS kills the job by signal", record: "    job_state = F\n    substate = 93\n    Exit_status = 265\n", wantCode: 137, wantOK: true},
+		{name: "shell reports a signal", record: "    job_state = C\n    exit_status = 139\n", wantCode: 139, wantOK: true},
+		{name: "exit status above any signal", record: "    job_state = C\n    exit_status = 400\n", wantCode: 400, wantOK: true},
 		{name: "OpenPBS job deleted while queued", record: "    job_state = F\n    Hold_Types = u\n    substate = 91\n    Variable_List = PBS_O_HOME=/home/u,\n", wantCode: 1, wantError: "cancelled", wantOK: true},
 		{name: "OpenPBS job deleted while running", record: "    job_state = F\n    substate = 91\n    Exit_status = 271\n", wantCode: 271, wantError: "cancelled", wantOK: true},
 		{name: "no record yet", record: "    job_state = Q\n    substate = 10\n"},

@@ -428,6 +428,16 @@ func (timing schedulerTiming) withDefaults() schedulerTiming {
 
 // waitForSchedulerResult implements the scheduler-independent polling contract.
 // Each scheduler supplies only its native queue and accounting queries.
+// signalExitCode returns the exit code a shell reports for a process ended by
+// signal, and 0 for a value that is not a signal number, such as the 125 sacct
+// can report for a job that ran out of memory.
+func signalExitCode(signal int) int {
+	if signal < 1 || signal > 64 {
+		return 0
+	}
+	return 128 + signal
+}
+
 func waitForSchedulerResult(store state.Store, jobDir, jobID string, command []string, policy schedulerPollingPolicy) model.JobResult {
 	statusPath := filepath.Join(jobDir, "status.json")
 	timing := policy.Timing.withDefaults()

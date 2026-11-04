@@ -1164,7 +1164,13 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
 - When a job ends without a wrapper result, as one cancelled while pending
   does, its result comes from scheduler accounting. For Slurm, only
   `COMPLETED` gives exit code 0: `CANCELLED by UID` with `ExitCode 0:0`
-  records exit code 1 and error `cancelled`. Covered by
+  records exit code 1 and error `cancelled`. `ExitCode 0:N` for a signal number
+  N records 128+N, as a shell would report it, and a nonzero code wins over the
+  signal; `0:N` for any other N, such as `OUT_OF_MEMORY` with `0:125`, records
+  exit code 1. PBS's `Exit_status` of 256+N also records 128+N, except for a
+  job deleted while running, which keeps the recorded status. Covered by
+  `TestPBSAccountingReadsTorqueAndOpenPBSRecords` in
+  [internal/executor/pbs_test.go](../internal/executor/pbs_test.go) and
   `TestWaitSlurmJobFailureBoundariesWithFakeSlurm` in
   [internal/executor/slurm_test.go](../internal/executor/slurm_test.go).
   Only an ended sacct state (`COMPLETED`, `FAILED`, `CANCELLED`, `TIMEOUT`,
