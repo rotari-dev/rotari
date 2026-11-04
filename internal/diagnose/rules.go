@@ -3,6 +3,7 @@ package diagnose
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -10,9 +11,12 @@ import (
 )
 
 type Rule struct {
-	Name       string
-	Patterns   []*regexp.Regexp
-	Excludes   []*regexp.Regexp
+	Name     string
+	Patterns []*regexp.Regexp
+	Excludes []*regexp.Regexp
+	// ExitCodes are the exit codes that mean this rule's failure when nothing
+	// in the error or log is recognized; see DiagnoseExitCode.
+	ExitCodes  []int
 	Suggestion string
 }
 
@@ -134,6 +138,18 @@ func Diagnose(errorText, log string, rules []Rule) []model.RuleDiagnosis {
 		diagnoses = append(diagnoses, match.diagnosis)
 	}
 	return diagnoses
+}
+
+// DiagnoseExitCode returns the diagnosis of a job whose error and log nothing
+// recognized but whose exit code has a conventional meaning: 127 for a missing
+// command, and 128+N for a job that passed on a child's death by signal N.
+func DiagnoseExitCode(exitCode int, rules []Rule) []model.RuleDiagnosis {
+	for _, rule := range rules {
+		if slices.Contains(rule.ExitCodes, exitCode) {
+			return []model.RuleDiagnosis{{Name: rule.Name, Evidence: fmt.Sprintf("exit code %d", exitCode), Suggestion: rule.Suggestion}}
+		}
+	}
+	return nil
 }
 
 func lastMatchingLine(normalized []string, rule Rule) int {

@@ -1,6 +1,7 @@
 package diagnose
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -132,6 +133,8 @@ func TestDiagnoseDefaultNormalizesAndMatchesKnownErrors(t *testing.T) {
 		{name: "Node.js unexpected token", job: Job{Log: "SyntaxError: Unexpected token ) in JSON at position 3"}, want: "JavaScript runtime error"},
 		{name: "Node.js reference error", job: Job{Log: "ReferenceError: config is not defined"}, want: "JavaScript runtime error"},
 		{name: "aborted", job: Job{Log: "Aborted (core dumped)"}, want: "Process aborted"},
+		{name: "dash missing exec", job: Job{Log: "/state/local-wrapper.sh: 109: exec: train: not found"}, want: "Command or executable not found"},
+		{name: "bash missing exec", job: Job{Log: "/state/local-wrapper.sh: line 109: exec: train: not found"}, want: "Command or executable not found"},
 		{name: "bash aborted command", job: Job{Log: "./run.sh: line 3: 4242 Aborted                 (core dumped) ./train"}, want: "Process aborted"},
 		{name: "double free", job: Job{Log: "double free or corruption (out)"}, want: "Native heap or stack corruption"},
 		{name: "invalid free", job: Job{Log: "free(): invalid pointer"}, want: "Native heap or stack corruption"},
@@ -200,6 +203,8 @@ func TestDiagnoseDefaultIgnoresLookalikeText(t *testing.T) {
 		{name: "truncated archive", log: "tar: Unexpected EOF in archive"},
 		{name: "version warning", log: "warning: incompatible version of foo, continuing"},
 		{name: "ordinary aborted text", log: "transaction aborted, retrying"},
+		{name: "ordinary terminated text", log: "worker 3 terminated normally"},
+		{name: "ordinary exec text", log: "the exec: section of the config was not found in this file"},
 		{name: "ordinary bus error text", log: "the event bus error counter is 0"},
 		{name: "ordinary connection closed", log: "connection closed by client, reconnecting"},
 		{name: "ordinary free call", log: "free(ptr) returned"},
@@ -211,6 +216,59 @@ func TestDiagnoseDefaultIgnoresLookalikeText(t *testing.T) {
 				t.Fatalf("DiagnoseDefault() = %#v, want no diagnosis", diagnoses)
 			}
 		})
+	}
+}
+
+func TestDiagnoseDefaultFallsBackToExitCode(t *testing.T) {
+	tests := []struct {
+		exitCode int
+		log      string
+		want     string
+		evidence string
+	}{
+		{exitCode: 127, want: "Command or executable not found", evidence: "exit code 127"},
+		{exitCode: 129, want: "Process terminated by signal", evidence: "exit code 129"},
+		{exitCode: 132, want: "Illegal instruction", evidence: "exit code 132"},
+		{exitCode: 134, want: "Process aborted", evidence: "exit code 134"},
+		{exitCode: 135, want: "Bus error", evidence: "exit code 135"},
+		{exitCode: 136, want: "Floating point exception", evidence: "exit code 136"},
+		{exitCode: 137, log: "step 1\nunrecognized output", want: "Process killed", evidence: "exit code 137"},
+		{exitCode: 139, want: "Segmentation fault", evidence: "exit code 139"},
+		{exitCode: 143, log: "Terminated", want: "Process terminated by signal", evidence: "exit code 143"},
+		// A recognized line explains the exit code, so the code adds nothing.
+		{exitCode: 137, log: "Memory cgroup out of memory: Killed process 42", want: "Host memory exhausted", evidence: "Memory cgroup out of memory: Killed process 42"},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%d %s", test.exitCode, test.want), func(t *testing.T) {
+			diagnoses := DiagnoseDefault(Job{ExitCode: &test.exitCode, Log: test.log})
+			if len(diagnoses) != 1 || diagnoses[0].Name != test.want || diagnoses[0].Evidence != test.evidence {
+				t.Fatalf("DiagnoseDefault() = %#v, want only %q citing %q", diagnoses, test.want, test.evidence)
+			}
+		})
+	}
+	for _, exitCode := range []int{1, 2, 124, 130, 255} {
+		if diagnoses := DiagnoseDefault(Job{ExitCode: &exitCode}); len(diagnoses) != 0 {
+			t.Errorf("DiagnoseDefault(exit %d) = %#v, want no diagnosis", exitCode, diagnoses)
+		}
+	}
+	if diagnoses := DiagnoseDefault(Job{}); len(diagnoses) != 0 {
+		t.Errorf("DiagnoseDefault(no exit code) = %#v, want no diagnosis", diagnoses)
+	}
+	cancelled := 143
+	if diagnoses := DiagnoseDefault(Job{ExitCode: &cancelled, Error: "cancelled", Log: "Terminated"}); len(diagnoses) != 0 {
+		t.Errorf("DiagnoseDefault(cancelled) = %#v, want no diagnosis", diagnoses)
+	}
+}
+
+func TestDefaultRuleExitCodesAreUnique(t *testing.T) {
+	seen := make(map[int]string)
+	for _, rule := range DefaultRules() {
+		for _, exitCode := range rule.ExitCodes {
+			if previous, ok := seen[exitCode]; ok {
+				t.Fatalf("rules %q and %q share exit code %d", previous, rule.Name, exitCode)
+			}
+			seen[exitCode] = rule.Name
+		}
 	}
 }
 

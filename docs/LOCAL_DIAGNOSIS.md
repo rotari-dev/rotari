@@ -22,6 +22,13 @@ job recovered from. The scheduler error is recorded after the job output and is
 therefore listed first. The generic `Python exception` diagnosis is added only
 when no more specific rule already matches the final exception line.
 
+When nothing in the error or output is recognized, an exit code with a
+conventional meaning gives the diagnosis instead, citing `exit code N` as its
+evidence: 127 for a missing command, and 129, 132, 134, 135, 136, 137, 139, and
+143 for a job that passed on a child's death by signal. These are listed in the
+table below. A job can choose such a code itself, so treat the diagnosis as a
+starting point. A cancelled job gets no diagnosis from its exit code.
+
 This is a historical, informational snapshot; it does not affect job status,
 retries, dependencies, or scheduler control. Every finalized failed job records
 one of three outcomes in `diagnosis_status`: `matched` with its recognized
@@ -72,17 +79,18 @@ the evidence and suggested next steps.
 | JavaScript runtime error | `TypeError: Cannot read properties of undefined`/`null`, `TypeError: ... is not a function`, `SyntaxError: Unexpected token`, `ReferenceError: ... is not defined` | Inspect the JavaScript stack trace and the failing value or input; check for undefined values and malformed JSON or source. |
 | Runtime memory exhausted | JVM `OutOfMemoryError`, Go `fatal error: out of memory`, Node.js JavaScript-heap exhaustion, Rust allocation failure, `Cannot allocate memory`, `ENOMEM`, `std::bad_alloc`, PyTorch `DefaultCPUAllocator` | Reduce application memory use or concurrency, and request a larger memory limit if permitted. |
 | Stack overflow | JVM `StackOverflowError`, Node.js `Maximum call stack size exceeded`, Go `fatal error: stack overflow` | Inspect recursive calls and stack usage; fix unintended recursion or reduce stack-heavy work before retrying. |
-| Process killed | A log line consisting of `Killed` or `Killed PID`, or a shell report such as `line 1: PID Killed COMMAND` or `[1]+ Killed COMMAND` | Inspect scheduler accounting and host logs; SIGKILL can be OOM, a scheduler limit, or explicit cancellation. |
+| Process killed | A log line consisting of `Killed` or `Killed PID`, a shell report such as `line 1: PID Killed COMMAND` or `[1]+ Killed COMMAND`, or exit code 137 | Inspect scheduler accounting and host logs; SIGKILL can be OOM, a scheduler limit, or explicit cancellation. |
+| Process terminated by signal | Exit code 129 or 143 and no recognized output; a `Terminated` line alone does not match, because the shell also prints it when rotari stops a job | A signal asked the process to stop, usually preemption, a cancel, a host shutdown, or a closed session; inspect scheduler accounting and host logs for the sender. |
 | Kernel panic or kernel fault | `kernel panic`, `BUG: unable to handle kernel`, `Oops: NNNN`, `general protection fault`, watchdog hard/soft lockup, RCU stall | Treat the compute node as unhealthy: inspect kernel logs and scheduler node health, report it to the cluster administrator, and retry on another node if appropriate. |
 | Application panic | A log line beginning `panic:` or Rust `thread ... panicked at ...` | Inspect the application stack trace and failing invariant; fix the application error before retrying. |
 | Unhandled application exception | JVM `Exception in thread ...`, Node.js `UncaughtException`/`UnhandledPromiseRejection`, C++ `terminate called after throwing an instance of ...` | Inspect the runtime's exception or rejection details and stack trace; handle the failure or fix the application before retrying. |
 | Application dependency or module missing | Go missing-module messages, JVM `ClassNotFoundException`/`NoClassDefFoundError`, Node.js `Cannot find module`, Rust undeclared crate/module | Check that the required package, crate, class, or module is declared, installed, and available on the runtime or build search path. |
-| Segmentation fault | `segmentation fault`, `SIGSEGV`, `signal 11` | Inspect native extensions, shared-library and driver compatibility, and a core dump or debugger backtrace if available. |
-| Process aborted | A log line consisting of `Aborted` or `Aborted (core dumped)`, a shell report such as `line 1: PID Aborted COMMAND`, `Fatal Python error: Aborted`, `SIGABRT` | The process ended itself, usually after a failed assertion, an uncaught exception, or detected memory corruption; inspect the lines before it and a core dump or debugger backtrace. |
+| Segmentation fault | `segmentation fault`, `SIGSEGV`, `signal 11`, or exit code 139 | Inspect native extensions, shared-library and driver compatibility, and a core dump or debugger backtrace if available. |
+| Process aborted | A log line consisting of `Aborted` or `Aborted (core dumped)`, a shell report such as `line 1: PID Aborted COMMAND`, `Fatal Python error: Aborted`, `SIGABRT`, or exit code 134 | The process ended itself, usually after a failed assertion, an uncaught exception, or detected memory corruption; inspect the lines before it and a core dump or debugger backtrace. |
 | Native heap or stack corruption | `double free or corruption`, glibc `free():`/`malloc():`/`realloc():`/`munmap_chunk():` errors, `corrupted size vs. prev_size`, `stack smashing detected` | Inspect native code and extensions for out-of-bounds writes or invalid frees; rerun under Valgrind or AddressSanitizer, and check shared-library compatibility. |
-| Bus error | A log line consisting of `Bus error` or `Bus error (core dumped)`, a shell report such as `line 1: PID Bus error COMMAND`, `SIGBUS` | Check for a truncated or removed memory-mapped file, exhausted `/dev/shm`, and network-filesystem health. |
-| Illegal instruction | `illegal instruction`, `SIGILL` | The binary likely uses CPU features the host lacks, such as AVX; use a build for this CPU or constrain the job to compatible hosts. |
-| Floating point exception | `floating point exception`, `SIGFPE` | Check native code for integer division by zero or overflow, and for empty or zero-sized inputs that reach a division. |
+| Bus error | A log line consisting of `Bus error` or `Bus error (core dumped)`, a shell report such as `line 1: PID Bus error COMMAND`, `SIGBUS`, or exit code 135 | Check for a truncated or removed memory-mapped file, exhausted `/dev/shm`, and network-filesystem health. |
+| Illegal instruction | `illegal instruction`, `SIGILL`, or exit code 132 | The binary likely uses CPU features the host lacks, such as AVX; use a build for this CPU or constrain the job to compatible hosts. |
+| Floating point exception | `floating point exception`, `SIGFPE`, or exit code 136 | Check native code for integer division by zero or overflow, and for empty or zero-sized inputs that reach a division. |
 | NVIDIA GPU driver/device error | `NVRM: Xid`, `GPU has fallen off the bus` | Inspect GPU/node health and NVIDIA kernel logs; retry on another GPU/node if appropriate. |
 | CUDA device-side assert | `device-side assert triggered` | Check tensor shapes, labels, and index ranges passed to CUDA kernels; rerun with synchronous CUDA error reporting if needed. |
 | NCCL failure | `NCCL error`, `NCCL WARN` lines that report an error, failure, abort, or timeout, `NCCL ... unhandled system error` | Check GPU/node connectivity, NCCL configuration, network-interface selection, and distributed-rank consistency. |
@@ -95,7 +103,7 @@ the evidence and suggested next steps.
 | Permission denied | `permission denied`, `EACCES` | Check ownership, file and directory permissions, mount options, and the account used by the job. |
 | Shell syntax error | Shell `syntax error near unexpected token`, `syntax error: ... unexpected`, unterminated-quote `unexpected EOF` | Check the reported script line and nearby quoting, delimiters, conditionals, and command substitutions; run the script through the intended shell's syntax checker. |
 | Shell unset variable under nounset | `unbound variable`, `parameter not set` (commonly with `set -u`) | Check that the variable is initialized or exported before use; for optional values, use a default expansion such as `${VAR-}` or `${VAR:-default}`. |
-| Command or executable not found | `command not found`, `executable file not found` | Check the command spelling and `PATH`, or use an absolute path and ensure the executable is installed on the execution host. |
+| Command or executable not found | `command not found`, `executable file not found`, the shell's `exec: COMMAND: not found`, or exit code 127 | Check the command spelling and `PATH`, or use an absolute path and ensure the executable is installed on the execution host. |
 | Native linking failed | `undefined reference to`, `ld: cannot find`, `multiple definition of`, linker-command failure | Check linker inputs, library search paths, and library names; ensure required symbols and libraries are available and compatible. |
 | Shared library or ABI mismatch | `undefined symbol`, `symbol lookup error`, missing `GLIBC_*`/`GLIBCXX_*`/`CXXABI_*`, `cannot open shared object file`, `wrong ELF class` | Check `ldd`, `LD_LIBRARY_PATH`, and loaded `.so` files; align compiler, libstdc++, CUDA, and Python-extension ABI versions with the runtime host. |
 | Python import or module missing | `ModuleNotFoundError`, `ImportError`, `cannot import name` | Check the Python environment, `PYTHONPATH`, package installation, and version compatibility. |

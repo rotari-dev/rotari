@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -94,6 +95,68 @@ esac`)
 			"1 error (exit 5): nan", "e.g. loss became NaN at step 2"} {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s output does not contain %q:\n%s", name, want, text)
+			}
+		}
+	}
+}
+
+// TestFailuresWithoutOutputAreDiagnosed runs jobs that print nothing of their
+// own: the wrapper's shell reports a missing command or a signal, and a code
+// passed on from a child leaves only the exit code. A failure with no
+// conventional code stays unrecognized.
+func TestFailuresWithoutOutputAreDiagnosed(t *testing.T) {
+	covers(t, "NOT-5")
+	e := support.NewEnv(t)
+	project := "silent"
+	e.MustRotari("add", "-p", project, "--job-name", "silent-missing", "--", "rotari-conformance-no-such-command")
+	e.MustRotari("add", "-p", project, "--job-name", "silent-stopped", "--", "sh", "-c", `kill -TERM $$`)
+	e.MustRotari("add", "-p", project, "--job-name", "silent-passed", "--", "sh", "-c", "exit 137")
+	e.MustRotari("add", "-p", project, "--job-name", "silent-crashed", "--", "sh", "-c", `kill -SEGV $$`)
+	e.MustRotari("add", "-p", project, "--job-name", "silent-plain", "--", "sh", "-c", "exit 3")
+	if result := e.RotariRun("run", "-p", project, "--quiet"); result.Code == 0 {
+		t.Fatalf("run with failing jobs should exit 1: %s", result)
+	}
+	var shown struct {
+		Failures failureGroupsView `json:"failures"`
+	}
+	if err := json.Unmarshal([]byte(e.MustRotari("show", "-p", project, "--json").Stdout), &shown); err != nil {
+		t.Fatal(err)
+	}
+	want := map[int]struct{ kind, cause string }{
+		127: {"diagnosis", "Command or executable not found"},
+		143: {"diagnosis", "Process terminated by signal"},
+		137: {"diagnosis", "Process killed"},
+		139: {"diagnosis", "Segmentation fault"},
+		3:   {"error", "error"},
+	}
+	if len(shown.Failures) != len(want) {
+		t.Fatalf("failure groups = %+v, want one per job", shown.Failures)
+	}
+	for _, group := range shown.Failures {
+		if len(group.ExitCodes) != 1 {
+			t.Fatalf("group %+v, want one exit code", group)
+		}
+		expected, ok := want[group.ExitCodes[0]]
+		if !ok || group.Kind != expected.kind || group.Cause != expected.cause {
+			t.Errorf("group %+v, want %+v", group, expected)
+		}
+	}
+	// --filter-diagnosis recomputes from the current rules, --filter-failure-cause
+	// reads the saved result, and the failure kind reads the exit code.
+	all := []string{"silent-missing", "silent-stopped", "silent-passed", "silent-crashed", "silent-plain"}
+	for _, test := range []struct {
+		args []string
+		want []string
+	}{
+		{args: []string{"--filter-diagnosis", "process-killed"}, want: []string{"silent-passed"}},
+		{args: []string{"--filter-diagnosis", "command-or-executable-not-found"}, want: []string{"silent-missing"}},
+		{args: []string{"--filter-failure-cause", "segmentation-fault"}, want: []string{"silent-crashed"}},
+		{args: []string{"--filter-failure-kind", "signal"}, want: []string{"silent-stopped", "silent-passed", "silent-crashed"}},
+	} {
+		table := e.MustRotari(append([]string{"show", "-p", project}, test.args...)...).Stdout
+		for _, name := range all {
+			if listed := strings.Contains(table, name); listed != slices.Contains(test.want, name) {
+				t.Errorf("show %v lists %s = %v, want jobs %v:\n%s", test.args, name, listed, test.want, table)
 			}
 		}
 	}

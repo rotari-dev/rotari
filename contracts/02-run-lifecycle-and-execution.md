@@ -1349,3 +1349,13 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   `Diagnosis` control and enables it for finalized failed jobs with a saved
   analysis; it is disabled for live fallback results that have no finalized
   summary analysis.
+- **NOT-5** A failed job needs no recognized output of its own to be diagnosed.
+  The lines that the job wrapper's shell reports when the command is missing or
+  dies by a crash signal are recognized. When nothing in the error or log is,
+  exit code 127 or a 128+N code that names a signal rule gives that rule's
+  diagnosis, citing `exit code N`, except for a cancelled job, so saved results,
+  failure groups, and `--filter-diagnosis` agree. Other unrecognized failures
+  stay `no_match`. The failure kind `signal` still reads the exit code, whatever
+  the diagnosis. Implemented in
+  `diagnose.DiagnoseDefault`; covered by `TestFailuresWithoutOutputAreDiagnosed` in
+  [conformance/03-interfaces/failure_groups_test.go](../conformance/03-interfaces/failure_groups_test.go).

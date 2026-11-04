@@ -29,7 +29,7 @@ func computeRulesVersion() string {
 	hash := sha256.New()
 	fmt.Fprintf(hash, "matcher %d\npython %s\n", matcherRevision, pythonExceptionRule)
 	for _, rule := range defaultRules {
-		fmt.Fprintf(hash, "rule %q %q\n", rule.Name, rule.Suggestion)
+		fmt.Fprintf(hash, "rule %q %q %v\n", rule.Name, rule.Suggestion, rule.ExitCodes)
 		for _, pattern := range rule.Patterns {
 			fmt.Fprintf(hash, "pattern %q\n", pattern)
 		}
@@ -59,7 +59,7 @@ func AnalyzeResult(result model.JobResult, log string, readErr error) model.JobR
 		result.DiagnosisStatus, result.DiagnosisNote = model.DiagnosisUnavailable, readErr.Error()
 		return result
 	}
-	result.Diagnoses = DiagnoseDefault(Job{JobID: result.ID, Error: result.Error, Log: log})
+	result.Diagnoses = DiagnoseDefault(Job{JobID: result.ID, ExitCode: &result.ExitCode, Error: result.Error, Log: log})
 	result.LastOutputLine = LastOutputLine(log)
 	result.DiagnosisStatus = model.DiagnosisMatched
 	if len(result.Diagnoses) == 0 {

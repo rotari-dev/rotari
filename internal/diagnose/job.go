@@ -15,7 +15,13 @@ type Job struct {
 }
 
 func DiagnoseDefault(job Job) []model.RuleDiagnosis {
-	return Diagnose(job.Error, job.Log, DefaultRules())
+	rules := DefaultRules()
+	diagnoses := Diagnose(job.Error, job.Log, rules)
+	// A cancel explains its own exit code, so the code says nothing more.
+	if len(diagnoses) == 0 && job.ExitCode != nil && !model.IsCancelledError(job.Error) {
+		return DiagnoseExitCode(*job.ExitCode, rules)
+	}
+	return diagnoses
 }
 
 // omittedLogMarker starts a log that TailLog shortened.

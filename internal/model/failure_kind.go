@@ -1,6 +1,9 @@
 package model
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // TimeoutExitCode is the exit code recorded for a job stopped by its timeout,
 // matching GNU timeout.
@@ -15,6 +18,10 @@ const (
 	FailureKindSignal    = "signal"
 	FailureKindError     = "error"
 )
+
+// oomWord matches OOM as a word, or the OOM killer's forms such as oom-kill and
+// OOMKilled, and not words that contain the letters, such as room or zoom.
+var oomWord = regexp.MustCompile(`\boom(?:[-_ ]?kill(?:ed|er)?)?\b`)
 
 var failureKinds = []string{FailureKindTimeout, FailureKindCancelled, FailureKindBlocked, FailureKindOOM, FailureKindSignal, FailureKindError}
 
@@ -40,7 +47,7 @@ func FailureKinds(result JobResult) []string {
 	if strings.HasPrefix(text, "blocked") {
 		kinds = append(kinds, FailureKindBlocked)
 	}
-	if strings.Contains(text, "out of memory") || strings.Contains(text, "oom") || strings.Contains(text, "memory limit") {
+	if strings.Contains(text, "out of memory") || oomWord.MatchString(text) || strings.Contains(text, "memory limit") {
 		kinds = append(kinds, FailureKindOOM)
 	}
 	if result.ExitCode > 128 {

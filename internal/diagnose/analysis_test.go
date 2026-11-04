@@ -18,6 +18,10 @@ func TestAnalyzeResultRecordsStatusAndRules(t *testing.T) {
 		noMatch.LastOutputLine != "ordinary failure" {
 		t.Fatalf("AnalyzeResult(no match) = %#v", noMatch)
 	}
+	exitCode := AnalyzeResult(model.JobResult{ID: "job-1", ExitCode: 137}, "", nil)
+	if exitCode.DiagnosisStatus != model.DiagnosisMatched || len(exitCode.Diagnoses) != 1 || exitCode.Diagnoses[0].Name != "Process killed" {
+		t.Fatalf("AnalyzeResult(exit 137) = %#v", exitCode)
+	}
 	unavailable := AnalyzeResult(model.JobResult{ID: "job-1", ExitCode: 1}, "CUDA out of memory", errors.New("output unreadable"))
 	if unavailable.DiagnosisStatus != model.DiagnosisUnavailable || unavailable.DiagnosisNote != "output unreadable" || len(unavailable.Diagnoses) != 0 ||
 		unavailable.LastOutputLine != "" {
