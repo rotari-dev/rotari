@@ -86,6 +86,12 @@ basedir only. Covered by `TestActivityPage` in
 **WEB-2** The live Web UI provides a dedicated history search across projects
 in user-selected scopes. Each scope selects a registered basedir and may
 narrow to one project and one run; multiple scopes are combined as a union.
+A scope may instead select all basedirs (`all_basedirs` in the API), which
+expands on the server to every registered basedir and cannot be narrowed to a
+project or run. An all-basedirs search still returns the results it could read
+and names in `unsearched` each basedir that is missing or could not be read; a
+scope naming one basedir fails the search on such an error instead. Results of
+a search over several basedirs name each result's basedir.
 The dropdown choices load hierarchically from the selected basedir and project.
 Search scope is independent of basedir checkboxes used to monitor browser
 notifications. The result level (project, run, or job) is selected once for
@@ -127,9 +133,11 @@ and the page is in
 API coverage is in
 [`internal/web/search_test.go`](../internal/web/search_test.go) and
 [`internal/webui/webui_test.go`](../internal/webui/webui_test.go); the
-cross-project API behavior and recorded unfinished job status are covered by
+cross-project and cross-basedir API behavior and recorded unfinished job status
+are covered by
 [`TestHistorySearchAcrossProjects`](../conformance/05-web/history_search_test.go)
-and [`TestHistorySearchFindsRecordedUnfinishedJobStatus`](../conformance/05-web/history_search_test.go).
+[`TestHistorySearchFindsRecordedUnfinishedJobStatus`](../conformance/05-web/history_search_test.go),
+and [`TestHistorySearchAllBasedirs`](../conformance/05-web/history_search_test.go).
 
 ## Asset layout
 

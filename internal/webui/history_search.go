@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -20,6 +21,19 @@ import (
 type historySearchAPIRequest struct {
 	webprojection.HistorySearchRequest
 	Scopes []webprojection.HistorySearchScope `json:"scopes"`
+}
+
+// historySearchAPIResponse adds the basedirs an all-basedirs scope could not
+// search, so the results never pass for a complete search.
+type historySearchAPIResponse struct {
+	webprojection.HistorySearchResponse
+	Unsearched []historySearchUnsearched `json:"unsearched,omitempty"`
+}
+
+type historySearchUnsearched struct {
+	BaseDirID   string `json:"basedir_id"`
+	BaseDirPath string `json:"basedir_path"`
+	Error       string `json:"error"`
 }
 
 type historySearchOptionsResponse struct {
@@ -159,7 +173,28 @@ func (s site) handleHistorySearch(writer http.ResponseWriter, request *http.Requ
 	}
 	selectedScopes := make(map[string]bool, len(input.Scopes))
 	records := make([]webprojection.HistorySearchRecord, 0)
+	var unsearched []historySearchUnsearched
 	for _, scope := range input.Scopes {
+		if scope.AllBasedirs {
+			if scope.BaseDirID != "" || scope.ProjectName != "" || scope.RunID != "" {
+				writeWebError(writer, fmt.Errorf("all_basedirs cannot be combined with basedir_id, project_name, or run_id"))
+				return
+			}
+			for _, entry := range s.basedirEntries() {
+				key := entry.ID + "\x00\x00"
+				if selectedScopes[key] {
+					continue
+				}
+				selectedScopes[key] = true
+				loaded, err := s.loadHistorySearchBasedir(entry)
+				if err != nil {
+					unsearched = append(unsearched, historySearchUnsearched{BaseDirID: entry.ID, BaseDirPath: entry.Path, Error: err.Error()})
+					continue
+				}
+				records = append(records, loaded...)
+			}
+			continue
+		}
 		entry, ok := s.registeredBasedir(scope.BaseDirID)
 		if !ok {
 			writeWebError(writer, fmt.Errorf("invalid basedir_id %q", scope.BaseDirID))
@@ -186,7 +221,17 @@ func (s site) handleHistorySearch(writer http.ResponseWriter, request *http.Requ
 		writeWebError(writer, err)
 		return
 	}
-	writeWebJSON(writer, result)
+	writeWebJSON(writer, historySearchAPIResponse{HistorySearchResponse: result, Unsearched: unsearched})
+}
+
+// loadHistorySearchBasedir loads one basedir of an all-basedirs scope. A
+// registered basedir can outlive its directory, and joblist.Projects reads a
+// missing directory as an empty state, so absence is checked first.
+func (s site) loadHistorySearchBasedir(entry webBaseDir) ([]webprojection.HistorySearchRecord, error) {
+	if _, err := os.Stat(entry.Path); errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("basedir does not exist")
+	}
+	return s.loadHistorySearchRecords(entry, "", "")
 }
 
 func (s site) loadHistorySearchRecords(entry webBaseDir, projectName, runID string) ([]webprojection.HistorySearchRecord, error) {

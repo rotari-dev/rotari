@@ -36,7 +36,8 @@ type HistorySearchRequest struct {
 }
 
 type HistorySearchScope struct {
-	BaseDirID   string `json:"basedir_id"`
+	AllBasedirs bool   `json:"all_basedirs,omitempty"`
+	BaseDirID   string `json:"basedir_id,omitempty"`
 	ProjectName string `json:"project_name,omitempty"`
 	RunID       string `json:"run_id,omitempty"`
 }

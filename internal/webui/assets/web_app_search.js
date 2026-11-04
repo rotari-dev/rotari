@@ -44,6 +44,8 @@ const historySearchFieldOptions = {
     { target: "job", value: "exit_code", label: "Job · Exit code" },
   ],
 };
+// Basedir IDs are base64url, so this value cannot name a basedir.
+const historySearchAllBasedirs = "*";
 let historySearchLastRequest = null;
 let historySearchOffset = 0;
 let historySearchFocusedJobURL = "";
@@ -194,7 +196,8 @@ function historySearchScopeHTML() {
     .join("");
   return `<div class="history-search-scope-row">
     <select class="history-search-scope-basedir" aria-label="Basedir" onchange="historySearchBasedirChanged(this)">
-      <option value="">Choose basedir</option>${basedirOptions}
+      <option value="">Choose basedir</option>
+      <option value="${historySearchAllBasedirs}">All basedirs</option>${basedirOptions}
     </select>
     <select class="history-search-scope-project" aria-label="Project" onchange="historySearchProjectChanged(this)" disabled>
       <option value="">All projects</option>
@@ -218,7 +221,7 @@ function historySearchPageHTML() {
     <form id="history-search-form" class="history-search-form">
       <fieldset class="history-search-scope">
         <legend>Search range</legend>
-        <p class="history-search-scope-help">Choose a basedir, then optionally narrow the range to a project and run. Added ranges are searched together.</p>
+        <p class="history-search-scope-help">Choose a basedir or all basedirs; a single basedir can be narrowed to a project and run. Added ranges are searched together.</p>
         <div id="history-search-scopes">${historySearchInitialScopeHTML()}</div>
         <button type="button" class="history-search-add-scope" onclick="historySearchAddScope()">＋ Add search range</button>
       </fieldset>
@@ -329,9 +332,10 @@ async function historySearchBasedirChanged(select) {
   const run = row.querySelector(".history-search-scope-run");
   project.innerHTML = '<option value="">All projects</option>';
   run.innerHTML = '<option value="">All runs</option>';
-  project.disabled = !select.value;
+  const allBasedirs = select.value === historySearchAllBasedirs;
+  project.disabled = !select.value || allBasedirs;
   run.disabled = true;
-  if (!select.value) return;
+  if (!select.value || allBasedirs) return;
   const selectedID = select.value;
   try {
     const response = await fetch(
@@ -402,11 +406,44 @@ function historySearchSelectedScopes() {
       run_id: row.querySelector(".history-search-scope-run").value,
     }))
     .filter((scope) => scope.basedir_id)
-    .map((scope) => ({
-      basedir_id: scope.basedir_id,
-      ...(scope.project_name ? { project_name: scope.project_name } : {}),
-      ...(scope.run_id ? { run_id: scope.run_id } : {}),
-    }));
+    .map((scope) =>
+      scope.basedir_id === historySearchAllBasedirs
+        ? { all_basedirs: true }
+        : historySearchBasedirScope(scope),
+    );
+}
+
+function historySearchBasedirScope(scope) {
+  return {
+    basedir_id: scope.basedir_id,
+    ...(scope.project_name ? { project_name: scope.project_name } : {}),
+    ...(scope.run_id ? { run_id: scope.run_id } : {}),
+  };
+}
+
+// Results of a search over one basedir need not repeat it; rows of several
+// basedirs can otherwise look identical, because project names recur.
+function historySearchSpansBasedirs(scopes) {
+  return (
+    scopes.some((scope) => scope.all_basedirs) ||
+    new Set(scopes.map((scope) => scope.basedir_id)).size > 1
+  );
+}
+
+function historySearchBasedirLabel(id, path) {
+  const entry = registeredBasedirs.find((item) => item.id === id);
+  return entry ? basedirLabelText(entry) : path;
+}
+
+function historySearchResultMessage(data) {
+  const count = `${data.total} result${data.total === 1 ? "" : "s"}`;
+  const unsearched = (data.unsearched || []).map(
+    (item) =>
+      `${historySearchBasedirLabel(item.basedir_id, item.basedir_path)} (${item.error})`,
+  );
+  return unsearched.length
+    ? `${count}. Not searched: ${unsearched.join("; ")}`
+    : count;
 }
 
 async function historySearchLoadDiagnosisOptions(
@@ -529,7 +566,7 @@ async function historySearchExecute() {
       return;
     }
     const data = await response.json();
-    message.textContent = `${data.total} result${data.total === 1 ? "" : "s"}`;
+    message.textContent = historySearchResultMessage(data);
     historySearchRenderResults(data.rows || []);
     pagination.hidden = data.total <= data.limit;
     document.getElementById("history-search-page-label").textContent =
@@ -551,6 +588,9 @@ function historySearchRenderResults(rows) {
       '<p class="history-search-empty">No matching history found.</p>';
     return;
   }
+  const spansBasedirs = historySearchSpansBasedirs(
+    historySearchLastRequest?.scopes || [],
+  );
   const body = rows
     .map((row) => {
       const runPath =
@@ -584,6 +624,8 @@ function historySearchRenderResults(rows) {
         details = `${row.project_name} / ${row.run_name || row.run_id} · ${row.job_id}`;
         command = row.command || "";
       }
+      if (spansBasedirs && row.target !== "project")
+        details = `${historySearchBasedirLabel(row.basedir_id, row.basedir_path)} · ${details}`;
       const status = row.job_status || row.run_status || "";
       const timestamp = row.timestamp ? formatDateTime(row.timestamp) : "";
       return `<tr>

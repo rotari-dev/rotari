@@ -255,3 +255,86 @@ func TestHistorySearchFindsRecordedUnfinishedJobStatus(t *testing.T) {
 		t.Fatalf("history search = %#v, want the interrupted attempt with recorded status", result)
 	}
 }
+
+// An all-basedirs scope searches every registered basedir and names the ones
+// it could not search rather than failing or passing for a complete search.
+func TestHistorySearchAllBasedirs(t *testing.T) {
+	covers(t, "WEB-2")
+	e := support.NewEnv(t)
+	other := filepath.Join(e.Root, "other-state")
+	gone := filepath.Join(e.Root, "gone-state")
+	broken := filepath.Join(e.Root, "broken-state")
+	e.MustRotari("add", "-p", "alpha", "--", "true")
+	e.MustRotari("run", "-p", "alpha", "--quiet")
+	for _, item := range []struct{ baseDir, project string }{{other, "beta"}, {gone, "gamma"}, {broken, "delta"}} {
+		e.MustRotari("add", "-b", item.baseDir, "-p", item.project, "--", "true")
+		e.MustRotari("run", "-b", item.baseDir, "-p", item.project, "--quiet")
+	}
+	if err := os.RemoveAll(gone); err != nil {
+		t.Fatal(err)
+	}
+	projects := filepath.Join(broken, "projects")
+	if err := os.RemoveAll(projects); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(projects, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	base := e.StartWeb()
+	search := func(scopes ...map[string]any) support.HTTPResult {
+		return e.HTTPPostJSON(base+"/api/history-search", map[string]any{
+			"scopes":  scopes,
+			"target":  "project",
+			"filters": []map[string]string{{"target": "project", "field": "project_name", "word": "a"}},
+		})
+	}
+	all := map[string]any{"all_basedirs": true}
+	// The repeated scope must not search or report anything twice.
+	response := search(all, all)
+	if response.Status != 200 {
+		t.Fatalf("history search: status %d: %s", response.Status, response.Body)
+	}
+	var result struct {
+		Rows []struct {
+			ProjectName string `json:"project_name"`
+			BaseDirPath string `json:"basedir_path"`
+		} `json:"rows"`
+		Unsearched []struct {
+			BaseDirPath string `json:"basedir_path"`
+			Error       string `json:"error"`
+		} `json:"unsearched"`
+	}
+	if err := json.Unmarshal([]byte(response.Body), &result); err != nil {
+		t.Fatal(err)
+	}
+	found := map[string]string{}
+	for _, row := range result.Rows {
+		found[row.ProjectName] = row.BaseDirPath
+	}
+	abs := func(path string) string {
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return filepath.Clean(absolute)
+	}
+	if len(result.Rows) != 2 || found["alpha"] != abs(e.Base) || found["beta"] != abs(other) {
+		t.Errorf("rows = %+v, want alpha and beta from their own basedirs", result.Rows)
+	}
+	reasons := map[string]string{}
+	for _, item := range result.Unsearched {
+		reasons[item.BaseDirPath] = item.Error
+	}
+	if len(result.Unsearched) != 2 || reasons[abs(gone)] != "basedir does not exist" || reasons[abs(broken)] == "" {
+		t.Errorf("unsearched = %+v, want the removed and the unreadable basedir", result.Unsearched)
+	}
+	for _, scope := range []map[string]any{
+		{"all_basedirs": true, "basedir_id": "x"},
+		{"all_basedirs": true, "project_name": "alpha"},
+		{"all_basedirs": true, "run_id": "x"},
+	} {
+		if response := search(scope); response.Status == 200 {
+			t.Errorf("scope %v: status 200, want it rejected: %s", scope, response.Body)
+		}
+	}
+}

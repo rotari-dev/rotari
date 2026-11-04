@@ -109,7 +109,8 @@ flowchart LR
    `runwatch.ReportInterrupted` at startup and every 30 seconds, which records
    runs `project.Inspect` finds interrupted, since a killed run cannot.
    The dedicated history-search API scans only the user-selected basedir,
-   project, and run scopes without expanding the lightweight `/api/state` index.
+   project, and run scopes, or every registered basedir when asked for all,
+   without expanding the lightweight `/api/state` index.
    The activity API (`/api/activity`) lists runs across every registered
    basedir through `internal/runlist`, as `rotari runs` does, for one bounded
    time range: runs outside it are skipped by run ID and directory time

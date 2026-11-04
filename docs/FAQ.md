@@ -534,7 +534,9 @@ a terminal, `rotari runs --json` gives the same facts.
 
 Yes. Open `History search` in the Web sidebar to search project, run, and job
 history in selected scopes. Choose a basedir, then optionally narrow it to a
-project and run; add more scopes to include additional ranges. Scope selection
+project and run, or choose `All basedirs` to search every registered basedir;
+any it cannot read are named beside the results. Add more scopes to include
+additional ranges. Scope selection
 is independent of notification monitoring. Choose a time window and add
 field/word conditions joined by AND or OR. History search runs on the
 `rotari web` server, so a static Web export leaves it out of the sidebar.
