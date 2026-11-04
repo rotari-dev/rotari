@@ -46,6 +46,16 @@ func serveLaunchService() int {
 			http.NotFound(writer, request)
 			return
 		}
+		if strings.HasSuffix(request.URL.Path, "/jupyter-config") {
+			path := os.Getenv("ROTARI_LAUNCHER_JUPYTER_CONFIG")
+			info, err := os.Stat(path)
+			content, readErr := os.ReadFile(path)
+			private := err == nil && readErr == nil && info.Mode().Perm() == 0o600
+			fmt.Fprintf(writer, "private=%v sets-token=%v holds-token=%v", private,
+				strings.Contains(string(content), `c.IdentityProvider.token = os.environ["ROTARI_LAUNCHER_TOKEN"]`),
+				strings.Contains(string(content), os.Getenv("ROTARI_LAUNCHER_TOKEN")))
+			return
+		}
 		if strings.HasSuffix(request.URL.Path, "/basic-auth") {
 			credentials := base64.StdEncoding.EncodeToString([]byte("rotari:" + os.Getenv("ROTARI_LAUNCHER_TOKEN")))
 			fmt.Fprintf(writer, "basic-auth-sent=%v", request.Header.Get("X-Launch-Basic") == "Basic "+credentials)
@@ -777,6 +787,10 @@ func TestWebLaunchServesServices(t *testing.T) {
 	// proxy_headers can also present the token as HTTP Basic credentials.
 	if basic := api(e, http.MethodGet, base+viewer.BasePath+"/basic-auth", ""); basic.Status != http.StatusOK || basic.Body != "basic-auth-sent=true" {
 		t.Fatalf("Basic credentials = (%d, %s)", basic.Status, basic.Body)
+	}
+	// A Jupyter service can take the token from a private file without a secret.
+	if config := api(e, http.MethodGet, base+viewer.BasePath+"/jupyter-config", ""); config.Status != http.StatusOK || config.Body != "private=true sets-token=true holds-token=false" {
+		t.Fatalf("Jupyter config = (%d, %s)", config.Status, config.Body)
 	}
 	// The service learns the address the browser used, not its own loopback
 	// port or what the browser claims.

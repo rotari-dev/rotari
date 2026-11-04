@@ -279,6 +279,7 @@ these variables, which the command should quote:
 | `ROTARI_LAUNCHER_PORT` | service mode: the port to listen on |
 | `ROTARI_LAUNCHER_BASE_PATH` | service mode: the URL path prefix to serve under |
 | `ROTARI_LAUNCHER_TOKEN` | service mode: a secret made for this launch (see [Tokens for services](#tokens-for-services)) |
+| `ROTARI_LAUNCHER_JUPYTER_CONFIG` | service mode: a Jupyter config file that makes that secret the login token (see [Tokens for services](#tokens-for-services)) |
 
 `cwd = "target"` is the selected directory, or a selected file's directory.
 Launched commands also get `127.0.0.1,localhost,::1` added to `NO_PROXY` and
@@ -353,12 +354,18 @@ through the proxy. The built-in Jupyter Lab, which runs code, uses it:
 ```toml
 [[launcher]]
 name = "Jupyter Lab"
-command = '''jupyter lab --no-browser --ip=127.0.0.1 --port="$ROTARI_LAUNCHER_PORT" --ServerApp.base_url="$ROTARI_LAUNCHER_BASE_PATH" --IdentityProvider.token="$ROTARI_LAUNCHER_TOKEN" --ServerApp.root_dir="$ROTARI_LAUNCHER_ARTIFACT" --ServerApp.allow_remote_access=True --ServerApp.allow_origin='*''''
+command = '''jupyter lab --no-browser --ip=127.0.0.1 --port="$ROTARI_LAUNCHER_PORT" --ServerApp.base_url="$ROTARI_LAUNCHER_BASE_PATH" --config="$ROTARI_LAUNCHER_JUPYTER_CONFIG" --ServerApp.root_dir="$ROTARI_LAUNCHER_ARTIFACT" --ServerApp.allow_remote_access=True --ServerApp.allow_origin='*''''
 targets = ["directory"]
 mode = "service"
 ready_path = "/api"
 proxy_headers = { Authorization = "token $ROTARI_LAUNCHER_TOKEN" }
 ```
+
+Other users of the host can read a process's arguments, so no built-in passes
+the token in one. `$ROTARI_LAUNCHER_JUPYTER_CONFIG` is a file, private to you
+and holding no secret, that reads your `jupyter_server_config.py` files and then
+sets the token from the environment, so a `token = ''` of yours cannot turn
+authentication off. Setting `JUPYTER_TOKEN` alone would let it.
 
 A service that takes the token as an HTTP Basic password uses
 `$ROTARI_LAUNCHER_BASIC_AUTH`, which `proxy_headers` replaces with the Base64 of

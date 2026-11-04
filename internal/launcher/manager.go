@@ -31,11 +31,30 @@ const (
 	// can require one should, with ProxyHeaders presenting it, so that
 	// other local users who reach its loopback port cannot use it.
 	EnvToken = "ROTARI_LAUNCHER_TOKEN"
+	// EnvJupyterConfig is the path of the manager's jupyterConfig.
+	EnvJupyterConfig = "ROTARI_LAUNCHER_JUPYTER_CONFIG"
 	// ProxyBasicAuth stands, in proxy_headers only, for the Base64 of
 	// "rotari:" and the launch's token: HTTP Basic credentials, for a
 	// service that takes the token as a password.
 	ProxyBasicAuth = "ROTARI_LAUNCHER_BASIC_AUTH"
 )
+
+// jupyterConfig makes the launch token Jupyter's login token without putting
+// it in a process's arguments, which other users of the host can read. Set
+// last, it overrides what the user's own config, read first as Jupyter would
+// have, says about the token; JUPYTER_TOKEN alone would let `token = ”` there
+// turn authentication off. Jupyter runs this file, so it stays in the
+// manager's private runtime directory.
+const jupyterConfig = `import os
+from jupyter_core.paths import jupyter_config_path
+
+for path in reversed(jupyter_config_path()):
+    load_subconfig("jupyter_server_config.py", path)
+c.IdentityProvider.token = os.environ["` + EnvToken + `"]
+`
+
+// jupyterConfigName is jupyterConfig's file in the runtime directory.
+const jupyterConfigName = "jupyter_token_config.py"
 
 // noProxyLoopback is added to NO_PROXY and no_proxy: loopback traffic never
 // needs a proxy, and TensorBoard's own gRPC to localhost fails through one.
@@ -124,13 +143,15 @@ type Launch struct {
 	BasePath string `json:"base_path,omitempty"`
 	reuseKey string
 	// token is EnvToken for a service; it never leaves the server.
-	token        string
-	proxyHeaders map[string]string
-	stopGrace    time.Duration
-	process      *Process
-	log          *rotatingLog
-	logDir       string
-	stopCalled   bool
+	token string
+	// jupyterConfig is EnvJupyterConfig for a service.
+	jupyterConfig string
+	proxyHeaders  map[string]string
+	stopGrace     time.Duration
+	process       *Process
+	log           *rotatingLog
+	logDir        string
+	stopCalled    bool
 	// recorded is closed once watch has recorded how the launch ended.
 	recorded chan struct{}
 }
@@ -180,6 +201,12 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 	if err != nil {
 		lifetime.Close()
 		return nil, err
+	}
+	if err := os.WriteFile(filepath.Join(dir, jupyterConfigName), []byte(jupyterConfig), 0o600); err != nil {
+		lock.Close()
+		os.RemoveAll(dir)
+		lifetime.Close()
+		return nil, fmt.Errorf("write launcher Jupyter config: %w", err)
 	}
 	return &Manager{config: config, lifetime: lifetime, dir: dir, lock: lock}, nil
 }
@@ -235,6 +262,7 @@ func (manager *Manager) Start(request StartRequest) (Launch, error) {
 			return Launch{}, err
 		}
 		launch.proxyHeaders = command.ProxyHeaders
+		launch.jupyterConfig = filepath.Join(manager.dir, jupyterConfigName)
 	}
 	err = manager.prepare(launch)
 	if err == nil {
@@ -336,7 +364,7 @@ func launchEnvironment(env []string, launch *Launch) []string {
 	}
 	result = append(result, EnvArtifact+"="+launch.Target, EnvCWD+"="+launch.CWD)
 	if launch.Mode == ModeService {
-		result = append(result, EnvPort+"="+strconv.Itoa(launch.Port), EnvBasePath+"="+launch.BasePath, EnvToken+"="+launch.token)
+		result = append(result, EnvPort+"="+strconv.Itoa(launch.Port), EnvBasePath+"="+launch.BasePath, EnvToken+"="+launch.token, EnvJupyterConfig+"="+launch.jupyterConfig)
 	}
 	return result
 }

@@ -118,6 +118,33 @@ func TestManagerPassesLaunchEnvironment(t *testing.T) {
 	}
 }
 
+// Jupyter runs the config file, so only this user may change it, and it holds
+// no secret.
+func TestManagerWritesPrivateJupyterConfig(t *testing.T) {
+	manager := newTestManager(t, ManagerConfig{})
+	path := filepath.Join(manager.dir, jupyterConfigName)
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dirInfo, err := os.Stat(manager.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 || dirInfo.Mode().Perm() != 0o700 {
+		t.Fatalf("config mode = %v, directory mode = %v", info.Mode().Perm(), dirInfo.Mode().Perm())
+	}
+	environment := launchEnvironment(nil, &Launch{Mode: ModeService, token: "secret", jupyterConfig: path})
+	if !slices.Contains(environment, EnvJupyterConfig+"="+path) {
+		t.Fatalf("service environment = %v", environment)
+	}
+	if command := launchEnvironment(nil, &Launch{Mode: ModeCommand, jupyterConfig: path}); slices.ContainsFunc(command, func(entry string) bool {
+		return strings.HasPrefix(entry, EnvJupyterConfig+"=")
+	}) {
+		t.Fatalf("command environment = %v", command)
+	}
+}
+
 func TestManagerReusesOnlyLiveMatchingLaunches(t *testing.T) {
 	t.Parallel()
 	manager := newTestManager(t, ManagerConfig{})

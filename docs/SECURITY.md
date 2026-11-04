@@ -115,6 +115,8 @@ a secret should use the launch's `ROTARI_LAUNCHER_TOKEN`, which the proxy
 presents through `proxy_headers`, as is or as HTTP Basic credentials. The built-in Jupyter Lab and marimo do, so
 their kernels serve only through the proxy. TensorBoard, MLflow, Aim, Streamlit,
 Datasette, Panel, and Gradio cannot, so another user who finds their port can read what they show.
+No built-in passes the token in a process's arguments, which other users can
+read.
 WebSocket handshakes, used by services such as Jupyter and Streamlit, need
 the same `Origin` as other mutating requests.
 

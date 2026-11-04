@@ -924,7 +924,11 @@ with SIGKILL, ends every launch's process group. Covered by
 process listening on `127.0.0.1:$ROTARI_LAUNCHER_PORT` belongs to the launch
 and its readiness path under `$ROTARI_LAUNCHER_BASE_PATH` answers 2xx or 3xx;
 a process outside the launch on that port fails it. Each service launch gets
-its own `$ROTARI_LAUNCHER_TOKEN`, which never appears in an API response.
+its own `$ROTARI_LAUNCHER_TOKEN`, which never appears in an API response, and
+`$ROTARI_LAUNCHER_JUPYTER_CONFIG`, a Jupyter config file only the server's user
+can read, holding no secret, that sets that token as the login token after
+reading the user's own config, so the built-in Jupyter Lab's token is in no
+process's arguments and a `token = ''` of the user's cannot turn it off.
 Only after readiness does `/_launch/ID/...` forward requests to it, with path
 and query unchanged. Open links in both Artifacts and Launches keep this
 server-wide path, including after refresh on a `/_basedir/ID/` page.

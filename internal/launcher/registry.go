@@ -104,7 +104,7 @@ const (
 	// its port cannot run code. The proxy keeps cross-site requests out
 	// (WithExecGuard), so Jupyter's own Origin check, which would compare
 	// the browser's Origin with the proxy's upstream Host, is turned off.
-	jupyterCommand = `jupyter lab --no-browser --ip=127.0.0.1 --port="$ROTARI_LAUNCHER_PORT" --ServerApp.base_url="$ROTARI_LAUNCHER_BASE_PATH" --IdentityProvider.token="$ROTARI_LAUNCHER_TOKEN" --ServerApp.root_dir="$ROTARI_LAUNCHER_ARTIFACT" --ServerApp.allow_remote_access=True --ServerApp.allow_origin='*'`
+	jupyterCommand = `jupyter lab --no-browser --ip=127.0.0.1 --port="$ROTARI_LAUNCHER_PORT" --ServerApp.base_url="$ROTARI_LAUNCHER_BASE_PATH" --config="$ROTARI_LAUNCHER_JUPYTER_CONFIG" --ServerApp.root_dir="$ROTARI_LAUNCHER_ARTIFACT" --ServerApp.allow_remote_access=True --ServerApp.allow_origin='*'`
 	// MLflow 3.17 on a file-store tracking directory (mlruns), which it
 	// serves only when MLFLOW_ALLOW_FILE_STORE is set.
 	mlflowCommand = `MLFLOW_ALLOW_FILE_STORE=true mlflow ui --backend-store-uri "$ROTARI_LAUNCHER_ARTIFACT" --host 127.0.0.1 --port "$ROTARI_LAUNCHER_PORT" --static-prefix "$ROTARI_LAUNCHER_BASE_PATH" --workers 1`
@@ -505,6 +505,9 @@ func Template() []byte {
 #   ROTARI_LAUNCHER_PORT       service mode: the port to listen on
 #   ROTARI_LAUNCHER_BASE_PATH  service mode: the URL path prefix to serve under
 #   ROTARI_LAUNCHER_TOKEN      service mode: a secret made for this launch
+#   ROTARI_LAUNCHER_JUPYTER_CONFIG
+#                              service mode: a Jupyter config file, for
+#                              --config, that makes that secret the login token
 # Quote them ("$ROTARI_LAUNCHER_ARTIFACT"); paths can contain any character.
 #
 # Settings:

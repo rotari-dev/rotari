@@ -1090,11 +1090,17 @@ func TestJupyterAuthenticatedProxy(t *testing.T) {
 	if os.Getenv("ROTARI_TEST_LAUNCHER_TOOLS") == "" {
 		t.Skip("ROTARI_TEST_LAUNCHER_TOOLS is not set")
 	}
+	// A user's own Jupyter config is read, but cannot turn the token off.
+	configDir := t.TempDir()
+	userConfigRead := filepath.Join(configDir, "read")
+	write(t, filepath.Join(configDir, "jupyter_server_config.py"), "c.IdentityProvider.token = ''\nopen("+strconv.Quote(userConfigRead)+", 'w').close()\n")
+	t.Setenv("JUPYTER_CONFIG_DIR", configDir)
 	f := newArtifactFixture(t)
 	options := launchOptions(t, f.baseDir, launcher.BuiltinCommands()...)
 	handler := Handler(options)
 	started := decodeBody[launcher.Launch](t, serveJSON(t, handler, http.MethodPost, "/api/launch",
 		`{"project_name":"default","run_id":"`+f.runID+`","job_id":"job-1","entry":`+fmt.Sprint(f.entries["many"])+`,"name":"Jupyter Lab"}`))
+	var running launcher.Launch
 	deadline := time.Now().Add(60 * time.Second)
 	for {
 		launch, err := options.Launches.Manager.Get(started.ID)
@@ -1102,6 +1108,7 @@ func TestJupyterAuthenticatedProxy(t *testing.T) {
 			t.Fatal(err)
 		}
 		if launch.State == launcher.StateRunning {
+			running = launch
 			break
 		}
 		if launch.State != launcher.StateStarting || time.Now().After(deadline) {
@@ -1138,6 +1145,25 @@ func TestJupyterAuthenticatedProxy(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(config), &settings); err != nil || settings.Token == "" {
 		t.Fatal("Jupyter configuration has no usable token")
+	}
+	if _, err := os.Stat(userConfigRead); err != nil {
+		t.Errorf("the user's Jupyter config was not read: %v", err)
+	}
+	direct, err := http.Get("http://" + net.JoinHostPort(launcher.LoopbackHost, strconv.Itoa(running.Port)) + running.BasePath + "/api/kernels")
+	if err != nil {
+		t.Fatal(err)
+	}
+	direct.Body.Close()
+	if direct.StatusCode != http.StatusForbidden {
+		t.Errorf("Jupyter without the token = %d, want 403", direct.StatusCode)
+	}
+	// Other users of the host can read every process's arguments.
+	processes, err := exec.Command("ps", "-eo", "args").CombinedOutput()
+	if err != nil {
+		t.Fatalf("ps: %v\n%s", err, processes)
+	}
+	if strings.Contains(string(processes), settings.Token) {
+		t.Error("the launch token is in a process's arguments")
 	}
 	for _, method := range []string{http.MethodGet, http.MethodPost} {
 		path, body, want := "/api/contents", "", http.StatusOK

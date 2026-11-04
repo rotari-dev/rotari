@@ -59,10 +59,10 @@ func TestBuiltinCommands(t *testing.T) {
 		}
 	}
 	// Jupyter runs code, so it requires the launch token, which only the
-	// proxy presents.
+	// proxy presents and no process's arguments show.
 	for _, got := range builtins {
 		if got.Name == "Jupyter Lab" {
-			if got.ProxyHeaders["Authorization"] != "token $"+EnvToken || !strings.Contains(got.Command, `"$`+EnvToken+`"`) {
+			if got.ProxyHeaders["Authorization"] != "token $"+EnvToken || !strings.Contains(got.Command, `--config="$`+EnvJupyterConfig+`"`) || strings.Contains(got.Command, EnvToken) {
 				t.Errorf("Jupyter Lab does not require the launch token: %+v", got)
 			}
 		}
