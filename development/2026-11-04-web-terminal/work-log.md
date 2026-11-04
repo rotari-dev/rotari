@@ -57,3 +57,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The test passes on the current code and failed when `esc`, `jsArg`, or the Markdown escape was weakened, or when the original `showArtifacts` bug was restored; a first version with one combined value missed the `jsArg` case. It passed three more runs and once under `-race`. After rebasing onto `main`, `go test ./conformance ./conformance/05-web` passed. No real browser was used.
 
 **Remaining:** Gaps listed in [the phase 1 results](plan.md#phase-1-results); phase 2.
+
+## Check the remaining stored values
+
+**Commits:** 2026-11-04 16:35:49 `c0985fc6`.
+
+**Change:** `TestStoredValuesStayText` now stores basedir paths, config files, diagnoses, executor options, and launcher names, targets, and output, and opens the recovery dialog. Each page lists text it must show. WEB-28 moved from partial to conformance, and `plan.md` lists the gaps that remain.
+
+**Reason:** These were the gaps the previous entry left open, at the user's request.
+
+**Plan impact:** Phase 1's value coverage is complete for what the CLI can record. Phase 2 is next.
+
+**Validation:** The test passes in all four contexts, passed two more runs and once under `-race`, and failed with `esc` weakened. After rebasing onto `main`, `go test ./conformance ./conformance/05-web` passed. No real browser was used. Full `go test ./...` was not rerun, since only a test and documents changed.
+
+**Remaining:** Recovery dialog reasons rest on review; a service launch's progress view is not rendered; phase 2.
