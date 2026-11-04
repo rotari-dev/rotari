@@ -197,12 +197,12 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	dir, lock, err := createRuntimeDir(os.TempDir()) // NOSONAR: createRuntimeDir refuses a replaceable temporary directory and creates a unique 0700 directory.
+	dir, lock, err := createRuntimeDir(os.TempDir())
 	if err != nil {
 		lifetime.Close()
 		return nil, err
 	}
-	if err := os.WriteFile(filepath.Join(dir, jupyterConfigName), []byte(jupyterConfig), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, jupyterConfigName), []byte(jupyterConfig), 0o600); err != nil { // NOSONAR: dir is the unique 0700 directory createRuntimeDir made under a checked parent.
 		lock.Close()
 		os.RemoveAll(dir)
 		lifetime.Close()
