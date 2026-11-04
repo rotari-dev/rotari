@@ -2,10 +2,13 @@ package web
 
 import (
 	"encoding/json"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/rotari-dev/rotari/conformance/support"
 )
 
 // hostileBrowserCheck is hostilePageCheck in a real browser, which runs what
@@ -42,6 +45,19 @@ const prepare = ` + "`" + `
   }, true);
 ` + "`" + `;
 
+// Adds what a value that became markup could: a handler and a script. Neither may
+// run, and the browser must report them.
+const plantExpression = ` + "`" + `(async () => {
+  const holder = document.createElement('div');
+  holder.innerHTML = '<img src=x onerror="window.__planted = 1">';
+  document.body.append(holder);
+  const script = document.createElement('script');
+  script.textContent = 'window.__planted = 2';
+  document.body.append(script);
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  return { planted: window.__planted, violations: window.__violations };
+})()` + "`" + `;
+
 const inspectExpression = ` + "`" + `(() => ({
   injected: window.__injected !== undefined,
   markup: [...document.querySelectorAll('[data-injected]')].slice(0, 1).map((node) => (node.parentElement || node).outerHTML.slice(0, 300)),
@@ -54,9 +70,9 @@ const inspectExpression = ` + "`" + `(() => ({
 
 const clickExpression = (seen) => ` + "`" + `(() => {
   const seen = new Set(${JSON.stringify(seen)});
-  for (const control of document.querySelectorAll('button, summary, [onclick], [role="button"]')) {
+  for (const control of document.querySelectorAll('button, summary, [data-action], [role="button"]')) {
     if (control.disabled || !control.isConnected) continue;
-    const key = [control.tagName, control.className, control.getAttribute('onclick') || '', (control.textContent || '').slice(0, 60)].join('|');
+    const key = [control.tagName, control.className, control.getAttribute('data-action') || '', control.getAttribute('data-args') || '', (control.textContent || '').slice(0, 60)].join('|');
     if (seen.has(key)) continue;
     control.click();
     return key;
@@ -90,6 +106,13 @@ async function check(cdp, page) {
     }
   };
   await withPage(cdp, address, { width: 1280, height: 900, settleMs: 800, beforeNavigate }, async (session) => {
+    if (page.plant) {
+      const { planted, violations } = await session.evaluate(plantExpression);
+      if (planted !== undefined) found.add('a planted script ran: ' + planted);
+      if (violations.length < 2) found.add('the browser reported ' + violations.length + ' violations, want one each for the handler and the script');
+      shown = true;
+      return;
+    }
     const inspect = async (when) => {
       const state = await session.evaluate(inspectExpression.replace('EXPECTED', JSON.stringify(page.expect || [])));
       if (state.injected) found.add('ran as code ' + when);
@@ -205,6 +228,39 @@ func TestStoredValuesStayTextInBrowser(t *testing.T) {
 			renderHostilePagesInBrowser(t, node, chrome, helper, site.viewers, "")
 		})
 	}
+}
+
+// TestPagePolicyBlocksPlantedScript runs what a value that became markup could,
+// on each kind of live page. It also shows that the browser check sees violations,
+// which is what makes its finding none on the other pages mean something.
+func TestPagePolicyBlocksPlantedScript(t *testing.T) {
+	covers(t, "WEB-29")
+	chrome := browserForTests(t)
+	node, err := exec.LookPath("node")
+	if err != nil || exec.Command(node, "-e", `if (typeof WebSocket !== "function") process.exit(1)`).Run() != nil {
+		if os.Getenv("ROTARI_REQUIRE_BROWSER_TESTS") != "" {
+			t.Fatal("the browser check needs Node 22 or later")
+		}
+		t.Skip("the browser check needs Node 22 or later")
+	}
+	helper, err := filepath.Abs(filepath.Join("..", "..", "scripts", "web-browser.mjs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := support.NewEnv(t)
+	run := e.CreateFinishedRun()
+	table := filepath.Join(e.Root, "data.csv")
+	if err := os.WriteFile(table, []byte("a,b\n1,2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	live := e.StartWeb()
+	pages := []hostilePage{
+		{Name: "projects", URL: live + "/", Plant: true},
+		{Name: "run", URL: live + "/project/" + url.PathEscape(run.Project) + "/run/" + url.PathEscape(run.RunID), Plant: true},
+		{Name: "recent jobs", URL: live + "/jobs/", Plant: true},
+		{Name: "Table viewer", URL: e.StartTableView(table), Plant: true},
+	}
+	renderHostilePagesInBrowser(t, node, chrome, helper, pages, "")
 }
 
 func renderHostilePagesInBrowser(t *testing.T, node, chrome, helper string, pages []hostilePage, token string) {

@@ -412,7 +412,7 @@ function recoverRunButton(project, runID) {
     esc(project) +
     '" data-run="' +
     esc(runID) +
-    '" title="Recover the interrupted run, as rotari unlock does" onclick="showRecoverRun(this.dataset.project, this.dataset.run)">Recover…</button>'
+    '" title="Recover the interrupted run, as rotari unlock does" data-action="showRecoverRun">Recover…</button>'
   );
 }
 // recoverActionText says what applying the preview does.

@@ -255,7 +255,7 @@ func TestCLIFlagPairWebNotificationsEffect(t *testing.T) {
 		{name: "enabled", page: enabledJobs, want: []byte("const jobsNotificationsDefaultOn = true")},
 		{name: "disabled", page: disabledJobs, want: []byte("const jobsNotificationsDefaultOn = false")},
 	} {
-		if !bytes.Contains(check.page, []byte(`id="notify-toggle"`)) || !bytes.Contains(check.page, []byte(`onclick="toggleJobsNotifications()"`)) || !bytes.Contains(check.page, check.want) || !bytes.Contains(check.page, []byte("const jobsPageIsLive = false")) || !bytes.Contains(check.page, []byte("if (jobsPageIsLive)\n        window.initializeNotificationInbox({")) {
+		if !bytes.Contains(check.page, []byte(`id="notify-toggle"`)) || !bytes.Contains(check.page, []byte(`data-action="toggleJobsNotifications"`)) || !bytes.Contains(check.page, check.want) || !bytes.Contains(check.page, []byte("const jobsPageIsLive = false")) || !bytes.Contains(check.page, []byte("if (jobsPageIsLive)\n        window.initializeNotificationInbox({")) {
 			t.Fatalf("static Recent jobs page does not expose the %s notification toggle with the requested default", check.name)
 		}
 	}

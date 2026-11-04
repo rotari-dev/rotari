@@ -46,6 +46,14 @@ return it from its read API. This does not encrypt the connection: a
 replacement URL is sent to the Web server when saved. Use HTTPS through a
 trusted reverse proxy whenever the browser-to-server network is not trusted.
 
+## Script on Web UI pages
+
+Live Web UI and Table viewer pages send a `Content-Security-Policy` that runs only
+their own scripts and limits requests to the same origin, as a second line of
+defense if a stored value ever became markup. It does not cover a static export,
+which has no response headers, or a launched service, which serves its own pages
+on the same origin.
+
 ## Artifact files and static exports
 
 `rotari run` reads the configuration files, shell scripts, and Python files a

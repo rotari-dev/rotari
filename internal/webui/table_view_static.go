@@ -97,7 +97,7 @@ func GenerateStaticTableView(path, outputDir string) (StaticTableViewCopy, error
 	json.HTMLEscape(&escaped, data)
 	scripts := "<script>\nwindow.__ROTARI_TABLE_VIEW_STATIC__ = " + escaped.String() + ";\n</script>\n" +
 		`    <script src="table_view_static.js"></script>`
-	page := tableViewPage([]string{"web_fonts.css", "web_tokens.css", "web_app_highlight.css"}, scripts)
+	page := tableViewPage([]string{"web_fonts.css", "web_tokens.css", "web_app_highlight.css"}, scripts, "")
 	if err := os.RemoveAll(outputDir); err != nil {
 		return StaticTableViewCopy{}, err
 	}

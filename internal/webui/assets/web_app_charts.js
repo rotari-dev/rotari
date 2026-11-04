@@ -310,9 +310,9 @@ function laneRowsHTML(entries, rowHeight) {
         rowHeight.toFixed(1) +
         'px"><button type="button" class="lane-label" title="Show ' +
         esc(entry.name) +
-        ' in the table" onclick="focusMatrixJob(' +
-        esc(JSON.stringify(entry.lane.job_id)) +
-        ')">' +
+        ' in the table" ' +
+        actionAttributes("focusMatrixJob", entry.lane.job_id) +
+        '>' +
         esc(entry.name) +
         '</button><div class="lane-track">' +
         track +

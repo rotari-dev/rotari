@@ -1,3 +1,122 @@
+// The controls of the application and Recent jobs pages name an action in
+// data-action (click), data-change-action, or data-toggle-action, with any
+// arguments as JSON in data-args. A Content-Security-Policy forbids inline
+// handlers, and only these actions can run, so a control cannot call anything
+// else on the page.
+(() => {
+  const actions = {
+    cancelRun: (el) => cancelRun(el.dataset.project, el.dataset.run),
+    changeLogStream: (el) => changeLogStream(el.value),
+    chooseArtifactLaunch: (el, args) => chooseArtifactLaunch(...args, el),
+    clearSelectedJobs: () => clearSelectedJobs(),
+    closeArtifactLaunch: () => closeArtifactLaunch(),
+    closeDrawer: () => closeDrawer(),
+    closeOutputModal: () => closeOutputModal(),
+    controlSelectedRunJobs: (_, args) => controlSelectedRunJobs(...args),
+    copyCommandGuide: (el) => copyCommandGuide(el.closest("pre"), el),
+    copyIdentityValue: (el) => copyIdentityValue(el),
+    copyJobsValue: (el) => copyJobsValue(el),
+    copyLogTail: (el) => copyLogTail(el),
+    copyModalOutput: (el) => copyModalOutput(el),
+    copySelectedJobs: (el, args) => copySelectedJobs(el.dataset.project, el.dataset.run, ...args),
+    deleteProject: (el) => deleteProject(el.dataset.project),
+    deleteRun: (el) => deleteRun(el.dataset.project, el.dataset.run),
+    focusMatrixJob: (_, args) => focusMatrixJob(...args),
+    generateLauncherConfig: () => generateLauncherConfig(),
+    historySearchAddCondition: () => historySearchAddCondition(),
+    historySearchAddScope: () => historySearchAddScope(),
+    historySearchBasedirChanged: (el) => historySearchBasedirChanged(el),
+    historySearchPage: (_, args) => historySearchPage(...args),
+    historySearchProjectChanged: (el) => historySearchProjectChanged(el),
+    historySearchRemoveCondition: (el) => historySearchRemoveCondition(el),
+    historySearchRemoveScope: (el) => historySearchRemoveScope(el),
+    historySearchToggleCustomRange: (el) => historySearchToggleCustomRange(el),
+    historySearchUpdateTarget: (el) => historySearchUpdateTarget(el),
+    historySearchUpdateValueControl: (el) => historySearchUpdateValueControl(el),
+    loadArtifactDirectory: (_, args) => loadArtifactDirectory(...args),
+    loadArtifactText: (_, args) => loadArtifactText(...args),
+    log: (el) => log(el.dataset.project, el.dataset.logRun, el.dataset.logJob, el.dataset.attempt, el.dataset.logMode),
+    moreArtifactTable: () => moreArtifactTable(),
+    moreArtifactText: () => moreArtifactText(),
+    openArtifact: (_, args) => openArtifact(...args),
+    openMatrixCell: (el) => openMatrixCell(el),
+    popupMenuToggled: (el) => popupMenuToggled(el),
+    refreshWithBasedirs: () => refreshWithBasedirs(),
+    removeQueueJob: (el) => removeQueueJob(el.dataset.project, el.dataset.job, el.dataset.label),
+    saveQueueJob: (el) => saveQueueJob(el.dataset.project, el.dataset.job, el.closest("tr")),
+    selectAllRunJobs: () => selectAllRunJobs(),
+    selectFailedJobs: () => selectFailedJobs(),
+    selectFailedUnfinishedJobs: () => selectFailedUnfinishedJobs(),
+    selectJobAttempt: (_, args) => selectJobAttempt(...args),
+    setMatrixAxis: (el) => setMatrixAxis(el),
+    setTableColumn: (el) => setTableColumn(el),
+    showArtifacts: (_, args) => showArtifacts(...args),
+    showConfig: (_, args) => showConfig(...args),
+    showDiagnosis: (el) => showDiagnosis(el),
+    showJobReport: (el) => showJobReport(el),
+    showLaunchLog: (_, args) => showLaunchLog(...args),
+    showLaunches: (_, args) => showLaunches(...args),
+    showLog: (el) => showLog(el.dataset.project, el.dataset.run, el.dataset.job, el.dataset.attempt, "stdout", el.dataset.logMode),
+    showNotes: (el) => showNotes(el),
+    showNotificationConfig: () => showNotificationConfig(),
+    showOriginalOutput: (el) => showOriginalOutput(el.dataset.run, el.dataset.job, el),
+    showPath: (el) => showPath(el.dataset.path),
+    showRecoverRun: (el) => showRecoverRun(el.dataset.project, el.dataset.run),
+    showRunFiles: (_, args) => showRunFiles(...args),
+    showRunReport: (el) => showRunReport(el),
+    startArtifactLaunch: (_, args) => startArtifactLaunch(...args),
+    stopLaunch: (_, args) => stopLaunch(...args),
+    toggleAllJobsNotificationBasedirs: (el) => toggleAllJobsNotificationBasedirs(el),
+    toggleAllNotificationBasedirs: (el) => toggleAllNotificationBasedirs(el),
+    toggleArtifactMarkdown: () => toggleArtifactMarkdown(),
+    toggleDrawer: () => toggleDrawer(),
+    toggleJobsNotificationBasedir: (el) => toggleJobsNotificationBasedir(el),
+    toggleJobsNotifications: () => toggleJobsNotifications(),
+    toggleJobsSidebar: (el) => toggleJobsSidebar(el),
+    toggleNotificationBasedir: (el) => toggleNotificationBasedir(el),
+    toggleReportRedaction: () => toggleReportRedaction(),
+    toggleReportSource: () => toggleReportSource(),
+    toggleRunNotifications: () => toggleRunNotifications(),
+    toggleSettingsMenu: () => toggleSettingsMenu(),
+    toggleSidebarAllProjects: (el) => toggleSidebarAllProjects(el),
+    toggleSidebarBasedir: (el) => toggleSidebarBasedir(el),
+    toggleSidebarProject: (el) => toggleSidebarProject(el),
+    closeOutputModalOnBackdrop: (el, _, event) => {
+      if (event.target === el) closeOutputModal();
+    },
+    reloadPage: () => location.reload(),
+    submitNotificationConfig: () =>
+      document.getElementById("notification-config-editor").requestSubmit(),
+  };
+  const run = (element, name, event) => {
+    if (!Object.hasOwn(actions, name)) {
+      console.error("rotari: unknown page action " + name);
+      return;
+    }
+    actions[name](element, JSON.parse(element.dataset.args || "[]"), event);
+  };
+  // Clicks run every action from the target outward, as bubbling would.
+  document.addEventListener("click", (event) => {
+    for (let element = event.target; element; element = element.parentElement) {
+      if (element.dataset?.action) run(element, element.dataset.action, event);
+    }
+  });
+  // These are caught on their way down: a toggle event does not bubble.
+  for (const [type, key] of [
+    ["change", "changeAction"],
+    ["toggle", "toggleAction"],
+  ]) {
+    document.addEventListener(
+      type,
+      (event) => {
+        const name = event.target.dataset?.[key];
+        if (name) run(event.target, name, event);
+      },
+      true,
+    );
+  }
+})();
+
 // The page frame shared by the application and Recent jobs pages, inlined
 // in <head> of both: the viewer's theme, the Settings menu, the navigation
 // drawer on narrow screens, the sidebar's width, and why notifications are

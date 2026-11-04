@@ -1,10 +1,10 @@
 # Plan: Web UI hardening, then a built-in terminal
 
 Created: 2026-11-04
-Status: Phase 1 is done, with the gaps listed in
-[its results](#phase-1-results). Phase 2 is next. Phases 1 and 2 are worth doing on
-their own; [the gate](#gate-decide-whether-to-build-the-terminal) decides whether
-phases 3 to 5 happen at all.
+Status: Phases 1 and 2 are implemented; phase 2 awaits its first run in Chrome on
+CI, which [its results](#phase-2-results) describe.
+[The gate](#gate-decide-whether-to-build-the-terminal) decides whether phases 3 to
+5 happen at all.
 
 ## Goal
 
@@ -224,6 +224,25 @@ main development machine. Until a policy exists, that check finds nothing.
 Done when: a real-browser run through every view shows no violations, and a
 planted handler and inline script are blocked. Add a contract ID (next free after
 WEB-25) and a conformance test for the header.
+
+### Phase 2 results
+
+- All 97 inline handlers became `data-action`, `data-change-action`, and
+  `data-toggle-action` attributes, run by one listener in `web_shell.js` from a list
+  of allowed actions. Calling any named global function would have let a value that
+  became markup call anything, which is why the list is explicit. That markup could
+  still run a listed action, with its own arguments.
+- The nonce is per response, on application, Recent jobs, and Table viewer pages.
+  Scripts match by nonce alone, without `'self'`, since a launched service answers on
+  the same origin. This differs from the first draft of the policy above.
+- It was enforced at once, without the planned report-only step, because
+  `TestStoredValuesStayTextInBrowser` fails on any violation across every page and
+  control. That test runs only where Chrome exists, so CI is the first real check.
+- Tests that clicked elements left over from an earlier render were changed to look
+  them up again: a listener on the document does not see a detached element's click,
+  which no user can produce.
+- A launched service still shares the origin, so its pages are not limited by the
+  policy and can call the rotari API. Static exports have no policy.
 
 ## Gate: decide whether to build the terminal
 

@@ -96,7 +96,7 @@ function pathButton(path) {
   return (
     '<button class="show-path" data-path="' +
     esc(path) +
-    '" onclick="showPath(this.dataset.path)">Path</button>'
+    '" data-action="showPath">Path</button>'
   );
 }
 function deleteRunButton(projectName, runID) {
@@ -105,7 +105,7 @@ function deleteRunButton(projectName, runID) {
     esc(projectName) +
     '" data-run="' +
     esc(runID) +
-    '" onclick="deleteRun(this.dataset.project, this.dataset.run)">Delete</button>'
+    '" data-action="deleteRun">Delete</button>'
   );
 }
 function deleteProjectButton(projectName, running) {
@@ -116,7 +116,15 @@ function deleteProjectButton(projectName, running) {
     (running
       ? ' disabled title="Running projects cannot be deleted"'
       : ' title="Delete the project: its queue, runs, and project configuration"') +
-    ' onclick="deleteProject(this.dataset.project)">Delete</button>'
+    ' data-action="deleteProject">Delete</button>'
+  );
+}
+// actionAttributes names the action a control runs and its arguments, which
+// web_shell.js passes to it as data. An inline handler would need the arguments
+// quoted for JavaScript, and a Content-Security-Policy that forbids it.
+function actionAttributes(name, ...args) {
+  return (
+    'data-action="' + name + '" data-args="' + esc(JSON.stringify(args)) + '"'
   );
 }
 function basedirURL(id, path) {
@@ -540,7 +548,7 @@ function activeSidebarProjectsHTML(entry, queues, activeProject, activeRun) {
         esc(projectName) +
         '"><div class="sidebar-project-row"><button type="button" class="sidebar-toggle" aria-expanded="' +
         (expanded ? "true" : "false") +
-        '" aria-label="Toggle runs" onclick="toggleSidebarProject(this)"></button><a class="sidebar-project-link' +
+        '" aria-label="Toggle runs" data-action="toggleSidebarProject"></button><a class="sidebar-project-link' +
         (projectActive ? " active" : "") +
         ' basedir-switch" href="' +
         basedirURL(entry.id, "/project/" + encodeURIComponent(projectName)) +
@@ -596,7 +604,7 @@ function sidebarBasedirHTML(
     entry.id +
     '"><div class="sidebar-project-row basedir-row"><button type="button" class="sidebar-toggle" aria-expanded="' +
     (isExpanded ? "true" : "false") +
-    '" aria-label="Toggle projects" onclick="toggleSidebarBasedir(this)"></button><a class="sidebar-project-link' +
+    '" aria-label="Toggle projects" data-action="toggleSidebarBasedir"></button><a class="sidebar-project-link' +
     (isActive ? " active" : "") +
     ' basedir-path basedir-switch" title="' +
     esc(entry.path) +
@@ -606,7 +614,7 @@ function sidebarBasedirHTML(
     basedirLabelHTML(entry) +
     '</a><label class="basedir-bell" title="Enable notifications"><input class="basedir-notification-toggle" type="checkbox" data-basedir-id="' +
     entry.id +
-    '" aria-label="Notify about runs in this basedir" onchange="toggleNotificationBasedir(this)" />' +
+    '" aria-label="Notify about runs in this basedir" data-change-action="toggleNotificationBasedir" />' +
     bellIconSVG +
     '</label></div><div class="sidebar-projects basedir-contents"' +
     (isExpanded ? ">" : " hidden>") +
@@ -614,7 +622,7 @@ function sidebarBasedirHTML(
     (allProjectsExpanded ? " expanded" : "") +
     '"><div class="sidebar-project-row"><button type="button" class="sidebar-toggle" aria-expanded="' +
     (allProjectsExpanded ? "true" : "false") +
-    '" aria-label="Toggle project list" onclick="toggleSidebarAllProjects(this)"></button><a class="sidebar-project-link basedir-switch' +
+    '" aria-label="Toggle project list" data-action="toggleSidebarAllProjects"></button><a class="sidebar-project-link basedir-switch' +
     (isActive && isOverview ? " active" : "") +
     '" href="' +
     basedirURL(entry.id, "/") +
@@ -1858,7 +1866,7 @@ function columnTable(name, columns, rows, header, className) {
           column.key +
           '"' +
           (column.shown ? " checked" : "") +
-          ' onchange="setTableColumn(this)"> ' +
+          ' data-change-action="setTableColumn"> ' +
           column.label +
           (column.show === "auto" && column.same
             ? ' <span class="meta">same for all</span>'
@@ -1976,10 +1984,10 @@ function runJobsHTML(q, run, runID) {
 function runSelectionHTML() {
   return (
     '<div class="toolbar run-selection" role="group" aria-label="Select jobs">' +
-    '<button type="button" onclick="selectAllRunJobs()" title="Select every job">Select all</button>' +
-    '<button type="button" class="select-failed" onclick="selectFailedJobs()">Select failed</button>' +
-    '<button type="button" class="select-failed-unfinished" onclick="selectFailedUnfinishedJobs()">Select failed + unfinished</button>' +
-    '<button type="button" class="unselect-all" disabled onclick="clearSelectedJobs()" title="Clear all selected jobs">Unselect all</button>' +
+    '<button type="button" data-action="selectAllRunJobs" title="Select every job">Select all</button>' +
+    '<button type="button" class="select-failed" data-action="selectFailedJobs">Select failed</button>' +
+    '<button type="button" class="select-failed-unfinished" data-action="selectFailedUnfinishedJobs">Select failed + unfinished</button>' +
+    '<button type="button" class="unselect-all" disabled data-action="clearSelectedJobs" title="Clear all selected jobs">Unselect all</button>' +
     '<span class="selection-count meta" aria-live="polite"></span></div>'
   );
 }
@@ -1996,18 +2004,18 @@ function runActionsHTML(q, run, runID) {
     '<div class="toolbar web-copy-controls run-toolbar">' +
     '<button type="button" class="create-selected" disabled' +
     data +
-    ' onclick="copySelectedJobs(this.dataset.project, this.dataset.run, false)" title="Replace the queue with the selected jobs">Create queue</button>' +
+    ' data-action="copySelectedJobs" data-args="[false]" title="Replace the queue with the selected jobs">Create queue</button>' +
     '<button type="button" class="append-selected" disabled' +
     data +
-    ' onclick="copySelectedJobs(this.dataset.project, this.dataset.run, true)" title="Add the selected jobs to the queue">Append to queue</button>' +
+    ' data-action="copySelectedJobs" data-args="[true]" title="Add the selected jobs to the queue">Append to queue</button>' +
     '<button type="button" class="run-ai" disabled title="Prepare run report"' +
     data +
-    ' onclick="showRunReport(this)">Report</button>' +
-    '<button type="button" class="cancel-selected-jobs" disabled onclick="controlSelectedRunJobs(\'cancel\')">Cancel selected</button>' +
-    '<button type="button" class="suspend-resume-selected-jobs" disabled onclick="controlSelectedRunJobs(\'suspend-resume\')">Suspend selected</button>' +
+    ' data-action="showRunReport">Report</button>' +
+    '<button type="button" class="cancel-selected-jobs" disabled data-action="controlSelectedRunJobs" data-args="[&quot;cancel&quot;]">Cancel selected</button>' +
+    '<button type="button" class="suspend-resume-selected-jobs" disabled data-action="controlSelectedRunJobs" data-args="[&quot;suspend-resume&quot;]">Suspend selected</button>' +
     '<span class="toolbar-gap"></span>' +
     filesButton +
-    '<button type="button" class="run-config-snapshot" onclick="showConfig(true)"' +
+    '<button type="button" class="run-config-snapshot" data-action="showConfig" data-args="[true]"' +
     (run.context?.config_snapshot_paths?.length
       ? ' title="View the configuration saved with this run"'
       : ' disabled title="No config snapshot"') +
@@ -2018,14 +2026,14 @@ function runActionsHTML(q, run, runID) {
     (run.running
       ? '<button type="button" class="cancel-run"' +
         data +
-        ' onclick="cancelRun(this.dataset.project, this.dataset.run)">Cancel run</button>'
+        ' data-action="cancelRun">Cancel run</button>'
       : "") +
     '<button type="button" class="delete-run"' +
     data +
     (run.running
       ? ' disabled title="Running runs cannot be deleted"'
       : ' title="Delete run history"') +
-    ' onclick="deleteRun(this.dataset.project, this.dataset.run)">Delete run</button></div>'
+    ' data-action="deleteRun">Delete run</button></div>'
   );
 }
 function showRunReport(button) {
@@ -2047,7 +2055,7 @@ function copyButtonHTML(value, label) {
     esc(value) +
     '" data-copy-title="Copy ' +
     label +
-    '" onclick="copyIdentityValue(this)">' +
+    '" data-action="copyIdentityValue">' +
     copyIconSVG +
     "</button>"
   );
@@ -2111,15 +2119,9 @@ function runJobCells(q, run, runID, j) {
             (attempt, index) =>
               '<button type="button" class="' +
               (attempt.id === j.attempt_id ? "selected" : "") +
-              '" onclick="selectJobAttempt(' +
-              jsArg(q.project_name) +
-              "," +
-              jsArg(runID) +
-              "," +
-              jsArg(j.id) +
-              "," +
-              jsArg(attempt.id) +
-              ')">' +
+              '" ' +
+              actionAttributes("selectJobAttempt", q.project_name, runID, j.id, attempt.id) +
+              ">" +
               (index === 0 ? "Latest: " : "") +
               esc(attempt.id) +
               "</button>",
@@ -2222,7 +2224,7 @@ function runJobActions(q, run, runID, j) {
       esc(logAttemptID) +
       '" data-log-mode="' +
       esc(j.log_mode || "merge") +
-      '" onclick="log(this.dataset.project, this.dataset.logRun, this.dataset.logJob, this.dataset.attempt, this.dataset.logMode)">Log</button>'
+      '" data-action="log">Log</button>'
     : '<button class="view-log"' +
       jobData +
       ' data-attempt="' +
@@ -2231,7 +2233,7 @@ function runJobActions(q, run, runID, j) {
       esc(j.log_mode || "") +
       '"' +
       (started ? "" : ' disabled title="Job has not started yet"') +
-      " onclick=\"showLog(this.dataset.project, this.dataset.run, this.dataset.job, this.dataset.attempt, 'stdout', this.dataset.logMode)\">Log</button>";
+      " data-action=\"showLog\">Log</button>";
   const diagnoses = (result && result.diagnoses) || [];
   const diagnosisStatus = (result && result.diagnosis_status) || "";
   const failed = !!(result && result.exit_code !== 0);
@@ -2247,13 +2249,13 @@ function runJobActions(q, run, runID, j) {
             diagnoses: diagnoses,
           }),
         ) +
-        '" onclick="showDiagnosis(this)">Diagnosis</button>'
+        '" data-action="showDiagnosis">Diagnosis</button>'
       : '<button class="diagnosis" disabled title="Available after a finalized failed result with saved analysis">Diagnosis</button>';
   const noteLabels = j.note_labels || [];
   const notesControl = noteLabels.length
     ? '<button class="view-notes" data-notes="' +
       esc(JSON.stringify(noteLabels)) +
-      '" onclick="showNotes(this)">Notes (' +
+      '" data-action="showNotes">Notes (' +
       noteLabels.length +
       ")</button>"
     : '<button class="view-notes" disabled title="No notes on this job; add one with rotari note ATTEMPT_ID TEXT">Notes</button>';
@@ -2263,15 +2265,9 @@ function runJobActions(q, run, runID, j) {
   const artifactsReady = !!result || !!j.submitted_at;
   const notStarted = ' disabled title="Job has not started yet"';
   const artifacts = artifactsReady
-    ? '<button class="view-artifacts" onclick="showArtifacts(' +
-      jsArg(q.project_name) +
-      "," +
-      jsArg(logRun) +
-      "," +
-      jsArg(logJob) +
-      "," +
-      jsArg(artifactAttemptID) +
-      ')">Artifacts</button>'
+    ? '<button class="view-artifacts" ' +
+      actionAttributes("showArtifacts", q.project_name, logRun, logJob, artifactAttemptID) +
+      ">Artifacts</button>"
     : '<button class="view-artifacts"' + notStarted + ">Artifacts</button>";
   return actionsCell([
     viewLog,
@@ -2280,7 +2276,7 @@ function runJobActions(q, run, runID, j) {
     notesControl,
     '<button class="job-ai" title="Prepare job report"' +
       jobData +
-      ' onclick="showJobReport(this)">Report</button>',
+      ' data-action="showJobReport">Report</button>',
     pathButton(
       state.base_dir +
         "/projects/" +
@@ -2421,7 +2417,7 @@ function commandGuideHTML(text) {
     esc(text) +
     '<span class="command-guide-copied" role="status">Copied!</span><button class="command-guide-copy" type="button" title="Copy command" aria-label="Copy command" data-icon="' +
     esc(copyIconSVG) +
-    '" onclick="copyCommandGuide(this.closest(\'pre\'), this)">' +
+    '" data-action="copyCommandGuide">' +
     copyIconSVG +
     "</button></pre>"
   );
@@ -2477,7 +2473,7 @@ function popupMenuAttributes(key) {
   return (
     ' data-menu-key="' +
     esc(key) +
-    '" ontoggle="popupMenuToggled(this)"' +
+    '" data-toggle-action="popupMenuToggled"' +
     (openPopupMenus.has(key) ? " open" : "")
   );
 }
@@ -2540,7 +2536,7 @@ function copyIconForValue(value, label) {
     esc(value) +
     '" data-copy-title="Copy ' +
     label +
-    '" onclick="copyIdentityValue(this)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-4"></path><rect x="9" y="4" width="11" height="11" rx="1"></rect></svg></button>'
+    '" data-action="copyIdentityValue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-4"></path><rect x="9" y="4" width="11" height="11" rx="1"></rect></svg></button>'
   );
 }
 async function copyIdentityValue(button) {
@@ -2599,16 +2595,16 @@ function queueJobActions(queue, j) {
         esc(origin.run_id) +
         '" data-job="' +
         esc(origin.job_id) +
-        '" onclick="showOriginalOutput(this.dataset.run, this.dataset.job, this)">View log</button>'
+        '" data-action="showOriginalOutput">View log</button>'
       : "",
     '<button class="save-job"' +
       jobData +
-      " disabled onclick=\"saveQueueJob(this.dataset.project, this.dataset.job, this.closest('tr'))\">Save</button>",
+      " disabled data-action=\"saveQueueJob\">Save</button>",
     '<button class="remove-job"' +
       jobData +
       ' data-label="' +
       esc(j.name || j.id) +
-      '" onclick="removeQueueJob(this.dataset.project, this.dataset.job, this.dataset.label)">Remove</button>',
+      '" data-action="removeQueueJob">Remove</button>',
   ]);
 }
 // queueJobCells is a queued job's cell in each of queueJobColumns.

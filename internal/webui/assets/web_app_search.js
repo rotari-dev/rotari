@@ -75,13 +75,13 @@ const historySearchStatusOptions = {
 
 function historySearchConditionHTML(join = "and", target = "job") {
   return `<div class="history-search-condition">
-    <select class="history-search-field" aria-label="Search field" onchange="historySearchUpdateValueControl(this)">${historySearchOptionsHTML(target)}</select>
+    <select class="history-search-field" aria-label="Search field" data-change-action="historySearchUpdateValueControl">${historySearchOptionsHTML(target)}</select>
     ${historySearchValueControl("job", "command")}
     <select class="history-search-join" aria-label="Combine condition" ${join === "first" ? "hidden" : ""}>
       <option value="and" ${join === "and" ? "selected" : ""}>AND</option>
       <option value="or" ${join === "or" ? "selected" : ""}>OR</option>
     </select>
-    ${join !== "first" ? '<button type="button" class="history-search-remove" aria-label="Remove condition" onclick="historySearchRemoveCondition(this)">−</button>' : ""}
+    ${join !== "first" ? '<button type="button" class="history-search-remove" aria-label="Remove condition" data-action="historySearchRemoveCondition">−</button>' : ""}
   </div>`;
 }
 
@@ -195,23 +195,23 @@ function historySearchScopeHTML() {
     )
     .join("");
   return `<div class="history-search-scope-row">
-    <select class="history-search-scope-basedir" aria-label="Basedir" onchange="historySearchBasedirChanged(this)">
+    <select class="history-search-scope-basedir" aria-label="Basedir" data-change-action="historySearchBasedirChanged">
       <option value="">Choose basedir</option>
       <option value="${historySearchAllBasedirs}">All basedirs</option>${basedirOptions}
     </select>
-    <select class="history-search-scope-project" aria-label="Project" onchange="historySearchProjectChanged(this)" disabled>
+    <select class="history-search-scope-project" aria-label="Project" data-change-action="historySearchProjectChanged" disabled>
       <option value="">All projects</option>
     </select>
     <select class="history-search-scope-run" aria-label="Run" disabled>
       <option value="">All runs</option>
     </select>
-    <button type="button" class="history-search-scope-remove" aria-label="Remove search range" onclick="historySearchRemoveScope(this)">−</button>
+    <button type="button" class="history-search-scope-remove" aria-label="Remove search range" data-action="historySearchRemoveScope">−</button>
   </div>`;
 }
 
 function historySearchInitialScopeHTML() {
   return historySearchScopeHTML().replace(
-    '<button type="button" class="history-search-scope-remove" aria-label="Remove search range" onclick="historySearchRemoveScope(this)">−</button>',
+    '<button type="button" class="history-search-scope-remove" aria-label="Remove search range" data-action="historySearchRemoveScope">−</button>',
     "",
   );
 }
@@ -223,13 +223,13 @@ function historySearchPageHTML() {
         <legend>Search range</legend>
         <p class="history-search-scope-help">Choose a basedir or all basedirs; a single basedir can be narrowed to a project and run. Added ranges are searched together.</p>
         <div id="history-search-scopes">${historySearchInitialScopeHTML()}</div>
-        <button type="button" class="history-search-add-scope" onclick="historySearchAddScope()">＋ Add search range</button>
+        <button type="button" class="history-search-add-scope" data-action="historySearchAddScope">＋ Add search range</button>
       </fieldset>
       <fieldset class="history-search-query">
         <legend>Conditions</legend>
         <div class="history-search-controls-row">
           <label class="history-search-result-target">Search for
-            <select id="history-search-target" onchange="historySearchUpdateTarget(this)">
+            <select id="history-search-target" data-change-action="historySearchUpdateTarget">
               <option value="project">Projects</option>
               <option value="run">Runs</option>
               <option value="job" selected>Jobs</option>
@@ -241,11 +241,11 @@ function historySearchPageHTML() {
           </div>
         </div>
         <div id="history-search-conditions">${historySearchConditionHTML("first", "job")}</div>
-        <button type="button" class="history-search-add" onclick="historySearchAddCondition()">＋ Add condition</button>
+        <button type="button" class="history-search-add" data-action="historySearchAddCondition">＋ Add condition</button>
       </fieldset>
       <div class="history-search-time-row">
         <label>Time range
-          <select id="history-search-time-range" onchange="historySearchToggleCustomRange(this)">
+          <select id="history-search-time-range" data-change-action="historySearchToggleCustomRange">
             <option value="24h" selected>Last 24 hours</option>
             <option value="7d">Last 7 days</option>
             <option value="30d">Last 30 days</option>
@@ -263,9 +263,9 @@ function historySearchPageHTML() {
     <div id="history-search-message" class="history-search-message" role="status"></div>
     <div id="history-search-results"></div>
     <div id="history-search-pagination" class="history-search-pagination" hidden>
-      <button type="button" onclick="historySearchPage(-1)">Previous</button>
+      <button type="button" data-action="historySearchPage" data-args="[-1]">Previous</button>
       <span id="history-search-page-label"></span>
-      <button type="button" onclick="historySearchPage(1)">Next</button>
+      <button type="button" data-action="historySearchPage" data-args="[1]">Next</button>
     </div>
   </div>`;
 }
@@ -319,7 +319,7 @@ function historySearchUpdateScopeControls(scopes) {
     if (index > 0 && !scope.querySelector(".history-search-scope-remove"))
       scope.insertAdjacentHTML(
         "beforeend",
-        '<button type="button" class="history-search-scope-remove" aria-label="Remove search range" onclick="historySearchRemoveScope(this)">−</button>',
+        '<button type="button" class="history-search-scope-remove" aria-label="Remove search range" data-action="historySearchRemoveScope">−</button>',
       );
     if (index === 0)
       scope.querySelector(".history-search-scope-remove")?.remove();

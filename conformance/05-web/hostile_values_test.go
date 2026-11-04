@@ -34,7 +34,7 @@ const { pages, token, mark } = JSON.parse(fs.readFileSync(process.argv[1], 'utf8
 // A click can start work that jsdom cannot finish; only the findings matter.
 process.on('unhandledRejection', () => {});
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const signature = (node) => [node.tagName, node.className, node.getAttribute('onclick') || '', (node.textContent || '').slice(0, 60)].join('|');
+const signature = (node) => [node.tagName, node.className, node.getAttribute('data-action') || '', node.getAttribute('data-args') || '', (node.textContent || '').slice(0, 60)].join('|');
 const describe = (node) => node.outerHTML.slice(0, 300);
 
 async function open(page) {
@@ -115,7 +115,7 @@ async function check(page) {
   const seen = new Set();
   let clicks = 0;
   for (let round = 0; round < 4 && clicks < 500; round++) {
-    const controls = [...document.querySelectorAll('button, summary, [onclick], [role="button"]')];
+    const controls = [...document.querySelectorAll('button, summary, [data-action], [role="button"]')];
     let fresh = 0;
     for (const control of controls) {
       if (control.disabled || !control.isConnected) continue;
@@ -156,6 +156,8 @@ type hostilePage struct {
 	Search bool   `json:"search,omitempty"`
 	// Scripts loads the page's script files, which only the Table viewer has.
 	Scripts bool `json:"scripts,omitempty"`
+	// Plant, in the browser check, adds a handler and a script that must not run.
+	Plant bool `json:"plant,omitempty"`
 	// Expect lists text, or a selector after "selector:", that must appear at
 	// some point, so that a view that stopped showing a value fails the test.
 	Expect []string `json:"expect,omitempty"`

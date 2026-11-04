@@ -114,7 +114,7 @@ setTimeout(async () => {
     // not started shows it disabled with the reason.
     const actionButton = (id, cls) => actions(id).querySelector('.' + cls);
     assert.equal(actionButton('d', 'view-artifacts').disabled, false);
-    assert(actionButton('d', 'view-artifacts').getAttribute('onclick').includes(run.jobs[3].attempt_id), 'Artifacts of a running job is not its attempt');
+    assert(actionButton('d', 'view-artifacts').getAttribute('data-args').includes(run.jobs[3].attempt_id), 'Artifacts of a running job is not its attempt');
     assert(actionButton('e', 'view-artifacts').disabled && actionButton('e', 'view-artifacts').title === 'Job has not started yet', 'Artifacts of a pending job is not disabled');
     assert(!actions('a').querySelector('details'), 'a row still has a menu');
     // The toolbar has one Files button for the directory holding the
@@ -156,11 +156,11 @@ setTimeout(async () => {
     assert.equal(button('View config snapshot').nextElementSibling, button('Cancel run'));
     window.eval("state.projects[0].runs[0].running = false");
     window.render();
-    assert(!snapshotButton.disabled, 'snapshot action needs no job selection');
+    assert(!button('View config snapshot').disabled, 'snapshot action needs no job selection');
     const originalShowConfig = window.showConfig;
     let snapshotRequested = false;
     window.showConfig = snapshot => { snapshotRequested = snapshot; };
-    snapshotButton.click();
+    button('View config snapshot').click();
     assert.equal(snapshotRequested, true);
     window.showConfig = originalShowConfig;
     window.eval("state.projects[0].runs[0].context.config_snapshot_paths = []");
@@ -193,8 +193,8 @@ setTimeout(async () => {
     assert.deepEqual(JSON.parse(window.localStorage.getItem('rotari-run-sections')), { 'job-timeline': false, 'run-environment': true });
 
     // The Columns menu turns columns on and off, and remembers the choice.
-    const columnsMenu = document.querySelector('.run-jobs-bar .columns-menu');
-    const choice = key => columnsMenu.querySelector('input[data-column="' + key + '"]');
+    // A choice redraws the table, so each lookup finds the current menu.
+    const choice = key => document.querySelector('.run-jobs-bar .columns-menu input[data-column="' + key + '"]');
     assert(choice('executor').closest('label').textContent.includes('same for all'));
     choice('finished').checked = true;
     choice('finished').dispatchEvent(new window.Event('change'));

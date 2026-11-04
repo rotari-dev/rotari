@@ -152,13 +152,9 @@ async function fillArtifactLaunchButtons(container) {
                 "</button>"
             : '<button type="button" class="artifact-launch-command" title="' +
                 esc("Launch " + name + " on " + artifactTitle(entry, child)) +
-                '" onclick="chooseArtifactLaunch(' +
-                jsArg(entry) +
-                "," +
-                jsArg(child) +
-                "," +
-                jsArg(name) +
-                ',this)">' +
+                '" ' +
+                actionAttributes("chooseArtifactLaunch", entry, child, name) +
+                ">" +
                 esc(name) +
                 "</button>";
         })
@@ -188,11 +184,9 @@ function runFilesButton(project, runID) {
   return (
     '<button type="button" class="run-files" title="' +
     esc("Browse " + basedirParent() + " and launch commands on its files") +
-    '" onclick="showRunFiles(' +
-    jsArg(project) +
-    "," +
-    jsArg(runID) +
-    ')">Files</button>'
+    '" ' +
+    actionAttributes("showRunFiles", project, runID) +
+    ">Files</button>"
   );
 }
 
@@ -314,13 +308,9 @@ async function previewArtifactLaunch(index, child, name) {
     '<dt>Runs</dt><dd><pre class="launch-command">' +
     esc(body.shell + " -c " + body.command) +
     "</pre></dd></dl>" +
-    '<div class="launch-choices"><button type="button" class="launch-confirm" onclick="startArtifactLaunch(' +
-    jsArg(index) +
-    "," +
-    jsArg(child) +
-    "," +
-    jsArg(name) +
-    ',false)">Launch</button><button type="button" onclick="closeArtifactLaunch()">Cancel</button></div>';
+    '<div class="launch-choices"><button type="button" class="launch-confirm" ' +
+    actionAttributes("startArtifactLaunch", index, child, name, false) +
+    '>Launch</button><button type="button" data-action="closeArtifactLaunch">Cancel</button></div>';
 }
 
 async function startArtifactLaunch(index, child, name, newInstance) {
@@ -343,9 +333,9 @@ async function startArtifactLaunch(index, child, name, newInstance) {
     .json()
     .catch(() => ({ error: "HTTP " + response.status }));
   const show = (id) =>
-    '<button type="button" onclick="showLaunches(' +
-    jsArg(id) +
-    ')">Show in Launches</button>';
+    '<button type="button" ' +
+    actionAttributes("showLaunches", id) +
+    ">Show in Launches</button>";
   if (!response.ok) {
     panel.innerHTML =
       launchExplanation(body.error, body.hint) +
@@ -366,13 +356,9 @@ async function startArtifactLaunch(index, child, name, newInstance) {
       '</p><div class="launch-choices">' +
       launchOpenLink(body) +
       show(body.id) +
-      '<button type="button" onclick="startArtifactLaunch(' +
-      jsArg(index) +
-      "," +
-      jsArg(child) +
-      "," +
-      jsArg(name) +
-      ',true)">Start another instance</button></div>';
+      '<button type="button" ' +
+      actionAttributes("startArtifactLaunch", index, child, name, true) +
+      '>Start another instance</button></div>';
     return;
   }
   if (body.mode === "service") return followServiceStart(body.id, name);
@@ -399,9 +385,9 @@ function launchOpenLink(launch) {
 // Open link, or until it fails, with the server's reason.
 async function followServiceStart(id, name) {
   const show =
-    '<button type="button" onclick="showLaunches(' +
-    jsArg(id) +
-    ')">Show in Launches</button>';
+    '<button type="button" ' +
+    actionAttributes("showLaunches", id) +
+    ">Show in Launches</button>";
   for (;;) {
     const panel = artifactLaunchPanel();
     if (!panel) return;
@@ -507,13 +493,12 @@ async function renderLaunches() {
         esc(formatDateTime(launch.started_at)) +
         "</td><td>" +
         launchOpenLink(launch) +
-        '<button type="button" onclick="showLaunchLog(' +
-        jsArg(launch.id) +
-        ')">Logs</button>' +
+        '<button type="button" ' +
+        actionAttributes("showLaunchLog", launch.id) +
+        ">Logs</button>" +
         (live
-          ? '<button type="button" onclick="stopLaunch(' +
-            jsArg(launch.id) +
-            ')"' +
+          ? '<button type="button" ' +
+            actionAttributes("stopLaunch", launch.id) +
             (launch.state === "stopping" ? " disabled" : "") +
             ">Stop</button>"
           : "") +
@@ -669,7 +654,7 @@ async function showLauncherConfig(message) {
         : '<pre class="log launcher-config-text">' +
           esc(config.content) +
           "</pre>"
-      : '<div class="launch-choices"><button type="button" onclick="generateLauncherConfig()">Generate launcher config</button></div>');
+      : '<div class="launch-choices"><button type="button" data-action="generateLauncherConfig">Generate launcher config</button></div>');
   if (config.exists && config.editable) {
     const editor = document.createElement("div");
     editor.className = "launcher-config-editor";

@@ -3238,9 +3238,9 @@ func TestWebJobsPageShowsRecentJobs(t *testing.T) {
 		"Registered basedirs",
 		"State directories known to rotari",
 		`aria-label="Toggle projects"`,
-		`onclick="toggleJobsSidebar(this)"`,
+		`data-action="toggleJobsSidebar"`,
 		`class="basedir-notification-toggle"`,
-		`onchange="toggleJobsNotificationBasedir(this)"`,
+		`data-change-action="toggleJobsNotificationBasedir"`,
 		`rotari-notification-basedirs`,
 		`class="sidebar-project-link basedir-path"`,
 		`href="/project/demo"`,
@@ -3254,8 +3254,8 @@ func TestWebJobsPageShowsRecentJobs(t *testing.T) {
 		`title="Copy attempt ID"`,
 		`data-copy-value="true"`,
 		`id="notify-toggle"`,
-		`onclick="toggleJobsNotifications()"`,
-		`onclick="location.reload()">Refresh</button>`,
+		`data-action="toggleJobsNotifications"`,
+		`data-action="reloadPage">Refresh</button>`,
 		`const jobsPageIsLive = true`,
 		"if (jobsPageIsLive)\n        window.initializeNotificationInbox({",
 	} {
@@ -3551,7 +3551,7 @@ func TestGenerateStaticWebIncludesJobsPage(t *testing.T) {
 				t.Fatal(err)
 			}
 			body := string(data)
-			for _, want := range []string{"Recent jobs", `aria-label="Toggle projects"`, `href="../project/demo"`, `class="brand-icon"`, "job-1", `href="../project/demo/run/` + runID + `"`, `id="notify-toggle"`, `onclick="toggleJobsNotifications()"`, `const jobsPageIsLive = false`, "if (jobsPageIsLive)\n        window.initializeNotificationInbox({", "const jobsNotificationsDefaultOn = " + strconv.FormatBool(notifications)} {
+			for _, want := range []string{"Recent jobs", `aria-label="Toggle projects"`, `href="../project/demo"`, `class="brand-icon"`, "job-1", `href="../project/demo/run/` + runID + `"`, `id="notify-toggle"`, `data-action="toggleJobsNotifications"`, `const jobsPageIsLive = false`, "if (jobsPageIsLive)\n        window.initializeNotificationInbox({", "const jobsNotificationsDefaultOn = " + strconv.FormatBool(notifications)} {
 				if !strings.Contains(body, want) {
 					t.Fatalf("static jobs page does not contain %q: %s", want, body)
 				}
@@ -3562,7 +3562,7 @@ func TestGenerateStaticWebIncludesJobsPage(t *testing.T) {
 
 func TestWebSeparatesLogsFromActions(t *testing.T) {
 	html := testSite().webHTML()
-	for _, want := range []string{"function actionsCell(buttons)", "view-log", "show-path", "delete-run", "Job log", "Job log — merged", `logMode === "separate"`, "changeLogStream", `id="log-stream"`, "View log", "showDiagnosis(this)", "data-diagnoses", "function showDiagnosis(trigger)", "const diagnosisControl=!failed", "disabled title=\"Available after a finalized failed result with saved analysis\"", "function showPath(path)", "textContent='Job path'", `<td class="actions"><div class="action-buttons">`} {
+	for _, want := range []string{"function actionsCell(buttons)", "view-log", "show-path", "delete-run", "Job log", "Job log — merged", `logMode === "separate"`, "changeLogStream", `id="log-stream"`, "View log", `data-action="showDiagnosis"`, "data-diagnoses", "function showDiagnosis(trigger)", "const diagnosisControl=!failed", "disabled title=\"Available after a finalized failed result with saved analysis\"", "function showPath(path)", "textContent='Job path'", `<td class="actions"><div class="action-buttons">`} {
 		if !webContains(html, want) {
 			t.Fatalf("web page does not contain %q", want)
 		}
@@ -3613,9 +3613,9 @@ func TestWebProvidesCopyAndAIReports(t *testing.T) {
 		`Copy gives the Markdown, which an AI assistant can read too. Nothing is sent to external services automatically.`,
 		`fetch('/api/report?'+params)`,
 		`function showRunReport(button)`,
-		`onclick="showJobReport(this)">Report</button>`,
+		`data-action="showJobReport">Report</button>`,
 		`function showJobReport(button)`,
-		`onclick="showRunReport(this)">Report</button>`,
+		`data-action="showRunReport">Report</button>`,
 		`Prepare run report`,
 		`Prepare job report`,
 		`redactToggle.hidden=view!=='ai'`,

@@ -1263,11 +1263,24 @@ and `TestLoadJobsShowsRunningAttemptID` in
 
 ## Generated Web pages
 
+**WEB-29** Live application, Recent jobs, and Table viewer pages send a
+`Content-Security-Policy` (`pagePolicy` in `internal/webui/page_policy.go`). Only
+scripts with that response's nonce run, requests stay on the same origin, and
+styles may be inline, since data-driven sizes and colours are. The nonce goes in
+with the page's other values in one pass, so a value holding the placeholder's text
+cannot obtain it. A launched service's responses under `/_launch/` and served
+artifact files keep their own headers. A static export has no response headers, so
+it has no policy or nonce. Pages have no inline handlers: a control names an action
+in `data-action`, `data-change-action`, or `data-toggle-action`, with arguments as
+JSON in `data-args`, and `web_shell.js` runs only the actions it registers
+(`TestPageActionsAreRegistered`, `TestAssetsHaveNoInlineHandlers`).
+`TestPagePolicyBlocksPlantedScript` checks in headless Chrome that a planted handler
+and script do not run and are reported.
+
 **WEB-28** Values recorded in state, logs, notes, and artifact files stay text.
 They do not become markup or run, when a live page, a static export page, or the
-Table viewer renders them or when a control on the page is clicked. Handlers
-take such values through `jsArg` or `this.dataset`, since `esc` alone does not
-protect a JavaScript argument. `TestStoredValuesStayText` covers basedir paths;
+Table viewer renders them or when a control on the page is clicked. Controls
+carry such values as data for `web_shell.js` to pass on, not as JavaScript. `TestStoredValuesStayText` covers basedir paths;
 project, job, stage, matrix, and array names; commands, working directories, and
 executor options; logs, diagnoses, notes, and config files; artifact names and
 contents; and launcher names, targets, and output, in jsdom. It also opens the

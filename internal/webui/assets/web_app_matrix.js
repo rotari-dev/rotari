@@ -76,7 +76,7 @@ function renderMatrixCell(groupID, key, cellJobs, running) {
     esc(JSON.stringify(entries)) +
     '" title="' +
     esc(title) +
-    '" onclick="openMatrixCell(this)">' +
+    '" data-action="openMatrixCell">' +
     esc(label) +
     "</td>"
   );
@@ -159,7 +159,7 @@ function renderMatrixGroupContent(group, running) {
     axis +
     '" data-group-id="' +
     esc(group.matrix.group_id) +
-    '" onchange="setMatrixAxis(this)">' +
+    '" data-change-action="setMatrixAxis">' +
     dimensions
       .map(
         (dimension) =>

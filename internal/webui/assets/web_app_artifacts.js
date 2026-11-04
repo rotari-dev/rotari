@@ -174,13 +174,9 @@ function renderArtifactListing() {
   const rows = rowEntries
     .map(({ entry, index, open }) => {
       const path = open
-        ? '<button type="button" class="artifact-open" onclick="openArtifact(' +
-          jsArg(index) +
-          "," +
-          jsArg("") +
-          "," +
-          jsArg(entry.type) +
-          ')">' +
+        ? '<button type="button" class="artifact-open" ' +
+          actionAttributes("openArtifact", index, "", entry.type) +
+          '>' +
           esc(entry.display_path) +
           "</button>"
         : esc(entry.display_path);
@@ -245,12 +241,6 @@ function setArtifactPreview(html) {
   const preview = artifactPreview();
   preview.innerHTML = html;
   fillArtifactLaunchButtons(preview);
-}
-// jsArg writes a value as a JavaScript literal inside an HTML attribute,
-// such as an onclick handler: JSON.stringify quotes it for JavaScript, and
-// esc for HTML, which the browser undoes before running the handler.
-function jsArg(value) {
-  return esc(JSON.stringify(value));
 }
 // artifactPath is a content route with its query, for fetch, which adds
 // the basedir prefix itself; artifactURL adds it for img and a elements.
@@ -344,13 +334,14 @@ function artifactHeader(index, child, type) {
     "</strong> " +
     (type === "directory" ? "" : artifactDownloadLink(index, child)) +
     (type === "directory" && child
-      ? '<button type="button" class="artifact-up" onclick="openArtifact(' +
-        jsArg(index) +
-        "," +
-        jsArg(
+      ? '<button type="button" class="artifact-up" ' +
+        actionAttributes(
+          "openArtifact",
+          index,
           child.includes("/") ? child.slice(0, child.lastIndexOf("/")) : "",
+          "directory",
         ) +
-        ",'directory')\">Up</button>"
+        ">Up</button>"
       : "") +
     artifactLaunchButtons(index, child, type) +
     "</p>"
@@ -427,11 +418,9 @@ async function renderArtifactPreview(index, child, type) {
   const openAsText =
     typeof staticArtifactFileURL === "function"
       ? ""
-      : '<button type="button" class="artifact-open-text" onclick="loadArtifactText(' +
-        jsArg(index) +
-        "," +
-        jsArg(child) +
-        ",'start')\">Open as text</button>";
+      : '<button type="button" class="artifact-open-text" ' +
+        actionAttributes("loadArtifactText", index, child, "start") +
+        ">Open as text</button>";
   setArtifactPreview(
     header +
       (response.ok
@@ -500,15 +489,15 @@ function artifactTextMarkup(state) {
   const more =
     state.from === "end"
       ? state.start > 0
-        ? '<button type="button" onclick="moreArtifactText()">Load earlier</button>'
+        ? '<button type="button" data-action="moreArtifactText">Load earlier</button>'
         : ""
       : state.end < state.size
-        ? '<button type="button" onclick="moreArtifactText()">Load more</button>'
+        ? '<button type="button" data-action="moreArtifactText">Load more</button>'
         : "";
 
   if (markdown && canRenderMarkdown) {
     const toggle =
-      '<button type="button" onclick="toggleArtifactMarkdown()">' +
+      '<button type="button" data-action="toggleArtifactMarkdown">' +
       (state.showSource ? "Render Markdown" : "Show source") +
       "</button>";
     const content = state.showSource
@@ -617,7 +606,7 @@ async function moreArtifactTable() {
       body.map((row) => "<tr>" + cells(row, "td") + "</tr>").join("") +
       "</tbody></table></div>" +
       (state.end < state.size
-        ? '<button type="button" onclick="moreArtifactTable()">Load more rows</button>'
+        ? '<button type="button" data-action="moreArtifactTable">Load more rows</button>'
         : ""),
   );
 }
@@ -677,13 +666,9 @@ async function loadArtifactDirectory(index, child, offset) {
       const open =
         entry.type === "other"
           ? esc(entry.name)
-          : '<button type="button" class="artifact-open" onclick="openArtifact(' +
-            jsArg(index) +
-            "," +
-            jsArg(path) +
-            "," +
-            jsArg(type) +
-            ')">' +
+          : '<button type="button" class="artifact-open" ' +
+            actionAttributes("openArtifact", index, path, type) +
+            '>' +
             esc(entry.name) +
             "</button>";
       return (
@@ -718,13 +703,9 @@ async function loadArtifactDirectory(index, child, offset) {
       rows +
       "</tbody></table>" +
       (end < page.total
-        ? '<button type="button" onclick="loadArtifactDirectory(' +
-          index +
-          "," +
-          jsArg(child) +
-          "," +
-          end +
-          ')">More</button>'
+        ? '<button type="button" ' +
+          actionAttributes("loadArtifactDirectory", index, child, end) +
+          '>More</button>'
         : ""),
   );
 }

@@ -332,8 +332,9 @@ func (s site) baseHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 		_ = s.reloadBaseDirs()
+		nonce := setPagePolicy(writer)
 		writer.Header().Set(headerContentType, "text/html; charset=utf-8")
-		_, _ = writer.Write([]byte(s.webHTML()))
+		_, _ = writer.Write([]byte(s.webPage(nonce, "")))
 	})
 	mux.HandleFunc("/fonts/", serveWebFont)
 	mux.HandleFunc("/web_fonts.css", func(writer http.ResponseWriter, request *http.Request) {
@@ -383,8 +384,9 @@ func (s site) baseHandler() http.Handler {
 		}
 		joblist.Sort(rows)
 		_ = s.reloadBaseDirs()
+		nonce := setPagePolicy(writer)
 		writer.Header().Set(headerContentType, "text/html; charset=utf-8")
-		_, _ = writer.Write([]byte(jobsHTMLWithSession(s.currentBasePrefix()+"/", projects, rows, selection, true, s.Notifications, s.notificationSession, s.basedirEntries())))
+		_, _ = writer.Write([]byte(jobsPage(nonce, s.currentBasePrefix()+"/", projects, rows, selection, true, s.Notifications, s.notificationSession, s.basedirEntries())))
 	})
 	mux.HandleFunc("/jobs", func(writer http.ResponseWriter, request *http.Request) {
 		http.Redirect(writer, request, s.currentBasePrefix()+"/jobs/", http.StatusMovedPermanently)
@@ -2111,6 +2113,10 @@ func (s site) webHTML() string {
 }
 
 func (s site) webHTMLWithStaticBootstrap(bootstrap string) string {
+	return s.webPage("", bootstrap)
+}
+
+func (s site) webPage(nonce, bootstrap string) string {
 	basedirs := s.basedirEntries()
 	if bootstrap != "" {
 		for _, entry := range basedirs {
@@ -2120,7 +2126,7 @@ func (s site) webHTMLWithStaticBootstrap(bootstrap string) string {
 			}
 		}
 	}
-	html := composeWebHTMLWithSession(s.Executors, s.Notifications, bootstrap, s.notificationSession, basedirs)
+	html := composeWebPage(nonce, s.Executors, s.Notifications, bootstrap, s.notificationSession, basedirs)
 	logout := ""
 	if s.AuthEnabled {
 		logout = `<form method="post" action="/_auth/logout"><button type="submit">Sign out</button></form>`

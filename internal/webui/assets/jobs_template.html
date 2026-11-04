@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>rotari Recent jobs</title>
     __ROTARI_FAVICON_LINKS__
-    <script>
+    <script__ROTARI_SCRIPT_NONCE__>
       __ROTARI_SHELL_SCRIPT__;
     </script>
     <style>
@@ -52,7 +52,7 @@
         aria-label="Resize sidebar"
         tabindex="0"
       ></div>
-      <div class="drawer-scrim" onclick="closeDrawer()"></div>
+      <div class="drawer-scrim" data-action="closeDrawer"></div>
       <div class="content">
         <header class="topbar">
           <button
@@ -60,7 +60,7 @@
             type="button"
             aria-label="Show navigation"
             aria-expanded="false"
-            onclick="toggleDrawer()"
+            data-action="toggleDrawer"
           >
             ☰
           </button>
@@ -75,7 +75,7 @@
                 type="button"
                 aria-haspopup="true"
                 aria-expanded="false"
-                onclick="toggleSettingsMenu()"
+                data-action="toggleSettingsMenu"
               >
                 Settings
               </button>
@@ -99,7 +99,7 @@
         __ROTARI_CONTENT__
       </div>
     </main>
-    <script>
+    <script__ROTARI_SCRIPT_NONCE__>
       const jobsSidebar = document.querySelector(".sidebar");
       const jobsSidebarScrollKey =
         "rotari-sidebar-scroll:" + "__ROTARI_BASEDIR_SCROLL_KEY__";

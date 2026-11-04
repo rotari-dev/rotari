@@ -65,8 +65,9 @@ func (view tableView) handler() http.Handler {
 			writeArtifactError(writer, err)
 			return
 		}
+		nonce := setPagePolicy(writer)
 		writer.Header().Set(headerContentType, "text/html; charset=utf-8")
-		_, _ = writer.Write([]byte(view.page()))
+		_, _ = writer.Write([]byte(tableViewPage(view.stylesheets, "", nonce)))
 	})
 	mux.HandleFunc("GET /table_view.js", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set(headerContentType, "text/javascript; charset=utf-8")
@@ -194,19 +195,19 @@ func (view tableView) handler() http.Handler {
 	return mux
 }
 
-func (view tableView) page() string {
-	return tableViewPage(view.stylesheets, "")
-}
-
 // tableViewPage is the viewer's page, linking stylesheets before its own
-// and running scripts, a static snapshot's, before its own.
-func tableViewPage(stylesheets []string, scripts string) string {
+// and running scripts, a static snapshot's, before its own. nonce is as for
+// composeWebPage.
+func tableViewPage(stylesheets []string, scripts, nonce string) string {
 	var links strings.Builder
 	for _, href := range stylesheets {
 		links.WriteString(`<link rel="stylesheet" href="` + html.EscapeString(href) + `" />`)
 	}
-	page := strings.Replace(tableViewHTML, "__ROTARI_STYLESHEETS__", links.String(), 1)
-	return strings.Replace(page, "__ROTARI_STATIC_SCRIPTS__", scripts, 1)
+	return strings.NewReplacer(
+		scriptNoncePlaceholder, scriptNonceAttribute(nonce),
+		"__ROTARI_STYLESHEETS__", links.String(),
+		"__ROTARI_STATIC_SCRIPTS__", scripts,
+	).Replace(tableViewHTML)
 }
 
 // tableViewInfo is the /api/info response: what the page shows before any

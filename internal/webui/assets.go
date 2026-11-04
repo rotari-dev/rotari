@@ -125,17 +125,17 @@ func basedirLabelHTML(entry webBaseDir) string {
 }
 
 // basedirBellHTML is the switch that notifies about runs in one basedir. It
-// is a checkbox drawn as a bell; onchange names the page's handler.
-func basedirBellHTML(entry webBaseDir, extra, onchange string) string {
+// is a checkbox drawn as a bell; action names the page's handler.
+func basedirBellHTML(entry webBaseDir, extra, action string) string {
 	return `<label class="basedir-bell" title="Enable notifications"><input class="basedir-notification-toggle" type="checkbox" data-basedir-id="` +
-		html.EscapeString(entry.ID) + `"` + extra + ` aria-label="Notify about runs in this basedir" onchange="` + onchange + `(this)" />` + bellIconSVG + `</label>`
+		html.EscapeString(entry.ID) + `"` + extra + ` aria-label="Notify about runs in this basedir" data-change-action="` + action + `" />` + bellIconSVG + `</label>`
 }
 
 // allBasedirsBellHTML is the switch beside the Registered basedirs heading
 // that turns every basedir bell on or off at once. It stays hidden until the
 // page's script finds more than one basedir bell.
-func allBasedirsBellHTML(onchange string) string {
-	return `<label class="basedir-bell basedir-bell-all" title="Enable notifications for all basedirs" hidden><input class="basedir-notification-all" type="checkbox" aria-label="Notify about runs in all basedirs" onchange="` + onchange + `(this)" />` + bellIconSVG + `</label>`
+func allBasedirsBellHTML(action string) string {
+	return `<label class="basedir-bell basedir-bell-all" title="Enable notifications for all basedirs" hidden><input class="basedir-notification-all" type="checkbox" aria-label="Notify about runs in all basedirs" data-change-action="` + action + `" />` + bellIconSVG + `</label>`
 }
 
 const bellIconSVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg>`
@@ -145,6 +145,12 @@ func composeWebHTML(executors []string, notifications bool, bootstrap string, ba
 }
 
 func composeWebHTMLWithSession(executors []string, notifications bool, bootstrap, notificationSession string, basedirLists ...[]webBaseDir) string {
+	return composeWebPage("", executors, notifications, bootstrap, notificationSession, basedirLists...)
+}
+
+// composeWebPage is the application page; nonce is the one its scripts run
+// under, or "" in a static export, which sends no policy.
+func composeWebPage(nonce string, executors []string, notifications bool, bootstrap, notificationSession string, basedirLists ...[]webBaseDir) string {
 	executorJSON, _ := json.Marshal(executors)
 	diagnosisGuidanceJSON, _ := json.Marshal(struct {
 		NoMatchNext     string `json:"noMatchNext"`
@@ -165,6 +171,7 @@ func composeWebHTMLWithSession(executors []string, notifications bool, bootstrap
 	// text of a placeholder stays as written.
 	template := strings.NewReplacer("__ROTARI_SHELL_SCRIPT__", webShellJS, "__ROTARI_WEB_APP__", webAppJS).Replace(webTemplateHTML)
 	return strings.NewReplacer(
+		scriptNoncePlaceholder, scriptNonceAttribute(nonce),
 		"__ROTARI_BASEDIRS__", string(basedirJSON),
 		"__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllNotificationBasedirs"),
 		"__ROTARI_EXECUTORS__", string(executorJSON),
@@ -220,6 +227,11 @@ func jobsHTML(homePath string, projects []string, rows []joblist.Row, selection 
 // window presets and range bar into .jobs-range, with this basedir's runs
 // from the Activity API behind the bar.
 func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row, selection jobsSelection, canFilter, notifications bool, notificationSession string, basedirLists ...[]webBaseDir) string {
+	return jobsPage("", homePath, projects, rows, selection, canFilter, notifications, notificationSession, basedirLists...)
+}
+
+// jobsPage is the Recent jobs page; nonce is as for composeWebPage.
+func jobsPage(nonce, homePath string, projects []string, rows []joblist.Row, selection jobsSelection, canFilter, notifications bool, notificationSession string, basedirLists ...[]webBaseDir) string {
 	var builder strings.Builder
 	if canFilter {
 		basedirID := ""
@@ -256,10 +268,10 @@ func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row,
 	if len(basedirLists) > 0 {
 		scrollKey = currentBasedirScrollID(basedirLists[0])
 	}
-	notificationControl := `<button id="notify-toggle" type="button" onclick="toggleJobsNotifications()">Notification off</button>`
+	notificationControl := `<button id="notify-toggle" type="button" data-action="toggleJobsNotifications">Notification off</button>`
 	var toolbar string
 	if canFilter {
-		toolbar = `<button id="refresh-button" type="button" onclick="location.reload()">Refresh</button>`
+		toolbar = `<button id="refresh-button" type="button" data-action="reloadPage">Refresh</button>`
 	}
 	var crumbs strings.Builder
 	if len(basedirLists) > 0 {
@@ -273,6 +285,7 @@ func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row,
 	}
 	crumbs.WriteString(`<span class="crumb-here">Recent jobs</span>`)
 	values := []string{
+		scriptNoncePlaceholder, scriptNonceAttribute(nonce),
 		"__ROTARI_JOBS_PROJECTS__", sidebar.String(),
 		"__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllJobsNotificationBasedirs"),
 		"__ROTARI_BASEDIR_SCROLL_KEY__", scrollKey,
@@ -397,7 +410,7 @@ func writeJobsBasedirEntry(builder *strings.Builder, homePath string, currentPro
 	builder.WriteString(html.EscapeString(entry.ID))
 	builder.WriteString(`"><div class="sidebar-project-row basedir-row"><button type="button" class="sidebar-toggle" aria-expanded="`)
 	builder.WriteString(strconv.FormatBool(active))
-	builder.WriteString(`" aria-label="Toggle projects" onclick="toggleJobsSidebar(this)"></button><a class="sidebar-project-link basedir-path" title="`)
+	builder.WriteString(`" aria-label="Toggle projects" data-action="toggleJobsSidebar"></button><a class="sidebar-project-link basedir-path" title="`)
 	builder.WriteString(html.EscapeString(entry.Path))
 	builder.WriteString(`" href="`)
 	builder.WriteString(html.EscapeString(basePath))
@@ -409,7 +422,7 @@ func writeJobsBasedirEntry(builder *strings.Builder, homePath string, currentPro
 	if !active {
 		builder.WriteString(` hidden`)
 	}
-	builder.WriteString(`><div class="sidebar-project expanded all-projects"><div class="sidebar-project-row"><button type="button" class="sidebar-toggle" aria-expanded="true" aria-label="Toggle project list" onclick="toggleJobsSidebar(this)"></button><a class="sidebar-project-link" href="`)
+	builder.WriteString(`><div class="sidebar-project expanded all-projects"><div class="sidebar-project-row"><button type="button" class="sidebar-toggle" aria-expanded="true" aria-label="Toggle project list" data-action="toggleJobsSidebar"></button><a class="sidebar-project-link" href="`)
 	builder.WriteString(html.EscapeString(basePath))
 	builder.WriteString(`">All projects</a></div><div class="sidebar-projects project-list">`)
 	for _, project := range projectNames {
@@ -469,7 +482,7 @@ func writeJobsBasedirProject(builder *strings.Builder, basePath, project string)
 }
 
 func writeJobsSidebarProjects(builder *strings.Builder, homePath string, projects []string) {
-	builder.WriteString(`<div class="sidebar-project expanded" id="sidebar-root"><div class="sidebar-project-row"><button type="button" class="sidebar-toggle" aria-expanded="true" aria-label="Toggle all projects" onclick="toggleJobsSidebar(this)"></button><a class="sidebar-project-link" href="`)
+	builder.WriteString(`<div class="sidebar-project expanded" id="sidebar-root"><div class="sidebar-project-row"><button type="button" class="sidebar-toggle" aria-expanded="true" aria-label="Toggle all projects" data-action="toggleJobsSidebar"></button><a class="sidebar-project-link" href="`)
 	builder.WriteString(html.EscapeString(homePath))
 	builder.WriteString(`">All projects</a></div><div class="sidebar-projects" id="sidebar-projects">`)
 	for _, project := range projects {
@@ -499,7 +512,7 @@ func writeJobsCopyButton(builder *strings.Builder, value, label string) {
 	builder.WriteString(html.EscapeString(label))
 	builder.WriteString(`" data-copy-value="`)
 	builder.WriteString(html.EscapeString(value))
-	builder.WriteString(`" onclick="copyJobsValue(this)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-4"></path><rect x="9" y="4" width="11" height="11" rx="1"></rect></svg></button>`)
+	builder.WriteString(`" data-action="copyJobsValue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-4"></path><rect x="9" y="4" width="11" height="11" rx="1"></rect></svg></button>`)
 }
 
 //go:embed assets/favicon-dark.svg

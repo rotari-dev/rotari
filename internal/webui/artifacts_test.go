@@ -143,7 +143,7 @@ for (const [got, want] of checks) {
 	if output, err := exec.Command("node", path).CombinedOutput(); err != nil {
 		t.Fatalf("artifact formatting: %v\n%s", err, output)
 	}
-	if !strings.Contains(webAppCoreJS, `onclick="showArtifacts(`) {
+	if !strings.Contains(webAppCoreJS, `actionAttributes("showArtifacts"`) {
 		t.Fatal("the job table has no Artifacts button")
 	}
 }
