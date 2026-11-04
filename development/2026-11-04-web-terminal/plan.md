@@ -182,8 +182,9 @@ showing a value fails the test instead of passing with nothing to check.
 
 Gaps:
 
-- It runs in jsdom, not a browser, and finds script by its effects. A construct
-  jsdom does not run, such as an image's `onerror`, is found only as markup.
+- `TestStoredValuesStayTextInBrowser` repeats the check in headless Chrome, for the
+  HTML and single-quoted values, and CI requires it. It passes in CI, but no weakened
+  code has yet been run against it; only the jsdom test has shown that it detects.
 - The recovery dialog is opened, but the CLI cannot put a hostile value in its
   reasons, so those rest on review.
 - The page's own POST requests are blocked, so a view shown only after one
@@ -215,10 +216,10 @@ Estimate: 3 to 5 days, most of it replacing handlers.
 5. Run it as `Content-Security-Policy-Report-Only` while walking through every
    view, then enforce it.
 
-jsdom does not enforce CSP, so this phase needs a real browser. Headless browsers
-are not installed on the main development machine;
-[scripts/web-browser.mjs](../../scripts/web-browser.mjs) has the DevTools driver,
-which needs Chrome and Node 22 or later.
+jsdom does not enforce CSP, so this phase needs a real browser.
+`TestStoredValuesStayTextInBrowser` already fails on any policy violation, and CI
+runs it; set `ROTARI_TEST_CHROME` to run it locally. Chrome is not installed on the
+main development machine. Until a policy exists, that check finds nothing.
 
 Done when: a real-browser run through every view shows no violations, and a
 planted handler and inline script are blocked. Add a contract ID (next free after

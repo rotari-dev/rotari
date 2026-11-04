@@ -71,3 +71,31 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The test passes in all four contexts, passed two more runs and once under `-race`, and failed with `esc` weakened. After rebasing onto `main`, `go test ./conformance ./conformance/05-web` passed. No real browser was used. Full `go test ./...` was not rerun, since only a test and documents changed.
 
 **Remaining:** Recovery dialog reasons rest on review; a service launch's progress view is not rendered; phase 2.
+
+## Fix a launcher test's race
+
+**Commits:**  ``.
+
+**Change:** `TestKilledOwnerStopsLaunches` in `internal/launcher/process_test.go` reads the launch's process group before killing the fake Web process.
+
+**Reason:** The longer CI run exposed it: the command writes its PID before the fake process prints the group, so on a loaded host the test read nothing.
+
+**Plan impact:** None; it unblocked CI for the browser check.
+
+**Validation:** With the print delayed by two seconds, the old test failed as in CI and the new one passed. It passed 50 repetitions and 20 under `-race` on one CPU, and the package passed. Go CI passed on the branch.
+
+**Remaining:** The same test's surviving-group failure in `ISSUES.md` is a different symptom and stays open.
+
+## Check stored values in a real browser
+
+**Commits:**  ``.
+
+**Change:** Added `TestStoredValuesStayTextInBrowser`, `ROTARI_REQUIRE_BROWSER_TESTS` in `ci.yml`, and a `beforeNavigate` option and a longer start limit in `scripts/web-browser.mjs`. Both stored-value checks wait for pages and requests instead of fixed times.
+
+**Reason:** Phase 2 needs a check that enforces a policy, which jsdom cannot; the user chose CI, with a skip where Chrome is absent.
+
+**Plan impact:** Phase 2's check is in place, and nothing runs against it until a policy exists.
+
+**Validation:** Go CI, including `go` with the browser required and `race`, passed on the branch at `35b8c735`, before these commits were squashed and rebased. Earlier runs failed on the contract table, on Chrome's ten-second start limit, and on fixed waits, each fixed here. After rebasing, `go vet ./...` and `go test ./internal/launcher ./internal/webui ./conformance ./conformance/05-web` passed, with the browser test skipped locally because Chrome is absent. Fetching Chrome locally was denied by a permission check. CI logs were not read, so the browser test's run is inferred from the required setting and the job's success. No weakened code was run against the browser test.
+
+**Remaining:** Phase 2. The full CI time rose from about 400 to as much as 657 seconds in one run.
