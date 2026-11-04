@@ -3,6 +3,7 @@ package interfaces
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rotari-dev/rotari/conformance/support"
 )
@@ -18,6 +19,11 @@ func TestShowNoLogs(t *testing.T) {
 			e.MustRotari("add", "-p", project, "--job-name", "matrix", "--matrix", "VALUE=a,b", "--log-mode", mode, "--", "echo", "hidden-matrix")
 			e.MustRotari("run", "-p", project, "--quiet")
 			attempt := lastAttemptID(t, e, project, plain)
+			// show reports the supervisor, which outlives run by a moment.
+			support.WaitUntil(t, 30*time.Second, func() (bool, string) {
+				output := e.MustRotari("show", "-p", project, "--no-pager", "-j", plain, "--no-logs").Stdout
+				return strings.Contains(output, "Runner server: stopped"), output
+			})
 			for _, selector := range [][]string{
 				{"-j", plain}, {"--job-name", "plain"}, {plain}, {attempt},
 				{"-j", array + "-1"}, {"--job-name", "matrix-VALUEa"},

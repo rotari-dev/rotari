@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rotari-dev/rotari/conformance/support"
@@ -335,6 +336,42 @@ func TestHistorySearchAllBasedirs(t *testing.T) {
 	} {
 		if response := search(scope); response.Status == 200 {
 			t.Errorf("scope %v: status 200, want it rejected: %s", scope, response.Body)
+		}
+	}
+}
+
+func TestHistorySearchOfRemovedBasedirFails(t *testing.T) {
+	covers(t, "WEB-2")
+	e := support.NewEnv(t)
+	gone := filepath.Join(e.Root, "gone-state")
+	e.MustRotari("add", "-b", gone, "-p", "gamma", "--", "true")
+	e.MustRotari("run", "-b", gone, "-p", "gamma", "--quiet")
+	absolute, err := filepath.Abs(gone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(gone); err != nil {
+		t.Fatal(err)
+	}
+	id := base64.RawURLEncoding.EncodeToString([]byte(filepath.Clean(absolute)))
+	base := e.StartWeb()
+	for _, scope := range []map[string]string{
+		{"basedir_id": id},
+		{"basedir_id": id, "project_name": "default"},
+	} {
+		response := e.HTTPPostJSON(base+"/api/history-search", map[string]any{
+			"scopes":  []map[string]string{scope},
+			"target":  "project",
+			"filters": []map[string]string{{"target": "project", "field": "project_name", "word": "default"}},
+		})
+		if response.Status == 200 || !strings.Contains(response.Body, "basedir does not exist") {
+			t.Errorf("scope %v: status %d: %s, want the missing basedir reported", scope, response.Status, response.Body)
+		}
+	}
+	for _, query := range []string{"basedir_id=" + id, "basedir_id=" + id + "&project_name=default"} {
+		response := e.HTTPGet(base + "/api/history-search-options?" + query)
+		if response.Status == 200 || !strings.Contains(response.Body, "basedir does not exist") {
+			t.Errorf("options %s: status %d: %s, want the missing basedir reported", query, response.Status, response.Body)
 		}
 	}
 }

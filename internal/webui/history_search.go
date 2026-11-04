@@ -59,7 +59,7 @@ func (s site) handleHistorySearchOptions(writer http.ResponseWriter, request *ht
 	}
 	projectName := request.URL.Query().Get("project_name")
 	if projectName == "" {
-		projects, err := joblist.Projects(entry.Path, "")
+		projects, err := historySearchProjects(entry)
 		if err != nil {
 			writeWebError(writer, err)
 			return
@@ -67,7 +67,7 @@ func (s site) handleHistorySearchOptions(writer http.ResponseWriter, request *ht
 		writeWebJSON(writer, historySearchOptionsResponse{Projects: projects})
 		return
 	}
-	projects, err := joblist.Projects(entry.Path, "")
+	projects, err := historySearchProjects(entry)
 	if err != nil {
 		writeWebError(writer, err)
 		return
@@ -186,7 +186,7 @@ func (s site) handleHistorySearch(writer http.ResponseWriter, request *http.Requ
 					continue
 				}
 				selectedScopes[key] = true
-				loaded, err := s.loadHistorySearchBasedir(entry)
+				loaded, err := s.loadHistorySearchRecords(entry, "", "")
 				if err != nil {
 					unsearched = append(unsearched, historySearchUnsearched{BaseDirID: entry.ID, BaseDirPath: entry.Path, Error: err.Error()})
 					continue
@@ -224,18 +224,18 @@ func (s site) handleHistorySearch(writer http.ResponseWriter, request *http.Requ
 	writeWebJSON(writer, historySearchAPIResponse{HistorySearchResponse: result, Unsearched: unsearched})
 }
 
-// loadHistorySearchBasedir loads one basedir of an all-basedirs scope. A
-// registered basedir can outlive its directory, and joblist.Projects reads a
-// missing directory as an empty state, so absence is checked first.
-func (s site) loadHistorySearchBasedir(entry webBaseDir) ([]webprojection.HistorySearchRecord, error) {
+// historySearchProjects lists a registered basedir's projects. A registered
+// basedir can outlive its directory, and joblist.Projects reads a missing
+// directory as an empty state, so absence is checked first.
+func historySearchProjects(entry webBaseDir) ([]string, error) {
 	if _, err := os.Stat(entry.Path); errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("basedir does not exist")
 	}
-	return s.loadHistorySearchRecords(entry, "", "")
+	return joblist.Projects(entry.Path, "")
 }
 
 func (s site) loadHistorySearchRecords(entry webBaseDir, projectName, runID string) ([]webprojection.HistorySearchRecord, error) {
-	projects, err := joblist.Projects(entry.Path, "")
+	projects, err := historySearchProjects(entry)
 	if err != nil {
 		return nil, err
 	}
