@@ -305,7 +305,9 @@ ready_timeout = "60s"   # default 60s
 The service must listen on exactly `127.0.0.1:$ROTARI_LAUNCHER_PORT`, not
 `0.0.0.0`, and serve everything under `$ROTARI_LAUNCHER_BASE_PATH`, which is
 how requests arrive; rotari does not rewrite paths or pages, so a program that
-cannot serve under a path prefix does not work. Rotari picks the port. It
+cannot serve under a path prefix does not work. Requests carry
+`X-Forwarded-Host` and `X-Forwarded-Proto` with the address the browser used,
+for a program that builds absolute URLs. Rotari picks the port. It
 counts the service as ready only when the process listening on the port
 belongs to the launch and `ready_path` answers, so another program that took
 the port first is never shown; that, a bind to another address, or no answer

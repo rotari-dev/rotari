@@ -121,6 +121,14 @@ func (s site) serveLaunchProxy(writer http.ResponseWriter, request *http.Request
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(out *httputil.ProxyRequest) {
 			out.SetURL(upstream)
+			// The address the browser used, which WithExecGuard has checked:
+			// a service building absolute URLs must not name its loopback port.
+			proto := "http"
+			if isSecureAuthRequest(out.In) {
+				proto = "https"
+			}
+			out.Out.Header.Set("X-Forwarded-Host", out.In.Host)
+			out.Out.Header.Set("X-Forwarded-Proto", proto)
 			out.Out.Header.Del("Authorization")
 			out.Out.Header.Del("X-Rotari-Token")
 			// Keep application cookies, but never forward Rotari's sessions.

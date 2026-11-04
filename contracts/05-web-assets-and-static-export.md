@@ -935,6 +935,10 @@ command's `proxy_headers` (the readiness probe sends them too), in which
 launch's token, so a service can refuse anyone who reaches its port
 without the proxy; before then and
 after it ends the route answers 503, and 404 for an unknown ID.
+Forwarded requests carry `X-Forwarded-Host` (the request's checked `Host`, never
+a browser-sent `X-Forwarded-Host`) and `X-Forwarded-Proto` (`https` over TLS or
+from a TLS-terminating proxy, otherwise `http`), so a service that builds
+absolute URLs names the address the browser used, not its loopback port.
 An authenticated request under `/_launch/` establishes an HttpOnly,
 SameSite=Strict cookie scoped to that prefix (Secure over TLS), valid for 12
 hours and invalidated by a Web server restart. It authenticates only launch

@@ -45,6 +45,10 @@ func serveLaunchService() int {
 			http.NotFound(writer, request)
 			return
 		}
+		if strings.HasSuffix(request.URL.Path, "/forwarded") {
+			fmt.Fprintf(writer, "forwarded-host=%q forwarded-proto=%q", request.Header.Get("X-Forwarded-Host"), request.Header.Get("X-Forwarded-Proto"))
+			return
+		}
 		fmt.Fprintf(writer, "path=%s query=%s auth=%q token=%q launch-token-sent=%v", request.URL.Path, request.URL.RawQuery,
 			request.Header.Get("Authorization"), request.Header.Get("X-Rotari-Token"),
 			os.Getenv("ROTARI_LAUNCHER_TOKEN") != "" && request.Header.Get("X-Launch-Token") == os.Getenv("ROTARI_LAUNCHER_TOKEN"))
@@ -764,6 +768,16 @@ func TestWebLaunchServesServices(t *testing.T) {
 	if proxied.Status != http.StatusOK || proxied.Body != want {
 		t.Fatalf("proxied = (%d, %s), want %s", proxied.Status, proxied.Body, want)
 	}
+	// The service learns the address the browser used, not its own loopback
+	// port or what the browser claims.
+	baseURL, err := url.Parse(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	direct := e.HTTPDo(http.MethodGet, base+viewer.BasePath+"/forwarded", map[string]string{"X-Rotari-Token": launchToken, "X-Forwarded-Host": "evil.example"}, "")
+	if want := fmt.Sprintf("forwarded-host=%q forwarded-proto=%q", baseURL.Host, "http"); direct.Status != http.StatusOK || direct.Body != want {
+		t.Fatalf("forwarded = (%d, %s), want %s", direct.Status, direct.Body, want)
+	}
 	// A real browser signs in with the Web form, then Jupyter supplies its
 	// own Authorization header on API requests. Neither credential leaks.
 	jar, err := cookiejar.New(nil)
@@ -825,6 +839,19 @@ func TestWebLaunchServesServices(t *testing.T) {
 		if response.StatusCode != http.StatusOK || string(body) != want+` cookie="application=kept"` {
 			t.Fatalf("service Authorization %q = (%d, %s)", authorization, response.StatusCode, body)
 		}
+	}
+	// Behind a TLS-terminating proxy, it is the proxy's public address.
+	forwarded, err := browser.Get(proxy.URL + viewer.BasePath + "/forwarded")
+	if err != nil {
+		t.Fatal(err)
+	}
+	forwardedBody, err := io.ReadAll(forwarded.Body)
+	forwarded.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf("forwarded-host=%q forwarded-proto=%q", parsed.Host, "https"); forwarded.StatusCode != http.StatusOK || string(forwardedBody) != want {
+		t.Fatalf("forwarded through a proxy = (%d, %s), want %s", forwarded.StatusCode, forwardedBody, want)
 	}
 	if unknown := api(e, http.MethodGet, base+"/_launch/0000000000000000/", ""); unknown.Status != http.StatusNotFound {
 		t.Fatalf("unknown launch = %d", unknown.Status)
