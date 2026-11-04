@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -294,21 +295,30 @@ func TestKilledOwnerStopsLaunches(t *testing.T) {
 	web := exec.Command(os.Args[0])
 	web.Env = append(os.Environ(), testRole+"=web",
 		"ROTARI_TEST_LAUNCHER_COMMAND="+`sleep 300 & echo $! > "$PID_FILE"; wait`, "PID_FILE="+pidFile)
-	var stdout bytes.Buffer
-	web.Stdout, web.Stderr = &stdout, os.Stderr
+	stdout, err := web.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	web.Stderr = os.Stderr
 	if err := web.Start(); err != nil {
 		t.Fatal(err)
 	}
 	child := readNumberFile(t, pidFile)
+	// The command writes its PID before Start returns in the Web process, so
+	// wait for the group too: killing it earlier would leave nothing to read.
+	line, err := bufio.NewReader(stdout).ReadString('\n')
+	if err != nil {
+		t.Fatalf("reading the fake Web process's output: %v", err)
+	}
+	pgid, err := strconv.Atoi(strings.TrimSpace(line))
+	if err != nil {
+		t.Fatalf("fake Web process printed %q", line)
+	}
 	if err := web.Process.Kill(); err != nil {
 		t.Fatal(err)
 	}
 	_ = web.Wait()
 	waitProcessGone(t, child, "after its Web process was killed")
-	pgid, err := strconv.Atoi(strings.TrimSpace(stdout.String()))
-	if err != nil {
-		t.Fatalf("fake Web process printed %q", stdout.String())
-	}
 	if !errors.Is(syscall.Kill(-pgid, 0), syscall.ESRCH) {
 		t.Fatalf("process group %d survived its Web process", pgid)
 	}
