@@ -2111,15 +2111,15 @@ function runJobCells(q, run, runID, j) {
             (attempt, index) =>
               '<button type="button" class="' +
               (attempt.id === j.attempt_id ? "selected" : "") +
-              '" onclick="selectJobAttempt(\'' +
-              esc(q.project_name) +
-              "','" +
-              esc(runID) +
-              "','" +
-              esc(j.id) +
-              "','" +
-              esc(attempt.id) +
-              "')\">" +
+              '" onclick="selectJobAttempt(' +
+              jsArg(q.project_name) +
+              "," +
+              jsArg(runID) +
+              "," +
+              jsArg(j.id) +
+              "," +
+              jsArg(attempt.id) +
+              ')">' +
               (index === 0 ? "Latest: " : "") +
               esc(attempt.id) +
               "</button>",
@@ -2263,15 +2263,15 @@ function runJobActions(q, run, runID, j) {
   const artifactsReady = !!result || !!j.submitted_at;
   const notStarted = ' disabled title="Job has not started yet"';
   const artifacts = artifactsReady
-    ? '<button class="view-artifacts" onclick="showArtifacts(\'' +
-      esc(q.project_name) +
-      "','" +
-      esc(logRun) +
-      "','" +
-      esc(logJob) +
-      "','" +
-      esc(artifactAttemptID) +
-      "')\">Artifacts</button>"
+    ? '<button class="view-artifacts" onclick="showArtifacts(' +
+      jsArg(q.project_name) +
+      "," +
+      jsArg(logRun) +
+      "," +
+      jsArg(logJob) +
+      "," +
+      jsArg(artifactAttemptID) +
+      ')">Artifacts</button>'
     : '<button class="view-artifacts"' + notStarted + ">Artifacts</button>";
   return actionsCell([
     viewLog,

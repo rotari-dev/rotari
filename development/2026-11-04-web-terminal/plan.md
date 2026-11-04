@@ -48,26 +48,18 @@ launchers. With a terminal it could do anything the user's account can do.
   ([SECURITY.md](../../docs/SECURITY.md#launching-services-and-commands)), so
   their pages can call the rotari API as the signed-in browser.
 
-## Confirmed vulnerability
+## Fixed vulnerability
 
-A project name containing `'` breaks out of the `showArtifacts` handler at
-[web_app_core.js:2266](../../internal/webui/assets/web_app_core.js#L2266) and
-runs script when the user clicks **Artifacts**. Reproduced on 2026-11-04 with
-the built binary and jsdom, using a project created by `rotari add` and a
-payload that only set a global variable.
+A value containing `'` could break out of the `showArtifacts` and
+`selectJobAttempt` handlers in
+[web_app_core.js](../../internal/webui/assets/web_app_core.js) and run script
+when clicked. `esc` is the wrong tool in that position: the browser decodes
+`&#39;` back to `'` in the attribute value before parsing it as JavaScript.
 
-`esc` is the wrong tool in that position: the browser decodes `&#39;` back to
-`'` in the attribute value before parsing it as JavaScript.
-`selectJobAttempt` at line 2114 has the same shape (read, not executed). Lines
-2006 and 2007 also quote a handler argument and are not yet checked.
-
-Anyone who can write the basedir can plant such a name or edit the IDs in
-state. An ordinary project name with an apostrophe hits the same code, so its
-Artifacts button should fail as well; this has not been run. See
-[ISSUES.md](../ISSUES.md).
-
-Do not put a working payload in commits, plans, or issue text. Fix this before
-pushing anything that describes it.
+Both handlers now use `jsArg`, covered by
+[TestWebJobActionHandlersKeepIdentityAsData](../../internal/webui/job_action_handlers_test.go);
+see [ISSUES.md](../ISSUES.md). A scan of multi-line generated handlers found no
+other argument built with `esc` alone, but that is not the audit in phase 1.
 
 ## Scope and non-goals
 
@@ -122,12 +114,10 @@ Non-goals:
 
 Estimate: 2 to 4 days.
 
-1. Fix the confirmed handlers first, as `data-*` with `this.dataset`, the pattern
-   already at `web_app_core.js:99`.
-2. Classify every sink and generated handler in a table in this plan: file and
+1. Classify every sink and generated handler in a table in this plan: file and
    line, the data reaching it, the escaping in use, and safe or fixed. Treat
    everything from state files, logs, configs, and the API as untrusted.
-3. Check by output context, not just for the presence of `esc`:
+2. Check by output context, not just for the presence of `esc`:
    - HTML text and quoted attributes: `esc`.
    - JavaScript inside an event handler: never `esc` alone.
    - URLs in `href` and `src`: scheme and path encoding. The Markdown renderer
@@ -135,7 +125,8 @@ Estimate: 2 to 4 days.
    - JSON embedded in `<script>`: the static bootstrap and Table viewer.
    - Go-composed HTML in `assets.go`, `auth.go`, and `table_view_static.go`.
    - Dynamic `class` and `style` values, SVG, and chart labels.
-4. Add a regression test. A jsdom table test renders hostile values (`'`, `"`,
+3. Extend
+   [the regression test](../../internal/webui/job_action_handlers_test.go). A jsdom table test renders hostile values (`'`, `"`,
    `<`, `&`, backtick, and handler text) and clicks each generated control. It
    asserts that no payload ran and that each handler received the exact original
    value, so legitimate names with apostrophes are covered too.
@@ -196,9 +187,10 @@ Stop here unless all of these hold:
   add them to the Web UI instead.
 - The maintainer accepts decisions 2 to 7, including typing the token each time.
 
-Do not substitute `ttyd` in `launchers.toml` on a shared host. A service's
-loopback port is reachable by other users without rotari's token, and that would
-give them a shell as this user.
+Do not substitute `ttyd` in `launchers.toml` on a shared host without checking
+how it takes a secret. A service's loopback port is reachable by other users, so
+it must require the launch token, which
+[must not appear in a process's arguments](../../docs/SECURITY.md#launching-services-and-commands).
 
 ## Phase 3: Terminal sessions and transport
 
