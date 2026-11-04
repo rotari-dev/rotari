@@ -1023,17 +1023,6 @@ func showRun(paths state.ProjectPaths, runID string, filter showJobFilter, wide 
 			return
 		}
 		latestAttemptID := latest.id
-		latestAttemptLabel := latestAttemptID
-		if latestAttemptLabel == "" {
-			latestAttemptLabel = "-"
-		}
-		if latestAttemptLabel == "-" {
-			if origin := originByID[jobID]; origin != nil && origin.AttemptID != "" {
-				latestAttemptLabel = origin.AttemptID
-			} else if result, ok := resultByID[jobSpec.ID]; ok && result.AttemptID != "" {
-				latestAttemptLabel = result.AttemptID
-			}
-		}
 		name := state.ReadJobName(jobDir)
 		if name == "" {
 			name = jobSpec.Name
@@ -1053,6 +1042,10 @@ func showRun(paths state.ProjectPaths, runID string, filter showJobFilter, wide 
 			dependsOn = "-"
 		}
 		summaryResult, hasSummary := resultByID[jobSpec.ID]
+		latestAttemptLabel := jobstatus.AttemptID(latestAttemptID, summaryResult, hasSummary)
+		if latestAttemptLabel == "" {
+			latestAttemptLabel = "-"
+		}
 		resolved := jobstatus.ReadJob(jsonStore(), jobDir, summaryResult, hasSummary)
 		status, statusOK, blocked := resolved.ExitCode, resolved.Finished(), resolved.Blocked()
 		// An attempt's command.json, which jobSpecs holds for it, records the

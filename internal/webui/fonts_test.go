@@ -46,7 +46,8 @@ func TestLiveServerServesEmbeddedFonts(t *testing.T) {
 		t.Fatalf("GET /fonts/LICENSE.txt = %d, want the font licence", license.Code)
 	}
 	for _, target := range []string{"/fonts/", "/fonts/missing.woff2", "/fonts/../web_styles.css", "/fonts/README.md"} {
-		if response := get(target); response.Code != http.StatusNotFound && response.Code != http.StatusMovedPermanently {
+		// Go 1.26's ServeMux answers a path it cleans with a 307, Go 1.25's with a 301.
+		if response := get(target); response.Code != http.StatusNotFound && response.Code != http.StatusMovedPermanently && response.Code != http.StatusTemporaryRedirect {
 			t.Errorf("GET %s = %d, want only the embedded fonts served", target, response.Code)
 		}
 	}
