@@ -24,7 +24,7 @@ func TestBuiltinCommands(t *testing.T) {
 		"Aim":                {"aim", []TargetKind{TargetDirectory}, nil, DefaultReadyPath},
 		"Streamlit":          {"streamlit", []TargetKind{TargetFile}, []string{"*.py"}, "/_stcore/health"},
 		"Datasette":          {"datasette", []TargetKind{TargetFile}, []string{"*.db", "*.sqlite", "*.sqlite3"}, DefaultReadyPath},
-		"marimo":             {"marimo", []TargetKind{TargetFile}, []string{"*.py"}, "/health"},
+		"marimo":             {"marimo", []TargetKind{TargetFile}, []string{"*.py", "*.md", "*.markdown", "*.qmd"}, "/health"},
 		"marimo (directory)": {"marimo", []TargetKind{TargetDirectory}, nil, "/health"},
 		"Panel":              {"panel", []TargetKind{TargetFile}, []string{"*.py"}, DefaultReadyPath},
 		"Gradio":             {"gradio", []TargetKind{TargetFile}, []string{"*.py"}, DefaultReadyPath},

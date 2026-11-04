@@ -127,7 +127,8 @@ const (
 	// `python` so that a host without Gradio shows it unavailable. An app
 	// that sets its own address or port in launch() does not work.
 	gradioCommand = `GRADIO_ANALYTICS_ENABLED=False GRADIO_SERVER_NAME=127.0.0.1 GRADIO_SERVER_PORT="$ROTARI_LAUNCHER_PORT" GRADIO_ROOT_PATH="$ROTARI_LAUNCHER_BASE_PATH" gradio "$ROTARI_LAUNCHER_ARTIFACT"`
-	// marimo 0.25: the artifact is a notebook, or a directory of them. The
+	// marimo 0.25: the artifact is a notebook, in Python or Markdown, or a
+	// directory of them. The
 	// launch token is its password, which only the proxy presents
 	// (its Basic credentials), so other local users who reach its port cannot
 	// run code. It goes through standard input because they can read a
@@ -161,7 +162,7 @@ func BuiltinCommands() []Command {
 	datasette.Patterns = []string{"*.db", "*.sqlite", "*.sqlite3"}
 	marimoHeaders := map[string]string{"Authorization": "Basic $" + ProxyBasicAuth}
 	marimo := service("marimo", marimoCommand, []TargetKind{TargetFile}, "/health")
-	marimo.Patterns = []string{"*.py"}
+	marimo.Patterns = []string{"*.py", "*.md", "*.markdown", "*.qmd"}
 	marimo.ProxyHeaders = marimoHeaders
 	marimoDirectory := service("marimo (directory)", marimoCommand, directory, "/health")
 	marimoDirectory.ProxyHeaders = marimoHeaders
@@ -536,10 +537,10 @@ func Template() []byte {
 # Built in, without an entry here: TensorBoard, Jupyter Lab (requires the
 # launch token), MLflow (a directory named mlruns), MLflow (SQLite) (a file
 # named mlflow.db), Aim, Streamlit (*.py files), Datasette (*.db, *.sqlite,
-# and *.sqlite3 files), marimo (*.py files, requires the launch token),
-# marimo (directory), Panel (*.py files), and Gradio (*.py files). Each is
-# shown disabled while its program is not installed. An entry with the same
-# name replaces one.
+# and *.sqlite3 files), marimo (*.py, *.md, *.markdown, and *.qmd files,
+# requires the launch token), marimo (directory), Panel (*.py files), and
+# Gradio (*.py files). Each is shown disabled while its program is not
+# installed. An entry with the same name replaces one.
 
 # TensorBoard is built in: rotari registers it without an entry here, as
 #   tensorboard --logdir "$ROTARI_LAUNCHER_ARTIFACT" --host 127.0.0.1

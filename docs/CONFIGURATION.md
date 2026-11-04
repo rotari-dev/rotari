@@ -332,7 +332,7 @@ the same name replaces it:
 | Aim | directories | an Aim repository (`aim init`); Aim refuses other directories |
 | Streamlit | `*.py` files | runs the app |
 | Datasette | `*.db`, `*.sqlite`, and `*.sqlite3` files | browses and queries a SQLite file, read-only |
-| marimo | `*.py` files | opens the notebook; requires the launch token (below) |
+| marimo | `*.py`, `*.md`, `*.markdown`, and `*.qmd` files | opens the notebook, or other Markdown as a new one, which changes the file only when saved from marimo; requires the launch token (below) |
 | marimo (directory) | directories | lists the directory's notebooks; requires the launch token (below) |
 | Panel | `*.py` files | runs the app |
 | Gradio | `*.py` files | runs the app; one that sets its own address or port in `launch()` does not work |

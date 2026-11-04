@@ -827,6 +827,7 @@ func TestBuiltinServicesThroughProxy(t *testing.T) {
 	write(t, filepath.Join(work, "gradio_app.py"), "import gradio as gr\ndemo = gr.Interface(lambda x: x, 'text', 'text')\ndemo.launch()\n")
 	notebook := "import marimo\napp = marimo.App()\n\nif __name__ == '__main__':\n    app.run()\n"
 	write(t, filepath.Join(work, "nb.py"), notebook)
+	write(t, filepath.Join(work, "nb.md"), "---\ntitle: Notebook\nmarimo-version: 0.25.2\n---\n\n```python {.marimo}\nprint(1)\n```\n")
 	write(t, filepath.Join(work, "nb", "notebook.py"), notebook)
 	if output, err := exec.Command("aim", "init", "--repo", filepath.Join(work, "aimrepo")).CombinedOutput(); err != nil {
 		t.Fatalf("aim init: %v\n%s", err, output)
@@ -922,6 +923,7 @@ func TestBuiltinServicesThroughProxy(t *testing.T) {
 			}
 		}},
 		{"marimo", "nb.py", launcher.TargetFile, checkMarimo("")},
+		{"marimo", "nb.md", launcher.TargetFile, checkMarimo("")},
 		{"marimo (directory)", "nb", launcher.TargetDirectory, checkMarimo("&file=notebook.py")},
 		{"Panel", "panel_app.py", launcher.TargetFile, func(t *testing.T, base string, _ launcher.Launch) {
 			code, body := get(base+"/panel_app", nil)
