@@ -74,7 +74,7 @@ See [plan.md](plan.md) for current scope and status.
 
 ## Fix a launcher test's race
 
-**Commits:**  ``.
+**Commits:** 2026-11-04 18:32:38 `a7d038c1`.
 
 **Change:** `TestKilledOwnerStopsLaunches` in `internal/launcher/process_test.go` reads the launch's process group before killing the fake Web process.
 
@@ -88,7 +88,7 @@ See [plan.md](plan.md) for current scope and status.
 
 ## Check stored values in a real browser
 
-**Commits:**  ``.
+**Commits:** 2026-11-04 18:32:38 `9a72dad9`.
 
 **Change:** Added `TestStoredValuesStayTextInBrowser`, `ROTARI_REQUIRE_BROWSER_TESTS` in `ci.yml`, and a `beforeNavigate` option and a longer start limit in `scripts/web-browser.mjs`. Both stored-value checks wait for pages and requests instead of fixed times.
 
