@@ -249,7 +249,10 @@ does not promise to detect a lost remote client.
   causes, in text and in their `failures` JSON. Each job is classified on its
   own result, so array tasks and matrix members fall into their own causes: a
   block, cancellation, or timeout that rotari recorded comes first, then the
-  job's latest saved rule diagnosis, then its remaining failure kind. Groups
+  job's latest saved rule diagnosis, then its remaining failure kind. A
+  scheduler's time limit is not rotari's timeout: it has the failure kind
+  `timeout`, but its cause comes from its diagnosis or its other kinds, so its
+  group does not advise `change --timeout`. Groups
   list the most frequent cause first. A group's example line is its first
   job's matched diagnosis line, else its recorded error, else its saved
   `last_output_line`. In text, each group of the project's last

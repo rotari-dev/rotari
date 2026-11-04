@@ -226,9 +226,12 @@ Failures by cause:
 ```
 
 Each job is classified on its own result: a block by a failed dependency, a
-cancellation, or a timeout comes first, then the job's latest saved rule
-diagnosis, and otherwise its failure kind (`oom`, `signal`, or `error`; see
-`--filter-failure-kind`). The most frequent cause is listed first. The example
+cancellation, or a `--timeout` that rotari enforced comes first, then the job's
+latest saved rule diagnosis, and otherwise its failure kind (`oom`, `signal`, or
+`error`; see `--filter-failure-kind`). A scheduler's time limit is not rotari's
+timeout, so it appears under its diagnosis, such as `Slurm time limit exceeded`,
+and `--filter-failure-kind timeout` selects both. The most frequent cause is
+listed first. The example
 line is the matched rule's line, else the error rotari recorded, such as
 `timed out after 5s`, else the job's last output line, so a script that only
 exits nonzero still shows how its output ended:

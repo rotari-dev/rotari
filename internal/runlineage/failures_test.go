@@ -169,6 +169,53 @@ func TestLimitMembersKeepsTheFirstJobsAndCountsTheRest(t *testing.T) {
 	}
 }
 
+// TestFailureGroupsTellASchedulerTimeLimitFromRotarisTimeout groups jobs that
+// a scheduler stopped, or whose scheduler command timed out. Only rotari's own
+// timeout gets the advice to raise it with change --timeout, and the others
+// are analyzed by rules, so they still count in the diagnosis summary.
+func TestFailureGroupsTellASchedulerTimeLimitFromRotarisTimeout(t *testing.T) {
+	limit := "Slurm time limit exceeded"
+	diagnosedLimit := diagnosed(1, limit, "CANCELLED AT 2026-11-04 DUE TO TIME LIMIT", "Increase the Slurm time limit.")
+	diagnosedLimit.Error = "timeout"
+	run := Run{Jobs: []Job{
+		failedTask(1, StatusFailed, diagnosedLimit),
+		failedTask(2, StatusFailed, model.JobResult{ExitCode: 1, Error: "timeout", DiagnosisStatus: model.DiagnosisNoMatch}),
+		failedTask(3, StatusFailed, model.JobResult{ExitCode: 143, Error: "timeout", DiagnosisStatus: model.DiagnosisNoMatch}),
+		failedTask(4, StatusFailed, model.JobResult{ExitCode: model.TimeoutExitCode, Error: "timed out after 5s", DiagnosisStatus: model.DiagnosisNoMatch}),
+	}}
+	for index := range run.Jobs {
+		job := &run.Jobs[index]
+		job.DiagnosisStatus = job.Result.DiagnosisStatus
+		for _, diagnosis := range job.Result.Diagnoses {
+			job.Diagnoses = append(job.Diagnoses, diagnosis.Name)
+		}
+	}
+	groups := FailureGroups(run)
+	got := map[string]FailureGroup{}
+	for _, group := range groups {
+		got[group.Cause] = group
+	}
+	if group := got[limit]; group.Kind != FailureKindDiagnosis || group.Suggestion != "Increase the Slurm time limit." {
+		t.Errorf("scheduler time limit with a diagnosis = %+v, want its rule", group)
+	}
+	if group := got[model.FailureKindError]; group.Kind != model.FailureKindError || group.Suggestion != "" || group.Example.Evidence != "timeout" {
+		t.Errorf("scheduler time limit without a diagnosis = %+v, want an error group citing the state", group)
+	}
+	if group := got[model.FailureKindSignal]; group.Kind != model.FailureKindSignal || group.Suggestion != "" {
+		t.Errorf("scheduler time limit with a signal = %+v, want a signal group", group)
+	}
+	if group := got[model.FailureKindTimeout]; group.Count != 1 || group.Jobs[0].ID != "train-04" || !strings.Contains(group.Suggestion, "change --timeout") {
+		t.Errorf("rotari timeout = %+v, want only task 4, with the change --timeout advice", group)
+	}
+	counts := map[string]int{}
+	for _, count := range SummarizeDiagnoses(run) {
+		counts[count.Name] = count.Count
+	}
+	if counts[limit] != 1 || counts[model.DiagnosisNoMatch] != 2 || len(counts) != 2 {
+		t.Errorf("SummarizeDiagnoses() = %v, want the scheduler limits counted and rotari's timeout left out", counts)
+	}
+}
+
 // TestFailureGroupsSuggestAFixForCausesRotariRecords groups a timeout, a
 // cancellation, and a blocked job, whose causes rotari records itself rather
 // than a diagnosis rule, and checks that each group still suggests a fix.

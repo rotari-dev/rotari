@@ -245,7 +245,7 @@ and specifying both dimensions narrows by both. Annotations such as
 - `--filter-failure-cause CAUSE` matches failed jobs that failure summaries
   (CLI-4) group under CAUSE: a block, cancellation, or timeout rotari
   recorded, else the job's latest saved rule diagnosis, else its first other
-  failure kind, decided once by `model.FailureCause`. CAUSE is a failure
+  failure kind besides `timeout`, decided once by `model.FailureCause`. CAUSE is a failure
   kind or a diagnosis rule name, compared by its slug ID, so case and
   punctuation do not matter and the rule's slug ID also works. Because a
   saved diagnosis can name a rule from an earlier rule set, CAUSE is not

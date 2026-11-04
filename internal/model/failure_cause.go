@@ -15,20 +15,33 @@ const FailureCauseDiagnosis = "diagnosis"
 // then the latest saved rule diagnosis, named by its rule; then the result's
 // first remaining failure kind. Failure summaries group jobs by it and
 // --filter-failure-cause selects by it.
+//
+// The cause timeout is only rotari's own, which records TimeoutExitCode. Any
+// other result of kind timeout, such as a scheduler's time limit or a scheduler
+// command that timed out, was not stopped by rotari, so its suggestion to raise
+// rotari's timeout would not apply.
 func FailureCause(result JobResult) (kind, name string) {
 	kinds := FailureKinds(result)
 	if len(kinds) == 0 {
 		return "", ""
 	}
-	for _, recorded := range []string{FailureKindBlocked, FailureKindCancelled, FailureKindTimeout} {
+	for _, recorded := range []string{FailureKindBlocked, FailureKindCancelled} {
 		if slices.Contains(kinds, recorded) {
 			return recorded, recorded
 		}
 	}
+	if result.ExitCode == TimeoutExitCode {
+		return FailureKindTimeout, FailureKindTimeout
+	}
 	if len(result.Diagnoses) > 0 {
 		return FailureCauseDiagnosis, result.Diagnoses[0].Name
 	}
-	return kinds[0], kinds[0]
+	for _, kind := range kinds {
+		if kind != FailureKindTimeout {
+			return kind, kind
+		}
+	}
+	return FailureKindError, FailureKindError
 }
 
 // FailureCauseID returns the selector ID of a failure cause or diagnosis

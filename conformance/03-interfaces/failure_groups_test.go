@@ -2,7 +2,9 @@ package interfaces
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -155,6 +157,60 @@ func TestFailuresWithoutOutputAreDiagnosed(t *testing.T) {
 	} {
 		table := e.MustRotari(append([]string{"show", "-p", project}, test.args...)...).Stdout
 		for _, name := range all {
+			if listed := strings.Contains(table, name); listed != slices.Contains(test.want, name) {
+				t.Errorf("show %v lists %s = %v, want jobs %v:\n%s", test.args, name, listed, test.want, table)
+			}
+		}
+	}
+}
+
+// TestSchedulerTimeLimitIsNotRotarisTimeout runs a job that fake Slurm commands
+// report as TIMEOUT, as sacct does for a job stopped at its --time. It has the
+// failure kind timeout, but rotari did not stop it, so its group does not advise
+// raising rotari's timeout, and only rotari's own timeout is the cause timeout.
+func TestSchedulerTimeLimitIsNotRotarisTimeout(t *testing.T) {
+	covers(t, "CLI-4")
+	bin := t.TempDir()
+	for name, output := range map[string]string{"sbatch": "12345", "squeue": "", "sacct": "TIMEOUT|0:0"} {
+		script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' %q\n", output)
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e := support.NewEnv(t).WithVar("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	project := "limits"
+	e.MustRotari("add", "-p", project, "--job-name", "job-at-slurm-limit", "-e", "slurm", "--", "true")
+	e.MustRotari("add", "-p", project, "--job-name", "job-at-own-timeout", "--timeout", "1s", "--", "sleep", "5")
+	if result := e.RotariRun("run", "-p", project, "--quiet"); result.Code == 0 {
+		t.Fatalf("run with failing jobs should exit 1: %s", result)
+	}
+	var shown struct {
+		Failures failureGroupsView `json:"failures"`
+	}
+	if err := json.Unmarshal([]byte(e.MustRotari("show", "-p", project, "--json").Stdout), &shown); err != nil {
+		t.Fatal(err)
+	}
+	causes := map[string]int{}
+	for _, group := range shown.Failures {
+		causes[group.Cause] = group.ExitCodes[0]
+	}
+	if want := map[string]int{"timeout": 124, "error": 1}; !reflect.DeepEqual(causes, want) {
+		t.Errorf("failure causes = %v, want %v", causes, want)
+	}
+	text := e.MustRotari("show", "-p", project).Stdout
+	if count := strings.Count(text, "change --timeout"); count != 1 {
+		t.Errorf("show advises change --timeout %d times, want once, for rotari's timeout:\n%s", count, text)
+	}
+	for _, test := range []struct {
+		args []string
+		want []string
+	}{
+		{args: []string{"--filter-failure-kind", "timeout"}, want: []string{"job-at-slurm-limit", "job-at-own-timeout"}},
+		{args: []string{"--filter-failure-cause", "timeout"}, want: []string{"job-at-own-timeout"}},
+		{args: []string{"--filter-failure-cause", "error"}, want: []string{"job-at-slurm-limit"}},
+	} {
+		table := e.MustRotari(append([]string{"show", "-p", project}, test.args...)...).Stdout
+		for _, name := range []string{"job-at-slurm-limit", "job-at-own-timeout"} {
 			if listed := strings.Contains(table, name); listed != slices.Contains(test.want, name) {
 				t.Errorf("show %v lists %s = %v, want jobs %v:\n%s", test.args, name, listed, test.want, table)
 			}
