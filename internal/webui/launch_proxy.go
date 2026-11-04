@@ -140,6 +140,11 @@ func (s site) serveLaunchProxy(writer http.ResponseWriter, request *http.Request
 			}
 			// The service's own secret, which only this proxy presents.
 			for name, value := range upstreamService.Headers {
+				// Ahead of the application cookies, not instead of them, and
+				// first so that a browser cookie of that name cannot replace it.
+				if cookies := out.Out.Header.Get("Cookie"); cookies != "" && http.CanonicalHeaderKey(name) == "Cookie" {
+					value += "; " + cookies
+				}
 				out.Out.Header.Set(name, value)
 			}
 		},

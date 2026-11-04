@@ -31,6 +31,10 @@ const (
 	// can require one should, with ProxyHeaders presenting it, so that
 	// other local users who reach its loopback port cannot use it.
 	EnvToken = "ROTARI_LAUNCHER_TOKEN"
+	// EnvTokenFile is the path of a private file holding EnvToken, for a
+	// service that reads its secret only from a file. It goes when the
+	// launch ends.
+	EnvTokenFile = "ROTARI_LAUNCHER_TOKEN_FILE"
 	// EnvJupyterConfig is the path of the manager's jupyterConfig.
 	EnvJupyterConfig = "ROTARI_LAUNCHER_JUPYTER_CONFIG"
 	// ProxyBasicAuth stands, in proxy_headers only, for the Base64 of
@@ -55,6 +59,9 @@ c.IdentityProvider.token = os.environ["` + EnvToken + `"]
 
 // jupyterConfigName is jupyterConfig's file in the runtime directory.
 const jupyterConfigName = "jupyter_token_config.py"
+
+// tokenFileName is EnvTokenFile's file in the launch's directory.
+const tokenFileName = "token"
 
 // noProxyLoopback is added to NO_PROXY and no_proxy: loopback traffic never
 // needs a proxy, and TensorBoard's own gRPC to localhost fails through one.
@@ -301,7 +308,17 @@ func (manager *Manager) prepare(launch *Launch) error {
 		return fmt.Errorf("create launch log: %w", err)
 	}
 	launch.log = log
+	if launch.Mode == ModeService {
+		if err := os.WriteFile(launch.tokenFile(), []byte(launch.token), 0o600); err != nil { // NOSONAR: logDir is a new 0700 directory in the manager's runtime directory.
+			return fmt.Errorf("write launch token file: %w", err)
+		}
+	}
 	return nil
+}
+
+// tokenFile is the path of EnvTokenFile.
+func (launch *Launch) tokenFile() string {
+	return filepath.Join(launch.logDir, tokenFileName)
 }
 
 // spawn starts the launch's process; a service first gets a new port.
@@ -364,7 +381,7 @@ func launchEnvironment(env []string, launch *Launch) []string {
 	}
 	result = append(result, EnvArtifact+"="+launch.Target, EnvCWD+"="+launch.CWD)
 	if launch.Mode == ModeService {
-		result = append(result, EnvPort+"="+strconv.Itoa(launch.Port), EnvBasePath+"="+launch.BasePath, EnvToken+"="+launch.token, EnvJupyterConfig+"="+launch.jupyterConfig)
+		result = append(result, EnvPort+"="+strconv.Itoa(launch.Port), EnvBasePath+"="+launch.BasePath, EnvToken+"="+launch.token, EnvTokenFile+"="+launch.tokenFile(), EnvJupyterConfig+"="+launch.jupyterConfig)
 	}
 	return result
 }
@@ -375,6 +392,7 @@ func (launch *Launch) fail(err error) {
 	if launch.log != nil {
 		launch.log.Close()
 	}
+	_ = os.Remove(launch.tokenFile())
 }
 
 // watch records how a launch ended. A failure, when given and the launch
@@ -385,6 +403,7 @@ func (manager *Manager) watch(launch *Launch, failure error) {
 	manager.mu.Unlock()
 	result, err := process.Wait()
 	launch.log.Close()
+	_ = os.Remove(launch.tokenFile())
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 	defer close(launch.recorded)

@@ -279,6 +279,7 @@ these variables, which the command should quote:
 | `ROTARI_LAUNCHER_PORT` | service mode: the port to listen on |
 | `ROTARI_LAUNCHER_BASE_PATH` | service mode: the URL path prefix to serve under |
 | `ROTARI_LAUNCHER_TOKEN` | service mode: a secret made for this launch (see [Tokens for services](#tokens-for-services)) |
+| `ROTARI_LAUNCHER_TOKEN_FILE` | service mode: a file holding that secret, private to you and removed when the launch ends (see [Tokens for services](#tokens-for-services)) |
 | `ROTARI_LAUNCHER_JUPYTER_CONFIG` | service mode: a Jupyter config file that makes that secret the login token (see [Tokens for services](#tokens-for-services)) |
 
 `cwd = "target"` is the selected directory, or a selected file's directory.
@@ -386,8 +387,35 @@ ready_path = "/health"
 proxy_headers = { Authorization = "Basic $ROTARI_LAUNCHER_BASIC_AUTH" }
 ```
 
-The browser never sees the token, and the proxy drops the browser's own
-`Authorization` header. TensorBoard, MLflow, Aim, Streamlit, Datasette, Panel,
+A service that reads its secret only from a file uses
+`$ROTARI_LAUNCHER_TOKEN_FILE`. A cookie in `proxy_headers` is sent ahead of the
+browser's cookies, which the service still receives. VS Code's browser version
+needs both. It is not built in: register it yourself, because the command below
+accepts the
+[VS Code Server license terms](https://aka.ms/vscode-server-license) on your
+behalf. Install the
+[standalone VS Code CLI](https://code.visualstudio.com/Download)
+and name its path; the `code` in a Remote SSH terminal is a different program
+without `serve-web`, and it comes first on `PATH` there:
+
+```toml
+[[launcher]]
+name = "VS Code"
+command = '''"$HOME/.local/bin/code-cli" serve-web --host 127.0.0.1 --port "$ROTARI_LAUNCHER_PORT" --server-base-path "$ROTARI_LAUNCHER_BASE_PATH" --connection-token-file "$ROTARI_LAUNCHER_TOKEN_FILE" --accept-server-license-terms --default-folder "$ROTARI_LAUNCHER_ARTIFACT"'''
+targets = ["directory"]
+mode = "service"
+ready_path = "/version"
+proxy_headers = { Cookie = "vscode-tkn=$ROTARI_LAUNCHER_TOKEN" }
+```
+
+The first launch downloads the Web server, about 700 MB, before the editor
+opens. Like Jupyter Lab, VS Code runs commands as you. VS Code also puts the
+token in a browser cookie that its page reads, so other pages served from the
+same rotari address may be able to read it; launch it next to services you
+trust.
+
+With the built-in commands, the browser never sees the token, and the proxy
+always drops the browser's own `Authorization` header. TensorBoard, MLflow, Aim, Streamlit, Datasette, Panel,
 and Gradio cannot require a token, so another user of the host who finds their port can read what they
 show; launch them only where that is acceptable.
 

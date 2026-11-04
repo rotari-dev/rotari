@@ -56,6 +56,20 @@ func serveLaunchService() int {
 				strings.Contains(string(content), os.Getenv("ROTARI_LAUNCHER_TOKEN")))
 			return
 		}
+		if strings.HasSuffix(request.URL.Path, "/token-file") {
+			path := os.Getenv("ROTARI_LAUNCHER_TOKEN_FILE")
+			info, err := os.Stat(path)
+			content, readErr := os.ReadFile(path)
+			private := err == nil && readErr == nil && info.Mode().Perm() == 0o600
+			fmt.Fprintf(writer, "private=%v holds-token=%v", private, string(content) == os.Getenv("ROTARI_LAUNCHER_TOKEN"))
+			return
+		}
+		if strings.HasSuffix(request.URL.Path, "/service-cookie") {
+			own := "service=" + os.Getenv("ROTARI_LAUNCHER_TOKEN")
+			cookie := request.Header.Get("Cookie")
+			fmt.Fprintf(writer, "own-first=%v rest=%q", cookie == own || strings.HasPrefix(cookie, own+"; "), strings.TrimPrefix(strings.TrimPrefix(cookie, own), "; "))
+			return
+		}
 		if strings.HasSuffix(request.URL.Path, "/basic-auth") {
 			credentials := base64.StdEncoding.EncodeToString([]byte("rotari:" + os.Getenv("ROTARI_LAUNCHER_TOKEN")))
 			fmt.Fprintf(writer, "basic-auth-sent=%v", request.Header.Get("X-Launch-Basic") == "Basic "+credentials)
@@ -795,6 +809,8 @@ func TestWebLaunchServesServices(t *testing.T) {
 	writeLaunchers(t, e,
 		launcherEntry("Viewer", launchServiceRole+`=1 exec "$ROTARI_CONFORMANCE_BIN"`, `"directory"`, "service")+
 			"proxy_headers = { X-Launch-Token = \"$ROTARI_LAUNCHER_TOKEN\", X-Launch-Basic = \"Basic $ROTARI_LAUNCHER_BASIC_AUTH\" }\n\n"+
+			launcherEntry("Cookied", launchServiceRole+`=1 exec "$ROTARI_CONFORMANCE_BIN"`, `"directory"`, "service")+
+			"proxy_headers = { Cookie = \"service=$ROTARI_LAUNCHER_TOKEN\" }\n\n"+
 			launcherEntry("Squatted", `echo "$ROTARI_LAUNCHER_PORT" > `+portFile+`; sleep 300`, `"file"`, "service"))
 	base, _, _ := startWebProcess(t, e, "--allow-exec")
 
@@ -875,6 +891,29 @@ func TestWebLaunchServesServices(t *testing.T) {
 	// A Jupyter service can take the token from a private file without a secret.
 	if config := api(e, http.MethodGet, base+viewer.BasePath+"/jupyter-config", ""); config.Status != http.StatusOK || config.Body != "private=true sets-token=true holds-token=false" {
 		t.Fatalf("Jupyter config = (%d, %s)", config.Status, config.Body)
+	}
+	// A service that reads its secret only from a file gets a private one.
+	if file := api(e, http.MethodGet, base+viewer.BasePath+"/token-file", ""); file.Status != http.StatusOK || file.Body != "private=true holds-token=true" {
+		t.Fatalf("token file = (%d, %s)", file.Status, file.Body)
+	}
+	// A cookie in proxy_headers joins the browser's cookies and wins over one
+	// of the same name.
+	cookied := decodeLaunch(t, api(e, http.MethodPost, base+"/api/launch", f.request("Cookied", "data", "", nil)))
+	if ready := waitLaunch(t, e, base, cookied.ID, func(launch launchRecord) bool { return launch.State != "starting" }); ready.State != "running" {
+		t.Fatalf("service with a cookie = %+v", ready)
+	}
+	for browser, want := range map[string]string{
+		"":                                  `own-first=true rest=""`,
+		"application=kept":                  `own-first=true rest="application=kept"`,
+		"service=browser; application=kept": `own-first=true rest="service=browser; application=kept"`,
+	} {
+		headers := map[string]string{"X-Rotari-Token": launchToken}
+		if browser != "" {
+			headers["Cookie"] = browser
+		}
+		if got := e.HTTPDo(http.MethodGet, base+cookied.BasePath+"/service-cookie", headers, ""); got.Status != http.StatusOK || got.Body != want {
+			t.Fatalf("cookie with browser %q = (%d, %s), want %s", browser, got.Status, got.Body, want)
+		}
 	}
 	// The service learns the address the browser used, not its own loopback
 	// port or what the browser claims.

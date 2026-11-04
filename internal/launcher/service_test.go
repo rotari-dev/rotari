@@ -208,6 +208,34 @@ func TestServiceNeedsAServicePath(t *testing.T) {
 	}
 }
 
+// A service reads its token from a private file, gone once the launch ends.
+func TestServiceTokenFileLastsAsLongAsTheLaunch(t *testing.T) {
+	t.Parallel()
+	manager := newServiceManager(t)
+	launch, err := manager.Start(StartRequest{Command: serviceCommand("web", ""), Target: t.TempDir(), Kind: TargetDirectory})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ready := waitState(t, manager, launch.ID, notStarting); ready.State != StateRunning {
+		t.Fatalf("service = %+v", ready)
+	}
+	path := filepath.Join(manager.dir, launch.ID, tokenFileName)
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("token file mode = %v", info.Mode().Perm())
+	}
+	if _, err := manager.Stop(launch.ID); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, manager, launch.ID, func(state Launch) bool { return !state.State.live() })
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("token file after the launch ended: %v", err)
+	}
+}
+
 // A service that requires the launch token is ready only because the
 // probe presents it, and the upstream carries it for the proxy; each
 // launch has its own token.

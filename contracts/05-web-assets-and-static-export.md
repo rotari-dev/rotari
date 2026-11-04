@@ -933,7 +933,9 @@ are not counted. Covered by the browser check in `TestWebLaunchLifecycle` in
 process listening on `127.0.0.1:$ROTARI_LAUNCHER_PORT` belongs to the launch
 and its readiness path under `$ROTARI_LAUNCHER_BASE_PATH` answers 2xx or 3xx;
 a process outside the launch on that port fails it. Each service launch gets
-its own `$ROTARI_LAUNCHER_TOKEN`, which never appears in an API response, and
+its own `$ROTARI_LAUNCHER_TOKEN`, which never appears in an API response,
+`$ROTARI_LAUNCHER_TOKEN_FILE`, a file only the server's user can read that holds
+the token and is removed when the launch ends, and
 `$ROTARI_LAUNCHER_JUPYTER_CONFIG`, a Jupyter config file only the server's user
 can read, holding no secret, that sets that token as the login token after
 reading the user's own config, so the built-in Jupyter Lab's token is in no
@@ -947,7 +949,9 @@ command's `proxy_headers` (the readiness probe sends them too), in which
 `$ROTARI_LAUNCHER_TOKEN` is the
 launch's token and `$ROTARI_LAUNCHER_BASIC_AUTH` the Base64 of `rotari:` and
 that token, so a service can refuse anyone who reaches its port
-without the proxy; before then and
+without the proxy. A `Cookie` in `proxy_headers` precedes the browser's other
+cookies rather than replacing them, so it wins over one of the same name for a
+service that reads the first. Before then and
 after it ends the route answers 503, and 404 for an unknown ID.
 Forwarded requests carry `X-Forwarded-Host` (the request's checked `Host`, never
 a browser-sent `X-Forwarded-Host`) and `X-Forwarded-Proto` (`https` over TLS or
