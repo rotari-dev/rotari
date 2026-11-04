@@ -51,6 +51,31 @@ func OpenTrustedFile(path string) (*os.File, error) {
 	return file, nil
 }
 
+// trustedDirectory returns path without symlinks after making the checks of
+// OpenTrustedFile on it as a directory.
+func trustedDirectory(path string) (string, error) {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	uid := os.Getuid()
+	resolved, err := resolveTrusted(path, uid)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Lstat(resolved)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s: %w", resolved, syscall.ENOTDIR)
+	}
+	if err := checkTrusted(resolved, info, uid); err != nil {
+		return "", err
+	}
+	return resolved, nil
+}
+
 // resolveTrusted walks path from the root, checking each directory and
 // restarting from the root at each symlink, and returns the symlink-free
 // path of the final component without checking that component itself.

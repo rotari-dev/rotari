@@ -23,8 +23,14 @@ const runtimeLockName = "owner.lock"
 const staleRuntimeAge = time.Minute
 
 // createRuntimeDir creates and locks a private runtime directory, after
-// removing those left by managers that died without Close.
+// removing those left by managers that died without Close. It refuses a
+// tempDir where another user could replace the runtime directory, whose
+// Jupyter config runs as this user.
 func createRuntimeDir(tempDir string) (string, *os.File, error) {
+	tempDir, err := trustedDirectory(tempDir)
+	if err != nil {
+		return "", nil, fmt.Errorf("launcher runtime directory: %w", err)
+	}
 	sweepRuntimeDirs(tempDir, time.Now())
 	dir, err := os.MkdirTemp(tempDir, runtimeDirPattern)
 	if err != nil {

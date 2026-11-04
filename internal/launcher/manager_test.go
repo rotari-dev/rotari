@@ -372,9 +372,70 @@ func TestManagerKeepsRecentOutput(t *testing.T) {
 	}
 }
 
+// Jupyter runs the config file in the runtime directory, so a temporary
+// directory that lets another user replace it is refused, and nothing in it is
+// swept.
+func TestRuntimeDirRefusesAReplaceableTempDir(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name    string
+		mode    os.FileMode
+		refused bool
+	}{
+		{"private", 0o700, false},
+		{"sticky", 0o777 | os.ModeSticky, false},
+		{"writable by others", 0o777, true},
+		{"writable by group", 0o770, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			target := filepath.Join(trustedDir(t), "tmp")
+			mkdir(t, target, test.mode)
+			link := target + "-link"
+			if err := os.Symlink(target, link); err != nil {
+				t.Fatal(err)
+			}
+			for _, temp := range []string{target, link} {
+				abandoned := filepath.Join(target, runtimeDirPattern+"abandoned")
+				if err := os.Mkdir(abandoned, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				old := time.Now().Add(-2 * staleRuntimeAge)
+				if err := os.Chtimes(abandoned, old, old); err != nil {
+					t.Fatal(err)
+				}
+				dir, lock, err := createRuntimeDir(temp)
+				if test.refused {
+					if err == nil {
+						lock.Close()
+						t.Fatalf("createRuntimeDir(%s) = %s, want a refusal", temp, dir)
+					}
+					if !strings.Contains(err.Error(), target+" is writable by group or others") {
+						t.Fatalf("createRuntimeDir(%s): %v", temp, err)
+					}
+					if _, err := os.Stat(abandoned); err != nil {
+						t.Fatalf("refused directory was swept: %v", err)
+					}
+					if err := os.Remove(abandoned); err != nil {
+						t.Fatal(err)
+					}
+					continue
+				}
+				if err != nil {
+					t.Fatalf("createRuntimeDir(%s): %v", temp, err)
+				}
+				lock.Close()
+				if filepath.Dir(dir) != target {
+					t.Fatalf("runtime directory = %s, want it in %s", dir, target)
+				}
+			}
+		})
+	}
+}
+
 func TestRuntimeDirSweepRemovesOnlyAbandonedDirectories(t *testing.T) {
 	t.Parallel()
-	temp := t.TempDir()
+	temp := trustedDir(t)
 	live, lock, err := createRuntimeDir(temp)
 	if err != nil {
 		t.Fatal(err)

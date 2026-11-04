@@ -122,7 +122,10 @@ the same `Origin` as other mutating requests.
 
 Launched-command output stays in a private `0700` directory under `$TMPDIR`
 until the Web server stops. A later `rotari web --allow-exec` removes
-directories that a killed server left behind.
+directories that a killed server left behind. `rotari web --allow-exec` does
+not start when another user could replace that directory: `$TMPDIR` and every
+directory above it, following symlinks, must be owned by you or root and not
+writable by group or others, unless sticky like `/tmp`.
 
 ## Limits
 

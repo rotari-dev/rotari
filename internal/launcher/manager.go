@@ -197,7 +197,7 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	dir, lock, err := createRuntimeDir(os.TempDir())
+	dir, lock, err := createRuntimeDir(os.TempDir()) // NOSONAR: createRuntimeDir refuses a replaceable temporary directory and creates a unique 0700 directory.
 	if err != nil {
 		lifetime.Close()
 		return nil, err

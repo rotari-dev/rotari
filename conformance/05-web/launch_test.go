@@ -623,6 +623,19 @@ func TestWebLaunchRunsOnlyRegisteredCommands(t *testing.T) {
 	if result := e.Rotari("web", "--allow-exec", "--port", "0"); result.Code != 1 || !strings.Contains(result.Stderr, "writable by group or others") {
 		t.Fatalf("web with an untrusted launcher file = %s", result)
 	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// So does a temporary directory where another user could replace the
+	// private runtime directory.
+	temp := filepath.Join(e.Root, "tmp")
+	if err := os.Chmod(temp, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if result := e.Rotari("web", "--allow-exec", "--port", "0"); result.Code != 1 || !strings.Contains(result.Stderr, temp+" is writable by group or others") {
+		t.Fatalf("web with an untrusted temporary directory = %s", result)
+	}
 
 	// config --launchers writes a private template there.
 	fresh := support.NewEnv(t)

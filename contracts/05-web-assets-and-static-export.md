@@ -887,7 +887,10 @@ can be launched when launching is unavailable
 (`fillArtifactLaunchButtons` in
 [web_app_launches.js](../internal/webui/assets/web_app_launches.js)). `rotari web --allow-exec` refuses to
 start when that file, a directory above it, or a symlink on the way is owned
-by another user or writable by group or others, or when the file is invalid;
+by another user or writable by group or others, or when the file is invalid,
+and likewise, with sticky directories like `/tmp` allowed, when `$TMPDIR` or a
+directory above it could let another user replace the private runtime
+directory, whose generated Jupyter config runs as the launching user;
 `rotari config --launchers` writes a template there with mode `0600` and
 `config --list` lists it. `POST /api/launch` accepts only a registered
 command's name, an artifact named as WEB-6 names one (entry index, `wd`,
