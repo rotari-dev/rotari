@@ -38,10 +38,12 @@ type webLaunchCommand struct {
 	Command string                `json:"command"`
 	Targets []launcher.TargetKind `json:"targets"`
 	// Patterns limit the command to matching file names.
-	Patterns []string      `json:"patterns,omitempty"`
-	Mode     launcher.Mode `json:"mode"`
-	CWD      string        `json:"cwd"`
-	Builtin  bool          `json:"builtin,omitempty"`
+	Patterns []string `json:"patterns,omitempty"`
+	// FilePatterns limit it to matching file names, and not directories.
+	FilePatterns []string      `json:"file_patterns,omitempty"`
+	Mode         launcher.Mode `json:"mode"`
+	CWD          string        `json:"cwd"`
+	Builtin      bool          `json:"builtin,omitempty"`
 	// Unavailable says why the command cannot run on this host, such as
 	// its program missing from PATH; the UI shows it disabled.
 	Unavailable string `json:"unavailable,omitempty"`
@@ -87,7 +89,7 @@ const maxLaunchTargets = 1000
 // acceptsTarget reports whether a command, or a viewer, takes a target of kind
 // named name; "" matches any kind or any name.
 func acceptsTarget(command launcher.Command, kind launcher.TargetKind, name string) bool {
-	return kind == "" || (command.Accepts(kind) && (name == "" || command.Matches(name)))
+	return kind == "" || (command.Accepts(kind) && (name == "" || command.Matches(kind, name)))
 }
 
 // launchTargets matches each target=KIND:NAME against the registered
@@ -145,7 +147,7 @@ func (s site) launchAvailability(kind launcher.TargetKind, name string) launchAv
 			continue
 		}
 		availability.Commands = append(availability.Commands, webLaunchCommand{
-			Name: command.Name, Command: command.Command, Targets: command.Targets, Patterns: command.Patterns,
+			Name: command.Name, Command: command.Command, Targets: command.Targets, Patterns: command.Patterns, FilePatterns: command.FilePatterns,
 			Mode: command.Mode, CWD: command.CWD, Builtin: command.Builtin, Unavailable: command.Unavailable(),
 		})
 		for _, accepted := range command.Targets {
@@ -253,6 +255,12 @@ func describeTargets(commands []launcher.Command) string {
 		accepts := strings.Join(kinds, ", ")
 		if len(command.Patterns) > 0 {
 			accepts += ": " + strings.Join(command.Patterns, ", ")
+		}
+		if len(command.FilePatterns) > 0 {
+			accepts = string(launcher.TargetFile) + ": " + strings.Join(command.FilePatterns, ", ")
+			if command.Accepts(launcher.TargetDirectory) {
+				accepts += "; " + string(launcher.TargetDirectory)
+			}
 		}
 		parts = append(parts, fmt.Sprintf("%s (%s)", command.Name, accepts))
 	}
@@ -464,8 +472,8 @@ func (s site) launchStart(baseDir string, request webLaunchRequest) (launcher.St
 	if !command.Accepts(kind) {
 		return launcher.StartRequest{}, fmt.Errorf("launcher %q does not accept a %s", command.Name, kind)
 	}
-	if name := filepath.Base(filepath.Join(served.root, served.relative)); !command.Matches(name) {
-		return launcher.StartRequest{}, fmt.Errorf("launcher %q accepts only %s, not %s", command.Name, strings.Join(command.Patterns, ", "), name)
+	if name := filepath.Base(filepath.Join(served.root, served.relative)); !command.Matches(kind, name) {
+		return launcher.StartRequest{}, fmt.Errorf("launcher %q accepts only %s, not %s", command.Name, strings.Join(command.PatternsFor(kind), ", "), name)
 	}
 	labels := map[string]string{"basedir": baseDir, "project": request.ProjectName, "run": request.RunID}
 	if request.JobID != "" {

@@ -72,6 +72,9 @@ type Command struct {
 	// Patterns, when set, limit the command to targets whose base name
 	// matches one of these filepath.Match patterns, such as "*.py".
 	Patterns []string
+	// FilePatterns, when set, limit only files, for a command that also
+	// takes a directory of any name.
+	FilePatterns []string
 	// ProxyHeaders are request headers the Web server's proxy adds when it
 	// forwards to the service, with $ROTARI_LAUNCHER_TOKEN replaced by the
 	// launch's token, so a service can require a secret that only the
@@ -79,13 +82,22 @@ type Command struct {
 	ProxyHeaders map[string]string
 }
 
-// Matches reports whether a target named name (its base name) fits the
-// command's patterns; a command without patterns accepts every name.
-func (command Command) Matches(name string) bool {
-	if len(command.Patterns) == 0 {
+// PatternsFor are the patterns that limit a target of kind.
+func (command Command) PatternsFor(kind TargetKind) []string {
+	if kind == TargetFile && len(command.FilePatterns) > 0 {
+		return command.FilePatterns
+	}
+	return command.Patterns
+}
+
+// Matches reports whether a target of kind named name (its base name) fits
+// the command's patterns; a command without patterns accepts every name.
+func (command Command) Matches(kind TargetKind, name string) bool {
+	patterns := command.PatternsFor(kind)
+	if len(patterns) == 0 {
 		return true
 	}
-	for _, pattern := range command.Patterns {
+	for _, pattern := range patterns {
 		if matched, _ := filepath.Match(pattern, name); matched {
 			return true
 		}
@@ -160,12 +172,9 @@ func BuiltinCommands() []Command {
 	mlflowSQLite.Patterns = []string{"mlflow.db"}
 	datasette := service("Datasette", datasetteCommand, []TargetKind{TargetFile}, DefaultReadyPath)
 	datasette.Patterns = []string{"*.db", "*.sqlite", "*.sqlite3"}
-	marimoHeaders := map[string]string{"Authorization": "Basic $" + ProxyBasicAuth}
-	marimo := service("marimo", marimoCommand, []TargetKind{TargetFile}, "/health")
-	marimo.Patterns = []string{"*.py", "*.md", "*.markdown", "*.qmd"}
-	marimo.ProxyHeaders = marimoHeaders
-	marimoDirectory := service("marimo (directory)", marimoCommand, directory, "/health")
-	marimoDirectory.ProxyHeaders = marimoHeaders
+	marimo := service("marimo", marimoCommand, []TargetKind{TargetFile, TargetDirectory}, "/health")
+	marimo.FilePatterns = []string{"*.py", "*.md", "*.markdown", "*.qmd"}
+	marimo.ProxyHeaders = map[string]string{"Authorization": "Basic $" + ProxyBasicAuth}
 	panel := service("Panel", panelCommand, []TargetKind{TargetFile}, DefaultReadyPath)
 	panel.Patterns = []string{"*.py"}
 	gradio := service("Gradio", gradioCommand, []TargetKind{TargetFile}, DefaultReadyPath)
@@ -179,7 +188,6 @@ func BuiltinCommands() []Command {
 		streamlit,
 		datasette,
 		marimo,
-		marimoDirectory,
 		panel,
 		gradio,
 	}
@@ -282,6 +290,7 @@ type rawCommand struct {
 	ReadyTimeout *string  `toml:"ready_timeout"`
 	StopGrace    *string  `toml:"stop_grace"`
 	Patterns     []string `toml:"patterns"`
+	FilePatterns []string `toml:"file_patterns"`
 	// ProxyHeaders is a table, so it decodes into a map.
 	ProxyHeaders map[string]string `toml:"proxy_headers"`
 }
@@ -443,12 +452,20 @@ func (entry rawCommand) command() (Command, error) {
 		}
 		command.StopGrace = grace
 	}
-	for _, pattern := range entry.Patterns {
+	if len(entry.FilePatterns) > 0 {
+		if len(entry.Patterns) > 0 {
+			return Command{}, errors.New("patterns and file_patterns cannot be combined")
+		}
+		if !command.Accepts(TargetFile) {
+			return Command{}, errors.New(`file_patterns need "file" in targets`)
+		}
+	}
+	for _, pattern := range slices.Concat(entry.Patterns, entry.FilePatterns) {
 		if _, err := filepath.Match(pattern, ""); err != nil || pattern == "" || strings.Contains(pattern, "/") {
 			return Command{}, fmt.Errorf("pattern %q must be a file name pattern such as \"*.py\"", pattern)
 		}
-		command.Patterns = append(command.Patterns, pattern)
 	}
+	command.Patterns, command.FilePatterns = entry.Patterns, entry.FilePatterns
 	if len(entry.ProxyHeaders) > 0 {
 		if command.Mode != ModeService {
 			return Command{}, fmt.Errorf("proxy_headers apply only to mode %q", ModeService)
@@ -525,6 +542,8 @@ func Template() []byte {
 #   stop_grace     time between SIGTERM and SIGKILL on stop (default "5s")
 #   patterns       only targets whose name matches one of these, such as
 #                  ["*.py"] (default: any name)
+#   file_patterns  like patterns, but limits only files, so that the command
+#                  also takes a directory of any name
 #   proxy_headers  service only: a table of headers rotari's proxy adds to
 #                  every request, in which $ROTARI_LAUNCHER_TOKEN stands for
 #                  the launch's token (for example, an Authorization header
@@ -537,10 +556,10 @@ func Template() []byte {
 # Built in, without an entry here: TensorBoard, Jupyter Lab (requires the
 # launch token), MLflow (a directory named mlruns), MLflow (SQLite) (a file
 # named mlflow.db), Aim, Streamlit (*.py files), Datasette (*.db, *.sqlite,
-# and *.sqlite3 files), marimo (*.py, *.md, *.markdown, and *.qmd files,
-# requires the launch token), marimo (directory), Panel (*.py files), and
-# Gradio (*.py files). Each is shown disabled while its program is not
-# installed. An entry with the same name replaces one.
+# and *.sqlite3 files), marimo (*.py, *.md, *.markdown, and *.qmd files and
+# directories, requires the launch token), Panel (*.py files), and Gradio
+# (*.py files). Each is shown disabled while its program is not installed. An
+# entry with the same name replaces one.
 
 # TensorBoard is built in: rotari registers it without an entry here, as
 #   tensorboard --logdir "$ROTARI_LAUNCHER_ARTIFACT" --host 127.0.0.1

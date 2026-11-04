@@ -924,7 +924,7 @@ func TestBuiltinServicesThroughProxy(t *testing.T) {
 		}},
 		{"marimo", "nb.py", launcher.TargetFile, checkMarimo("")},
 		{"marimo", "nb.md", launcher.TargetFile, checkMarimo("")},
-		{"marimo (directory)", "nb", launcher.TargetDirectory, checkMarimo("&file=notebook.py")},
+		{"marimo", "nb", launcher.TargetDirectory, checkMarimo("&file=notebook.py")},
 		{"Panel", "panel_app.py", launcher.TargetFile, func(t *testing.T, base string, _ launcher.Launch) {
 			code, body := get(base+"/panel_app", nil)
 			if code != http.StatusOK || !strings.Contains(body, "static/extensions/panel") {

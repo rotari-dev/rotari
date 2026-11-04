@@ -17,17 +17,16 @@ func TestBuiltinCommands(t *testing.T) {
 		patterns   []string
 		readyPath  string
 	}{
-		"TensorBoard":        {"tensorboard", []TargetKind{TargetDirectory}, nil, DefaultReadyPath},
-		"Jupyter Lab":        {"jupyter", []TargetKind{TargetDirectory}, nil, "/api"},
-		"MLflow":             {"mlflow", []TargetKind{TargetDirectory}, []string{"mlruns"}, "/health"},
-		"MLflow (SQLite)":    {"mlflow", []TargetKind{TargetFile}, []string{"mlflow.db"}, "/health"},
-		"Aim":                {"aim", []TargetKind{TargetDirectory}, nil, DefaultReadyPath},
-		"Streamlit":          {"streamlit", []TargetKind{TargetFile}, []string{"*.py"}, "/_stcore/health"},
-		"Datasette":          {"datasette", []TargetKind{TargetFile}, []string{"*.db", "*.sqlite", "*.sqlite3"}, DefaultReadyPath},
-		"marimo":             {"marimo", []TargetKind{TargetFile}, []string{"*.py", "*.md", "*.markdown", "*.qmd"}, "/health"},
-		"marimo (directory)": {"marimo", []TargetKind{TargetDirectory}, nil, "/health"},
-		"Panel":              {"panel", []TargetKind{TargetFile}, []string{"*.py"}, DefaultReadyPath},
-		"Gradio":             {"gradio", []TargetKind{TargetFile}, []string{"*.py"}, DefaultReadyPath},
+		"TensorBoard":     {"tensorboard", []TargetKind{TargetDirectory}, nil, DefaultReadyPath},
+		"Jupyter Lab":     {"jupyter", []TargetKind{TargetDirectory}, nil, "/api"},
+		"MLflow":          {"mlflow", []TargetKind{TargetDirectory}, []string{"mlruns"}, "/health"},
+		"MLflow (SQLite)": {"mlflow", []TargetKind{TargetFile}, []string{"mlflow.db"}, "/health"},
+		"Aim":             {"aim", []TargetKind{TargetDirectory}, nil, DefaultReadyPath},
+		"Streamlit":       {"streamlit", []TargetKind{TargetFile}, []string{"*.py"}, "/_stcore/health"},
+		"Datasette":       {"datasette", []TargetKind{TargetFile}, []string{"*.db", "*.sqlite", "*.sqlite3"}, DefaultReadyPath},
+		"marimo":          {"marimo", []TargetKind{TargetFile, TargetDirectory}, nil, "/health"},
+		"Panel":           {"panel", []TargetKind{TargetFile}, []string{"*.py"}, DefaultReadyPath},
+		"Gradio":          {"gradio", []TargetKind{TargetFile}, []string{"*.py"}, DefaultReadyPath},
 	}
 	builtins := BuiltinCommands()
 	if len(builtins) != len(want) {
@@ -135,32 +134,35 @@ func TestParseCommandsRejectsInvalidSettings(t *testing.T) {
 	t.Parallel()
 	const valid = "name = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"command\"\n"
 	for name, test := range map[string]struct{ file, want string }{
-		"unknown key":         {"[[launcher]]\n" + valid + "colour = \"red\"\n", `unknown setting "launcher.colour"`},
-		"unknown table":       {"[launchers]\nx = 1\n", "unknown setting"},
-		"duplicate name":      {"[[launcher]]\n" + valid + "[[launcher]]\n" + valid, `"A" is defined more than once`},
-		"missing name":        {"[[launcher]]\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"command\"\n", "launcher 1: name is required"},
-		"padded name":         {"[[launcher]]\nname = \" A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"command\"\n", "surrounding spaces"},
-		"empty command":       {"[[launcher]]\nname = \"A\"\ncommand = \"  \"\ntargets = [\"file\"]\nmode = \"command\"\n", "command is required"},
-		"missing targets":     {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\nmode = \"command\"\n", "targets is required"},
-		"unknown target":      {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"dir\"]\nmode = \"command\"\n", `unknown target "dir"`},
-		"duplicate target":    {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\", \"file\"]\nmode = \"command\"\n", "listed more than once"},
-		"missing mode":        {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\n", "mode is required"},
-		"unknown mode":        {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"daemon\"\n", `unknown mode "daemon"`},
-		"relative cwd":        {"[[launcher]]\n" + valid + "cwd = \"tools\"\n", `cwd "tools"`},
-		"unclean cwd":         {"[[launcher]]\n" + valid + "cwd = \"/srv/../tools\"\n", "clean absolute"},
-		"ready in command":    {"[[launcher]]\n" + valid + "ready_path = \"/\"\n", "apply only to mode"},
-		"timeout in command":  {"[[launcher]]\n" + valid + "ready_timeout = \"5s\"\n", "apply only to mode"},
-		"spaced ready path":   {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"service\"\nready_path = \"/a b\"\n", "no spaces"},
-		"relative ready path": {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"service\"\nready_path = \"health\"\n", "must start with /"},
-		"bad duration":        {"[[launcher]]\n" + valid + "stop_grace = \"soon\"\n", `stop_grace "soon"`},
-		"path pattern":        {"[[launcher]]\n" + valid + "patterns = [\"a/*.py\"]\n", "file name pattern"},
-		"bad pattern":         {"[[launcher]]\n" + valid + "patterns = [\"[\"]\n", "file name pattern"},
-		"headers in command":  {"[[launcher]]\n" + valid + "proxy_headers = { X-A = \"1\" }\n", "apply only to mode"},
-		"reserved header":     {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"service\"\nproxy_headers = { Host = \"x\" }\n", "cannot set Host"},
-		"bad header name":     {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"service\"\nproxy_headers = { \"A B\" = \"x\" }\n", "not a valid HTTP header name"},
-		"multiline header":    {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"service\"\nproxy_headers = { X-A = \"a\\nb\" }\n", "must be one line"},
-		"zero duration":       {"[[launcher]]\n" + valid + "stop_grace = \"0s\"\n", "positive duration"},
-		"wrong type":          {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = \"file\"\nmode = \"command\"\n", "targets"},
+		"unknown key":                {"[[launcher]]\n" + valid + "colour = \"red\"\n", `unknown setting "launcher.colour"`},
+		"unknown table":              {"[launchers]\nx = 1\n", "unknown setting"},
+		"duplicate name":             {"[[launcher]]\n" + valid + "[[launcher]]\n" + valid, `"A" is defined more than once`},
+		"missing name":               {"[[launcher]]\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"command\"\n", "launcher 1: name is required"},
+		"padded name":                {"[[launcher]]\nname = \" A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"command\"\n", "surrounding spaces"},
+		"empty command":              {"[[launcher]]\nname = \"A\"\ncommand = \"  \"\ntargets = [\"file\"]\nmode = \"command\"\n", "command is required"},
+		"missing targets":            {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\nmode = \"command\"\n", "targets is required"},
+		"unknown target":             {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"dir\"]\nmode = \"command\"\n", `unknown target "dir"`},
+		"duplicate target":           {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\", \"file\"]\nmode = \"command\"\n", "listed more than once"},
+		"missing mode":               {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\n", "mode is required"},
+		"unknown mode":               {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"daemon\"\n", `unknown mode "daemon"`},
+		"relative cwd":               {"[[launcher]]\n" + valid + "cwd = \"tools\"\n", `cwd "tools"`},
+		"unclean cwd":                {"[[launcher]]\n" + valid + "cwd = \"/srv/../tools\"\n", "clean absolute"},
+		"ready in command":           {"[[launcher]]\n" + valid + "ready_path = \"/\"\n", "apply only to mode"},
+		"timeout in command":         {"[[launcher]]\n" + valid + "ready_timeout = \"5s\"\n", "apply only to mode"},
+		"spaced ready path":          {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"service\"\nready_path = \"/a b\"\n", "no spaces"},
+		"relative ready path":        {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"service\"\nready_path = \"health\"\n", "must start with /"},
+		"bad duration":               {"[[launcher]]\n" + valid + "stop_grace = \"soon\"\n", `stop_grace "soon"`},
+		"path pattern":               {"[[launcher]]\n" + valid + "patterns = [\"a/*.py\"]\n", "file name pattern"},
+		"bad pattern":                {"[[launcher]]\n" + valid + "patterns = [\"[\"]\n", "file name pattern"},
+		"bad file pattern":           {"[[launcher]]\n" + valid + "file_patterns = [\"a/*.py\"]\n", "file name pattern"},
+		"both patterns":              {"[[launcher]]\n" + valid + "patterns = [\"*.py\"]\nfile_patterns = [\"*.py\"]\n", "cannot be combined"},
+		"file patterns without file": {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"directory\"]\nmode = \"command\"\nfile_patterns = [\"*.py\"]\n", `need "file" in targets`},
+		"headers in command":         {"[[launcher]]\n" + valid + "proxy_headers = { X-A = \"1\" }\n", "apply only to mode"},
+		"reserved header":            {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"service\"\nproxy_headers = { Host = \"x\" }\n", "cannot set Host"},
+		"bad header name":            {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"service\"\nproxy_headers = { \"A B\" = \"x\" }\n", "not a valid HTTP header name"},
+		"multiline header":           {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = [\"file\"]\nmode = \"service\"\nproxy_headers = { X-A = \"a\\nb\" }\n", "must be one line"},
+		"zero duration":              {"[[launcher]]\n" + valid + "stop_grace = \"0s\"\n", "positive duration"},
+		"wrong type":                 {"[[launcher]]\nname = \"A\"\ncommand = \"true\"\ntargets = \"file\"\nmode = \"command\"\n", "targets"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := ParseCommands([]byte(test.file))
@@ -261,14 +263,41 @@ func TestLoadRegistryReplacesBuiltins(t *testing.T) {
 		return strings.Join(names, ",")
 	}
 	registry := write(plot)
-	if got := names(registry); got != "TensorBoard,Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,marimo (directory),Panel,Gradio,Plot" {
+	if got := names(registry); got != "TensorBoard,Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,Panel,Gradio,Plot" {
 		t.Fatalf("file without built-in names = %s", got)
 	}
 	registry = write(plot + "[[launcher]]\nname = \"TensorBoard\"\ncommand = \"conda run -n tb tensorboard\"\ntargets = [\"directory\"]\nmode = \"service\"\n")
 	replaced := registry.Commands[len(registry.Commands)-1]
-	if got := names(registry); got != "Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,marimo (directory),Panel,Gradio,Plot,TensorBoard" ||
+	if got := names(registry); got != "Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,Panel,Gradio,Plot,TensorBoard" ||
 		replaced.Builtin || replaced.Command != "conda run -n tb tensorboard" {
 		t.Fatalf("file replacing TensorBoard = %s, %+v", got, replaced)
+	}
+}
+
+// marimo takes its notebooks by name, and a directory of any name.
+func TestFilePatternsLimitOnlyFiles(t *testing.T) {
+	t.Parallel()
+	commands, err := ParseCommands([]byte(`
+[[launcher]]
+name = "App"
+command = "app"
+targets = ["file", "directory"]
+mode = "command"
+file_patterns = ["*.py"]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var marimo Command
+	for _, command := range BuiltinCommands() {
+		if command.Name == "marimo" {
+			marimo = command
+		}
+	}
+	for _, command := range []Command{commands[0], marimo} {
+		if !command.Matches(TargetFile, "run.py") || command.Matches(TargetFile, "run.txt") || !command.Matches(TargetDirectory, "run") {
+			t.Errorf("%s matches files and directories wrongly: %+v", command.Name, command)
+		}
 	}
 }
 
@@ -288,11 +317,14 @@ proxy_headers = { Authorization = "token $ROTARI_LAUNCHER_TOKEN", X-Static = "1"
 	}
 	command := commands[0]
 	for name, want := range map[string]bool{"run.py": true, "app.txt": true, "run.txt": false, "": false} {
-		if got := command.Matches(name); got != want {
+		if got := command.Matches(TargetFile, name); got != want {
 			t.Errorf("Matches(%q) = %v, want %v", name, got, want)
 		}
 	}
-	if (Command{}).Matches("anything") != true {
+	if !command.Matches(TargetDirectory, "app") || command.Matches(TargetDirectory, "data") {
+		t.Error("patterns do not limit directories")
+	}
+	if (Command{}).Matches(TargetFile, "anything") != true {
 		t.Error("a command without patterns does not match every name")
 	}
 	if command.ProxyHeaders["Authorization"] != "token $ROTARI_LAUNCHER_TOKEN" || command.ProxyHeaders["X-Static"] != "1" {

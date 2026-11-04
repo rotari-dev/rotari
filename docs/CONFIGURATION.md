@@ -332,8 +332,7 @@ the same name replaces it:
 | Aim | directories | an Aim repository (`aim init`); Aim refuses other directories |
 | Streamlit | `*.py` files | runs the app |
 | Datasette | `*.db`, `*.sqlite`, and `*.sqlite3` files | browses and queries a SQLite file, read-only |
-| marimo | `*.py`, `*.md`, `*.markdown`, and `*.qmd` files | opens the notebook, or other Markdown as a new one, which changes the file only when saved from marimo; requires the launch token (below) |
-| marimo (directory) | directories | lists the directory's notebooks; requires the launch token (below) |
+| marimo | `*.py`, `*.md`, `*.markdown`, and `*.qmd` files, and directories | opens the notebook, other Markdown as a new one (which changes the file only when saved from marimo), or a directory's list of notebooks; requires the launch token (below) |
 | Panel | `*.py` files | runs the app |
 | Gradio | `*.py` files | runs the app; one that sets its own address or port in `launch()` does not work |
 
@@ -393,7 +392,9 @@ and Gradio cannot require a token, so another user of the host who finds their p
 show; launch them only where that is acceptable.
 
 `patterns = ["*.py"]` limits any command to targets whose name matches one of
-the patterns.
+the patterns. `file_patterns = ["*.py"]` limits only files, for a command with
+both targets that also takes a directory of any name; it cannot be combined with
+`patterns`.
 
 ## Shell completion
 
