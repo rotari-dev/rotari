@@ -6,6 +6,33 @@ let launcherAvailability = null;
 // selectedLaunchID is the launch whose output the Launches view shows.
 let selectedLaunchID = "";
 let launchListTimer = null;
+let launchCountTimer = null;
+
+function launchIsLive(launch) {
+  return (
+    launch.state === "starting" ||
+    launch.state === "running" ||
+    launch.state === "stopping"
+  );
+}
+
+async function refreshLaunchCount() {
+  const button = document.getElementById("launches-button");
+  if (!button || button.hidden) return;
+  try {
+    const response = await fetch("/api/launches", { cache: "no-store" });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "HTTP " + response.status);
+    if (!Array.isArray(body.launches))
+      throw new Error("unexpected response from /api/launches");
+    const count = body.launches.filter(launchIsLive).length;
+    button.textContent = "Launches (" + count + ")";
+    button.title = "";
+  } catch (error) {
+    button.textContent = "Launches (?)";
+    button.title = "Cannot list launches: " + error.message;
+  }
+}
 
 // loadLauncherAvailability asks whether this server can launch, which
 // shows the Launches and job Launch buttons.
@@ -27,6 +54,11 @@ async function loadLauncherAvailability() {
   }
   const button = document.getElementById("launches-button");
   if (button) button.hidden = !launcherAvailability.available;
+  if (launcherAvailability.available) {
+    refreshLaunchCount();
+    if (!launchCountTimer)
+      launchCountTimer = setInterval(refreshLaunchCount, 2000);
+  }
   return launcherAvailability;
 }
 
@@ -459,10 +491,7 @@ async function renderLaunches() {
   }
   const rows = launches
     .map((launch) => {
-      const live =
-        launch.state === "starting" ||
-        launch.state === "running" ||
-        launch.state === "stopping";
+      const live = launchIsLive(launch);
       return (
         '<tr data-launch="' +
         esc(launch.id) +

@@ -634,7 +634,7 @@ func TestWebLaunchRunsOnlyRegisteredCommands(t *testing.T) {
 }
 
 func TestWebLaunchLifecycle(t *testing.T) {
-	covers(t, "WEB-16")
+	covers(t, "WEB-16", "WEB-27")
 	f := newLaunchFixture(t)
 	e := f.e
 	writeLaunchers(t, e, launcherEntry("Hold", `sleep 300 & echo $! >> "$ROTARI_LAUNCHER_CWD/hold.pids"; wait`, `"directory"`, "command"))
@@ -651,7 +651,78 @@ func TestWebLaunchLifecycle(t *testing.T) {
 	pidsFile := filepath.Join(e.Root, "data", "hold.pids")
 	pids := waitPIDs(t, pidsFile, 2)
 
-	stopped := decodeLaunch(t, api(e, http.MethodPost, base+"/api/launch-stop", `{"id":"`+first.ID+`"}`))
+	node, nodeErr := exec.LookPath("node")
+	nodeSupportsWebSyntax := nodeErr == nil &&
+		exec.Command(node, "-e", `new Function("return null?.value")`).Run() == nil
+	if nodeSupportsWebSyntax {
+		if !t.Run("live launch count", func(t *testing.T) {
+			pageResult := api(e, http.MethodGet, base+"/", "")
+			if pageResult.Status != http.StatusOK {
+				t.Fatalf("GET / = %d: %s", pageResult.Status, pageResult.Body)
+			}
+			pagePath := filepath.Join(t.TempDir(), "index.html")
+			if err := os.WriteFile(pagePath, []byte(pageResult.Body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			script := `
+const { JSDOM, VirtualConsole } = require('jsdom');
+const fs = require('fs');
+const [path, base, token, id] = process.argv.slice(1);
+const dom = new JSDOM(fs.readFileSync(path, 'utf8'), {
+  url: base + '/', runScripts: 'dangerously', virtualConsole: new VirtualConsole(),
+  beforeParse(window) {
+    window.Notification = undefined;
+    window.fetch = (url, init = {}) => fetch(new URL(String(url), base), {
+      ...init,
+      headers: { ...init.headers, 'X-Rotari-Token': token },
+    });
+  },
+});
+const until = async (check, what) => {
+  for (const deadline = Date.now() + 15000; Date.now() < deadline; ) {
+    if (await check()) return;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  throw Error(what);
+};
+(async () => {
+  const { document } = dom.window;
+  try {
+    const button = document.getElementById('launches-button');
+    await until(() => button?.textContent === 'Launches (2)', 'live launch count is not 2: ' + button?.textContent);
+    const response = await fetch(base + '/api/launch-stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Rotari-Token': token },
+      body: JSON.stringify({ id }),
+    });
+    if (!response.ok) throw Error('stopping launch: ' + response.status + ' ' + await response.text());
+    await until(() => button.textContent === 'Launches (1)', 'launch count did not drop to 1: ' + button.textContent);
+  } catch (error) {
+    process.stderr.write(String(error));
+    process.exitCode = 1;
+  } finally {
+    dom.window.close();
+  }
+})();
+`
+			if output, err := exec.Command("node", "-e", script, pagePath, base, launchToken, first.ID).CombinedOutput(); err != nil {
+				t.Fatalf("launch count browser check failed: %v\n%s", err, output)
+			}
+		}) {
+			t.Fatal("live launch count browser check failed")
+		}
+	} else {
+		if nodeErr == nil {
+			t.Log("skipping browser count check: Node.js does not support syntax used by the Web UI")
+		}
+		stopped := decodeLaunch(t, api(e, http.MethodPost, base+"/api/launch-stop", `{"id":"`+first.ID+`"}`))
+		if stopped.State != "stopped" {
+			t.Fatalf("stop = %+v", stopped)
+		}
+	}
+	stopped := waitLaunch(t, e, base, first.ID, func(launch launchRecord) bool {
+		return launch.State == "stopped"
+	})
 	if stopped.State != "stopped" || stopped.Signal != "terminated" {
 		t.Fatalf("stop = %+v", stopped)
 	}

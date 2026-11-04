@@ -131,8 +131,8 @@ Streamlit, Datasette, marimo, Panel, Gradio, and the commands in your global `la
 (`rotari config --launchers` writes a template). The UI shows what will run
 before **Launch**; a service such as TensorBoard then opens through the Web
 UI's own port, so it needs no extra SSH forward. **Launches** in the top bar
-lists and stops them. Closing the page does not stop a launch; stopping
-`rotari web` does.
+shows how many are starting, running, or stopping, and lists and stops them.
+Closing the page does not stop a launch; stopping `rotari web` does.
 
 ```sh
 export ROTARI_WEB_AUTH_TOKEN=...      # optional; otherwise one is generated and printed

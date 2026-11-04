@@ -920,6 +920,12 @@ with SIGKILL, ends every launch's process group. Covered by
 `TestWebLaunchLifecycle` in
 [conformance/05-web/launch_test.go](../conformance/05-web/launch_test.go).
 
+**WEB-27** On live application pages where launching is available, the top-bar
+**Launches** button shows the current number of launches in `starting`,
+`running`, or `stopping` state, refreshed every two seconds. Completed launches
+are not counted. Covered by the browser check in `TestWebLaunchLifecycle` in
+[conformance/05-web/launch_test.go](../conformance/05-web/launch_test.go).
+
 **WEB-17** A service launch (`mode = "service"`) is `starting` until the
 process listening on `127.0.0.1:$ROTARI_LAUNCHER_PORT` belongs to the launch
 and its readiness path under `$ROTARI_LAUNCHER_BASE_PATH` answers 2xx or 3xx;
