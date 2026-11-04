@@ -1,10 +1,9 @@
 # Plan: Web UI hardening, then a built-in terminal
 
 Created: 2026-11-04
-Status: Phases 1 and 2 are implemented; phase 2 awaits its first run in Chrome on
-CI, which [its results](#phase-2-results) describe.
-[The gate](#gate-decide-whether-to-build-the-terminal) decides whether phases 3 to
-5 happen at all.
+Status: Phases 1 and 2 are done; see [the phase 2 results](#phase-2-results).
+[The gate](#gate-decide-whether-to-build-the-terminal) decides next whether phases
+3 to 5 happen at all.
 
 ## Goal
 
@@ -183,8 +182,8 @@ showing a value fails the test instead of passing with nothing to check.
 Gaps:
 
 - `TestStoredValuesStayTextInBrowser` repeats the check in headless Chrome, for the
-  HTML and single-quoted values, and CI requires it. It passes in CI, but no weakened
-  code has yet been run against it; only the jsdom test has shown that it detects.
+  HTML and single-quoted values, and CI requires it. Weakened escaping has been run
+  only against the jsdom test; the browser's policy check is proved by planting script.
 - The recovery dialog is opened, but the CLI cannot put a hostile value in its
   reasons, so those rest on review.
 - The page's own POST requests are blocked, so a view shown only after one
@@ -237,7 +236,8 @@ WEB-25) and a conformance test for the header.
   the same origin. This differs from the first draft of the policy above.
 - It was enforced at once, without the planned report-only step, because
   `TestStoredValuesStayTextInBrowser` fails on any violation across every page and
-  control. That test runs only where Chrome exists, so CI is the first real check.
+  control. That test runs only where Chrome exists. It passed in CI at the first try,
+  and `TestPagePolicyBlocksPlantedScript` shows the check sees violations at all.
 - Tests that clicked elements left over from an earlier render were changed to look
   them up again: a listener on the document does not see a detached element's click,
   which no user can produce.

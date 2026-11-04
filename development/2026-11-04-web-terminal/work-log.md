@@ -99,3 +99,18 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** Go CI, including `go` with the browser required and `race`, passed on the branch at `35b8c735`, before these commits were squashed and rebased. Earlier runs failed on the contract table, on Chrome's ten-second start limit, and on fixed waits, each fixed here. After rebasing, `go vet ./...` and `go test ./internal/launcher ./internal/webui ./conformance ./conformance/05-web` passed, with the browser test skipped locally because Chrome is absent. Fetching Chrome locally was denied by a permission check. CI logs were not read, so the browser test's run is inferred from the required setting and the job's success. No weakened code was run against the browser test.
 
 **Remaining:** Phase 2. The full CI time rose from about 400 to as much as 657 seconds in one run.
+
+## Run pages under a Content-Security-Policy
+
+**Commits:** 2026-11-04 22:14:39 `d8ed6a9c`.
+
+**Change:** Replaced all 97 inline handlers with action attributes run from a list in `web_shell.js`, removed `jsArg`, added per-response nonces and `internal/webui/page_policy.go`, and sent the policy on application, Recent jobs, and Table viewer pages. Added `TestAssetsHaveNoInlineHandlers`, `TestPageActionsAreRegistered`, `TestPagesApplyScriptNonceInOnePass`, `TestLivePagesSendContentSecurityPolicy`, `TestStaticExportHasNoScriptNonce`, and `TestPagePolicyBlocksPlantedScript`, contract WEB-29, and a section in `SECURITY.md`. Tests that looked for handler text, or clicked elements from an earlier render, were updated.
+
+**Reason:** Plan phase 2: a stored value that became markup should not be able to run script or send data elsewhere.
+
+**Plan impact:** Phase 2 is done. It enforced the policy at once instead of a report-only step, and matches scripts by nonce alone rather than `'self'`, since a launched service shares the origin. The gate is next.
+
+**Validation:** Go CI, including `go` with the browser required and `race`, and the other workflows passed at `d695a186` on the `web-csp` branch. CI logs were not read; the browser tests' run is inferred from the required setting and the job's success. After rebasing onto `main`, `go vet ./...` and `tsc` passed, and `go test ./...` passed except `TestSSHJobReadsAsRunning`, the flaky test already in `ISSUES.md`, which then passed ten repetitions and a package rerun. The browser tests skipped locally because Chrome is absent. `go test -race ./...` passed before the rebase. `pre-commit` is not installed.
+
+**Remaining:** Static exports and launched services' own pages have no policy. A value that became markup could still run a listed action.
+
