@@ -1,9 +1,10 @@
 # Plan: Web UI hardening, then a built-in terminal
 
 Created: 2026-11-04
-Status: Proposed. No phase has started. Phases 1 and 2 are worth doing on their
-own; [the gate](#gate-decide-whether-to-build-the-terminal) decides whether
-phases 3 to 5 happen at all.
+Status: Phase 1 in progress; see [its first pass](#phase-1-first-pass). Phases 1
+and 2 are worth doing on their own;
+[the gate](#gate-decide-whether-to-build-the-terminal) decides whether phases 3
+to 5 happen at all.
 
 ## Goal
 
@@ -139,6 +140,34 @@ modes.
 
 Done when: every sink is classified, no unsafe finding remains, and the test
 fails on the code before the fix. Issues outside injection go to `ISSUES.md`.
+
+### Phase 1 first pass
+
+On 2026-11-04, a TypeScript-parser scan listed the 333 non-literal values
+concatenated into strings holding HTML tags, or assigned to an HTML sink. Most
+were read at their source, with helpers followed. Only the results marked as run
+were executed. Each row is a review result, not proof.
+
+| Area | Result |
+| --- | --- |
+| Handler arguments built with `esc` alone | Fixed in `showArtifacts` and `selectJobAttempt` (run); the rest use `jsArg`, `this.dataset`, or fixed text |
+| Sequential placeholder replacement in Go | Fixed, WEB-26 (run) |
+| HTML text and attributes in the page scripts | `esc`, numbers, or fixed text |
+| Status and timeline classes | From the `statusTones` table, with `off` as the fallback |
+| `entry.id` and `basedirURL` | Base64url IDs made by the server, and `encodeURIComponent` paths |
+| Markdown | Escaped text; links only `http` and `https` |
+| Highlighted code | highlight.js output, or `highlightEscape` |
+| Notification links | Server-built paths under the basedir route |
+| Table viewer | DOM properties; `innerHTML` only for fixed icons, `pdfPreviewMarkup`, Markdown, and highlighted code |
+| Login `next` | HTML-escaped; `safeWebReturnPath` not yet read |
+| Static JSON | `json.HTMLEscape` |
+| Recent jobs rows | `html.EscapeString` and `url.PathEscape` |
+
+Remaining for this phase:
+
+- Add the hostile-value test across views, which also covers values the scan
+  could miss, such as one held in a variable without tags before reaching HTML.
+- Read `safeWebReturnPath`, and complete the per-sink table from that test.
 
 ## Phase 2: Content-Security-Policy on live pages
 

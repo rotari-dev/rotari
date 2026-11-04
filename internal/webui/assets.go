@@ -160,49 +160,55 @@ func composeWebHTMLWithSession(executors []string, notifications bool, bootstrap
 		"const diagnosisGuidance = " + string(diagnosisGuidanceJSON) + ";",
 		webAppCoreJS, webAppActionsJS, webAppLogsJS, highlightJS, webAppHighlightJS, webAppPreviewsJS, webAppMarkdownJS, webAppArtifactsJS, webAppLaunchesJS, webAppTablesJS, webAppChartsJS, webAppMatrixJS, webAppNotificationsJS, webAppSearchJS, webAppActivityJS, webAppBootstrapJS,
 	}, "\n")
-	template := strings.Replace(webTemplateHTML, "__ROTARI_SHELL_SCRIPT__", webShellJS, 1)
-	template = strings.Replace(template, "__ROTARI_WEB_APP__", webAppJS, 1)
-	template = strings.Replace(template, "__ROTARI_BASEDIRS__", string(basedirJSON), 1)
-	template = strings.Replace(template, "__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllNotificationBasedirs"), 1)
-	template = strings.Replace(template, "__ROTARI_EXECUTORS__", string(executorJSON), 1)
-	template = strings.Replace(template, "__ROTARI_STATUS_TONES__", statusTonesJSON(), 1)
-	template = strings.ReplaceAll(template, "__ROTARI_BRAND_ICON__", brandIcon())
-	template = strings.Replace(template, "__ROTARI_NOTIFICATION_ICON__", faviconDataURL(webFaviconDarkSVG), 1)
-	template = strings.Replace(template, "__ROTARI_NOTIFICATION_DEFAULT__", strconv.FormatBool(notifications), 1)
-	template = strings.Replace(template, "__ROTARI_NOTIFICATION_SESSION__", notificationSession, 1)
-	template = strings.Replace(template, "__ROTARI_STATIC_BOOTSTRAP__", bootstrap, 1)
-	return template
+	// The scripts go in first, since they hold placeholders of their own. A
+	// Replacer does not search what it inserts, so a value that contains the
+	// text of a placeholder stays as written.
+	template := strings.NewReplacer("__ROTARI_SHELL_SCRIPT__", webShellJS, "__ROTARI_WEB_APP__", webAppJS).Replace(webTemplateHTML)
+	return strings.NewReplacer(
+		"__ROTARI_BASEDIRS__", string(basedirJSON),
+		"__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllNotificationBasedirs"),
+		"__ROTARI_EXECUTORS__", string(executorJSON),
+		"__ROTARI_STATUS_TONES__", statusTonesJSON(),
+		"__ROTARI_BRAND_ICON__", brandIcon(),
+		"__ROTARI_NOTIFICATION_ICON__", faviconDataURL(webFaviconDarkSVG),
+		"__ROTARI_NOTIFICATION_DEFAULT__", strconv.FormatBool(notifications),
+		"__ROTARI_NOTIFICATION_SESSION__", notificationSession,
+		"__ROTARI_STATIC_BOOTSTRAP__", bootstrap,
+	).Replace(template)
 }
 
 func composeStaticBootstrap(state, logs, reports, configTargets, configs, wordClouds, artifacts, artifactData, activity string) string {
-	bootstrap := webStaticBootstrapJS
-	bootstrap = strings.Replace(bootstrap, "__ROTARI_STATIC_STATE_DATA__", state, 1)
-	bootstrap = strings.Replace(bootstrap, "__ROTARI_STATIC_LOGS_DATA__", logs, 1)
-	bootstrap = strings.Replace(bootstrap, "__ROTARI_STATIC_REPORTS_DATA__", reports, 1)
-	bootstrap = strings.Replace(bootstrap, "__ROTARI_STATIC_CONFIG_TARGETS_DATA__", configTargets, 1)
-	bootstrap = strings.Replace(bootstrap, "__ROTARI_STATIC_CONFIGS_DATA__", configs, 1)
-	bootstrap = strings.Replace(bootstrap, "__ROTARI_STATIC_WORD_CLOUDS_DATA__", wordClouds, 1)
-	bootstrap = strings.Replace(bootstrap, "__ROTARI_STATIC_ARTIFACTS_DATA__", artifacts, 1)
-	bootstrap = strings.Replace(bootstrap, "__ROTARI_STATIC_ARTIFACT_CONTENTS_DATA__", artifactData, 1)
-	bootstrap = strings.Replace(bootstrap, "__ROTARI_STATIC_ACTIVITY_DATA__", activity, 1)
 	launchers, _ := json.Marshal(staticLaunchAvailability())
-	bootstrap = strings.Replace(bootstrap, "__ROTARI_STATIC_LAUNCHERS_DATA__", string(launchers), 1)
-	return bootstrap
+	return strings.NewReplacer(
+		"__ROTARI_STATIC_STATE_DATA__", state,
+		"__ROTARI_STATIC_LOGS_DATA__", logs,
+		"__ROTARI_STATIC_REPORTS_DATA__", reports,
+		"__ROTARI_STATIC_CONFIG_TARGETS_DATA__", configTargets,
+		"__ROTARI_STATIC_CONFIGS_DATA__", configs,
+		"__ROTARI_STATIC_WORD_CLOUDS_DATA__", wordClouds,
+		"__ROTARI_STATIC_ARTIFACTS_DATA__", artifacts,
+		"__ROTARI_STATIC_ARTIFACT_CONTENTS_DATA__", artifactData,
+		"__ROTARI_STATIC_ACTIVITY_DATA__", activity,
+		"__ROTARI_STATIC_LAUNCHERS_DATA__", string(launchers),
+	).Replace(webStaticBootstrapJS)
 }
 
-func composeInfoHTML(template, homePath, content string) string {
-	template = strings.Replace(template, "__ROTARI_FAVICON_LINKS__", faviconLinks(), 1)
-	template = strings.Replace(template, "__ROTARI_SHELL_SCRIPT__", webShellJS, 1)
+// composeInfoHTML fills template in one pass, with the page's own placeholders
+// and values as further pairs, so a value keeps the text of any placeholder.
+func composeInfoHTML(template, homePath, content string, values ...string) string {
 	styles := fontFaceCSS(homePath+"fonts/") + "\n" + webTokensCSS + "\n" + webInfoStylesCSS + "\n" + webShellCSS
-	template = strings.Replace(template, "__ROTARI_INFO_STYLES__", styles, 1)
-	template = strings.ReplaceAll(template, "__ROTARI_BRAND_ICON__", brandIcon())
-	template = strings.ReplaceAll(template, "__ROTARI_HOME_PATH__", html.EscapeString(homePath))
 	searchPath := strings.TrimRight(homePath, "/") + "/search/"
-	template = strings.ReplaceAll(template, "__ROTARI_SEARCH_PATH__", html.EscapeString(searchPath))
 	activityPath := strings.TrimRight(homePath, "/") + "/activity/"
-	template = strings.ReplaceAll(template, "__ROTARI_ACTIVITY_PATH__", html.EscapeString(activityPath))
-	template = strings.Replace(template, "__ROTARI_CONTENT__", content, 1)
-	return template
+	return strings.NewReplacer(append([]string{
+		"__ROTARI_FAVICON_LINKS__", faviconLinks(),
+		"__ROTARI_SHELL_SCRIPT__", webShellJS,
+		"__ROTARI_INFO_STYLES__", styles,
+		"__ROTARI_BRAND_ICON__", brandIcon(),
+		"__ROTARI_HOME_PATH__", html.EscapeString(homePath),
+		"__ROTARI_SEARCH_PATH__", html.EscapeString(searchPath),
+		"__ROTARI_ACTIVITY_PATH__", html.EscapeString(activityPath),
+		"__ROTARI_CONTENT__", content,
+	}, values...)...).Replace(template)
 }
 
 func jobsHTML(homePath string, projects []string, rows []joblist.Row, selection jobsSelection, canFilter, notifications bool, basedirLists ...[]webBaseDir) string {
@@ -246,12 +252,9 @@ func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row,
 	} else {
 		writeJobsSidebarProjects(&sidebar, homePath, projects)
 	}
-	template := strings.Replace(jobsTemplateHTML, "__ROTARI_JOBS_PROJECTS__", sidebar.String(), 1)
-	template = strings.Replace(template, "__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllJobsNotificationBasedirs"), 1)
+	scrollKey := ""
 	if len(basedirLists) > 0 {
-		template = strings.Replace(template, "__ROTARI_BASEDIR_SCROLL_KEY__", currentBasedirScrollID(basedirLists[0]), 1)
-	} else {
-		template = strings.Replace(template, "__ROTARI_BASEDIR_SCROLL_KEY__", "", 1)
+		scrollKey = currentBasedirScrollID(basedirLists[0])
 	}
 	notificationControl := `<button id="notify-toggle" type="button" onclick="toggleJobsNotifications()">Notification off</button>`
 	var toolbar string
@@ -269,17 +272,22 @@ func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row,
 		}
 	}
 	crumbs.WriteString(`<span class="crumb-here">Recent jobs</span>`)
-	template = strings.Replace(template, "__ROTARI_JOBS_CRUMBS__", crumbs.String(), 1)
-	template = strings.Replace(template, "__ROTARI_JOBS_SCOPE__", html.EscapeString(jobsScopeText(selection)), 1)
-	template = strings.Replace(template, "__ROTARI_JOBS_NOTIFICATION_CONTROL__", notificationControl, 1)
-	template = strings.Replace(template, "__ROTARI_JOBS_TOOLBAR__", toolbar, 1)
-	template = strings.Replace(template, "__ROTARI_JOBS_LIVE__", strconv.FormatBool(canFilter), 1)
-	template = strings.Replace(template, "__ROTARI_NOTIFICATION_DEFAULT__", strconv.FormatBool(notifications), 1)
-	template = strings.Replace(template, "__ROTARI_NOTIFICATION_SESSION__", notificationSession, 1)
-	template = strings.Replace(template, "__ROTARI_NOTIFICATION_ICON__", faviconDataURL(webFaviconDarkSVG), 1)
+	values := []string{
+		"__ROTARI_JOBS_PROJECTS__", sidebar.String(),
+		"__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllJobsNotificationBasedirs"),
+		"__ROTARI_BASEDIR_SCROLL_KEY__", scrollKey,
+		"__ROTARI_JOBS_CRUMBS__", crumbs.String(),
+		"__ROTARI_JOBS_SCOPE__", html.EscapeString(jobsScopeText(selection)),
+		"__ROTARI_JOBS_NOTIFICATION_CONTROL__", notificationControl,
+		"__ROTARI_JOBS_TOOLBAR__", toolbar,
+		"__ROTARI_JOBS_LIVE__", strconv.FormatBool(canFilter),
+		"__ROTARI_NOTIFICATION_DEFAULT__", strconv.FormatBool(notifications),
+		"__ROTARI_NOTIFICATION_SESSION__", notificationSession,
+		"__ROTARI_NOTIFICATION_ICON__", faviconDataURL(webFaviconDarkSVG),
+	}
 	if len(rows) == 0 {
 		builder.WriteString(`<p class="meta">No unfinished or recently finished jobs found.</p>`)
-		return composeInfoHTML(template, homePath, builder.String())
+		return composeInfoHTML(jobsTemplateHTML, homePath, builder.String(), values...)
 	}
 	builder.WriteString(`<section class="jobs-section"><table class="jobs-table"><thead><tr><th data-sort="state">State</th><th data-sort="project">Project</th><th data-sort="job">Job</th><th data-sort="attempt">Attempt</th><th data-sort="started">Started</th><th data-sort="finished">Finished</th><th data-sort="elapsed">Elapsed</th></tr></thead><tbody>`)
 	for _, row := range rows {
@@ -342,7 +350,7 @@ func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row,
 		builder.WriteString(`</td></tr>`)
 	}
 	builder.WriteString(`</tbody></table></section>`)
-	return composeInfoHTML(template, homePath, builder.String())
+	return composeInfoHTML(jobsTemplateHTML, homePath, builder.String(), values...)
 }
 
 func currentBasedirScrollID(basedirs []webBaseDir) string {
