@@ -2,6 +2,7 @@ package web
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,6 +44,11 @@ func serveLaunchService() int {
 	_ = http.Serve(listener, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if !strings.HasPrefix(request.URL.Path, base+"/") {
 			http.NotFound(writer, request)
+			return
+		}
+		if strings.HasSuffix(request.URL.Path, "/basic-auth") {
+			credentials := base64.StdEncoding.EncodeToString([]byte("rotari:" + os.Getenv("ROTARI_LAUNCHER_TOKEN")))
+			fmt.Fprintf(writer, "basic-auth-sent=%v", request.Header.Get("X-Launch-Basic") == "Basic "+credentials)
 			return
 		}
 		if strings.HasSuffix(request.URL.Path, "/forwarded") {
@@ -694,7 +700,7 @@ func TestWebLaunchServesServices(t *testing.T) {
 	portFile := filepath.Join(e.Root, "port")
 	writeLaunchers(t, e,
 		launcherEntry("Viewer", launchServiceRole+`=1 exec "$ROTARI_CONFORMANCE_BIN"`, `"directory"`, "service")+
-			"proxy_headers = { X-Launch-Token = \"$ROTARI_LAUNCHER_TOKEN\" }\n\n"+
+			"proxy_headers = { X-Launch-Token = \"$ROTARI_LAUNCHER_TOKEN\", X-Launch-Basic = \"Basic $ROTARI_LAUNCHER_BASIC_AUTH\" }\n\n"+
 			launcherEntry("Squatted", `echo "$ROTARI_LAUNCHER_PORT" > `+portFile+`; sleep 300`, `"file"`, "service"))
 	base, _, _ := startWebProcess(t, e, "--allow-exec")
 
@@ -767,6 +773,10 @@ func TestWebLaunchServesServices(t *testing.T) {
 	want := `path=` + viewer.BasePath + `/data/runs query=run=a%20b auth="" token="" launch-token-sent=true`
 	if proxied.Status != http.StatusOK || proxied.Body != want {
 		t.Fatalf("proxied = (%d, %s), want %s", proxied.Status, proxied.Body, want)
+	}
+	// proxy_headers can also present the token as HTTP Basic credentials.
+	if basic := api(e, http.MethodGet, base+viewer.BasePath+"/basic-auth", ""); basic.Status != http.StatusOK || basic.Body != "basic-auth-sent=true" {
+		t.Fatalf("Basic credentials = (%d, %s)", basic.Status, basic.Body)
 	}
 	// The service learns the address the browser used, not its own loopback
 	// port or what the browser claims.

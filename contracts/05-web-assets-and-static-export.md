@@ -932,7 +932,8 @@ Requests are forwarded without the browser's `Authorization` and
 `X-Rotari-Token` headers or Rotari launch-session cookie, and with the
 command's `proxy_headers` (the readiness probe sends them too), in which
 `$ROTARI_LAUNCHER_TOKEN` is the
-launch's token, so a service can refuse anyone who reaches its port
+launch's token and `$ROTARI_LAUNCHER_BASIC_AUTH` the Base64 of `rotari:` and
+that token, so a service can refuse anyone who reaches its port
 without the proxy; before then and
 after it ends the route answers 503, and 404 for an unknown ID.
 Forwarded requests carry `X-Forwarded-Host` (the request's checked `Host`, never

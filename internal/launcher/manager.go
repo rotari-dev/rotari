@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -30,6 +31,10 @@ const (
 	// can require one should, with ProxyHeaders presenting it, so that
 	// other local users who reach its loopback port cannot use it.
 	EnvToken = "ROTARI_LAUNCHER_TOKEN"
+	// ProxyBasicAuth stands, in proxy_headers only, for the Base64 of
+	// "rotari:" and the launch's token: HTTP Basic credentials, for a
+	// service that takes the token as a password.
+	ProxyBasicAuth = "ROTARI_LAUNCHER_BASIC_AUTH"
 )
 
 // noProxyLoopback is added to NO_PROXY and no_proxy: loopback traffic never
@@ -519,12 +524,16 @@ func newSecret() (string, error) {
 }
 
 // resolvedProxyHeaders are the launch's ProxyHeaders with its token in
-// place of $ROTARI_LAUNCHER_TOKEN and ${ROTARI_LAUNCHER_TOKEN}.
+// place of $ROTARI_LAUNCHER_TOKEN and ${ROTARI_LAUNCHER_TOKEN}, and its
+// Basic credentials in place of $ROTARI_LAUNCHER_BASIC_AUTH and
+// ${ROTARI_LAUNCHER_BASIC_AUTH}.
 func (launch *Launch) resolvedProxyHeaders() map[string]string {
 	if len(launch.proxyHeaders) == 0 {
 		return nil
 	}
-	replacer := strings.NewReplacer("${"+EnvToken+"}", launch.token, "$"+EnvToken, launch.token)
+	basicAuth := base64.StdEncoding.EncodeToString([]byte("rotari:" + launch.token))
+	replacer := strings.NewReplacer("${"+EnvToken+"}", launch.token, "$"+EnvToken, launch.token,
+		"${"+ProxyBasicAuth+"}", basicAuth, "$"+ProxyBasicAuth, basicAuth)
 	headers := make(map[string]string, len(launch.proxyHeaders))
 	for name, value := range launch.proxyHeaders {
 		headers[name] = replacer.Replace(value)

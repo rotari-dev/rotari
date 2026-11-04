@@ -490,7 +490,9 @@ func Template() []byte {
 #                  the launch's token (for example, an Authorization header
 #                  of "token $ROTARI_LAUNCHER_TOKEN"). A service that requires
 #                  this token cannot be used by other users who connect to
-#                  its port directly.
+#                  its port directly. $ROTARI_LAUNCHER_BASIC_AUTH stands for
+#                  the Base64 of "rotari:" and the token, for a header of
+#                  "Basic $ROTARI_LAUNCHER_BASIC_AUTH".
 #
 # Built in, without an entry here: TensorBoard, Jupyter Lab (requires the
 # launch token), MLflow (a directory named mlruns), MLflow (SQLite) (a file

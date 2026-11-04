@@ -353,6 +353,24 @@ ready_path = "/api"
 proxy_headers = { Authorization = "token $ROTARI_LAUNCHER_TOKEN" }
 ```
 
+A service that takes the token as an HTTP Basic password uses
+`$ROTARI_LAUNCHER_BASIC_AUTH`, which `proxy_headers` replaces with the Base64 of
+`rotari:` and the token; it is not in the command's environment. For example,
+marimo 0.25 (`-q` keeps the sign-in URL out of the launch's output, and the
+token goes through standard input because other users of the host can read a
+process's arguments):
+
+```toml
+[[launcher]]
+name = "marimo"
+command = '''printf %s "$ROTARI_LAUNCHER_TOKEN" | marimo -q edit "$ROTARI_LAUNCHER_ARTIFACT" --headless --skip-update-check --host 127.0.0.1 --port "$ROTARI_LAUNCHER_PORT" --base-url "$ROTARI_LAUNCHER_BASE_PATH" --token --token-password-file -'''
+targets = ["file"]
+mode = "service"
+patterns = ["*.py"]
+ready_path = "/health"
+proxy_headers = { Authorization = "Basic $ROTARI_LAUNCHER_BASIC_AUTH" }
+```
+
 The browser never sees the token, and the proxy drops the browser's own
 `Authorization` header. TensorBoard, MLflow, Aim, and Streamlit cannot require
 a token, so another user of the host who finds their port can read what they

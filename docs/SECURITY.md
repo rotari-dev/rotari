@@ -112,7 +112,7 @@ connection, it checks that the listening process belongs to the launch
 A launched service also listens on that loopback port, which other users of
 the host can reach directly without rotari's token. A service that can require
 a secret should use the launch's `ROTARI_LAUNCHER_TOKEN`, which the proxy
-presents through `proxy_headers`. The built-in Jupyter Lab does, so its
+presents through `proxy_headers`, as is or as HTTP Basic credentials. The built-in Jupyter Lab does, so its
 kernels serve only through the proxy. TensorBoard, MLflow, Aim, and Streamlit
 cannot, so another user who finds their port can read what they show.
 WebSocket handshakes, used by services such as Jupyter and Streamlit, need
