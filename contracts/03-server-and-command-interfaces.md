@@ -250,9 +250,10 @@ does not promise to detect a lost remote client.
   own result, so array tasks and matrix members fall into their own causes: a
   block, cancellation, or timeout that rotari recorded comes first, then the
   job's latest saved rule diagnosis, then its remaining failure kind. A
-  scheduler's time limit is not rotari's timeout: it has the failure kind
-  `timeout`, but its cause comes from its diagnosis or its other kinds, so its
-  group does not advise `change --timeout`. Groups
+  scheduler's time limit or a job's own exit 124, as from GNU `timeout`, is not
+  rotari's timeout, which also records `timed out after ...`: it has the failure
+  kind `timeout`, but its cause comes from its diagnosis or its other kinds, so
+  its group does not advise `change --timeout`. Groups
   list the most frequent cause first. A group's example line is its first
   job's matched diagnosis line, else its recorded error, else its saved
   `last_output_line`. In text, each group of the project's last

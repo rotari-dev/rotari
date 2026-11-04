@@ -216,6 +216,35 @@ func TestFailureGroupsTellASchedulerTimeLimitFromRotarisTimeout(t *testing.T) {
 	}
 }
 
+// TestFailureGroupsTellAJobsOwnExit124FromRotarisTimeout groups a job that ran
+// GNU timeout itself. It exited 124, but rotari did not stop it, so it does not
+// get the advice to raise rotari's timeout. A rule that matches names it.
+func TestFailureGroupsTellAJobsOwnExit124FromRotarisTimeout(t *testing.T) {
+	groups := FailureGroups(Run{Jobs: []Job{
+		failedTask(1, StatusFailed, model.JobResult{ExitCode: model.TimeoutExitCode, LastOutputLine: "epoch 3", DiagnosisStatus: model.DiagnosisNoMatch}),
+		failedTask(2, StatusFailed, diagnosed(model.TimeoutExitCode, "DNS lookup failed", "could not resolve host", "Check DNS.")),
+		failedTask(3, StatusFailed, model.JobResult{ExitCode: model.TimeoutExitCode, Error: "timed out after 5s"}),
+	}})
+	got := map[string]FailureGroup{}
+	for _, group := range groups {
+		got[group.Cause] = group
+	}
+	if group := got[model.FailureKindError]; group.Count != 1 || group.Jobs[0].ID != "train-01" || group.Suggestion != "" || group.Example.Evidence != "epoch 3" {
+		t.Errorf("own exit 124 = %+v, want an error group citing its last output line", group)
+	}
+	if group := got["DNS lookup failed"]; group.Count != 1 || group.Jobs[0].ID != "train-02" || group.Suggestion != "Check DNS." {
+		t.Errorf("own exit 124 with a diagnosis = %+v, want its rule", group)
+	}
+	if group := got[model.FailureKindTimeout]; group.Count != 1 || group.Jobs[0].ID != "train-03" {
+		t.Errorf("rotari timeout = %+v, want only task 3", group)
+	}
+	for _, result := range []model.JobResult{{ExitCode: model.TimeoutExitCode}, {ExitCode: model.TimeoutExitCode, Error: "timed out after 5s"}} {
+		if kinds := model.FailureKinds(result); !strings.Contains(strings.Join(kinds, ","), model.FailureKindTimeout) {
+			t.Errorf("FailureKinds(%+v) = %v, want timeout: the kind reads the exit code", result, kinds)
+		}
+	}
+}
+
 // TestFailureGroupsSuggestAFixForCausesRotariRecords groups a timeout, a
 // cancellation, and a blocked job, whose causes rotari records itself rather
 // than a diagnosis rule, and checks that each group still suggests a fix.

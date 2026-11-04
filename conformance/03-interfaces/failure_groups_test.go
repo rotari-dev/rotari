@@ -218,6 +218,51 @@ func TestSchedulerTimeLimitIsNotRotarisTimeout(t *testing.T) {
 	}
 }
 
+// TestJobsOwnExit124IsNotRotarisTimeout runs a job that exits 124 by itself, as
+// GNU timeout does, beside one rotari stops. Both have the failure kind timeout,
+// but only rotari's own is the cause timeout, with the change --timeout advice.
+func TestJobsOwnExit124IsNotRotarisTimeout(t *testing.T) {
+	covers(t, "CLI-4")
+	e := support.NewEnv(t)
+	project := "own-exit"
+	e.MustRotari("add", "-p", project, "--job-name", "job-own-exit", "--", "sh", "-c", "echo last-line; exit 124")
+	e.MustRotari("add", "-p", project, "--job-name", "job-own-timeout", "--timeout", "1s", "--", "sleep", "5")
+	if result := e.RotariRun("run", "-p", project, "--quiet"); result.Code == 0 {
+		t.Fatalf("run with failing jobs should exit 1: %s", result)
+	}
+	var shown struct {
+		Failures failureGroupsView `json:"failures"`
+	}
+	if err := json.Unmarshal([]byte(e.MustRotari("show", "-p", project, "--json").Stdout), &shown); err != nil {
+		t.Fatal(err)
+	}
+	causes := map[string]string{}
+	for _, group := range shown.Failures {
+		causes[group.Cause] = group.Example.Evidence
+	}
+	if want := map[string]string{"timeout": "timed out after 1s", "error": "last-line"}; !reflect.DeepEqual(causes, want) {
+		t.Errorf("failure causes and examples = %v, want %v", causes, want)
+	}
+	if count := strings.Count(e.MustRotari("show", "-p", project).Stdout, "change --timeout"); count != 1 {
+		t.Errorf("show advises change --timeout %d times, want once, for rotari's timeout", count)
+	}
+	for _, test := range []struct {
+		args []string
+		want []string
+	}{
+		{args: []string{"--filter-failure-kind", "timeout"}, want: []string{"job-own-exit", "job-own-timeout"}},
+		{args: []string{"--filter-failure-cause", "timeout"}, want: []string{"job-own-timeout"}},
+		{args: []string{"--filter-failure-cause", "error"}, want: []string{"job-own-exit"}},
+	} {
+		table := e.MustRotari(append([]string{"show", "-p", project}, test.args...)...).Stdout
+		for _, name := range []string{"job-own-exit", "job-own-timeout"} {
+			if listed := strings.Contains(table, name); listed != slices.Contains(test.want, name) {
+				t.Errorf("show %v lists %s = %v, want jobs %v:\n%s", test.args, name, listed, test.want, table)
+			}
+		}
+	}
+}
+
 // TestFailureGroupRetryHintsWork runs a project whose jobs fail for four
 // causes and runs each failure group's retry hint that lineage prints, as
 // printed: each previews a rerun of only that group's job. The causes
