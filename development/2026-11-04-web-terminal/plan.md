@@ -1,10 +1,10 @@
 # Plan: Web UI hardening, then a built-in terminal
 
 Created: 2026-11-04
-Status: Phase 1 in progress; see [its first pass](#phase-1-first-pass). Phases 1
-and 2 are worth doing on their own;
-[the gate](#gate-decide-whether-to-build-the-terminal) decides whether phases 3
-to 5 happen at all.
+Status: Phase 1 is done, with the gaps listed in
+[its results](#phase-1-results). Phase 2 is next. Phases 1 and 2 are worth doing on
+their own; [the gate](#gate-decide-whether-to-build-the-terminal) decides whether
+phases 3 to 5 happen at all.
 
 ## Goal
 
@@ -126,8 +126,7 @@ Estimate: 2 to 4 days.
    - JSON embedded in `<script>`: the static bootstrap and Table viewer.
    - Go-composed HTML in `assets.go`, `auth.go`, and `table_view_static.go`.
    - Dynamic `class` and `style` values, SVG, and chart labels.
-3. Extend
-   [the regression test](../../internal/webui/job_action_handlers_test.go). A jsdom table test renders hostile values (`'`, `"`,
+3. Add a regression test. A jsdom table test renders hostile values (`'`, `"`,
    `<`, `&`, backtick, and handler text) and clicks each generated control. It
    asserts that no payload ran and that each handler received the exact original
    value, so legitimate names with apostrophes are covered too.
@@ -141,17 +140,21 @@ modes.
 Done when: every sink is classified, no unsafe finding remains, and the test
 fails on the code before the fix. Issues outside injection go to `ISSUES.md`.
 
-### Phase 1 first pass
+### Phase 1 results
+
+Two defects were found and fixed: handler arguments built with `esc` alone, and
+sequential placeholder replacement (WEB-26). The review found nothing else; the
+table below is by area, instead of the per-sink table this phase first planned,
+since `TestStoredValuesStayText` (WEB-28) now checks the rendered pages directly.
 
 On 2026-11-04, a TypeScript-parser scan listed the 333 non-literal values
 concatenated into strings holding HTML tags, or assigned to an HTML sink. Most
-were read at their source, with helpers followed. Only the results marked as run
-were executed. Each row is a review result, not proof.
+were read at their source, with helpers followed.
 
 | Area | Result |
 | --- | --- |
-| Handler arguments built with `esc` alone | Fixed in `showArtifacts` and `selectJobAttempt` (run); the rest use `jsArg`, `this.dataset`, or fixed text |
-| Sequential placeholder replacement in Go | Fixed, WEB-26 (run) |
+| Handler arguments | `jsArg`, `this.dataset`, or fixed text |
+| Template placeholders in Go | One pass that does not search inserted values |
 | HTML text and attributes in the page scripts | `esc`, numbers, or fixed text |
 | Status and timeline classes | From the `statusTones` table, with `off` as the fallback |
 | `entry.id` and `basedirURL` | Base64url IDs made by the server, and `encodeURIComponent` paths |
@@ -159,15 +162,26 @@ were executed. Each row is a review result, not proof.
 | Highlighted code | highlight.js output, or `highlightEscape` |
 | Notification links | Server-built paths under the basedir route |
 | Table viewer | DOM properties; `innerHTML` only for fixed icons, `pdfPreviewMarkup`, Markdown, and highlighted code |
-| Login `next` | HTML-escaped; `safeWebReturnPath` not yet read |
+| Login `next` | HTML-escaped; `safeWebReturnPath` allows only local paths |
 | Static JSON | `json.HTMLEscape` |
 | Recent jobs rows | `html.EscapeString` and `url.PathEscape` |
 
-Remaining for this phase:
+`TestStoredValuesStayText` records four hostile values through the CLI, one each
+for HTML, single-quoted, double-quoted, and template-literal contexts. A single
+value cannot do this: an early combined value was a syntax error inside a handler,
+so the test missed a weakened `jsArg`. The test renders the live pages, every static
+export page, and the Table viewer, and clicks their controls. It passes on the
+current code. Weakening `esc`, `jsArg`, or the Markdown escape, or restoring the
+original `showArtifacts` bug, makes it fail.
 
-- Add the hostile-value test across views, which also covers values the scan
-  could miss, such as one held in a variable without tags before reaching HTML.
-- Read `safeWebReturnPath`, and complete the per-sink table from that test.
+Gaps:
+
+- It runs in jsdom, not a browser, and finds script by its effects. A construct
+  jsdom does not run, such as an image's `onerror`, is found only as markup.
+- It does not store hostile basedir paths, config file contents, diagnoses,
+  executor options, or an interrupted run for the recovery dialog.
+- POST requests are blocked, so views shown only after a successful one, such as
+  a started launch, are not rendered.
 
 ## Phase 2: Content-Security-Policy on live pages
 
