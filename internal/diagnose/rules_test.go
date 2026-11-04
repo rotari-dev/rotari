@@ -110,6 +110,27 @@ func TestDiagnoseDefaultNormalizesAndMatchesKnownErrors(t *testing.T) {
 		{name: "requests HTTPError", job: Job{Log: "403 Client Error: Forbidden for url: https://example.test/api"}, want: "HTTP authentication or authorization failed"},
 		{name: "NCCL warning with failure", job: Job{Log: "node1:42 NCCL WARN NET/IB : Got completion with error 12"}, want: "NCCL failure"},
 		{name: "kernel oops", job: Job{Log: "[1234.5] Oops: 0002 [#1] SMP PTI"}, want: "Kernel panic or kernel fault"},
+		{name: "bash killed command", job: Job{Log: "/bin/bash: line 1: 12345 Killed                  python train.py"}, want: "Process killed"},
+		{name: "job control killed", job: Job{Log: "[1]+  Killed                  python train.py"}, want: "Process killed"},
+		{name: "NumPy allocation", job: Job{Log: "numpy.core._exceptions._ArrayMemoryError: Unable to allocate 3.4 GiB for an array"}, want: "Python memory error"},
+		{name: "glibc version", job: Job{Log: "python: /lib64/libc.so.6: version `GLIBC_2.34' not found (required by python)"}, want: "Shared library or ABI mismatch"},
+		{name: "glibc version in Python import", job: Job{Log: "ImportError: /lib64/libc.so.6: version `GLIBC_2.34' not found"}, want: "Shared library or ABI mismatch"},
+		{name: "NVML driver mismatch", job: Job{Log: "Failed to initialize NVML: Driver/library version mismatch"}, want: "CUDA/GPU unavailable"},
+		{name: "srun allocation", job: Job{Log: "srun: error: Unable to allocate resources: Requested node configuration is not available"}, want: "Scheduler submission failed"},
+		{name: "srun step", job: Job{Log: "srun: error: Unable to create step for job 123: Memory required by task is not available"}, want: "Scheduler submission failed"},
+		{name: "salloc submission", job: Job{Log: "salloc: error: Job submit/allocate failed: Requested node configuration is not available"}, want: "Scheduler submission failed"},
+		{name: "srun invalid account", job: Job{Log: "srun: error: Unable to allocate resources: Invalid account or account/partition combination specified"}, want: "Invalid scheduler resource request"},
+		{name: "srun task OOM", job: Job{Log: "srun: error: node01: task 0: Out Of Memory"}, want: "Slurm memory limit exceeded"},
+		{name: "Slurm node fail state", job: Job{Log: "JobState=NODE_FAIL Reason=NodeDown"}, want: "Slurm node failure"},
+		{name: "Slurm boot fail state", job: Job{Log: "State=BOOT_FAIL"}, want: "Slurm node failure"},
+		{name: "Slurm cancelled by node failure", job: Job{Log: "slurmstepd: error: *** JOB 123 ON node01 CANCELLED AT 2026-01-01T00:00:00 DUE TO NODE FAILURE, SEE SLURMCTLD LOG FOR DETAILS ***"}, want: "Slurm node failure"},
+		{name: "PBS memory limit", job: Job{Log: "=>> PBS: job killed: mem 1024kb exceeded limit 512kb"}, want: "PBS resource or walltime limit exceeded"},
+		{name: "LSF swap limit", job: Job{Log: "TERM_SWAP: job killed after reaching LSF swap usage limit"}, want: "LSF memory limit exceeded"},
+		{name: "Node.js undefined property", job: Job{Log: "TypeError: Cannot read properties of undefined (reading 'x')"}, want: "JavaScript runtime error"},
+		{name: "Node.js old undefined property", job: Job{Log: "TypeError: Cannot read property 'x' of undefined"}, want: "JavaScript runtime error"},
+		{name: "Node.js not a function", job: Job{Log: "TypeError: fetchData is not a function"}, want: "JavaScript runtime error"},
+		{name: "Node.js unexpected token", job: Job{Log: "SyntaxError: Unexpected token ) in JSON at position 3"}, want: "JavaScript runtime error"},
+		{name: "Node.js reference error", job: Job{Log: "ReferenceError: config is not defined"}, want: "JavaScript runtime error"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -148,6 +169,11 @@ func TestDiagnoseDefaultIgnoresLookalikeText(t *testing.T) {
 		{name: "errno name inside word", log: "prefix_enoentry and leacces and teagain"},
 		{name: "another tool's timeout", log: "request timed out after 30s, retrying"},
 		{name: "quoted rotari timeout", log: "see: rotari: job timed out after 5s in the docs"},
+		{name: "ordinary killed count", log: "the supervisor killed 3 workers"},
+		{name: "srun task exit", log: "srun: error: node01: task 0: Exited with exit code 1"},
+		{name: "truncated archive", log: "tar: Unexpected EOF in archive"},
+		{name: "version warning", log: "warning: incompatible version of foo, continuing"},
+		{name: "dependency warning", log: "WARNING: package-a requires package-b but version 1 is installed"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
