@@ -21,5 +21,10 @@ description: "Use when managing rotari workspaces or preparing a commit, advanci
    `jj bookmark set main -r <completed-revision>`. Never move it to the empty
    working-copy change. If `main` has diverged or the change includes other
    unverified work, coordinate before integrating.
-6. Push only when requested. In the completion report, distinguish committed,
+6. Whenever `main` moves, also move the `default` workspace onto it: run
+   `jj status` in that workspace and, if its working-copy change is empty,
+   `jj new main` there. If the change is not empty, leave the workspace alone
+   and say so in the completion report; moving it would take those files out
+   of the working directory.
+7. Push only when requested. In the completion report, distinguish committed,
    integrated into local `main`, and pushed.
