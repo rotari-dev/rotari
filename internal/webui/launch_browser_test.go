@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rotari-dev/rotari/internal/artifact"
@@ -68,6 +69,15 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 `, server.URL, f.runID, string(entries), f.work)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("browser check failed: %v\n%s", err, output)
+	}
+}
+
+// A table cell shrinks a wrapping flex container to its widest button, which
+// stacks the buttons, so a row's launch buttons take fixed columns instead.
+func TestArtifactRowLaunchButtonsTakeColumns(t *testing.T) {
+	want := ".artifact-action .artifact-launchers {\n  display: inline-grid;\n  grid-template-columns: repeat(3, max-content);"
+	if !strings.Contains(webStylesCSS, want) {
+		t.Fatalf("web stylesheet does not contain %q", want)
 	}
 }
 

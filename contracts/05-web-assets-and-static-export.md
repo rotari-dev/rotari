@@ -881,7 +881,8 @@ command's file name `patterns` and its `file_patterns`, which limit only files,
 and a start refuses a target its patterns do not match. Each repeated `target=K:N` (at most 1000) gets, in order, an
 entry of `targets` naming the commands and viewers that accept it, the
 commands only while launching is available; the Web UI puts a button per
-command in each artifact row and preview title line, disabled with the
+command in each artifact row, in lines of three (two on a narrow screen), and
+preview title line, disabled with the
 reason when its program is missing, and says once above them why nothing
 can be launched when launching is unavailable
 (`fillArtifactLaunchButtons` in
@@ -909,7 +910,7 @@ without `ROTARI_WEB_AUTH_TOKEN`. Covered by
 `targets` by `TestLaunchAvailabilityForATarget` and `basedir_parent` by
 `TestLaunchOnBasedirParent` in
 [launches_test.go](../internal/webui/launches_test.go), the row buttons by
-`TestWebLaunchInBrowser` and the Files view by `TestWebRunFilesInBrowser` in
+`TestWebLaunchInBrowser` and `TestArtifactRowLaunchButtonsTakeColumns` and the Files view by `TestWebRunFilesInBrowser` in
 [launch_browser_test.go](../internal/webui/launch_browser_test.go), and its
 toolbar button by `TestWebRunJobsTable` in
 [run_jobs_test.go](../internal/webui/run_jobs_test.go).

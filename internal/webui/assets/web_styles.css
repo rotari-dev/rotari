@@ -1742,6 +1742,20 @@ pre,
 .artifact-action {
   white-space: nowrap;
 }
+/* A table cell shrinks a wrapping flex container to its widest button, so a
+   row's buttons take fixed columns instead of a line each. */
+.artifact-action .artifact-launchers {
+  display: inline-grid;
+  grid-template-columns: repeat(3, max-content);
+}
+.artifact-action .artifact-launchers .launch-viewer {
+  justify-content: center;
+}
+@media (max-width: 640px) {
+  .artifact-action .artifact-launchers {
+    grid-template-columns: repeat(2, max-content);
+  }
+}
 .artifact-image {
   max-width: 100%;
   height: auto;
