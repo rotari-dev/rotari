@@ -132,6 +132,47 @@ func TestDiagnoseDefaultNormalizesAndMatchesKnownErrors(t *testing.T) {
 		{name: "Node.js not a function", job: Job{Log: "TypeError: fetchData is not a function"}, want: "JavaScript runtime error"},
 		{name: "Node.js unexpected token", job: Job{Log: "SyntaxError: Unexpected token ) in JSON at position 3"}, want: "JavaScript runtime error"},
 		{name: "Node.js reference error", job: Job{Log: "ReferenceError: config is not defined"}, want: "JavaScript runtime error"},
+		{name: "python port conflict", job: Job{Log: "OSError: [Errno 98] Address already in use"}, want: "Network port already in use"},
+		{name: "nc port conflict", job: Job{Log: "nc: Address already in use"}, want: "Network port already in use"},
+		{name: "curl gateway timeout", job: Job{Log: "curl: (22) The requested URL returned error: 504"}, want: "HTTP gateway timeout"},
+		{name: "curl not found", job: Job{Log: "curl: (22) The requested URL returned error: 404"}, want: "HTTP resource not found"},
+		{name: "curl forbidden", job: Job{Log: "curl: (22) The requested URL returned error: 403"}, want: "HTTP authentication or authorization failed"},
+		{name: "wget not found", job: Job{Log: "2026-11-04 13:27:29 ERROR 404: File not found."}, want: "HTTP resource not found"},
+		{name: "urllib not found", job: Job{Log: "urllib.error.HTTPError: HTTP Error 404: Not Found"}, want: "HTTP resource not found"},
+		{name: "requests not found", job: Job{Log: "404 Client Error: Not Found for url: https://example.test/x"}, want: "HTTP resource not found"},
+		{name: "bad request", job: Job{Log: "HTTP/1.1 400 Bad Request"}, want: "HTTP bad request"},
+		{name: "git missing repository", job: Job{Log: "fatal: repository '/nonexistent/repo.git' does not exist"}, want: "Git repository unavailable or authentication failed"},
+		{name: "git not a repository", job: Job{Log: "fatal: not a git repository (or any of the parent directories): .git"}, want: "Git repository unavailable or authentication failed"},
+		{name: "gcc compile error", job: Job{Log: "bad.c:1:23: error: 'x' undeclared (first use in this function)"}, want: "Source compilation or build failed"},
+		{name: "gcc missing header", job: Job{Log: "hdr.c:1:10: fatal error: missing_header.h: No such file or directory"}, want: "Source compilation or build failed"},
+		{name: "g++ compile error", job: Job{Log: "bad.cpp:1:35: error: expected ';' before '}' token"}, want: "Source compilation or build failed"},
+		{name: "make missing target", job: Job{Log: "make: *** No rule to make target 'nope'.  Stop."}, want: "Source compilation or build failed"},
+		{name: "Go compile error", job: Job{Log: "./main.go:3:15: undefined: foo"}, want: "Source compilation or build failed"},
+		{name: "rustc abort", job: Job{Log: "error: aborting due to 1 previous error"}, want: "Source compilation or build failed"},
+		{name: "pip version", job: Job{Log: "ERROR: Could not find a version that satisfies the requirement no-such-package-xyz (from versions: none)"}, want: "Python dependency or version conflict"},
+		{name: "pip distribution", job: Job{Log: "ERROR: No matching distribution found for no-such-package-xyz"}, want: "Python dependency or version conflict"},
+		{name: "sh foreign binary", job: Job{Log: "sh: 1: ./foreign: Exec format error"}, want: "Executable incompatible with host"},
+		{name: "bash foreign binary", job: Job{Log: "bash: line 1: ./foreign: cannot execute binary file: Exec format error"}, want: "Executable incompatible with host"},
+		{name: "python foreign binary", job: Job{Log: "OSError: [Errno 8] Exec format error: './foreign'"}, want: "Executable incompatible with host"},
+		{name: "Go foreign binary", job: Job{Log: "fork/exec ./foreign: exec format error"}, want: "Executable incompatible with host"},
+		{name: "rustc error code", job: Job{Log: "error[E0308]: mismatched types"}, want: "Source compilation or build failed"},
+		{name: "Rust missing crate with a code", job: Job{Log: "error[E0433]: failed to resolve: use of undeclared crate or module `serde`"}, want: "Application dependency or module missing"},
+		{name: "javac", job: Job{Log: "A.java:1: error: cannot find symbol"}, want: "Source compilation or build failed"},
+		{name: "cmake", job: Job{Log: "CMake Error at CMakeLists.txt:2 (find_package):"}, want: "Source compilation or build failed"},
+		{name: "git authentication", job: Job{Log: "fatal: Authentication failed for 'https://example.test/x/y.git/'"}, want: "Git repository unavailable or authentication failed"},
+		{name: "git prompt disabled", job: Job{Log: "fatal: could not read Username for 'https://example.test': terminal prompts disabled"}, want: "Git repository unavailable or authentication failed"},
+		{name: "git repository not found", job: Job{Log: "fatal: repository 'https://example.test/x/y.git/' not found"}, want: "Git repository unavailable or authentication failed"},
+		{name: "conda package", job: Job{Log: "PackagesNotFoundError: The following packages are not available from current channels:"}, want: "Conda environment or package unavailable"},
+		{name: "conda environment", job: Job{Log: "EnvironmentNameNotFound: Could not find conda environment: foo"}, want: "Conda environment or package unavailable"},
+		{name: "Lmod", job: Job{Log: "Lmod has detected the following error:  The following module(s) are unknown: \"foo\""}, want: "Environment module unavailable"},
+		{name: "Tcl modules", job: Job{Log: "ERROR: Unable to locate a modulefile for 'foo'"}, want: "Environment module unavailable"},
+		{name: "npm resolve", job: Job{Log: "npm ERR! code ERESOLVE"}, want: "Application dependency or module missing"},
+		{name: "shared memory", job: Job{Log: "ERROR: Unexpected bus error encountered in worker. This might be caused by insufficient shared memory (shm)."}, want: "Shared memory or data loader failure"},
+		{name: "DataLoader killed", job: Job{Log: "RuntimeError: DataLoader worker (pid 1234) is killed by signal: Killed."}, want: "Shared memory or data loader failure"},
+		{name: "DataLoader exited", job: Job{Log: "RuntimeError: DataLoader worker (pid(s) 1234) exited unexpectedly"}, want: "Shared memory or data loader failure"},
+		{name: "torchrun child", job: Job{Log: "torch.distributed.elastic.multiprocessing.errors.ChildFailedError:"}, want: "Distributed training worker failed"},
+		{name: "ECC error", job: Job{Log: "RuntimeError: CUDA error: uncorrectable ECC error encountered"}, want: "NVIDIA GPU driver/device error"},
+		{name: "ECC status", job: Job{Log: "CUDA_ERROR_ECC_UNCORRECTABLE"}, want: "NVIDIA GPU driver/device error"},
 		{name: "aborted", job: Job{Log: "Aborted (core dumped)"}, want: "Process aborted"},
 		{name: "recorded node failure state", job: Job{Error: "node_fail"}, want: "Slurm node failure"},
 		{name: "recorded boot failure state", job: Job{Error: "boot_fail"}, want: "Slurm node failure"},
@@ -208,6 +249,13 @@ func TestDiagnoseDefaultIgnoresLookalikeText(t *testing.T) {
 		{name: "truncated archive", log: "tar: Unexpected EOF in archive"},
 		{name: "version warning", log: "warning: incompatible version of foo, continuing"},
 		{name: "ordinary aborted text", log: "transaction aborted, retrying"},
+		{name: "make recipe failure", log: "make: *** [Makefile:2: train] Error 1"},
+		{name: "nothing to make", log: "make: Nothing to be done for 'all'."},
+		{name: "compiler warning", log: "bad.c:1:23: warning: unused variable 'x'"},
+		{name: "Go log line", log: "main.go:12: starting epoch 3"},
+		{name: "HTTP-like number in an error", log: "error 404 items were skipped"},
+		{name: "ordinary mention of a repository", log: "the repository was not found in the cache, fetching"},
+		{name: "ordinary mention of a data loader", log: "DataLoader worker 3 finished epoch 2"},
 		{name: "ordinary state words", log: "the deadline is near\nworker preempted task 3\nretrying node_fail handler"},
 		{name: "ordinary terminated text", log: "worker 3 terminated normally"},
 		{name: "ordinary exec text", log: "the exec: section of the config was not found in this file"},
@@ -275,6 +323,17 @@ func TestDefaultRuleExitCodesAreUnique(t *testing.T) {
 			}
 			seen[exitCode] = rule.Name
 		}
+	}
+}
+
+func TestDiagnoseDefaultNamesThePortOfAGoPanic(t *testing.T) {
+	diagnoses := DiagnoseDefault(Job{Log: "panic: listen tcp 127.0.0.1:18765: bind: address already in use"})
+	names := map[string]bool{}
+	for _, diagnosis := range diagnoses {
+		names[diagnosis.Name] = true
+	}
+	if !names["Network port already in use"] || !names["Application panic"] {
+		t.Fatalf("DiagnoseDefault() = %#v, want the port conflict and the panic", diagnoses)
 	}
 }
 
