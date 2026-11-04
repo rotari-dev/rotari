@@ -139,6 +139,13 @@ const (
 	// `python` so that a host without Gradio shows it unavailable. An app
 	// that sets its own address or port in launch() does not work.
 	gradioCommand = `GRADIO_ANALYTICS_ENABLED=False GRADIO_SERVER_NAME=127.0.0.1 GRADIO_SERVER_PORT="$ROTARI_LAUNCHER_PORT" GRADIO_ROOT_PATH="$ROTARI_LAUNCHER_BASE_PATH" gradio "$ROTARI_LAUNCHER_ARTIFACT"`
+	// VS Code 1.145: the artifact is the folder to open. `code-cli` rather than
+	// `code`, which in a Remote SSH terminal is a different program without
+	// serve-web, first on PATH there. The launch token is its connection token,
+	// which it reads only from a file and takes as a cookie. It answers before
+	// it has downloaded its server, with a page asking to wait. Installing
+	// code-cli is what accepts the license terms the flag acknowledges.
+	vscodeCommand = `code-cli serve-web --host 127.0.0.1 --port "$ROTARI_LAUNCHER_PORT" --server-base-path "$ROTARI_LAUNCHER_BASE_PATH" --connection-token-file "$ROTARI_LAUNCHER_TOKEN_FILE" --accept-server-license-terms --disable-telemetry --default-folder "$ROTARI_LAUNCHER_ARTIFACT"`
 	// marimo 0.25: the artifact is a notebook, in Python or Markdown, or a
 	// directory of them. The
 	// launch token is its password, which only the proxy presents
@@ -179,6 +186,8 @@ func BuiltinCommands() []Command {
 	panel.Patterns = []string{"*.py"}
 	gradio := service("Gradio", gradioCommand, []TargetKind{TargetFile}, DefaultReadyPath)
 	gradio.Patterns = []string{"*.py"}
+	vscode := service("VS Code", vscodeCommand, directory, "/version")
+	vscode.ProxyHeaders = map[string]string{"Cookie": "vscode-tkn=$" + EnvToken}
 	return []Command{
 		service("TensorBoard", tensorBoardCommand, directory, DefaultReadyPath),
 		jupyter,
@@ -190,6 +199,7 @@ func BuiltinCommands() []Command {
 		marimo,
 		panel,
 		gradio,
+		vscode,
 	}
 }
 
@@ -561,8 +571,10 @@ func Template() []byte {
 # launch token), MLflow (a directory named mlruns), MLflow (SQLite) (a file
 # named mlflow.db), Aim, Streamlit (*.py files), Datasette (*.db, *.sqlite,
 # and *.sqlite3 files), marimo (*.py, *.md, *.markdown, and *.qmd files and
-# directories, requires the launch token), Panel (*.py files), and Gradio
-# (*.py files). Each is shown disabled while its program is not installed. An
+# directories, requires the launch token), Panel (*.py files), Gradio (*.py
+# files), and VS Code (directories, requires the launch token; install the
+# standalone VS Code CLI on PATH as code-cli, which accepts the VS Code Server
+# license terms, https://aka.ms/vscode-server-license). Each is shown disabled while its program is not installed. An
 # entry with the same name replaces one.
 
 # TensorBoard is built in: rotari registers it without an entry here, as
@@ -584,28 +596,6 @@ func Template() []byte {
 # command = 'wc -l "$ROTARI_LAUNCHER_ARTIFACT"'
 # targets = ["file"]
 # mode = "command"
-#
-# VS Code in the browser, for directories. First install the standalone CLI.
-# On x86-64 Linux (other systems: https://code.visualstudio.com/Download):
-#
-#   curl -fL -o vscode_cli.tar.gz 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64'
-#   tar -xzf vscode_cli.tar.gz
-#   install -m 755 code ~/.local/bin/code-cli
-#
-# Do not use the "code" of a Remote SSH terminal: it is a different program,
-# without serve-web. Using this entry accepts the VS Code Server license terms
-# (https://aka.ms/vscode-server-license). The first launch downloads the server,
-# about 700 MB; reload the page until the editor opens. VS Code runs commands as
-# you, and it puts the launch's token in a browser cookie, which other pages
-# from the same rotari address may be able to read.
-#
-# [[launcher]]
-# name = "VS Code"
-# command = '''"$HOME/.local/bin/code-cli" serve-web --host 127.0.0.1 --port "$ROTARI_LAUNCHER_PORT" --server-base-path "$ROTARI_LAUNCHER_BASE_PATH" --connection-token-file "$ROTARI_LAUNCHER_TOKEN_FILE" --accept-server-license-terms --default-folder "$ROTARI_LAUNCHER_ARTIFACT"'''
-# targets = ["directory"]
-# mode = "service"
-# ready_path = "/version"
-# proxy_headers = { Cookie = "vscode-tkn=$ROTARI_LAUNCHER_TOKEN" }
 `)
 }
 

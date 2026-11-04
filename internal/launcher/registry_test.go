@@ -27,6 +27,7 @@ func TestBuiltinCommands(t *testing.T) {
 		"marimo":          {"marimo", []TargetKind{TargetFile, TargetDirectory}, nil, "/health"},
 		"Panel":           {"panel", []TargetKind{TargetFile}, []string{"*.py"}, DefaultReadyPath},
 		"Gradio":          {"gradio", []TargetKind{TargetFile}, []string{"*.py"}, DefaultReadyPath},
+		"VS Code":         {"code-cli", []TargetKind{TargetDirectory}, nil, "/version"},
 	}
 	builtins := BuiltinCommands()
 	if len(builtins) != len(want) {
@@ -65,6 +66,11 @@ func TestBuiltinCommands(t *testing.T) {
 				t.Errorf("Jupyter Lab does not require the launch token: %+v", got)
 			}
 		}
+		if got.Name == "VS Code" {
+			if got.ProxyHeaders["Cookie"] != "vscode-tkn=$"+EnvToken || !strings.Contains(got.Command, `--connection-token-file "$`+EnvTokenFile+`"`) || strings.Contains(got.Command, `"$`+EnvToken+`"`) {
+				t.Errorf("VS Code does not require the launch token: %+v", got)
+			}
+		}
 	}
 }
 
@@ -83,8 +89,7 @@ func TestTemplateExamples(t *testing.T) {
 		}
 	}
 	commands, err = ParseCommands([]byte(examples.String()))
-	if err != nil || len(commands) != 3 || commands[0].Name != "TensorBoard" || commands[1].Name != "Line count" || commands[2].Name != "VS Code" ||
-		commands[2].ReadyPath != "/version" || commands[2].ProxyHeaders["Cookie"] != "vscode-tkn=$"+EnvToken {
+	if err != nil || len(commands) != 2 || commands[0].Name != "TensorBoard" || commands[1].Name != "Line count" {
 		t.Fatalf("template examples = %+v, %v\n%s", commands, err, examples.String())
 	}
 }
@@ -264,12 +269,12 @@ func TestLoadRegistryReplacesBuiltins(t *testing.T) {
 		return strings.Join(names, ",")
 	}
 	registry := write(plot)
-	if got := names(registry); got != "TensorBoard,Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,Panel,Gradio,Plot" {
+	if got := names(registry); got != "TensorBoard,Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,Panel,Gradio,VS Code,Plot" {
 		t.Fatalf("file without built-in names = %s", got)
 	}
 	registry = write(plot + "[[launcher]]\nname = \"TensorBoard\"\ncommand = \"conda run -n tb tensorboard\"\ntargets = [\"directory\"]\nmode = \"service\"\n")
 	replaced := registry.Commands[len(registry.Commands)-1]
-	if got := names(registry); got != "Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,Panel,Gradio,Plot,TensorBoard" ||
+	if got := names(registry); got != "Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,Panel,Gradio,VS Code,Plot,TensorBoard" ||
 		replaced.Builtin || replaced.Command != "conda run -n tb tensorboard" {
 		t.Fatalf("file replacing TensorBoard = %s, %+v", got, replaced)
 	}

@@ -938,6 +938,15 @@ func TestBuiltinServicesThroughProxy(t *testing.T) {
 				t.Errorf("Gradio config = %d %.300q, want root %s", code, body, base)
 			}
 		}},
+		{"VS Code", "nb", launcher.TargetDirectory, func(t *testing.T, base string, launch launcher.Launch) {
+			if code, body := get(base+"/", nil); code != http.StatusOK || !strings.Contains(body, "workbench") {
+				t.Errorf("VS Code page = %d %.200q", code, body)
+			}
+			direct := fmt.Sprintf("http://127.0.0.1:%d%s/", launch.Port, launch.BasePath)
+			if code, body := get(direct, nil); code != http.StatusForbidden {
+				t.Errorf("VS Code without the token = %d %.200q", code, body)
+			}
+		}},
 		{"Streamlit", "app.py", launcher.TargetFile, func(t *testing.T, base string, _ launcher.Launch) {
 			if code, body := get(base+"/", nil); code != http.StatusOK || !strings.Contains(body, "<") {
 				t.Errorf("Streamlit page = %d %.200q", code, body)

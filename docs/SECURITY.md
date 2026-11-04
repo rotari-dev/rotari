@@ -80,7 +80,7 @@ reports how many it copied.
 
 Launching is off by default. `rotari web --allow-exec` lets anyone who can
 sign in run the built-in services (TensorBoard, Jupyter Lab, MLflow, Aim,
-Streamlit, Datasette, marimo, Panel, Gradio) and commands registered in your global `launchers.toml`, as you,
+Streamlit, Datasette, marimo, Panel, Gradio, VS Code) and commands registered in your global `launchers.toml`, as you,
 against the job artifacts the Web UI may serve. See
 [Launching commands](WEB.md#launching-commands).
 
@@ -113,8 +113,10 @@ A launched service also listens on that loopback port, which other users of
 the host can reach directly without rotari's token. A service that can require
 a secret should use the launch's `ROTARI_LAUNCHER_TOKEN`, which the proxy
 presents through `proxy_headers`, as is or as HTTP Basic credentials, and can
-read it from the private `ROTARI_LAUNCHER_TOKEN_FILE`. The built-in Jupyter Lab and marimo do use the token, so
-their kernels serve only through the proxy. TensorBoard, MLflow, Aim, Streamlit,
+read it from the private `ROTARI_LAUNCHER_TOKEN_FILE`. The built-in Jupyter Lab, marimo, and VS Code do use the token, so
+what runs code serves only through the proxy. VS Code also puts the token in a
+browser cookie that its page reads, which other pages from the same rotari
+address may be able to read. TensorBoard, MLflow, Aim, Streamlit,
 Datasette, Panel, and Gradio cannot, so another user who finds their port can read what they show.
 No built-in passes the token in a process's arguments, which other users can
 read.
