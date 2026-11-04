@@ -103,7 +103,8 @@ export async function launchChrome(chrome) {
     { stdio: "ignore" },
   );
   const portFile = join(profile, "DevToolsActivePort");
-  for (let i = 0; i < 100 && !existsSync(portFile); i++) await sleep(100);
+  // A loaded CI host can take well over ten seconds to start Chrome.
+  for (let i = 0; i < 600 && !existsSync(portFile); i++) await sleep(100);
   if (!existsSync(portFile))
     throw new Error("Chrome did not open a DevTools port");
   const [port, path] = readFileSync(portFile, "utf8").trim().split("\n");
@@ -122,7 +123,8 @@ export async function launchChrome(chrome) {
 // withPage opens url at the given viewport and colour scheme, waits for the
 // load event and settleMs more, runs use(page), and closes the page.
 // page.send calls a protocol method on the page; page.evaluate returns the
-// value of a JavaScript expression in it.
+// value of a JavaScript expression in it. beforeNavigate(page), if given, runs
+// before the page opens, to add a script or headers.
 export async function withPage(cdp, url, options, use) {
   const {
     width,
@@ -130,6 +132,7 @@ export async function withPage(cdp, url, options, use) {
     mobile = false,
     scheme = "light",
     settleMs = 1500,
+    beforeNavigate,
   } = options;
   const { browserContextId } = await cdp.send("Target.createBrowserContext");
   const { targetId } = await cdp.send("Target.createTarget", {
@@ -167,6 +170,7 @@ export async function withPage(cdp, url, options, use) {
     await page.send("Emulation.setEmulatedMedia", {
       features: [{ name: "prefers-color-scheme", value: scheme }],
     });
+    if (beforeNavigate) await beforeNavigate(page);
     const loaded = cdp.waitFor("Page.loadEventFired", sessionId);
     await page.send("Page.navigate", { url });
     await loaded;

@@ -1271,6 +1271,10 @@ project, job, stage, matrix, and array names; commands, working directories, and
 executor options; logs, diagnoses, notes, and config files; artifact names and
 contents; and launcher names, targets, and output, in jsdom. It also opens the
 recovery dialog, whose reasons the CLI cannot make hostile.
+`TestStoredValuesStayTextInBrowser` repeats this in headless Chrome, for the
+values that attack markup and a quoted argument, and fails on any
+Content-Security-Policy violation. It skips without Chrome, except where
+`ROTARI_REQUIRE_BROWSER_TESTS` is set, as in CI.
 
 **WEB-26** Values go into a page's template in one pass that never searches
 what it inserted, so a project name, job command, or other value containing the

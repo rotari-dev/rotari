@@ -48,6 +48,8 @@ jobs:
         run: go install gotest.tools/gotestsum@v1.13.0
 
       - name: Run tests
+        env:
+          ROTARI_REQUIRE_BROWSER_TESTS: "1"
         run: gotestsum --format pkgname-and-test-fails -- -timeout 15m -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./...
 
       - name: Upload coverage to Codecov

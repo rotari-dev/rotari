@@ -19,7 +19,7 @@ import (
 // the handler would never run. None has a slash, so a project and a file can have
 // it as their name, or a comma, so a matrix value can.
 var hostileValues = map[string]string{
-	"html":          "hostile-mark'\"><i data-injected=1><!--&amp;",
+	"html":          "hostile-mark'\"><i data-injected=1><img src=x onerror=window.__injected=1><!--&amp;",
 	"single quoted": "hostile-mark');window.__injected=1;('",
 	"double quoted": "hostile-mark\");window.__injected=1;(\"",
 	"template":      "hostile-mark`+(window.__injected=1)+`${window.__injected=1}",
@@ -53,7 +53,9 @@ async function open(page) {
         return Promise.resolve(new Response('{"error":"blocked by the test"}', { status: 403 }));
       const headers = { ...init.headers };
       if (token) headers['X-Rotari-Token'] = token;
-      return fetch(new URL(String(input), page.url), { ...init, headers });
+      window.__pending = (window.__pending || 0) + 1;
+      return fetch(new URL(String(input), page.url), { ...init, headers })
+        .finally(() => { window.__pending--; });
     };
   };
   const options = { runScripts: 'dangerously', url: page.url, virtualConsole, beforeParse };
@@ -98,10 +100,18 @@ async function check(page) {
         found.push('link ' + when + ': ' + describe(node));
     });
   };
-  await wait(400);
+  // A loaded host renders late, and scripts in files load after the page.
+  const hasMark = () => (document.body.textContent || '').includes(mark);
+  for (const deadline = Date.now() + 30000; !hasMark() && Date.now() < deadline; ) await wait(50);
+  const settle = async () => {
+    await wait(40);
+    for (const deadline = Date.now() + 10000; window.__pending && Date.now() < deadline; ) await wait(20);
+    await wait(40);
+  };
+  await settle();
   inspect('on load');
   if (page.search) { await search(document, window); inspect('after a search'); }
-  const shown = (document.body.textContent || '').includes(mark);
+  const shown = hasMark();
   const seen = new Set();
   let clicks = 0;
   for (let round = 0; round < 4 && clicks < 500; round++) {
@@ -115,7 +125,7 @@ async function check(page) {
       fresh++;
       clicks++;
       try { control.click(); } catch {}
-      await wait(40);
+      await settle();
       inspect('after clicking ' + key.slice(0, 120));
     }
     if (!fresh) break;
@@ -169,6 +179,23 @@ func TestStoredValuesStayText(t *testing.T) {
 }
 
 func checkStoredValueStaysText(t *testing.T, node, hostileValue string) {
+	t.Helper()
+	site := buildHostileSite(t, hostileValue)
+	if results := renderHostilePages(t, node, site.live, launchToken); len(results) != len(site.live) {
+		t.Fatalf("results = %d, want %d", len(results), len(site.live))
+	}
+	renderHostilePages(t, node, site.static, "")
+	renderHostilePages(t, node, site.viewers, "")
+}
+
+// hostileSite is every page that shows a recorded hostile value.
+type hostileSite struct {
+	live, static, viewers []hostilePage
+}
+
+// buildHostileSite records hostileValue through the CLI wherever a page can show
+// it, and serves and exports the result.
+func buildHostileSite(t *testing.T, hostileValue string) hostileSite {
 	t.Helper()
 	e := support.NewEnv(t)
 	// The basedir's own path is a value pages show.
@@ -249,9 +276,6 @@ func checkStoredValueStaysText(t *testing.T, node, hostileValue string) {
 	} {
 		pages = append(pages, hostilePage{Name: "live " + page.name, URL: live + page.path, Search: page.search, Expect: page.expect})
 	}
-	if results := renderHostilePages(t, node, pages, launchToken); len(results) != len(pages) {
-		t.Fatalf("results = %d, want %d", len(results), len(pages))
-	}
 
 	export := filepath.Join(e.Root, "export")
 	e.MustRotari("web", "--static-dir", export)
@@ -266,13 +290,12 @@ func checkStoredValueStaysText(t *testing.T, node, hostileValue string) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	renderHostilePages(t, node, static, "")
 
 	viewers := []hostilePage{}
 	for name, path := range map[string]string{"table": table, "Markdown": document} {
 		viewers = append(viewers, hostilePage{Name: "Table viewer " + name, URL: e.StartTableView(path), Scripts: true})
 	}
-	renderHostilePages(t, node, viewers, "")
+	return hostileSite{live: pages, static: static, viewers: viewers}
 }
 
 // startHostileLaunch runs the registered command on the job's text artifact.
@@ -340,6 +363,12 @@ func renderHostilePages(t *testing.T, node string, pages []hostilePage, token st
 	if err != nil {
 		t.Fatalf("page check: %v\n%s", err, output)
 	}
+	return reportHostileResults(t, output)
+}
+
+// reportHostileResults fails the test for what a page check found.
+func reportHostileResults(t *testing.T, output []byte) []hostileResult {
+	t.Helper()
 	var results []hostileResult
 	if err := json.Unmarshal(output, &results); err != nil {
 		t.Fatalf("page check output: %v\n%s", err, output)
