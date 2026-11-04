@@ -523,6 +523,8 @@ func Template() []byte {
 #   ROTARI_LAUNCHER_PORT       service mode: the port to listen on
 #   ROTARI_LAUNCHER_BASE_PATH  service mode: the URL path prefix to serve under
 #   ROTARI_LAUNCHER_TOKEN      service mode: a secret made for this launch
+#   ROTARI_LAUNCHER_TOKEN_FILE service mode: a private file holding that secret,
+#                              removed when the launch ends
 #   ROTARI_LAUNCHER_JUPYTER_CONFIG
 #                              service mode: a Jupyter config file, for
 #                              --config, that makes that secret the login token
@@ -551,7 +553,9 @@ func Template() []byte {
 #                  this token cannot be used by other users who connect to
 #                  its port directly. $ROTARI_LAUNCHER_BASIC_AUTH stands for
 #                  the Base64 of "rotari:" and the token, for a header of
-#                  "Basic $ROTARI_LAUNCHER_BASIC_AUTH".
+#                  "Basic $ROTARI_LAUNCHER_BASIC_AUTH". A Cookie header goes
+#                  ahead of the browser's cookies, which the service still
+#                  receives.
 #
 # Built in, without an entry here: TensorBoard, Jupyter Lab (requires the
 # launch token), MLflow (a directory named mlruns), MLflow (SQLite) (a file
@@ -580,6 +584,28 @@ func Template() []byte {
 # command = 'wc -l "$ROTARI_LAUNCHER_ARTIFACT"'
 # targets = ["file"]
 # mode = "command"
+#
+# VS Code in the browser, for directories. First install the standalone CLI.
+# On x86-64 Linux (other systems: https://code.visualstudio.com/Download):
+#
+#   curl -fL -o vscode_cli.tar.gz 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64'
+#   tar -xzf vscode_cli.tar.gz
+#   install -m 755 code ~/.local/bin/code-cli
+#
+# Do not use the "code" of a Remote SSH terminal: it is a different program,
+# without serve-web. Using this entry accepts the VS Code Server license terms
+# (https://aka.ms/vscode-server-license). The first launch downloads the server,
+# about 700 MB; reload the page until the editor opens. VS Code runs commands as
+# you, and it puts the launch's token in a browser cookie, which other pages
+# from the same rotari address may be able to read.
+#
+# [[launcher]]
+# name = "VS Code"
+# command = '''"$HOME/.local/bin/code-cli" serve-web --host 127.0.0.1 --port "$ROTARI_LAUNCHER_PORT" --server-base-path "$ROTARI_LAUNCHER_BASE_PATH" --connection-token-file "$ROTARI_LAUNCHER_TOKEN_FILE" --accept-server-license-terms --default-folder "$ROTARI_LAUNCHER_ARTIFACT"'''
+# targets = ["directory"]
+# mode = "service"
+# ready_path = "/version"
+# proxy_headers = { Cookie = "vscode-tkn=$ROTARI_LAUNCHER_TOKEN" }
 `)
 }
 

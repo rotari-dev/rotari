@@ -83,7 +83,8 @@ func TestTemplateExamples(t *testing.T) {
 		}
 	}
 	commands, err = ParseCommands([]byte(examples.String()))
-	if err != nil || len(commands) != 2 || commands[0].Name != "TensorBoard" || commands[1].Name != "Line count" {
+	if err != nil || len(commands) != 3 || commands[0].Name != "TensorBoard" || commands[1].Name != "Line count" || commands[2].Name != "VS Code" ||
+		commands[2].ReadyPath != "/version" || commands[2].ProxyHeaders["Cookie"] != "vscode-tkn=$"+EnvToken {
 		t.Fatalf("template examples = %+v, %v\n%s", commands, err, examples.String())
 	}
 }

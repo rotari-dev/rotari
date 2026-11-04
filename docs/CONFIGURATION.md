@@ -408,8 +408,9 @@ ready_path = "/version"
 proxy_headers = { Cookie = "vscode-tkn=$ROTARI_LAUNCHER_TOKEN" }
 ```
 
-The first launch downloads the Web server, about 700 MB, before the editor
-opens. Like Jupyter Lab, VS Code runs commands as you. VS Code also puts the
+`rotari config --launchers` writes this entry as a comment, with the commands
+that install the CLI. The first launch downloads the Web server, about 700 MB;
+reload the page until the editor opens. Like Jupyter Lab, VS Code runs commands as you. VS Code also puts the
 token in a browser cookie that its page reads, so other pages served from the
 same rotari address may be able to read it; launch it next to services you
 trust.
