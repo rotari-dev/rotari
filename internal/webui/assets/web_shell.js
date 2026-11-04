@@ -222,12 +222,18 @@
       if (Object.keys(changes).length) saveInboxState(changes);
       render();
     };
+    const closeInbox = () => {
+      inboxPanel.hidden = true;
+      inboxButton.setAttribute("aria-expanded", "false");
+    };
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !inboxPanel.hidden) {
-        inboxPanel.hidden = true;
-        inboxButton.setAttribute("aria-expanded", "false");
+        closeInbox();
         inboxButton.focus();
       }
+    });
+    document.addEventListener("pointerdown", (event) => {
+      if (!inboxPanel.hidden && !container.contains(event.target)) closeInbox();
     });
     const poll = () =>
       load().catch((error) => {

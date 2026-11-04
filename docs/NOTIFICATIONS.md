@@ -54,8 +54,8 @@ a restart of `rotari web`, and in every other page and browser that uses the
 same master directory. Each basedir keeps its own read and cleared state, so
 opening or clearing the inbox affects only the basedirs it shows: turning on
 another basedir's bell later still shows that basedir's unread entries. Use
-**Clear notifications** to remove the shown entries, or Escape to close the
-inbox. A server started with `--allow-control=false`
+**Clear notifications** to remove the shown entries; click outside the inbox or
+press Escape to close it. A server started with `--allow-control=false`
 shows the inbox but cannot save read or cleared entries; they then last only
 until the page is reloaded.
 
