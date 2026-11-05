@@ -103,10 +103,13 @@ internal/terminal: Session               a shell on a PTY (done)
 The keeper:
 
 - One goroutine always reads the terminal into a ring of recent output, 256 KiB at first, and
-  on to the attached connection. Output therefore never stalls a program, whether or not
-  anyone is watching, and what falls out of the ring is lost.
-- Attaching replays the ring and then streams. A connection too slow to keep up is dropped,
-  and reattaches from the ring.
+  on to the attached reader. With nothing attached, output goes only to the ring, so a program
+  never waits, and what falls out of the ring is lost.
+- An attached reader that falls behind makes the program wait, as a real terminal does, so a
+  burst loses nothing. A first version detached readers whose queue filled, which caught even
+  a healthy reader within a second of `yes`. A reader that takes nothing for 30 seconds counts
+  as gone, so a dead connection cannot hold a program for good.
+- Attaching replays the ring and then streams.
 - After replay, it sends the program a resize, so that a full-screen program such as `vim`
   redraws. The ring can start in the middle of a sequence or character; start it at a line
   boundary where one exists.
@@ -153,6 +156,10 @@ The panel:
 - It follows the theme. On a narrow screen it takes the full width.
 - A browser keeps some keys for itself, such as Ctrl-W, and these cannot reach the shell. The
   documentation says so.
+
+The 30-minute idle limit, the 256 KiB ring, the 1 MiB of waiting output, and the 30-second stall
+limit are provisional. They are meant to become configuration in the end, so nothing should
+depend on their values.
 
 ## Interfaces and documents
 
