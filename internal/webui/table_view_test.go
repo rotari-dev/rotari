@@ -1492,9 +1492,12 @@ func TestTableViewPlotsComputeOnceInBrowser(t *testing.T) {
       putImageData() {},
       drawImage: (source, x, y, width, height) => { if (canvas.classList.contains('tv-spectrogram')) drawn.push([source.width, source.height, width, height]); },
       clearRect() {},
-      fillRect() {},
+      fillRect: (x, y, width, height) => { if (canvas.classList.contains('tv-spectrogram')) rects.push([x, y, width, height]); },
+      fillText: (text) => { (canvas.classList.contains('tv-spectrogram') ? spectrogramLabels : waveLabels).push(text); },
+      measureText: (text) => ({ width: text.length * 6 }),
     };
   };
+  const rects = [], spectrogramLabels = [], waveLabels = [];
   window.AudioContext = class {
     async decodeAudioData() {
       const data = new Float32Array(8000).map((_, index) => Math.sin(index / 5));
@@ -1510,6 +1513,31 @@ func TestTableViewPlotsComputeOnceInBrowser(t *testing.T) {
   await until('first drawing', () => window.spectra === 100 && drawn.length);
   if (last() !== '[100,40,100,40]') fail('first drawing', last());
   const view = window.eval('tabViews').values().next().value;
+
+  // The plots have a grid and a vertical scale, and the time axis labels the
+  // grid's round times where they fall. 8 kHz is the top of 16 kHz audio.
+  plot.height = 200;
+  rects.length = spectrogramLabels.length = waveLabels.length = 0;
+  view.redraw();
+  await until('tall plot', () => last() === '[100,200,100,200]');
+  rects.length = spectrogramLabels.length = waveLabels.length = 0;
+  view.redraw();
+  if (JSON.stringify(spectrogramLabels) !== '["2 kHz","4 kHz","6 kHz","8 kHz"]') fail('frequency scale', spectrogramLabels);
+  if (JSON.stringify(waveLabels) !== '["0.5","0","-0.5"]') fail('amplitude scale', waveLabels);
+  const across = y => rects.some(rect => rect[1] === y && rect[2] === 100 && rect[3] === 1);
+  if (!across(150) || !across(100) || !across(50)) fail('frequency grid', JSON.stringify(rects));
+  const axis = [...view.axis.children];
+  if (JSON.stringify(axis.map(label => label.textContent)) !== '["0.0 s","0.2 s","0.4 s"]') fail('time axis', view.axis.textContent);
+  const down = x => rects.some(rect => rect[0] === x && rect[1] === 0 && rect[2] === 1 && rect[3] === 200);
+  if (!down(0) || !down(40) || !down(80)) fail('time grid', JSON.stringify(rects));
+  if (axis[1].style.left !== '40%') fail('label position', axis[1].style.left);
+  plot.height = 40;
+  view.redraw();
+  await until('short plot', () => last() === '[100,40,100,40]');
+  const spectraBefore = window.spectra;
+  view.redraw();
+  if (window.spectra !== spectraBefore) fail('grid recomputed spectra');
+  window.spectra = 100;
   view.redraw();
   if (window.spectra !== 100 || last() !== '[100,40,100,40]') fail('same size computed again', window.spectra, last());
 
@@ -1550,6 +1578,35 @@ func TestTableViewPlotsComputeOnceInBrowser(t *testing.T) {
 
 // The spectrogram's FFT finds a tone in its bin, and its colour scale runs
 // from viridis' first stop to its last; jsdom has no canvas to draw them.
+func TestPlotTicksAreRound(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not installed")
+	}
+	command := exec.Command("node", "-e", `
+const vm = require('vm');
+const context = vm.createContext({ Math, Float32Array, Float64Array, Uint32Array, Uint8Array, Map, Number, String });
+vm.runInContext(process.argv[1] + '; this.niceTicks = niceTicks; this.formatFrequency = formatFrequency;', context);
+const check = (start, end, count, want) => {
+  const got = context.niceTicks(start, end, count).values.map(value => Number(value.toFixed(6)));
+  if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(start + '..' + end + ': ' + JSON.stringify(got));
+};
+check(0, 8000, 4, [0, 2000, 4000, 6000, 8000]);
+check(0, 22050, 4, [0, 10000, 20000]);
+check(0, 22050, 10, [0, 5000, 10000, 15000, 20000]);
+check(0, 0.5, 5, [0, 0.1, 0.2, 0.3, 0.4, 0.5]);
+check(1.23, 1.27, 4, [1.23, 1.24, 1.25, 1.26, 1.27]);
+check(61, 125, 3, [100]);
+check(5, 5, 4, []);
+check(0, 1, 0, []);
+for (const [hertz, want] of [[500, '500 Hz'], [1000, '1 kHz'], [2500, '2.5 kHz'], [22050, '22.05 kHz']]) {
+  if (context.formatFrequency(hertz) !== want) throw new Error(context.formatFrequency(hertz));
+}
+`, tableViewPanesJS)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("ticks: %v\n%s", err, output)
+	}
+}
+
 func TestSpectrogramFindsATone(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node is not installed")

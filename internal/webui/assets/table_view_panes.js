@@ -779,6 +779,39 @@ const viridisTable = (() => {
   return table;
 })();
 
+// niceTicks is up to about count round values between start and end, a step of
+// 1, 2, or 5 times a power of ten apart, for a plot's grid and labels.
+function niceTicks(start, end, count) {
+  const span = end - start;
+  if (!(span > 0) || count < 1) return { values: [], step: 0 };
+  const raw = span / count;
+  const power = 10 ** Math.floor(Math.log10(raw));
+  const ratio = raw / power;
+  // Decimal fractions are inexact, so a ratio of 1 can read slightly above it.
+  const close = 1 + 1e-9;
+  const step =
+    (ratio <= close
+      ? 1
+      : ratio <= 2 * close
+        ? 2
+        : ratio <= 5 * close
+          ? 5
+          : 10) * power;
+  const values = [];
+  const first = Math.ceil(start / step - 1e-9);
+  for (let index = first; index * step <= end + step * 1e-9; index++) {
+    values.push(index * step);
+  }
+  return { values, step };
+}
+
+// formatFrequency writes a frequency for the spectrogram's scale.
+function formatFrequency(hertz) {
+  return hertz >= 1000
+    ? Number((hertz / 1000).toFixed(2)) + " kHz"
+    : hertz + " Hz";
+}
+
 // decoded keeps decoded audio by URL, a few files at a time.
 const decoded = new Map();
 
@@ -1458,20 +1491,84 @@ class TabView {
     return { width, height };
   }
 
+  // timeTicks is the round times in view, which the axis labels and both plots'
+  // grids share.
+  timeTicks() {
+    const range = this.range();
+    const room = this.axis.clientWidth || 400;
+    return niceTicks(
+      range.start,
+      range.end,
+      Math.max(2, Math.floor(room / 100)),
+    );
+  }
+
   drawAxis() {
     const range = this.range();
-    const ticks = [];
-    for (let index = 0; index <= 4; index++) {
-      const time = range.start + ((range.end - range.start) * index) / 4;
-      ticks.push(
-        el(
+    const span = range.end - range.start || 1;
+    const { values, step } = this.timeTicks();
+    const digits = Math.max(0, -Math.floor(Math.log10(step)));
+    setChildren(
+      this.axis,
+      values.map((time) => {
+        const place = (time - range.start) / span;
+        // A label at an edge stays inside the plot.
+        const shift = place < 0.05 ? 0 : place > 0.95 ? -100 : -50;
+        return el(
           "span",
-          {},
-          time.toFixed(range.end - range.start < 2 ? 2 : 1) + " s",
-        ),
+          {
+            style:
+              "left: " +
+              place * 100 +
+              "%; transform: translateX(" +
+              shift +
+              "%)",
+          },
+          time.toFixed(digits) + " s",
+        );
+      }),
+    );
+  }
+
+  // drawGrid draws lines at the round times in view, and across at each height.
+  drawGrid(context, width, height, color, heights) {
+    const range = this.range();
+    const span = range.end - range.start || 1;
+    const thickness = Math.max(1, Math.round(window.devicePixelRatio || 1));
+    context.fillStyle = color;
+    this.timeTicks().values.forEach((time) => {
+      const x = ((time - range.start) / span) * width;
+      context.fillRect(Math.round(x), 0, thickness, height);
+    });
+    heights.forEach((y) => {
+      context.fillRect(0, Math.round(y), width, thickness);
+    });
+  }
+
+  // drawScale writes a plot's vertical scale at its left, each label inside the
+  // plot, on a backing that keeps it readable over whatever is drawn.
+  drawScale(context, height, labels, color, backing) {
+    const ratio = window.devicePixelRatio || 1;
+    const size = 10 * ratio;
+    const pad = 2 * ratio;
+    context.font = size + "px monospace";
+    context.textBaseline = "middle";
+    context.textAlign = "left";
+    labels.forEach(({ y, text }) => {
+      const middle = Math.min(
+        height - size / 2 - pad,
+        Math.max(size / 2 + pad, y),
       );
-    }
-    setChildren(this.axis, ticks);
+      context.fillStyle = backing;
+      context.fillRect(
+        pad,
+        middle - size / 2 - pad / 2,
+        context.measureText(text).width + 2 * pad,
+        size + pad,
+      );
+      context.fillStyle = color;
+      context.fillText(text, 2 * pad, middle);
+    });
   }
 
   // drawOverlays draws both plots from their cached pixels, with the
@@ -1546,7 +1643,13 @@ class TabView {
     const style = getComputedStyle(document.documentElement);
     const played = style.getPropertyValue("--link").trim() || "#1f63c4";
     const rest = style.getPropertyValue("--muted").trim() || "#6b7887";
+    const line = style.getPropertyValue("--line").trim() || "#d7dee6";
+    const backing =
+      style.getPropertyValue("--surface-sunken").trim() || "#ffffff";
+    const amplitudes = [0.5, 0, -0.5];
+    const amplitudeY = (amplitude) => ((1 - amplitude) / 2) * height;
     context.clearRect(0, 0, width, height);
+    this.drawGrid(context, width, height, line, amplitudes.map(amplitudeY));
     const span = range.end - range.start || 1;
     const cursorX = ((this.cursor() - range.start) / span) * width;
     const { low, high } = cache;
@@ -1563,6 +1666,16 @@ class TabView {
       width,
       height,
       style.getPropertyValue("--s-bad").trim() || "#c42b2b",
+    );
+    this.drawScale(
+      context,
+      height,
+      amplitudes.map((amplitude) => ({
+        y: amplitudeY(amplitude),
+        text: String(amplitude),
+      })),
+      rest,
+      backing,
     );
   }
 
@@ -1644,7 +1757,32 @@ class TabView {
       cache.pixels = pixels;
     }
     context.drawImage(cache.pixels, 0, 0, width, height);
+    const ratio = window.devicePixelRatio || 1;
+    const nyquist = rate / 2;
+    const frequencies = niceTicks(
+      0,
+      nyquist,
+      Math.max(2, Math.floor(height / (40 * ratio))),
+    ).values.filter((hertz) => hertz > 0);
+    const frequencyY = (hertz) => (1 - hertz / nyquist) * height;
+    this.drawGrid(
+      context,
+      width,
+      height,
+      "rgba(255, 255, 255, 0.25)",
+      frequencies.map(frequencyY),
+    );
     this.overlay(context, width, height, "#ffffff");
+    this.drawScale(
+      context,
+      height,
+      frequencies.map((hertz) => ({
+        y: frequencyY(hertz),
+        text: formatFrequency(hertz),
+      })),
+      "#ffffff",
+      "rgba(0, 0, 0, 0.55)",
+    );
   }
 
   dispose() {

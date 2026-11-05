@@ -175,7 +175,8 @@ value per line: object keys become sorted columns, and arrays or scalar values
 go in a `value` column. Blank lines are skipped; malformed records are shown
 as errors. A cell holding the path of an image, audio, video, or PDF file opens
 it in a pane above the table (the table keeps its height, and the page scrolls),
-with a waveform and spectrogram for audio; **Channel** picks one channel of a
+with a waveform and spectrogram for audio, with grids and scales of time, amplitude,
+and frequency; **Channel** picks one channel of a
 multichannel file to draw and to play from both speakers, or **Mix** to draw
 their mean and play the file as it is. Markdown files use the same safe
 renderer as run reports, with a **Show source** toggle (rendering is limited

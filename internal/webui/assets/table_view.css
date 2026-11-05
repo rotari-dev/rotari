@@ -469,18 +469,23 @@ a:hover {
   content: attr(data-top);
   position: absolute;
   top: 2px;
-  left: 6px;
+  right: 6px;
   font-family: var(--font-mono);
   font-size: 10px;
   color: #ffffff;
   pointer-events: none;
 }
 .tv-time-axis {
-  display: flex;
-  justify-content: space-between;
+  flex: none;
+  position: relative;
+  height: 14px;
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--muted);
+}
+.tv-time-axis span {
+  position: absolute;
+  white-space: nowrap;
 }
 .tv-time-axis[hidden] {
   display: none;
