@@ -202,8 +202,8 @@ value of a column, and `(?i)` ignores case. Lookaround and backreferences are no
 available. They see the stored value rather than the formatted one, so a duration
 shown as `1:30` is matched as `90`. All conditions must match.
 
-**Describe** also shows each column's quartiles, a small histogram, and its most
-frequent values. Numbers beyond 10,000,000 in the selected rows leave out quartiles
+**Describe** also shows each column's quartiles and most frequent values, and a
+**Histogram** button that opens its distribution in a pane. Numbers beyond 10,000,000 in the selected rows leave out quartiles
 and histograms, and past 10,000 distinct values a column lists no top values; a filter
 narrows both.
 

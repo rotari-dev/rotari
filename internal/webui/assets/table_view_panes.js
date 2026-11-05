@@ -871,6 +871,10 @@ class TabView {
       this.showText();
       return;
     }
+    if (media.kind === "histogram") {
+      setChildren(this.root, histogramView(media));
+      return;
+    }
     if (media.kind === "notice") {
       this.root.append(
         el("p", { className: "tv-row-notice", role: "status" }, media.message),

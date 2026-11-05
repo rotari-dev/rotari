@@ -90,6 +90,10 @@ The user chose quartiles, top values, and histograms together on 2026-11-05.
   }
   ```
 
+- **The histogram opens in a pane.** The user tried bars in the table on 2026-11-05
+  and found they took too much width and broke its layout. The row holds a
+  **Histogram** button, and the bars open as a tab of the active pane. A tab shows the
+  rows selected when it opened; another selection opens another tab.
 - **Bars are plain elements.** Each is a `div` with an inline height, which the
   page policy (WEB-29) already allows for data-driven sizes. No chart library or
   canvas, so jsdom can test it and a static snapshot needs nothing more.

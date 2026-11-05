@@ -682,11 +682,19 @@ a:hover {
   border-bottom: 2px solid var(--line);
 }
 .tv-histogram {
+  flex: 1 1 120px;
+  min-height: 120px;
   display: flex;
   align-items: flex-end;
   gap: 2px;
-  width: 140px;
-  height: 36px;
+  border-bottom: 1px solid var(--line);
+}
+.tv-histogram-axis {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
 }
 .tv-histogram-bin {
   flex: 1;
@@ -697,7 +705,7 @@ a:hover {
 .tv-histogram-bar {
   flex: 1;
   background: var(--link);
-  border-radius: 1px 1px 0 0;
+  border-radius: 2px 2px 0 0;
 }
 .tv-top-values {
   min-width: 120px;

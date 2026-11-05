@@ -1266,15 +1266,47 @@ func TestTableViewDescribesDistributionsInBrowser(t *testing.T) {
   const cell = (name, column) => lines[names.indexOf(name)].children[column + 1];
   if (cell('25%', 0).textContent !== '1.75' || cell('50%', 0).textContent !== '2.5' || cell('75%', 0).textContent !== '3.25') fail('quartiles', cell('25%', 0).textContent);
   if (cell('50%', 1).textContent !== '–' || cell('histogram', 1).textContent !== '–') fail('text column', cell('50%', 1).textContent);
-  const bins = cell('histogram', 0).querySelectorAll('.tv-histogram-bin');
-  if (bins.length !== 20 || cell('histogram', 0).querySelectorAll('.tv-histogram-bar').length !== 4) fail('bars', bins.length);
-  if (bins[0].title !== '1 – 1.15: 1') fail('bar title', bins[0].title);
-  if (!cell('histogram', 0).querySelector('[role="img"]').getAttribute('aria-label').includes('4 numbers from 1 to 4')) fail('label');
-
   // A value holding markup stays text.
   const top = cell('top', 1);
   if (top.querySelector('[data-x]') || !top.textContent.includes('<b data-x>3') || !top.textContent.includes('other1')) fail('top', top.innerHTML);
   if (cell('top', 0).textContent !== '–') fail('all unique', cell('top', 0).textContent);
+
+  // The table holds a button, and the bars open in a pane.
+  if (cell('histogram', 0).querySelector('.tv-histogram')) fail('bars in the table');
+  const open = () => document.querySelector('#tv-table tr.tv-describe .tv-open-histogram');
+  if (open().textContent !== 'Histogram') fail('button', open().outerHTML);
+  if (!document.getElementById('tv-panes').hidden) fail('opened before a click');
+  open().click();
+  const pane = () => document.querySelector('.tv-pane-active');
+  const bins = () => pane().querySelectorAll('.tv-histogram-bin');
+  if (bins().length !== 20 || pane().querySelectorAll('.tv-histogram-bar').length !== 4) fail('bars', bins().length);
+  if (bins()[0].title !== '1 – 1.15: 1') fail('bar title', bins()[0].title);
+  if (!pane().querySelector('[role="img"]').getAttribute('aria-label').includes('4 numbers from 1 to 4')) fail('label');
+  if (!pane().querySelector('.tv-tab-view strong').textContent.includes('n') || !pane().querySelector('.tv-histogram-axis').textContent.includes('14')) fail('titles', pane().innerHTML);
+  if (document.activeElement.closest('#tv-table')) fail('focus stayed in the table');
+
+  // The same selection shows its tab again.
+  open().click();
+  if (pane().querySelectorAll('.tv-tab').length !== 1) fail('a second tab', pane().querySelectorAll('.tv-tab').length);
+
+  // A new selection counts different rows, so it opens its own tab, and the first
+  // stays as it was. A row move changes neither.
+  const operator = document.querySelector('select[aria-label="Operator"]');
+  operator.value = '>';
+  operator.dispatchEvent(new window.Event('change'));
+  const value = document.querySelector('.tv-filter-value');
+  value.value = '2';
+  value.dispatchEvent(new window.Event('input'));
+  [...document.querySelectorAll('.tv-filter-form button')].find(button => button.textContent === '+ Add').click();
+  await until('filtered describe', () => cells().length === 2 && [...document.querySelectorAll('tr.tv-describe')].some(row => row.textContent.startsWith('count2')));
+  document.querySelector('.tv-open-histogram').click();
+  if (pane().querySelectorAll('.tv-tab').length !== 2) fail('filtered tab', pane().querySelectorAll('.tv-tab').length);
+  if (!pane().querySelector('.tv-media-properties').textContent.includes('2 numbers in the rows selected')) fail('filtered summary', pane().querySelector('.tv-media-properties').textContent);
+  document.body.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+  await wait(200);
+  if (!pane().querySelector('.tv-histogram')) fail('a row move replaced the histogram');
+  if (document.body.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true })) !== true) fail('Space taken without a player');
+
 `)
 }
 

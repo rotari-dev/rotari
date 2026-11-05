@@ -1503,47 +1503,96 @@ function mediaCell(row, index) {
   );
 }
 
-// histogramCell draws a column's numbers as bars, each with its range and count.
+// histogramCell is a button that opens a column's histogram in a pane: bars in
+// the table would widen every column.
 function histogramCell(histogram, column) {
   if (!histogram) return "–";
+  return el(
+    "button",
+    {
+      type: "button",
+      className: "tv-link-button tv-open-histogram",
+      title: "Open the histogram of " + column.name + " in the active pane",
+      onclick: () => {
+        // Each selection of rows has its own tab, since it counts different rows.
+        const selection = JSON.stringify(view.filters);
+        openMedia({
+          kind: "histogram",
+          ref: column.name,
+          path: column.name,
+          source: sourceQuery.toString() + "#" + selection,
+          histogram,
+          column,
+          filtered: view.filters.length > 0,
+        });
+        releaseTableFocus();
+      },
+    },
+    "Histogram",
+  );
+}
+
+// histogramView draws a histogram for a pane, each bar with its range and count.
+function histogramView(media) {
+  const { histogram, column } = media;
   const counts = histogram.counts;
   const tallest = Math.max(...counts);
   const width = (histogram.max - histogram.min) / counts.length;
   const value = (number) => formatValue(number, column);
   const total = counts.reduce((sum, count) => sum + count, 0);
-  return el(
-    "div",
-    {
-      className: "tv-histogram",
-      role: "img",
-      "aria-label":
-        formatCount(total) +
-        " numbers from " +
-        value(histogram.min) +
-        " to " +
-        value(histogram.max),
-    },
-    counts.map((count, index) =>
-      el(
-        "span",
-        {
-          className: "tv-histogram-bin",
-          title:
-            value(histogram.min + index * width) +
-            " – " +
-            value(histogram.min + (index + 1) * width) +
-            ": " +
-            formatCount(count),
-        },
-        count
-          ? el("span", {
-              className: "tv-histogram-bar",
-              style: "height: " + (count / tallest) * 100 + "%",
-            })
-          : null,
+  const summary =
+    formatCount(total) +
+    " numbers" +
+    (media.filtered ? " in the rows selected when opened" : "") +
+    "; tallest bar " +
+    formatCount(tallest);
+  return [
+    el(
+      "div",
+      { className: "tv-tab-title" },
+      el("strong", {}, column.name),
+      el("span", { className: "tv-media-properties" }, summary),
+    ),
+    el(
+      "div",
+      {
+        className: "tv-histogram",
+        role: "img",
+        "aria-label":
+          formatCount(total) +
+          " numbers from " +
+          value(histogram.min) +
+          " to " +
+          value(histogram.max),
+      },
+      counts.map((count, index) =>
+        el(
+          "span",
+          {
+            className: "tv-histogram-bin",
+            title:
+              value(histogram.min + index * width) +
+              " – " +
+              value(histogram.min + (index + 1) * width) +
+              ": " +
+              formatCount(count),
+          },
+          count
+            ? el("span", {
+                className: "tv-histogram-bar",
+                style: "height: " + (count / tallest) * 100 + "%",
+              })
+            : null,
+        ),
       ),
     ),
-  );
+    el(
+      "div",
+      { className: "tv-histogram-axis" },
+      el("span", {}, value(histogram.min)),
+      el("span", {}, value(histogram.max)),
+    ),
+  ];
 }
 
 // topValuesCell lists a column's most frequent values, as text.
