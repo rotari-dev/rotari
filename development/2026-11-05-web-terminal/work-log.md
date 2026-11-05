@@ -268,3 +268,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The user said OK. `go test ./...` passed all 55 packages, `go vet ./...` and `gofmt` found nothing, and `-race` passed on `internal/terminal` and the terminal tests of `internal/webui` and `conformance/05-web`. Ending the shown shell first failed `TestTerminalPanel`. Stand-ins replaced xterm.js in that test, and the menu's look was not checked here.
 
 **Remaining:** None.
+
+## Marks on background tabs
+
+**Commits:** 2026-11-06 00:26:06 `23981e3e`.
+
+**Change:** `ShellInfo.UnseenOutput` in `internal/terminal`, `unseen_output` in the shell list, marks on tabs and the project list in `web_shell.js` and `web_shell.css`, and a note for a shell ending out of sight. Contract WEB-34, `docs/WEB.md`, and the plan's [marks](plan.md#marks-on-background-tabs) section.
+
+**Reason:** Suggested to the user, who chose it after the tab menu.
+
+**Plan impact:** The server decides what is unseen, since only it knows what reached a connection. Exit statuses of ended shells are not shown, because the server does not keep them.
+
+**Validation:** The user said OK, and in trying it found the bug in the next entry. `tsc`, `go vet ./...`, and `gofmt` found nothing. In `go test ./...`, 54 of 55 packages passed; `TestSSHJobReadsAsRunning`, an Open item in [ISSUES.md](../ISSUES.md), failed for the second run in a row. `-race` passed on `internal/terminal` and the terminal tests of `internal/webui` and `conformance/05-web`.
+
+**Remaining:** None.
