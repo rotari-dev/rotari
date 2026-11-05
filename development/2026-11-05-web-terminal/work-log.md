@@ -254,3 +254,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The user said OK. `tsc` and `gofmt` found nothing and the terminal tests passed. In `go test ./...`, 54 of 55 packages passed; `TestSSHJobReadsAsRunning`, an Open item in [ISSUES.md](../ISSUES.md), failed once and passed five repetitions alone. The handler was checked against a stand-in, and the browser test only checks that the addon loads.
 
 **Remaining:** None.
+
+## The tab menu
+
+**Commits:** 2026-11-06 00:16:04 `cb050672`.
+
+**Change:** `Keeper.Rename`, `PATCH /_terminal/shells/ID`, and a menu on each tab in `web_shell.js` and `web_shell.css`. Contract WEB-34, `docs/WEB.md`, and the plan's [tab menu](plan.md#the-tab-menu) section.
+
+**Reason:** The user asked for renaming and closing tabs from a right-click when first listing terminal features.
+
+**Plan impact:** Names live with the shell on the server. The name is asked for with the browser's `prompt`, the simple choice for now.
+
+**Validation:** The user said OK. `go test ./...` passed all 55 packages, `go vet ./...` and `gofmt` found nothing, and `-race` passed on `internal/terminal` and the terminal tests of `internal/webui` and `conformance/05-web`. Ending the shown shell first failed `TestTerminalPanel`. Stand-ins replaced xterm.js in that test, and the menu's look was not checked here.
+
+**Remaining:** None.
