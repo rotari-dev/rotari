@@ -226,3 +226,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The user answered "k" after being given the build. `go test ./...` passed all 55 packages, and `tsc` and `gofmt` found nothing. `-race` was not run; the change is JavaScript. Stand-ins replaced xterm.js in the test, and the browser test does not cover this.
 
 **Remaining:** None.
+
+## Project variables in the shell
+
+**Commits:** 2026-11-05 23:57:51 `235bdae4`.
+
+**Change:** `StartOptions.Env` in `internal/terminal`, set by `internal/webui/terminal.go`; `internal/state` exports the two variable names. Contract WEB-34, `docs/WEB.md`, and the plan's [Small improvements](plan.md#small-improvements) section. Also fills in the text size entry's commit, which a failed command had left blank.
+
+**Reason:** The fourth small improvement, so that `rotari` commands in a project's shell need no `-p`.
+
+**Plan impact:** Shells follow their project, not their directory, and `-p` reaches another project.
+
+**Validation:** The user said OK. `go test ./...` passed all 55 packages, `go vet ./...` and `gofmt` found nothing, and `-race` passed on `internal/terminal` and the terminal tests of `internal/webui` and `conformance/05-web`. Not setting the variables failed `TestTerminalShellsFollowTheirProject`.
+
+**Remaining:** None.
