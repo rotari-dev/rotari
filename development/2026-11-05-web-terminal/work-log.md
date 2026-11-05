@@ -212,3 +212,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The user tried the build and said OK. `go test ./...` passed all 55 packages, and `tsc`, `go vet` on the changed packages, and `gofmt` found nothing. `-race` was not run; the change is CSS and JavaScript. The new check in `TestTerminalPanelInBrowser` was skipped here for lack of Chrome.
 
 **Remaining:** That browser test on CI.
+
+## Change the text size
+
+**Commits:** .
+
+**Change:** **A-** and **A+** in `web_shell.js`, contract WEB-33, `docs/WEB.md`, and the plan's [Small improvements](plan.md#small-improvements) section.
+
+**Reason:** The third small improvement.
+
+**Plan impact:** None beyond the size being kept per browser.
+
+**Validation:** The user answered "k" after being given the build. `go test ./...` passed all 55 packages, and `tsc` and `gofmt` found nothing. `-race` was not run; the change is JavaScript. Stand-ins replaced xterm.js in the test, and the browser test does not cover this.
+
+**Remaining:** None.
