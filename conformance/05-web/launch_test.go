@@ -382,8 +382,9 @@ func TestWebLaunchRequiresOptInAndToken(t *testing.T) {
 			t.Fatalf("logout cookies = %v, want both sessions", cookies)
 		}
 		for _, cookie := range cookies {
-			if !cookie.Secure || cookie.MaxAge != -1 || cookie.Value != "" {
-				t.Fatalf("unsafe logout cookie: %+v", cookie)
+			// Over plain HTTP, as these cookies were set.
+			if cookie.Secure || cookie.MaxAge != -1 || cookie.Value != "" {
+				t.Fatalf("logout cookie: %+v", cookie)
 			}
 		}
 	})
@@ -409,11 +410,9 @@ func TestWebLaunchRequiresOptInAndToken(t *testing.T) {
 		response.Body.Close()
 		cookies := response.Cookies()
 		if response.StatusCode != http.StatusSeeOther || len(cookies) != 1 ||
-			cookies[0].Name != "rotari_web_session" || !cookies[0].Secure {
-			t.Fatalf("loopback login = %d, cookies = %v", response.StatusCode, cookies)
+			cookies[0].Name != "rotari_web_session" || cookies[0].Secure {
+			t.Fatalf("loopback login = %d, cookies = %v, want a cookie without Secure, which Safari would discard", response.StatusCode, cookies)
 		}
-		// Browsers send the Secure cookie to http://127.0.0.1; Go's cookie jar
-		// does not, so attach it by hand.
 		session, err := http.NewRequest(http.MethodGet, base+"/api/launchers", nil)
 		if err != nil {
 			t.Fatal(err)

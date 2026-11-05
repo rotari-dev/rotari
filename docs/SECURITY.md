@@ -46,6 +46,34 @@ return it from its read API. This does not encrypt the connection: a
 replacement URL is sent to the Web server when saved. Use HTTPS through a
 trusted reverse proxy whenever the browser-to-server network is not trusted.
 
+### Why the session cookie has no `Secure` on direct localhost
+
+The session cookie carries `Secure` over HTTPS and through an HTTPS proxy, but not on a
+plain HTTP connection directly to `localhost`. This is deliberate, and is often mistaken
+for a weakness, so here is the reasoning.
+
+`Secure` is an instruction to the browser: use this cookie only over HTTPS. It exists to keep
+a cookie from being read in transit, and traffic to `localhost` does not leave the machine.
+It says nothing about who may connect. Rotari itself decides that on every request: a browser
+session is accepted only over HTTPS or a direct loopback connection, whatever the cookie says.
+
+Browsers differ here. Chrome and Firefox treat `localhost` as secure and accept a `Secure`
+cookie over plain HTTP. Safari does not: it discards the cookie, so correct credentials return
+to the sign-in form with no error, and we know of no Safari setting that changes this. Omitting `Secure` on
+direct loopback makes Safari work, and leaves those browsers' behavior as it already was.
+
+What this does not change:
+
+- Another machine opening the server over plain HTTP is still refused.
+- Another user of a shared host who connects to the server's loopback port still needs the
+  token.
+
+What to keep in mind: a browser's cookies do not distinguish ports, so a cookie for `localhost`
+also goes to other services the same browser opens on `localhost`, as it already does in
+Chrome and Firefox. With SSH forwarding, `localhost` means the machine running the browser, not
+the server, so other users of the server are out of reach unless you forward a port of theirs
+and open it. Do not open a service you do not trust on the same host name, or use HTTPS.
+
 ## Script on Web UI pages
 
 Live Web UI and Table viewer pages send a `Content-Security-Policy` that runs only

@@ -7,13 +7,17 @@ import (
 	"time"
 )
 
-func TestWebLogoutCookiesAlwaysSecure(t *testing.T) {
+// Signing out must clear the cookies signing in set, so they carry Secure in the
+// same cases: a browser that refuses a Secure cookie over HTTP refuses to clear one
+// that way too.
+func TestWebLogoutCookiesMatchTheTransport(t *testing.T) {
 	for _, test := range []struct {
 		name, target, origin, forwardedProto string
+		secure                               bool
 	}{
-		{"HTTP", "http://localhost", "http://localhost", ""},
-		{"TLS", "https://localhost", "https://localhost", ""},
-		{"TLS proxy", "http://localhost", "https://localhost", "https"},
+		{"HTTP", "http://localhost", "http://localhost", "", false},
+		{"TLS", "https://localhost", "https://localhost", "", true},
+		{"TLS proxy", "http://localhost", "https://localhost", "https", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			handler := WithAuthToken(http.NotFoundHandler(), "secret")
@@ -34,7 +38,7 @@ func TestWebLogoutCookiesAlwaysSecure(t *testing.T) {
 			for _, cookie := range cookies {
 				path, ok := paths[cookie.Name]
 				if !ok || cookie.Path != path || cookie.Value != "" || cookie.MaxAge != -1 ||
-					!cookie.Expires.Before(time.Now()) || !cookie.HttpOnly || !cookie.Secure ||
+					!cookie.Expires.Before(time.Now()) || !cookie.HttpOnly || cookie.Secure != test.secure ||
 					cookie.SameSite != http.SameSiteStrictMode {
 					t.Fatalf("unsafe logout cookie: %+v", cookie)
 				}

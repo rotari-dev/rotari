@@ -2378,14 +2378,30 @@ func TestWebLoginFormCreatesAndRevokesSession(t *testing.T) {
 	}
 }
 
-func TestWebSessionCookieAlwaysUsesSecureAttribute(t *testing.T) {
-	recorder := httptest.NewRecorder()
-	if !new(webSessions).issue(recorder) {
-		t.Fatal("session cookie was not created")
-	}
-	cookies := recorder.Result().Cookies()
-	if len(cookies) != 1 || !cookies[0].Secure {
-		t.Fatalf("session cookie = %v, want Secure", cookies)
+// The session cookie has Secure wherever it can cross a network. Over plain HTTP,
+// which only a direct loopback connection may sign in on, Safari would discard a
+// Secure cookie and leave its user at the login form. See docs/SECURITY.md.
+func TestWebSessionCookieIsSecureExceptOnDirectLoopback(t *testing.T) {
+	for _, test := range []struct {
+		name, target, forwardedProto string
+		secure                       bool
+	}{
+		{"direct loopback HTTP", "http://localhost/", "", false},
+		{"TLS", "https://localhost/", "", true},
+		{"TLS proxy", "http://localhost/", "https", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, test.target, nil)
+			request.Header.Set("X-Forwarded-Proto", test.forwardedProto)
+			recorder := httptest.NewRecorder()
+			if !new(webSessions).issue(recorder, request) {
+				t.Fatal("session cookie was not created")
+			}
+			cookies := recorder.Result().Cookies()
+			if len(cookies) != 1 || cookies[0].Secure != test.secure || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode {
+				t.Fatalf("session cookie = %+v, want Secure %t, HttpOnly, and SameSite=Strict", cookies, test.secure)
+			}
+		})
 	}
 }
 
@@ -2448,7 +2464,7 @@ func TestWebLoginOverHTTPOnlyOnDirectLoopback(t *testing.T) {
 			}
 			cookies := loggedIn.Result().Cookies()
 			if page.Code != http.StatusOK || loggedIn.Code != http.StatusSeeOther || len(cookies) != 1 ||
-				!cookies[0].Secure || cookies[0].Name != webSessionCookie {
+				cookies[0].Secure || cookies[0].Name != webSessionCookie {
 				t.Fatalf("login page = %d, POST = %d %s, cookies = %v", page.Code, loggedIn.Code, loggedIn.Body.String(), cookies)
 			}
 			session := request(http.MethodGet, "/api/state", "", nil)

@@ -376,8 +376,9 @@ and [`TestWebListsBasedirsRegisteredAfterStart`](../conformance/05-web/basedir_r
   a direct loopback connection: a loopback client addressing a loopback
   `Host` (`localhost`, `127.0.0.1`, `[::1]`) with no `Forwarded`,
   `X-Forwarded-*`, or `X-Real-Ip` header, whose plain HTTP never leaves the
-  host. The session cookie always has the `Secure` attribute; browsers treat
-  `http://localhost` and loopback addresses as secure contexts. API token authentication
+  host. The session cookie has the `Secure` attribute, except on that direct loopback
+  connection, where Safari would discard it; see
+  [why](../docs/SECURITY.md#why-the-session-cookie-has-no-secure-on-direct-localhost). API token authentication
   does not encrypt HTTP traffic and must only be used over a trusted network
   or HTTPS. The notification
   settings form masks a saved webhook URL in its input and never returns that
@@ -839,24 +840,24 @@ requires the Web token, on loopback listeners too: without
 prints it on stderr; it always prints the sign-in user name and never prints a
 configured token. Browser users sign in through the login form over HTTPS, or
 over plain HTTP on a direct loopback connection (see the authentication
-bullet above), and receive a revocable 12-hour `Secure` session cookie; other
+bullet above), and receive a revocable 12-hour session cookie, `Secure` except on direct loopback; other
 plain-HTTP login and session use are refused. API callers continue to use bearer or `X-Rotari-Token` credentials.
 Session-cookie mutations require a same-origin request, and signing out
-revokes the session and expires both Web and launch cookies with `Secure`
-set, regardless of the logout request's transport. Without it,
+revokes the session and expires both Web and launch cookies, with `Secure` set as
+it was when they were issued. Without it,
 `GET /api/launchers` reports launching unavailable with the server's reason
 and enabling hint, and the launch API answers 403 with the same text. Covered
 by `TestWebLaunchRequiresOptInAndToken` in
 [conformance/05-web/launch_test.go](../conformance/05-web/launch_test.go),
 and the login-cookie requirements by
 `TestWebLoginFormCreatesAndRevokesSession`,
-`TestWebSessionCookieAlwaysUsesSecureAttribute`,
+`TestWebSessionCookieIsSecureExceptOnDirectLoopback`, `TestWebLogoutCookiesMatchTheTransport`,
 `TestWebLoginOverHTTPOnlyOnDirectLoopback`, and
 `TestWebLoopbackSessionRejectedFromRemoteClient` in
 [webui_test.go](../internal/webui/webui_test.go), implemented in
 [auth.go](../internal/webui/auth.go).
 Logout cookie attributes across HTTP, TLS, and TLS proxies are checked by
-`TestWebLogoutCookiesAlwaysSecure` in
+`TestWebLogoutCookiesMatchTheTransport` in
 [launch_auth_test.go](../internal/webui/launch_auth_test.go).
 
 **WEB-14** While launching is enabled, a request whose `Host` is not

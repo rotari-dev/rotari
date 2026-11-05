@@ -26,7 +26,7 @@ type webSessions struct {
 	expiries map[string]time.Time
 }
 
-func (sessions *webSessions) issue(writer http.ResponseWriter) bool {
+func (sessions *webSessions) issue(writer http.ResponseWriter, request *http.Request) bool {
 	var id [32]byte
 	if _, err := rand.Read(id[:]); err != nil {
 		http.Error(writer, "could not create login session", http.StatusInternalServerError)
@@ -55,7 +55,7 @@ func (sessions *webSessions) issue(writer http.ResponseWriter) bool {
 		Expires:  expires,
 		MaxAge:   int(webSessionLifetime.Seconds()),
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   isSecureAuthRequest(request),
 		SameSite: http.SameSiteStrictMode,
 	})
 	return true
@@ -176,7 +176,7 @@ func handleWebLogin(writer http.ResponseWriter, request *http.Request, token str
 			serveWebLoginPageStatus(writer, nextPath, "Sign-in failed. Check your user name and token.", http.StatusUnauthorized)
 			return
 		}
-		if !sessions.issue(writer) {
+		if !sessions.issue(writer, request) {
 			return
 		}
 		http.Redirect(writer, request, nextPath, http.StatusSeeOther)
@@ -208,7 +208,7 @@ func handleWebLogout(writer http.ResponseWriter, request *http.Request, sessions
 		Expires:  time.Unix(1, 0),
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   isSecureAuthRequest(request),
 		SameSite: http.SameSiteStrictMode,
 	})
 	http.SetCookie(writer, &http.Cookie{
@@ -218,7 +218,7 @@ func handleWebLogout(writer http.ResponseWriter, request *http.Request, sessions
 		Expires:  time.Unix(1, 0),
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   isSecureAuthRequest(request),
 		SameSite: http.SameSiteStrictMode,
 	})
 	http.Redirect(writer, request, webLoginPath, http.StatusSeeOther)
@@ -260,9 +260,8 @@ func allowsBrowserSession(request *http.Request) bool {
 var proxyHeaders = []string{"Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "X-Real-Ip"}
 
 // isDirectLoopbackRequest reports a request from this host, addressed to a
-// loopback name, with no proxy headers. Browsers treat http://localhost and
-// http://127.0.0.1 as secure contexts, so the Secure session cookie still
-// works there.
+// loopback name, with no proxy headers. The session cookie goes without Secure
+// there, since Safari would discard it; docs/SECURITY.md has the reasoning.
 func isDirectLoopbackRequest(request *http.Request) bool {
 	for _, header := range proxyHeaders {
 		if request.Header.Get(header) != "" {

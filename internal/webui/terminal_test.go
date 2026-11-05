@@ -298,8 +298,6 @@ func TestTerminalHandshakeIsGuarded(t *testing.T) {
 }
 
 // A browser signing in reaches the shell by its session, and signing out ends it.
-// The session cookie is Secure, which a browser sends to localhost and Go's cookie
-// jar does not, so this sends it by hand.
 func TestTerminalSessionAndSignOut(t *testing.T) {
 	server, _ := terminalServer(t, "/bin/sh")
 	browser := &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
