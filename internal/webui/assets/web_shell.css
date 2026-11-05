@@ -729,12 +729,24 @@ html.terminal-open main {
 html.terminal-open .output-modal {
   bottom: var(--terminal-height);
 }
+/* A dialog fits the room left above the panel, so none of it is out of reach. */
+html.terminal-open .output-panel {
+  height: min(760px, 100%);
+  max-height: 100%;
+}
+html.terminal-open .output-panel.compact {
+  height: auto;
+}
+html.terminal-open .artifact-view {
+  max-height: 100%;
+}
 #terminal-panel {
   position: fixed;
   right: 0;
   bottom: 0;
   left: 0;
-  z-index: 15;
+  /* Over the page, and under the top bar, whose Settings and Inbox open over it. */
+  z-index: 5;
   display: flex;
   flex-direction: column;
   height: var(--terminal-height);

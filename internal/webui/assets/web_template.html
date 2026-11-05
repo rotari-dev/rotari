@@ -156,6 +156,13 @@
                 >
                   Copy last 100 lines</button
                 ><button
+                  id="send-tail"
+                  data-action="sendLogTail"
+                  title="Send the last 100 lines to the terminal, as pasted text"
+                  hidden
+                >
+                  Send last 100 lines</button
+                ><button
                   id="report-redact-toggle"
                   data-action="toggleReportRedaction"
                   aria-pressed="true"
@@ -238,6 +245,19 @@
                     d="M9 9H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-4"
                   ></path>
                   <rect x="9" y="4" width="11" height="11" rx="1"></rect>
+                </svg>
+              </button>
+              <button
+                id="send-modal"
+                class="command-guide-copy modal-copy modal-send"
+                data-action="sendModalOutput"
+                title="Send to the terminal, without running it"
+                aria-label="Send to the terminal, without running it"
+                hidden
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 12h15"></path>
+                  <path d="m13 6 6 6-6 6"></path>
                 </svg>
               </button>
             </div>

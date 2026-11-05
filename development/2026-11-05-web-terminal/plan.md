@@ -223,8 +223,10 @@ bracketed paste a line break would run what came before it. Text with control ch
 since it can come from values in the state.
 
 The user then asked for it beside the other copy buttons too: IDs, names, and paths go in as one word,
-quoted if needed, so they can finish a half-typed command, and a job's command goes in as it is. Logs have
-several lines and keep only **Copy**. A note at the page's corner says what happened, since pages redraw
+quoted if needed, so they can finish a half-typed command, and a job's command goes in as it is. After
+trying it, they asked for logs too. Several lines go in only with bracketed paste on, because elsewhere each
+line would run. xterm.js does not strip escapes from a bracketed paste, so all control characters but line
+breaks and tabs are removed first; otherwise a log holding the paste's end sequence could run what follows. A note at the page's corner says what happened, since pages redraw
 their buttons every couple of seconds.
 
 ## Small improvements

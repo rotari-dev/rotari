@@ -256,6 +256,24 @@ async function copyModalOutput(button) {
     alert(error.message);
   }
 }
+// sendModalOutput sends what the dialog's copy button copies. A path is one word of a
+// command, and anything else is pasted text.
+async function sendModalOutput() {
+  const view = document.getElementById("output-modal").dataset.view;
+  try {
+    const text = view === "log" ? await fetchSelectedLog(0) : selectedOutput;
+    await window.sendToTerminalAndSay(text, view === "path" ? { word: true } : { pasted: true });
+  } catch (error) {
+    alert(error.message);
+  }
+}
+async function sendLogTail() {
+  try {
+    await window.sendToTerminalAndSay(await fetchSelectedLog(100), { pasted: true });
+  } catch (error) {
+    alert(error.message);
+  }
+}
 async function copyLogTail(button) {
   try {
     await copyText(await fetchSelectedLog(100));
@@ -273,6 +291,8 @@ function updateModalActions() {
   copyTail.hidden = view !== "log";
   copyTail.dataset.copyTitle = "Copy last 100 lines";
   copyTail.dataset.copyIcon ||= copyTail.innerHTML;
+  const offersTerminal = Boolean(document.getElementById("terminal-button"));
+  document.getElementById("send-tail").hidden = view !== "log" || !offersTerminal;
   document.getElementById("report-note").hidden = view !== "ai";
   const redactToggle = document.getElementById("report-redact-toggle");
   redactToggle.hidden = view !== "ai";
@@ -288,6 +308,7 @@ function updateModalActions() {
     view === "notification-config" ||
     view === "notification-config-generate" ||
     modal.dataset.editing === "true";
+  document.getElementById("send-modal").hidden = copyButton.hidden || !offersTerminal;
   document.getElementById("notification-config-save").hidden =
     view !== "notification-config" ||
     document.getElementById("notification-config-editor").dataset.editable !==

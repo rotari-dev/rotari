@@ -569,12 +569,18 @@ section {
   top: 8px;
   right: 8px;
 }
+.output-box .modal-send {
+  right: 48px;
+}
+.output-box:has(.modal-send:not([hidden])) .modal-copy-status {
+  right: 88px;
+}
 .output-panel .log {
   height: 100%;
   max-height: none;
   margin: 0;
   padding-top: 14px;
-  padding-right: 52px;
+  padding-right: 92px;
 }
 .output-panel.compact .log {
   height: auto;
@@ -1714,8 +1720,9 @@ pre,
 .artifact-view {
   overflow: auto;
   max-height: 75vh;
-  /* Room on the right for the modal's copy button. */
-  padding: 0.5rem 52px 0.5rem 0.5rem;
+  overscroll-behavior: contain;
+  /* Room on the right for the modal's copy and send buttons. */
+  padding: 0.5rem 92px 0.5rem 0.5rem;
 }
 .artifact-view .artifact-open {
   background: none;

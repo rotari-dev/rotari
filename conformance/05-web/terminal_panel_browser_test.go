@@ -105,6 +105,19 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await typeLine('');
   await until('the sent command to run', screenHas('sent-2'));
   await collect();
+
+  // A dialog fits above the panel, whatever its usual height.
+  const fits = await page.evaluate('(() => {' +
+    'window.showPath("/p");' +
+    'const dialog = document.querySelector(".output-panel");' +
+    'dialog.classList.remove("compact");' +
+    'const box = dialog.getBoundingClientRect();' +
+    'const terminal = document.getElementById("terminal-panel").getBoundingClientRect();' +
+    'window.closeOutputModal();' +
+    'return box.top >= 0 && box.bottom <= terminal.top;' +
+    '})()');
+  if (!fits) throw new Error('a dialog does not fit above the panel');
+  await collect();
 }).catch((error) => { failure = error.stack || String(error); });
 await close();
 console.log(JSON.stringify({ failure, violations: [...violations] }));

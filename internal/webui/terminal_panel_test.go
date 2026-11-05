@@ -103,6 +103,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
       window.Terminal = class {
         rows = 24; cols = 80;
         buffer = { active: { type: 'normal' } };
+        modes = { bracketedPasteMode: false };
         options = {};
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
         loadAddon() {} open() {} focus() {}
@@ -366,6 +367,10 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   const closedTall = load(process.argv[1], { height: '400' });
   assert.equal(closedTall.document.documentElement.style.getPropertyValue('--terminal-height'), '', 'a closed panel took room');
   assert.match(webShellCSS, /html\.terminal-open \{\s*--terminal-height: var\(--terminal-saved-height, 320px\);/);
+  // The top bar's menus open over the panel, and a dialog fits above it.
+  const stacking = (selector) => Number(new RegExp(selector + ' \\{[^}]*?z-index: (\\d+)').exec(webShellCSS)[1]);
+  assert.ok(stacking('#terminal-panel') < stacking('\\.content > \\.topbar'), 'the panel covers the top bar');
+  assert.match(webShellCSS, /html\.terminal-open \.output-panel \{\s*height: min\(760px, 100%\);\s*max-height: 100%;/);
 
   // The handle moves by pointer and by keyboard, and the result is kept.
   const resizer = tall.document.querySelector('.terminal-resizer');
@@ -577,11 +582,49 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   await wait(20);
   assert.equal(jobs.pasted.at(-1), "sh -c 'echo hi'");
 
+  // A dialog's path goes in as a word, and its log as pasted text, only where the program
+  // takes it as pasted text, with nothing left that a terminal would act on.
+  const dialogSend = sending.document.getElementById('send-modal');
+  const tailSend = sending.document.getElementById('send-tail');
+  sending.window.showPath('/job path/j1');
+  assert.equal(dialogSend.hidden, false, 'the path has no send button');
+  assert.equal(tailSend.hidden, true);
+  dialogSend.click();
+  await wait(20);
+  assert.equal(sending.pasted.at(-1), "'/job path/j1'");
+  sending.window.fetchSelectedLog = async (tail) => (tail ? 'tail\r\nline\n' : '\u001b[31mred\u001b[0m\r\nend\u001b[201~\u001b]0;t\u0007\u0003\n');
+  sending.document.getElementById('output-modal').dataset.view = 'log';
+  sending.window.updateModalActions();
+  assert.equal(tailSend.hidden, false, 'a log has no send button for its tail');
+  const typedByNow = sending.pasted.length;
+  dialogSend.click();
+  await wait(20);
+  assert.equal(sending.pasted.length, typedByNow, 'several lines reached a program that would run them');
+  assert.match(sending.document.querySelector('.terminal-send-note').textContent, /would run each line/);
+  sending.terminals[0].modes.bracketedPasteMode = true;
+  dialogSend.click();
+  await wait(20);
+  assert.equal(sending.pasted.at(-1), 'red\nend', 'an escape or colour survived');
+  tailSend.click();
+  await wait(20);
+  assert.equal(sending.pasted.at(-1), 'tail\nline');
+  assert.match(await sending.window.sendToTerminal('x\n'.repeat(200000), { pasted: true }), /too long/);
+  sending.terminals[0].modes.bracketedPasteMode = false;
+  // One line after cleaning needs nothing from the program.
+  assert.equal(await sending.window.sendToTerminal('\u001b[1mone\u001b[0m\n', { pasted: true }), null);
+  assert.equal(sending.pasted.at(-1), 'one');
+  sending.window.closeOutputModal?.();
+  // A dialog on a page with no terminal has only its copy buttons.
+  copyOnly.window.showPath('/p');
+  assert.equal(copyOnly.document.getElementById('send-modal').hidden, true);
+  assert.equal(copyOnly.document.getElementById('send-tail').hidden, true);
+
   // Control characters, a line break among them, are refused.
   const typedBefore = sending.pasted.length;
-  for (const bad of ['a\nb', 'a\u001b[2Jb', 'a\u0003', 'a\u009bb', '']) {
+  for (const bad of ['a\nb', 'a\u001b[2Jb', 'a\u0003', 'a\u009bb']) {
     assert.match(await sending.window.sendToTerminal(bad), /control characters/);
   }
+  assert.match(await sending.window.sendToTerminal(''), /nothing to send/);
   assert.equal(sending.pasted.length, typedBefore);
 
   // No shell for the project: a message, and neither a shell nor another project's.

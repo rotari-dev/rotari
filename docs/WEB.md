@@ -121,7 +121,9 @@ running it: press Enter in the terminal to run it. A suggested command, such as 
 goes in as one line with its comments and alternatives left out. A value such as a run ID or a path
 goes in as one word, quoted if it needs to be, so it can finish a command you have started typing. It
 goes to whatever is running there, such as `vim`. If the project has no shell, the button says so and
-starts none. Logs and other text of several lines have only **Copy**.
+starts none. A log or other text of several lines goes in as pasted text, without colors and up to
+256 KiB, and only where the program takes it as such, such as a recent `bash` or `zsh` prompt or an
+editor; elsewhere each line would run, so the button says so and sends nothing.
 
 **Clear** empties the tab's screen and scrollback, and what would be shown again after following a
 link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing

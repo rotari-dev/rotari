@@ -15,6 +15,8 @@
     controlSelectedRunJobs: (_, args) => controlSelectedRunJobs(...args),
     copyCommandGuide: (el) => copyCommandGuide(el.closest("pre"), el),
     sendToTerminal: (el) => sendButtonPressed(el),
+    sendModalOutput: () => sendModalOutput(),
+    sendLogTail: () => sendLogTail(),
     copyIdentityValue: (el) => copyIdentityValue(el),
     copyJobsValue: (el) => copyJobsValue(el),
     copyLogTail: (el) => copyLogTail(el),
@@ -546,11 +548,21 @@
     pendingSend = null;
     resolve(problem);
   };
+  // Several lines are safe only where the program takes them as pasted text; anywhere
+  // else, each line break would run what came before it. Only the program knows, and it
+  // says so by turning on bracketed paste.
+  const pasteProblem = (text) =>
+    text.includes("\n") && !term.modes.bracketedPasteMode
+      ? "What is running in this tab would run each line, so nothing was sent."
+      : null;
   const deliverSend = () => {
     if (!pendingSend) return;
-    term.paste(pendingSend.text);
-    term.focus();
-    settleSend(null);
+    const problem = pasteProblem(pendingSend.text);
+    if (!problem) {
+      term.paste(pendingSend.text);
+      term.focus();
+    }
+    settleSend(problem);
   };
   // begin shows what this browser tab last showed for this project, or the project's
   // first shell. It starts one only if someone asked.
@@ -789,14 +801,30 @@
   addEventListener("resize", () => {
     if (savedHeight()) applyHeight(savedHeight());
   });
+  // pastableText is text with only its lines and tabs left. A log's colours mean nothing
+  // at a prompt, and an escape could end a bracketed paste and run what followed it.
+  const pastableText = (text) =>
+    text
+      .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?/g, "")
+      .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+      .replace(/\r\n?/g, "\n")
+      .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "")
+      .replace(/\n+$/, "");
+  // Well under what the server takes in one message, in any encoding.
+  const pasteLimit = 256 * 1024;
   // sendToTerminal types a command into this project's shown shell, without running it,
   // and returns what stopped it, if anything. It starts no shell and takes none from
   // another browser tab: having a command to hand is no reason for either.
-  window.sendToTerminal = async (text) => {
-    // A line break would run what came before it, and other control characters, from a
-    // value in the state, could do anything a keyboard can.
-    if (!text || /[\u0000-\u001f\u007f-\u009f]/.test(text))
+  window.sendToTerminal = async (text, { pasted = false } = {}) => {
+    if (pasted) {
+      text = pastableText(text);
+      if (text.length > pasteLimit) return "This is too long to send, so nothing was sent.";
+    } else if (/[\u0000-\u001f\u007f-\u009f]/.test(text)) {
+      // A line break would run what came before it, and other control characters, from a
+      // value in the state, could do anything a keyboard can.
       return "This command has control characters, so it was not sent.";
+    }
+    if (!text) return "There is nothing to send.";
     if (pendingSend) return "The terminal is still connecting.";
     let refused, listed;
     try {
@@ -818,6 +846,8 @@
     }
     if (showing && socket.readyState === WebSocket.OPEN) {
       setOpen(true);
+      const problem = pasteProblem(text);
+      if (problem) return problem;
       term.paste(text);
       term.focus();
       return null;
@@ -838,9 +868,8 @@
   const asWord = (value) =>
     /^[A-Za-z0-9_\/.:=@%+,-]+$/.test(value) ? value : "'" + value.replace(/'/g, "'\\''") + "'";
   let sendNote, sendNoteTimer;
-  window.sendButtonPressed = async (button) => {
-    const { sendText, sendValue } = button.dataset;
-    const problem = await window.sendToTerminal(sendText ?? asWord(sendValue || ""));
+  window.sendToTerminalAndSay = async (text, { word = false, pasted = false } = {}) => {
+    const problem = await window.sendToTerminal(word ? asWord(text) : text, { pasted });
     if (!sendNote) {
       sendNote = document.createElement("div");
       sendNote.className = "terminal-send-note";
@@ -851,6 +880,10 @@
     sendNote.hidden = false;
     clearTimeout(sendNoteTimer);
     sendNoteTimer = setTimeout(() => (sendNote.hidden = true), problem ? 6000 : 2500);
+  };
+  window.sendButtonPressed = (button) => {
+    const { sendText, sendValue } = button.dataset;
+    return window.sendToTerminalAndSay(sendText ?? (sendValue || ""), { word: sendText === undefined });
   };
   // The Recent jobs page is drawn on the server, which leaves its copy buttons plain.
   const addJobsSendButtons = () => {
