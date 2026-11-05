@@ -190,8 +190,10 @@ func TestCloseHangsUpTheShellAndIsRepeatable(t *testing.T) {
 	default:
 		t.Fatal("Close returned before the shell exited")
 	}
-	if result := shell.Result(); result.Signal != syscall.SIGHUP {
-		t.Errorf("Result() = %+v, want SIGHUP", result)
+	// The hangup usually ends it, and a shell that finds its terminal gone first exits by
+	// itself, as dash does with status 2. Either way, nothing had to kill it.
+	if result := shell.Result(); result.Signal == syscall.SIGKILL {
+		t.Errorf("Result() = %+v, want it to end by itself on the hangup", result)
 	}
 	shell.awaitRead(t)
 }
@@ -201,8 +203,10 @@ func TestCloseKillsAShellThatIgnoresTheHangup(t *testing.T) {
 	closeGrace = 300 * time.Millisecond
 	t.Cleanup(func() { closeGrace = grace })
 	shell := startShell(t)
-	// A loop, since a shell reading its input ends by itself once input ends.
-	if _, err := io.WriteString(shell, "trap '' HUP; echo trapped; while :; do sleep 1; done\n"); err != nil {
+	// A loop, since a shell reading its input ends by itself once input ends. It runs no
+	// command, because dash takes the terminal back after each one, and with the terminal
+	// gone that makes it exit with status 2 before anything has to kill it.
+	if _, err := io.WriteString(shell, "trap '' HUP; echo trapped; while :; do :; done\n"); err != nil {
 		t.Fatal(err)
 	}
 	for deadline := time.Now().Add(testWait); !strings.Contains(shell.text(), "trapped\r\n"); {
