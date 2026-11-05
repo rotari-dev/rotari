@@ -1,7 +1,8 @@
 # Plan: Table Viewer Files in Their Own Windows
 
 Created: 2026-11-05
-Status: Implemented, and tried by the user in Chrome; see [work-log.md](work-log.md).
+Status: Implemented, and tried by the user in all their browsers on 2026-11-05; see
+[work-log.md](work-log.md).
 
 ## Purpose
 
@@ -47,4 +48,4 @@ events, and the channel. The real thing needs a person:
 
 ## Remaining work
 
-Trying the other browsers, which the user plans to do at the end.
+None.
