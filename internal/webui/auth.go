@@ -48,7 +48,7 @@ func (sessions *webSessions) issue(writer http.ResponseWriter, request *http.Req
 	sessions.expiries[value] = expires
 	sessions.mu.Unlock()
 
-	http.SetCookie(writer, &http.Cookie{
+	http.SetCookie(writer, &http.Cookie{ // NOSONAR: Secure is set except on direct loopback, where Safari would discard the cookie; see docs/SECURITY.md.
 		Name:     webSessionCookie,
 		Value:    value,
 		Path:     "/",
