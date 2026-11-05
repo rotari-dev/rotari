@@ -201,7 +201,7 @@ func handleWebLogout(writer http.ResponseWriter, request *http.Request, sessions
 	for _, signedOut := range onSignOut {
 		signedOut()
 	}
-	http.SetCookie(writer, &http.Cookie{
+	http.SetCookie(writer, &http.Cookie{ // NOSONAR: this expires the cookie, so Secure must match how it was issued; a browser refuses to clear a Secure cookie over plain HTTP.
 		Name:     webSessionCookie,
 		Value:    "",
 		Path:     "/",
@@ -211,7 +211,7 @@ func handleWebLogout(writer http.ResponseWriter, request *http.Request, sessions
 		Secure:   isSecureAuthRequest(request),
 		SameSite: http.SameSiteStrictMode,
 	})
-	http.SetCookie(writer, &http.Cookie{
+	http.SetCookie(writer, &http.Cookie{ // NOSONAR: this expires the cookie, so Secure must match how it was issued; a browser refuses to clear a Secure cookie over plain HTTP.
 		Name:     launchAuthCookie,
 		Value:    "",
 		Path:     launchProxyPrefix,
