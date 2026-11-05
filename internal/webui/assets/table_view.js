@@ -1545,10 +1545,28 @@ function histogramCell(histogram, column) {
   );
 }
 
-// histogramView draws a histogram for a pane, each bar with its range and count.
-function histogramView(media) {
+// The bar counts a histogram tab offers: each divides the server's bins exactly,
+// so merging them stays exact.
+const histogramBinChoices = [10, 20, 50, 100, 200];
+const histogramBinDefault = 20;
+
+// mergeBins adds neighbouring bins together, leaving count of them. One bin, for
+// equal values, has nothing to merge.
+function mergeBins(counts, count) {
+  if (counts.length <= count) return counts;
+  const size = counts.length / count;
+  const merged = new Array(count).fill(0);
+  counts.forEach((value, index) => {
+    merged[Math.floor(index / size)] += value;
+  });
+  return merged;
+}
+
+// histogramView draws a histogram into a pane's root, each bar with its range and
+// count, at the tab's chosen number of bars.
+function histogramView(media, root) {
   const { histogram, column } = media;
-  const counts = histogram.counts;
+  const counts = mergeBins(histogram.counts, media.bins || histogramBinDefault);
   const tallest = Math.max(...counts);
   const width = (histogram.max - histogram.min) / counts.length;
   const value = (number) => formatValue(number, column);
@@ -1565,6 +1583,33 @@ function histogramView(media) {
       { className: "tv-tab-title" },
       el("strong", {}, column.name),
       el("span", { className: "tv-media-properties" }, summary),
+      histogram.counts.length > 1
+        ? el(
+            "label",
+            { className: "tv-histogram-bins" },
+            "Bars",
+            el(
+              "select",
+              {
+                "aria-label": "Number of bars",
+                onchange: (event) => {
+                  media.bins = Number(event.target.value);
+                  setChildren(root, histogramView(media, root));
+                },
+              },
+              histogramBinChoices.map((choice) =>
+                el(
+                  "option",
+                  {
+                    value: choice,
+                    selected: choice === counts.length,
+                  },
+                  String(choice),
+                ),
+              ),
+            ),
+          )
+        : null,
     ),
     el(
       "div",

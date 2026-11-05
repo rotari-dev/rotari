@@ -245,10 +245,12 @@ func TestDescribeShowsDistributions(t *testing.T) {
 			t.Fatalf("score = %s", describeJSON(score))
 		}
 	}
-	// Three of the four numbers fall in the first of 20 bins, and the largest
-	// in the last. A cell that is not a number is not counted.
+	// Bins are 0.04625 wide: 0.75 in the first, 0.80 in the second, 0.9 in the
+	// fourth, and the largest in the last. A cell that is not a number is not
+	// counted.
 	histogram := score.Histogram
-	if histogram == nil || len(histogram.Counts) != 20 || histogram.Min != 0.75 || histogram.Max != 10 || histogram.Counts[0] != 3 || histogram.Counts[19] != 1 {
+	if histogram == nil || len(histogram.Counts) != 200 || histogram.Min != 0.75 || histogram.Max != 10 ||
+		histogram.Counts[0] != 1 || histogram.Counts[1] != 1 || histogram.Counts[3] != 1 || histogram.Counts[199] != 1 {
 		t.Fatalf("histogram = %s", describeJSON(histogram))
 	}
 	text := description.Columns[2]

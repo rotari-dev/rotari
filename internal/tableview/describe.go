@@ -27,8 +27,9 @@ var (
 const (
 	topValues     = 5
 	topValueBytes = 256
-	// histogramBins is how many equal-width bins a histogram has.
-	histogramBins = 20
+	// histogramBins is how many equal-width bins a histogram has. The page merges
+	// them into coarser ones, so it is a multiple of every count it offers.
+	histogramBins = 200
 )
 
 // Histogram counts a column's numbers in equal-width bins from Min to Max.

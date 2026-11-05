@@ -1307,6 +1307,23 @@ func TestTableViewDescribesDistributionsInBrowser(t *testing.T) {
   if (!pane().querySelector('.tv-tab-view strong').textContent.includes('n') || !pane().querySelector('.tv-histogram-axis').textContent.includes('14')) fail('titles', pane().innerHTML);
   if (document.activeElement.closest('#tv-table')) fail('focus stayed in the table');
 
+  // The number of bars can change, merging the same counts.
+  const bars = pane().querySelector('select[aria-label="Number of bars"]');
+  if ([...bars.options].map(option => option.value).join() !== '10,20,50,100,200' || bars.value !== '20') fail('choices', bars.outerHTML);
+  const choose = number => {
+    const select = pane().querySelector('select[aria-label="Number of bars"]');
+    select.value = String(number);
+    select.dispatchEvent(new window.Event('change'));
+  };
+  const total = () => [...bins()].reduce((sum, bin) => sum + Number(bin.title.split(': ')[1]), 0);
+  for (const number of [10, 50, 100, 200, 20]) {
+    choose(number);
+    if (bins().length !== number || total() !== 4 || pane().querySelector('select[aria-label="Number of bars"]').value !== String(number)) fail('bars', number, bins().length, total());
+  }
+  choose(10);
+  if (bins()[0].title !== '1 – 1.3: 1' || bins()[9].title !== '3.7 – 4: 1') fail('merged bars', bins()[0].title, bins()[9].title);
+  choose(20);
+
   // The same selection shows its tab again.
   open().click();
   if (pane().querySelectorAll('.tv-tab').length !== 1) fail('a second tab', pane().querySelectorAll('.tv-tab').length);
@@ -1674,6 +1691,20 @@ func TestTableViewPlotsComputeOnceInBrowser(t *testing.T) {
 
 // The spectrogram's FFT finds a tone in its bin, and its colour scale runs
 // from viridis' first stop to its last; jsdom has no canvas to draw them.
+// A histogram of equal values has one bar, and no choice of how many.
+func TestTableViewHistogramOfEqualValuesInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	write(t, filepath.Join(f.work, "data.csv"), "n\n7\n7\n")
+	runTableViewScript(t, testOptions(f.baseDir, false), f, "data.csv", "", `
+  await until('rows', () => cells().length === 2);
+  document.querySelector('.tv-describe-toggle').click();
+  await until('describe', () => document.querySelector('.tv-open-histogram'));
+  document.querySelector('.tv-open-histogram').click();
+  const pane = document.querySelector('.tv-pane-active');
+  if (pane.querySelectorAll('.tv-histogram-bin').length !== 1 || pane.querySelector('select[aria-label="Number of bars"]')) fail('one bar', pane.innerHTML);
+`)
+}
+
 func TestPlotTicksAreRound(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node is not installed")

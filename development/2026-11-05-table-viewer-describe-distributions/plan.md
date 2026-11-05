@@ -30,7 +30,7 @@ The display order follows pandas: `histogram`, `count`, `unique`, `top`, `mean`,
 
 - Clicking a bar or a top value to add a filter. It is a natural follow-up, but
   deserves its own decision.
-- Choosing bin counts, log scales, or quantiles other than the three.
+- Free choice of bin counts, log scales, or quantiles other than the three.
 - Value-count or chart views outside the Describe rows.
 - Approximate statistics. See Decisions.
 - New contract IDs. This extends the existing WEB-19 Describe rule.
@@ -51,7 +51,9 @@ The user chose quartiles, top values, and histograms together on 2026-11-05.
 - **Quartiles use linear interpolation,** like pandas' default, in keeping with
   WEB-19's "as pandas' `describe` does". They are over cells that read as
   numbers, as `mean` is.
-- **Histograms use 20 equal-width bins from minimum to maximum.** A value at the
+- **Histograms use 200 equal-width bins from minimum to maximum.** The page merges
+  them into 10, 20 (the default), 50, 100, or 200 bars, as the user chose on
+  2026-11-05, so changing the number stays exact and reads nothing again. A value at the
   maximum goes in the last bin. If all values are equal, there is one bin. If the
   range overflows `float64`, the histogram is left out, as an overflowing sum is
   today.

@@ -1029,7 +1029,7 @@ select, as pandas' `describe` does: non-blank cells, distinct values (up to
 100,000, then `unique_over`), and over the cells that read as numbers their
 count, mean, sample standard deviation, minimum, maximum, and sum. It also gives the
 quartiles of those numbers by linear interpolation (`q25`, `q50`, `q75`) and a
-`histogram` of 20 equal-width bins from minimum to maximum (one bin when all are
+`histogram` of 200 equal-width bins from minimum to maximum (one bin when all are
 equal, none when the range overflows), unless the selected rows hold more than
 10,000,000 numbers, which sets `distribution_over` and leaves them out of every
 column. `top` lists up to 5 most frequent non-blank values with their counts, the
@@ -1037,8 +1037,8 @@ most frequent and then first seen first, each cut to 256 bytes (`cut`); it is ab
 when every value appears once, and past 10,000 distinct values `top_over` says so
 instead. The figures are exact or absent, from one read of the file. The page's
 Describe rows show a **Histogram** button for a column that has one, which opens the
-bars in a tab of the active pane, one tab per column and selection of rows; a row
-move does not replace it.
+bars in a tab of the active pane, one tab per column and selection of rows, with 10,
+20, 50, 100, or 200 bars merged from those bins; a row move does not replace it.
 A `.jsonl` file instead has one JSON value per nonblank line. Object keys
 across all records become columns in sorted name order; arrays and scalar
 values use a `value` column. Strings and numbers become text, nested arrays

@@ -939,7 +939,7 @@ class TabView {
       return;
     }
     if (media.kind === "histogram") {
-      setChildren(this.root, histogramView(media));
+      setChildren(this.root, histogramView(media, this.root));
       return;
     }
     if (media.kind === "notice") {
