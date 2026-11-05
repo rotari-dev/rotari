@@ -714,12 +714,20 @@ main {
 }
 
 /* The terminal panel along the bottom of the page; web_shell.js adds it. The page
-   keeps clear of it, so nothing it shows ends up underneath. */
+   keeps clear of it, so nothing it shows ends up underneath, and a job's log in a dialog
+   stays beside the shell. */
 html.terminal-open {
   --terminal-height: 320px;
 }
 html.terminal-open body {
+  min-height: calc(100vh - var(--terminal-height));
   padding-bottom: var(--terminal-height);
+}
+html.terminal-open main {
+  min-height: calc(100vh - var(--terminal-height));
+}
+html.terminal-open .output-modal {
+  bottom: var(--terminal-height);
 }
 #terminal-panel {
   position: fixed;
@@ -730,19 +738,49 @@ html.terminal-open body {
   display: flex;
   flex-direction: column;
   height: var(--terminal-height);
-  border-top: 1px solid var(--line-soft);
-  background: var(--bg);
+  border-top: 1px solid var(--line);
+  background: var(--terminal-background);
 }
 #terminal-panel[hidden] {
   display: none;
+}
+.terminal-resizer {
+  flex: none;
+  height: 5px;
+  margin-top: -3px;
+  cursor: row-resize;
+  touch-action: none;
+}
+.terminal-resizer:hover,
+.terminal-resizer:focus-visible {
+  background: var(--line);
+  outline: none;
 }
 .terminal-bar {
   display: flex;
   flex: none;
   align-items: center;
   gap: 8px;
-  padding: 4px 8px;
-  background: var(--bg);
+  min-height: 30px;
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12px;
+}
+.terminal-title {
+  color: var(--text);
+  font-weight: 600;
+}
+.terminal-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-bar button {
+  flex: none;
+  padding: 2px 8px;
+  font-size: 12px;
 }
 .terminal-spacer {
   flex: 1;
@@ -750,5 +788,6 @@ html.terminal-open body {
 .terminal-viewport {
   flex: 1;
   min-height: 0;
-  padding: 4px;
+  padding: 4px 0 0 6px;
+  background: var(--terminal-background);
 }

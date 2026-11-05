@@ -143,6 +143,24 @@ func TestNewAttachmentTakesOverAndOldOneCannotType(t *testing.T) {
 	second.run(t, `echo "b-$((1+1))"`, "b-2")
 }
 
+// Reconnecting by itself must not take the shell from whoever is using it.
+func TestAttachIfFreeLeavesAnotherAttachmentAlone(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	first := watch(t, keeper)
+	first.run(t, `VALUE=kept; echo "one-$((1+1))"`, "one-2")
+	if _, err := keeper.AttachIfFree(24, 80); !errors.Is(err, ErrAttachedElsewhere) {
+		t.Fatalf("AttachIfFree with another attached = %v", err)
+	}
+	first.run(t, `echo "still-$((1+1))"`, "still-2")
+	first.Detach()
+	first.awaitEnd(t, DetachedByCaller)
+	second, err := keeper.AttachIfFree(24, 80)
+	if err != nil {
+		t.Fatalf("AttachIfFree with nothing attached = %v", err)
+	}
+	second.Detach()
+}
+
 func TestShellExitEndsAttachmentAndNextAttachStartsAFreshShell(t *testing.T) {
 	keeper := newTestKeeper(t, testIdle, 1<<16)
 	first := watch(t, keeper)

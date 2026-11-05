@@ -124,12 +124,41 @@
 // the top bar's Terminal button has no terminal to offer.
 (() => {
   const openKey = "rotari-terminal-open";
+  const heightKey = "rotari-terminal-height";
+  const minHeight = 120;
+  // Colours programs ask for by name, and the tokens that hold them.
+  const themeTokens = {
+    background: "background",
+    foreground: "foreground",
+    cursor: "cursor",
+    selectionBackground: "selection",
+    black: "black",
+    red: "red",
+    green: "green",
+    yellow: "yellow",
+    blue: "blue",
+    magenta: "magenta",
+    cyan: "cyan",
+    white: "white",
+    brightBlack: "bright-black",
+    brightRed: "bright-red",
+    brightGreen: "bright-green",
+    brightYellow: "bright-yellow",
+    brightBlue: "bright-blue",
+    brightMagenta: "bright-magenta",
+    brightCyan: "bright-cyan",
+    brightWhite: "bright-white",
+  };
   const closeTakenOver = 4001;
   const closeExited = 4002;
   const closeFailed = 4000;
   const scriptNonce = document.currentScript?.nonce || "";
   let panel, status, retry, viewport, term, fit, socket, retryTimer;
   let retryDelay = 1000;
+  // What to do when this tab next becomes visible: a tab nobody is looking at
+  // neither connects nor retries. Browsers make connections to a server wait for
+  // each other, and old tabs retrying would hold up the tab in use.
+  let whenVisible = null;
 
   const remember = (open) => {
     try {
@@ -142,6 +171,68 @@
     } catch {
       return false;
     }
+  };
+  // The page cannot lose all its room to the panel, nor the panel all of its own.
+  const clampHeight = (height) =>
+    Math.max(minHeight, Math.min(height, Math.max(minHeight, innerHeight - minHeight)));
+  const root = document.documentElement;
+  const applyHeight = (height) => {
+    root.style.setProperty("--terminal-height", clampHeight(height) + "px");
+  };
+  const savedHeight = () => {
+    try {
+      return Number(localStorage.getItem(heightKey)) || 0;
+    } catch {
+      return 0;
+    }
+  };
+  const currentHeight = () => panel?.getBoundingClientRect().height || savedHeight();
+  const saveHeight = () => {
+    try {
+      localStorage.setItem(heightKey, String(Math.round(currentHeight())));
+    } catch {}
+  };
+  const theme = () => {
+    const style = getComputedStyle(root);
+    const colours = {};
+    for (const [name, token] of Object.entries(themeTokens)) {
+      const value = style.getPropertyValue("--terminal-" + token).trim();
+      if (value) colours[name] = value;
+    }
+    return colours;
+  };
+  const applyTheme = () => {
+    if (term) term.options.theme = theme();
+  };
+  const fontFamily = () =>
+    getComputedStyle(root).getPropertyValue("--font-mono").trim() || "monospace";
+  const buildResizer = () => {
+    const resizer = document.createElement("div");
+    resizer.className = "terminal-resizer";
+    resizer.tabIndex = 0;
+    resizer.setAttribute("role", "separator");
+    resizer.setAttribute("aria-orientation", "horizontal");
+    resizer.setAttribute("aria-label", "Resize the terminal");
+    resizer.onpointerdown = (event) => {
+      event.preventDefault();
+      resizer.setPointerCapture?.(event.pointerId);
+      const startY = event.clientY;
+      const startHeight = currentHeight();
+      resizer.onpointermove = (move) =>
+        applyHeight(startHeight + startY - move.clientY);
+      resizer.onpointerup = resizer.onpointercancel = () => {
+        resizer.onpointermove = resizer.onpointerup = resizer.onpointercancel = null;
+        saveHeight();
+      };
+    };
+    resizer.onkeydown = (event) => {
+      const step = { ArrowUp: 24, ArrowDown: -24 }[event.key];
+      if (!step) return;
+      event.preventDefault();
+      applyHeight(currentHeight() + step);
+      saveHeight();
+    };
+    return resizer;
   };
   const loadScript = (src) =>
     new Promise((resolve, reject) => {
@@ -174,21 +265,28 @@
   const send = (data) => {
     if (socket?.readyState === WebSocket.OPEN) socket.send(data);
   };
-  const connect = () => {
+  // connect attaches to the shell. Reconnecting by itself passes takeOver false,
+  // so it cannot take the shell from a tab in use; only someone opening a page or
+  // pressing a button does that.
+  const connect = (takeOver = true) => {
     clearTimeout(retryTimer);
-    showStatus("");
+    whenVisible = null;
+    showStatus("Connecting...");
     // Replay brings the screen back, so what is here would appear twice.
     term.reset();
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
     const current = new WebSocket(
-      scheme + "//" + location.host + "/_terminal/ws?rows=" + term.rows + "&cols=" + term.cols,
+      scheme + "//" + location.host + "/_terminal/ws?rows=" + term.rows + "&cols=" + term.cols + (takeOver ? "" : "&takeover=0"),
     );
     socket = current;
     current.binaryType = "arraybuffer";
     current.onopen = () => {
       retryDelay = 1000;
+      // A login shell can take a while to read its profile.
+      showStatus("Waiting for the shell...");
     };
     current.onmessage = (event) => {
+      showStatus("");
       term.write(new Uint8Array(event.data));
     };
     current.onclose = (event) => {
@@ -201,18 +299,50 @@
       } else if (event.code === closeFailed) {
         showStatus("The shell did not start: " + event.reason, "Try again");
       } else {
-        showStatus("Reconnecting...");
-        retryTimer = setTimeout(connect, retryDelay);
-        retryDelay = Math.min(retryDelay * 2, 10000);
+        reconnect();
       }
     };
   };
+  const reconnect = () => {
+    if (document.hidden) {
+      showStatus("Disconnected.");
+      whenVisible = reconnect;
+      return;
+    }
+    showStatus("Reconnecting...");
+    retryTimer = setTimeout(async () => {
+      // A refused WebSocket does not say why, so ask with a plain request. After
+      // the server restarts the sign-in is gone, and retrying can never succeed.
+      let response;
+      try {
+        response = await fetch("/_terminal/xterm-license.txt", { method: "HEAD" });
+      } catch {}
+      if (response?.status === 401 || response?.status === 403) {
+        retry.onclick = () => location.reload();
+        showStatus("Sign in again to use the terminal.", "Reload");
+        return;
+      }
+      if (document.hidden) reconnect();
+      else if (response?.ok) connect(false);
+      else {
+        retryDelay = Math.min(retryDelay * 2, 10000);
+        reconnect();
+      }
+    }, retryDelay);
+    retryDelay = Math.min(retryDelay * 2, 10000);
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && whenVisible) whenVisible();
+  });
   const build = () => {
     panel = document.createElement("section");
     panel.id = "terminal-panel";
     panel.setAttribute("aria-label", "Terminal");
     const bar = document.createElement("div");
     bar.className = "terminal-bar";
+    const title = document.createElement("span");
+    title.className = "terminal-title";
+    title.textContent = "Terminal";
     status = document.createElement("span");
     status.className = "terminal-status";
     status.setAttribute("role", "status");
@@ -220,7 +350,7 @@
     retry = document.createElement("button");
     retry.type = "button";
     retry.hidden = true;
-    retry.onclick = connect;
+    retry.onclick = () => connect();
     const spacer = document.createElement("span");
     spacer.className = "terminal-spacer";
     const end = document.createElement("button");
@@ -234,21 +364,27 @@
     hide.type = "button";
     hide.textContent = "Hide";
     hide.onclick = () => window.toggleTerminalPanel();
-    bar.append(status, retry, spacer, end, hide);
+    bar.append(title, status, retry, spacer, end, hide);
     viewport = document.createElement("div");
     viewport.className = "terminal-viewport";
-    panel.append(bar, viewport);
+    panel.append(buildResizer(), bar, viewport);
     document.body.append(panel);
   };
   const start = async () => {
     build();
+    showStatus("Loading the terminal...");
     try {
       await loadAssets();
     } catch (error) {
       showStatus(error.message);
       return;
     }
-    term = new window.Terminal({ cursorBlink: true });
+    term = new window.Terminal({
+      cursorBlink: true,
+      fontFamily: fontFamily(),
+      fontSize: 13,
+      theme: theme(),
+    });
     fit = new window.FitAddon.FitAddon();
     term.loadAddon(fit);
     term.open(viewport);
@@ -263,17 +399,38 @@
     new ResizeObserver(() => {
       if (!panel.hidden) fit.fit();
     }).observe(viewport);
-    connect();
+    // The theme can change by the viewer's choice or by the system's.
+    new MutationObserver(applyTheme).observe(root, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", applyTheme);
+    // A font that arrives late changes the size of every cell.
+    document.fonts?.ready.then(() => {
+      term.options.fontFamily = fontFamily();
+      fit.fit();
+    });
+    // A page opened in the background waits to be looked at before taking the shell.
+    if (document.hidden) {
+      showStatus("Waiting for this tab to be shown.");
+      whenVisible = () => connect();
+    } else {
+      connect();
+    }
     term.focus();
   };
   const setOpen = (open) => {
-    document.documentElement.classList.toggle("terminal-open", open);
+    root.classList.toggle("terminal-open", open);
     document
       .getElementById("terminal-button")
       ?.setAttribute("aria-pressed", String(open));
     remember(open);
     if (!panel) {
-      if (open) start();
+      if (open)
+        start().catch((error) => {
+          console.error(error);
+          showStatus("The terminal could not start: " + error.message);
+        });
       return;
     }
     panel.hidden = !open;
@@ -283,9 +440,16 @@
     }
   };
   window.toggleTerminalPanel = () =>
-    setOpen(!document.documentElement.classList.contains("terminal-open"));
+    setOpen(!root.classList.contains("terminal-open"));
+  // Before the page is drawn, so a panel left open does not make it jump.
+  if (savedHeight()) applyHeight(savedHeight());
+  if (remembered()) root.classList.add("terminal-open");
+  addEventListener("resize", () => {
+    if (savedHeight()) applyHeight(savedHeight());
+  });
   document.addEventListener("DOMContentLoaded", () => {
     if (document.getElementById("terminal-button") && remembered()) setOpen(true);
+    else root.classList.remove("terminal-open");
   });
 })();
 

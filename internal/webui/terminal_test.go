@@ -173,6 +173,26 @@ func TestTerminalNewConnectionTakesOver(t *testing.T) {
 	second.await("value-kept")
 }
 
+// A page reconnecting by itself must not take the shell from the tab in use.
+func TestTerminalReconnectingDoesNotTakeOver(t *testing.T) {
+	server, _ := terminalServer(t, "/bin/sh")
+	first := dialTerminal(t, server)
+	first.typeLine(`echo "one-$((1+1))"`)
+	first.await("one-2")
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	connection, _, err := websocket.Dial(ctx, terminalSocketURL(server, "rows=24&cols=80&takeover=0"), &websocket.DialOptions{
+		HTTPHeader: http.Header{"X-Rotari-Token": {terminalTestToken}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reconnecting := readTerminal(t, connection)
+	reconnecting.awaitClose(terminalCloseTakenOver)
+	first.typeLine(`echo "still-$((1+1))"`)
+	first.await("still-2")
+}
+
 func TestTerminalReportsHowTheShellEnded(t *testing.T) {
 	server, _ := terminalServer(t, "/bin/sh")
 	client := dialTerminal(t, server)

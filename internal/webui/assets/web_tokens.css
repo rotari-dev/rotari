@@ -13,6 +13,27 @@
     BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono:
     "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* The terminal panel, which programs colour by these names. */
+  --terminal-background: #ffffff;
+  --terminal-foreground: #17202a;
+  --terminal-cursor: #17202a;
+  --terminal-selection: #b6d4f2;
+  --terminal-black: #17202a;
+  --terminal-red: #b3261e;
+  --terminal-green: #17703a;
+  --terminal-yellow: #8a6100;
+  --terminal-blue: #1f5fbf;
+  --terminal-magenta: #8a3ea8;
+  --terminal-cyan: #0f7480;
+  --terminal-white: #6b7887;
+  --terminal-bright-black: #4d5b6a;
+  --terminal-bright-red: #d13a30;
+  --terminal-bright-green: #1f8f4b;
+  --terminal-bright-yellow: #a87700;
+  --terminal-bright-blue: #2f78e0;
+  --terminal-bright-magenta: #a64fc7;
+  --terminal-bright-cyan: #148c9a;
+  --terminal-bright-white: #3a4653;
   --bg: #f4f6f9;
   --surface: #ffffff;
   --surface-2: #eef2f6;
@@ -71,6 +92,26 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
+    --terminal-background: #0b1118;
+    --terminal-foreground: #d7dee6;
+    --terminal-cursor: #d7dee6;
+    --terminal-selection: #2c4a6b;
+    --terminal-black: #2a3542;
+    --terminal-red: #f07a72;
+    --terminal-green: #67c98a;
+    --terminal-yellow: #e0b552;
+    --terminal-blue: #7ab0f5;
+    --terminal-magenta: #c99ae3;
+    --terminal-cyan: #62c6d1;
+    --terminal-white: #c2ccd6;
+    --terminal-bright-black: #5f6e7e;
+    --terminal-bright-red: #ff9c95;
+    --terminal-bright-green: #8be0a8;
+    --terminal-bright-yellow: #f2cd77;
+    --terminal-bright-blue: #a0c8fa;
+    --terminal-bright-magenta: #dcb8ef;
+    --terminal-bright-cyan: #8bdbe3;
+    --terminal-bright-white: #f2f5f8;
     --bg: #0b1118;
     --surface: #111a24;
     --surface-2: #182432;
@@ -119,6 +160,26 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --terminal-background: #0b1118;
+  --terminal-foreground: #d7dee6;
+  --terminal-cursor: #d7dee6;
+  --terminal-selection: #2c4a6b;
+  --terminal-black: #2a3542;
+  --terminal-red: #f07a72;
+  --terminal-green: #67c98a;
+  --terminal-yellow: #e0b552;
+  --terminal-blue: #7ab0f5;
+  --terminal-magenta: #c99ae3;
+  --terminal-cyan: #62c6d1;
+  --terminal-white: #c2ccd6;
+  --terminal-bright-black: #5f6e7e;
+  --terminal-bright-red: #ff9c95;
+  --terminal-bright-green: #8be0a8;
+  --terminal-bright-yellow: #f2cd77;
+  --terminal-bright-blue: #a0c8fa;
+  --terminal-bright-magenta: #dcb8ef;
+  --terminal-bright-cyan: #8bdbe3;
+  --terminal-bright-white: #f2f5f8;
   --bg: #0b1118;
   --surface: #111a24;
   --surface-2: #182432;

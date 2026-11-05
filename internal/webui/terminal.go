@@ -100,7 +100,16 @@ func (s site) serveTerminal(writer http.ResponseWriter, request *http.Request) {
 		return // Accept has written the response.
 	}
 	connection.SetReadLimit(terminalInputLimit)
-	attachment, err := s.Terminal.Attach(uint16(rows), uint16(cols))
+	// A page reconnecting by itself must not take the shell from another tab.
+	attach := s.Terminal.Attach
+	if request.URL.Query().Get("takeover") == "0" {
+		attach = s.Terminal.AttachIfFree
+	}
+	attachment, err := attach(uint16(rows), uint16(cols))
+	if errors.Is(err, terminal.ErrAttachedElsewhere) {
+		_ = connection.Close(terminalCloseTakenOver, "another connection has the terminal")
+		return
+	}
 	if err != nil {
 		_ = connection.Close(terminalCloseFailed, closeReason(err.Error()))
 		return

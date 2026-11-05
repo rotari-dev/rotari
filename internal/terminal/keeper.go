@@ -30,6 +30,9 @@ var (
 	ErrKeeperClosed = errors.New("terminal keeper is closed")
 	// ErrDetached is returned when using an Attachment that has ended.
 	ErrDetached = errors.New("terminal attachment has ended")
+	// ErrAttachedElsewhere is returned by AttachIfFree when another attachment
+	// has the shell.
+	ErrAttachedElsewhere = errors.New("terminal is attached elsewhere")
 )
 
 // DetachReason says why an Attachment ended.
@@ -98,10 +101,24 @@ func NewKeeper(options KeeperOptions) (*Keeper, error) {
 // ends any earlier Attachment with TakenOver. Next begins with the replay of recent
 // output. A program already running is made to redraw itself.
 func (keeper *Keeper) Attach(rows, cols uint16) (*Attachment, error) {
+	return keeper.attach(rows, cols, true)
+}
+
+// AttachIfFree is Attach that leaves another attachment alone and returns
+// ErrAttachedElsewhere instead. It is for reconnecting by itself, which must not
+// take the shell from whoever is using it.
+func (keeper *Keeper) AttachIfFree(rows, cols uint16) (*Attachment, error) {
+	return keeper.attach(rows, cols, false)
+}
+
+func (keeper *Keeper) attach(rows, cols uint16, takeOver bool) (*Attachment, error) {
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
 	if keeper.closed {
 		return nil, ErrKeeperClosed
+	}
+	if keeper.attached != nil && !takeOver {
+		return nil, ErrAttachedElsewhere
 	}
 	shell := keeper.shell
 	if shell != nil {

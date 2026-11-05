@@ -117,6 +117,11 @@ The keeper:
   recognizes.
 - Starting takes the first size from the page. When no shell is running, opening the panel
   starts one.
+- Only opening a page or pressing a button takes the shell. Reconnecting by itself attaches only
+  when nothing else is attached, or an old tab coming back would take the shell from the tab in
+  use. A tab that is not visible neither connects nor retries, since many old tabs retrying held
+  up a new tab's connection for a long time when the user tried it. After a server restart the
+  sign-in is gone, so the page stops retrying and says so.
 
 The shell is `$SHELL -l` in the home directory, or `/bin/sh` when `$SHELL` is unset, as
 documented. A failed start is shown in the panel rather than retried with another shell. The
@@ -154,6 +159,8 @@ The panel:
   comes back open after a link. The page's content shrinks to make room rather than sitting
   under it, and dialogs stay above it.
 - It follows the theme. On a narrow screen it takes the full width.
+- A log or other dialog ends where the panel begins, so a job's log and the shell stay side by
+  side, which is the panel's reason to exist.
 - A browser keeps some keys for itself, such as Ctrl-W, and these cannot reach the shell. The
   documentation says so.
 
@@ -213,11 +220,12 @@ In Chrome, extending the browser checks of WEB-28 and WEB-29: the panel opens wi
 violation, a typed command's output appears, following a link keeps the shell and its output,
 and xterm.js has not loaded before the panel opens.
 
-The user tried the plain panel by hand in a browser on Linux, on 2026-11-05: the shell, `vim`
-kept open across a link, Japanese input, and copy and paste all worked.
+The user tried the panel by hand on 2026-11-05: the shell, `vim` kept open across a link, `less`,
+Japanese input, copy and paste, dragging its height, light and dark colors, typing with a log open,
+and take-over by a second tab all worked, and it works on macOS.
 
-By hand, since CI has neither: macOS, including that `Close` hangs up at once, and an HTTPS
-reverse proxy. Also Japanese input and wide characters, copy and paste, `vim`, `less`, `top`,
+By hand, since CI has neither: that `Close` hangs up at once on macOS, and an HTTPS reverse
+proxy. Also Japanese input and wide characters, copy and paste, `vim`, `less`, `top`,
 reattaching while each runs, and `rotari run` with Ctrl-C and Ctrl-D. Safari's handling of
 `connect-src 'self'` for WebSocket needs checking there.
 
