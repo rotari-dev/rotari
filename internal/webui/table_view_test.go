@@ -710,10 +710,32 @@ func TestTableViewOpensFilesInPanesInBrowser(t *testing.T) {
   // jsdom cannot decode audio; the view says so instead of drawing.
   await until('status', () => view.querySelector('.tv-analysis-status').textContent.includes('Cannot draw'));
 
+  // The bar between the plots sets the waveform's height, within its bounds.
+  const waveBox = () => document.querySelector('.tv-pane-active .tv-waveform-box');
+  const handle = () => document.querySelector('.tv-pane-active .tv-plot-handle');
+  if (waveBox().style.flexBasis !== '64px') fail('default height', waveBox().style.flex);
+  const drag = (from, to) => {
+    handle().dispatchEvent(new window.MouseEvent('pointerdown', { clientY: from, bubbles: true }));
+    window.dispatchEvent(new window.MouseEvent('pointermove', { clientY: to }));
+    window.dispatchEvent(new window.MouseEvent('pointerup', { clientY: to }));
+  };
+  drag(100, 200);
+  if (waveBox().style.flexBasis !== '164px') fail('dragged height', waveBox().style.flex);
+  drag(100, -500);
+  if (waveBox().style.flexBasis !== '32px') fail('minimum height', waveBox().style.flex);
+  drag(100, 5000);
+  if (waveBox().style.flexBasis !== '800px') fail('maximum height', waveBox().style.flex);
+  drag(100, -568);
+  if (waveBox().style.flexBasis !== '132px') fail('height again', waveBox().style.flex);
+  window.dispatchEvent(new window.MouseEvent('pointermove', { clientY: 900 }));
+  if (waveBox().style.flexBasis !== '132px') fail('moved after release', waveBox().style.flex);
+
   // Waveform and Spectrogram toggle their plots.
   const toggle = name => [...view.querySelectorAll('.tv-audio-controls button')].find(button => button.textContent === name);
   toggle('Spectrogram').click();
   if (!view.querySelector('.tv-spectrogram-box').hidden || toggle('Spectrogram').getAttribute('aria-pressed') !== 'false') fail('spectrogram toggle');
+  // Alone, the waveform fills the pane, with no bar to drag.
+  if (!handle().hidden || waveBox().style.flexGrow !== '1') fail('waveform alone', waveBox().style.flex);
 
   // Split right copies the current file into a new pane, which becomes
   // active; the next file opens there.

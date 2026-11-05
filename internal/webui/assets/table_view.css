@@ -455,8 +455,22 @@ a:hover {
   cursor: crosshair;
   border-radius: 4px;
 }
+.tv-plot-handle {
+  flex: none;
+  height: 6px;
+  margin: -3px 0;
+  cursor: row-resize;
+  border-radius: 3px;
+}
+.tv-plot-handle:hover {
+  background: var(--line);
+}
+.tv-plot-handle[hidden] {
+  display: none;
+}
 .tv-waveform-box {
   flex: 0 0 64px;
+  min-height: 32px;
   background: var(--surface-sunken);
   border-radius: 4px;
 }

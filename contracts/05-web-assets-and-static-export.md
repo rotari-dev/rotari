@@ -1117,7 +1117,8 @@ split right or down, one pane always active; tabs move between panes by
 drag and drop, a drop near an edge splitting that pane; audio shows a
 waveform and a spectrogram the browser computes from the decoded samples, each
 with a grid at round times that the time axis labels, and a vertical scale of
-amplitude or frequency,
+amplitude or frequency; a bar between them sets the waveform's height for the pane,
+and the waveform alone fills it;
 of the channels' mix or, for a file of more than one channel, any one
 channel chosen per file, which the player then plays alone from every
 speaker (Mix plays the file as it is); a plot whose size changes is drawn

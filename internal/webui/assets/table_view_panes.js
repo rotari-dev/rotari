@@ -18,6 +18,11 @@ const maxDecodeBytes = 512 * 1024 * 1024;
 const maxAnalysisSeconds = 600;
 // The spectrogram's range below its loudest point, in decibels.
 const spectrogramRange = 80;
+// The waveform's default height and bounds, in pixels. The spectrogram takes the
+// rest of the pane.
+const waveHeightDefault = 64;
+const waveHeightMin = 32;
+const waveHeightMax = 800;
 // A plot whose size changes is stretched from its last drawing until the
 // size has held this long, and then computed again.
 const resizeSettleMs = 150;
@@ -302,6 +307,7 @@ function splitPane(pane, dir) {
   const created = newPane(current ? [newTab(current.media)] : []);
   created.wave = pane.wave;
   created.spec = pane.spec;
+  created.waveHeight = pane.waveHeight;
   insertBeside(pane, created, dir, false);
   panes.active = created.id;
   renderPanes();
@@ -1015,6 +1021,7 @@ class TabView {
       ),
       this.status,
       this.wave.box,
+      this.plotHandle(),
       this.spec.box,
       this.axis,
     );
@@ -1194,6 +1201,36 @@ class TabView {
     return { canvas, box };
   }
 
+  // plotHandle is the bar between the plots, which sets the waveform's height for
+  // the pane, so it holds as the pane shows other files.
+  plotHandle() {
+    this.handle = el("div", {
+      className: "tv-plot-handle",
+      role: "separator",
+      "aria-orientation": "horizontal",
+      title: "Drag to resize the waveform",
+    });
+    this.handle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      const start = event.clientY;
+      const height = this.pane.waveHeight || waveHeightDefault;
+      const move = (moved) => {
+        this.pane.waveHeight = Math.min(
+          waveHeightMax,
+          Math.max(waveHeightMin, height + moved.clientY - start),
+        );
+        this.update();
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    });
+    return this.handle;
+  }
+
   toggle(which) {
     if (!this.pane) return;
     this.pane[which] = !this.pane[which];
@@ -1208,6 +1245,11 @@ class TabView {
     this.specButton.setAttribute("aria-pressed", String(pane.spec));
     this.wave.box.hidden = !pane.wave;
     this.spec.box.hidden = !pane.spec;
+    this.handle.hidden = !pane.wave || !pane.spec;
+    // Alone, the waveform takes the room the spectrogram would.
+    this.wave.box.style.flex = pane.spec
+      ? "0 0 " + (pane.waveHeight || waveHeightDefault) + "px"
+      : "1 1 " + waveHeightDefault + "px";
     this.axis.hidden = !pane.wave && !pane.spec;
     if ((pane.wave || pane.spec) && !this.audioData && !this.loading)
       this.analyze();
