@@ -154,6 +154,10 @@ In `internal/webui/assets/table_view_panes.js`:
   `go test ./conformance/...`, and `scripts/check.sh` once. `scripts/check.sh`,
   `pre-commit`, and the system Node may not work on the development machine;
   report what could not run and run its steps directly.
+- **Headless Chrome in CI:** `conformance/05-web/page_policy_test.go` shows how
+  a test runs in real Chrome; CI requires it, and it skips where Chrome is absent.
+  Add the key and focus cases there, since jsdom does not model a browser's focus
+  and key defaults faithfully.
 - **Manual, required before calling this done:** jsdom has no canvas, Web Audio,
   or real media playback, and no browser is installed on the development
   machine. The user needs to try these in a real browser:
