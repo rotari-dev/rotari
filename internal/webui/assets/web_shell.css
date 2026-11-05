@@ -750,7 +750,13 @@ html.terminal-open .artifact-view {
   display: flex;
   flex-direction: column;
   height: var(--terminal-height);
+  /* A <section>, but not a card like the page's: it reaches the window's edges. */
+  margin: 0;
+  padding: 0;
+  border: 0;
   border-top: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
   background: var(--terminal-background);
 }
 #terminal-panel[hidden] {

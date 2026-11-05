@@ -120,6 +120,14 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   if (!fits) throw new Error('a dialog does not fit above the panel');
   await collect();
 
+  // The panel lies flat along the bottom of the window, not as a card like the page's sections.
+  const flat = await page.evaluate('(() => {' +
+    'const panel = document.getElementById("terminal-panel");' +
+    'const style = getComputedStyle(panel);' +
+    'return { bottom: panel.getBoundingClientRect().bottom, innerHeight, padding: style.padding, radius: style.borderRadius };' +
+    '})()');
+  if (flat.bottom !== flat.innerHeight || flat.padding !== '0px' || flat.radius !== '0px') throw new Error('the panel is not flat along the bottom: ' + JSON.stringify(flat));
+
   // Maximized, the panel takes the whole window, over the top bar, and gives it back.
   const covers = '(() => {' +
     'const box = document.getElementById("terminal-panel").getBoundingClientRect();' +

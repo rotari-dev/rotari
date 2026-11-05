@@ -366,6 +366,8 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(big.document.documentElement.classList.contains('terminal-maximized'), true, 'the next page lost it');
   assert.equal([...big.document.querySelectorAll('.terminal-bar button')].some((item) => item.textContent === 'Restore'), true);
   assert.match(webShellCSS, /html\.terminal-open\.terminal-maximized #terminal-panel \{\s*top: 0;\s*z-index: 50;/);
+  // The panel is a <section>, and the page's rule for those would make it a card that stops short of the window's edges.
+  assert.match(webShellCSS, /\n#terminal-panel \{[^}]*margin: 0;\s*padding: 0;\s*border: 0;\s*border-top: 1px solid var\(--line\);\s*border-radius: 0;\s*box-shadow: none;/);
 
   // The text size changes the terminal and fits it again, and stays within limits.
   const fontButton = (text) => [...document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === text);
