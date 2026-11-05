@@ -238,6 +238,8 @@ so it now does nothing on the alternate screen, as they chose. Maximize covers t
 rather than changing the panel's height, so the page behind stays as it was, and takes only CSS and a
 value in the browser. The text size is kept the same way, per browser and not per project. A project's
 shells get `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME`, so they follow the project rather than the directory.
+Links use the official web links addon, vendored after checking npm's SHA-512, with a plain click as the
+user asked and `noopener`, so a page reached from program output cannot reach this one.
 
 ## Interfaces and documents
 

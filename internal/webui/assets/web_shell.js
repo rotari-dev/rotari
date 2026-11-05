@@ -342,6 +342,7 @@
     loaded = (async () => {
       if (!window.Terminal) await loadScript("/_terminal/xterm.js");
       if (!window.FitAddon) await loadScript("/_terminal/xterm-addon-fit.js");
+      if (!window.WebLinksAddon) await loadScript("/_terminal/xterm-addon-web-links.js");
     })();
     return loaded;
   };
@@ -799,6 +800,10 @@
     });
     fit = new window.FitAddon.FitAddon();
     term.loadAddon(fit);
+    // A link is only text a program printed, so the new tab gets no hold on this page.
+    term.loadAddon(
+      new window.WebLinksAddon.WebLinksAddon((_, uri) => window.open(uri, "_blank", "noopener")),
+    );
     term.open(viewport);
     fit.fit();
     term.onData((data) => send(new TextEncoder().encode(data)));

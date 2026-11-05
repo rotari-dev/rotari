@@ -56,6 +56,7 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   if (await page.evaluate('typeof window.Terminal !== "undefined"')) throw new Error('xterm.js loaded before the panel opened');
   await page.evaluate('document.getElementById("terminal-button").click()');
   await until('the terminal', 'document.querySelector(".xterm-helper-textarea") !== null && document.querySelector(".xterm-rows") !== null');
+  if (await page.evaluate('typeof window.WebLinksAddon?.WebLinksAddon !== "function"')) throw new Error('the links addon did not load');
   await sleep(300);
   await typeLine('VALUE=kept; echo "one-$((1+1))"');
   await until('the first output', screenHas('one-2'));

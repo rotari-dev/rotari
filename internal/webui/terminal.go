@@ -38,6 +38,9 @@ var xtermJS string
 //go:embed assets/vendor/xterm-addon-fit.js
 var xtermFitJS string
 
+//go:embed assets/vendor/xterm-addon-web-links.js
+var xtermWebLinksJS string
+
 //go:embed assets/vendor/xterm.css
 var xtermCSS string
 
@@ -47,10 +50,11 @@ var xtermLicense string
 // terminalAssets are the files the panel loads when it first opens, so that pages
 // stay as light as they are for those who never open it.
 var terminalAssets = map[string]struct{ contentType, content string }{
-	terminalPrefix + "xterm.js":           {"text/javascript; charset=utf-8", xtermJS},
-	terminalPrefix + "xterm-addon-fit.js": {"text/javascript; charset=utf-8", xtermFitJS},
-	terminalPrefix + "xterm.css":          {"text/css; charset=utf-8", xtermCSS},
-	terminalPrefix + "xterm-license.txt":  {"text/plain; charset=utf-8", xtermLicense},
+	terminalPrefix + "xterm.js":                 {"text/javascript; charset=utf-8", xtermJS},
+	terminalPrefix + "xterm-addon-fit.js":       {"text/javascript; charset=utf-8", xtermFitJS},
+	terminalPrefix + "xterm-addon-web-links.js": {"text/javascript; charset=utf-8", xtermWebLinksJS},
+	terminalPrefix + "xterm.css":                {"text/css; charset=utf-8", xtermCSS},
+	terminalPrefix + "xterm-license.txt":        {"text/plain; charset=utf-8", xtermLicense},
 }
 
 // Close codes the page tells apart. Private codes start at 4000.

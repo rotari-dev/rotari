@@ -108,7 +108,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
         modes = { bracketedPasteMode: false };
         options = {};
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
-        loadAddon() {} open() {} focus() {}
+        loadAddon(addon) { (this.addons ||= []).push(addon); } open() {} focus() {}
         reset() { written.length = 0; }
         write(data, done) { written.push(Buffer.from(data).toString()); done?.(); }
         paste(text) { pasted.push(text); }
@@ -118,6 +118,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
         onResize(callback) { this.resize = callback; }
       };
       window.FitAddon = { FitAddon: class { fit() { fits.push(1); } } };
+      window.WebLinksAddon = { WebLinksAddon: class { constructor(handler) { this.handler = handler; } } };
     },
   });
   return { dom, window: dom.window, document: dom.window.document, sockets, written, terminals, requests, polls, server, alive, aliveTimers, pasted, fits };
@@ -159,6 +160,12 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.match(document.querySelector('.terminal-status').textContent, /Connecting/);
   sockets[0].onopen();
   assert.match(document.querySelector('.terminal-status').textContent, /Waiting for the shell/);
+
+  // A link opens in a new tab that gets no hold on this page.
+  const opened = [];
+  window.open = (...args) => opened.push(args);
+  terminals[0].addons.find((addon) => addon.handler).handler({}, 'https://example.test/a');
+  assert.deepEqual(opened, [['https://example.test/a', '_blank', 'noopener']]);
 
   // Output, input, and resize.
   sockets[0].onmessage({ data: new TextEncoder().encode('hello').buffer });
