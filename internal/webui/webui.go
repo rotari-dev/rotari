@@ -214,6 +214,7 @@ func (s site) handler() http.Handler {
 		child.baseHandler().ServeHTTP(writer, clone)
 	})
 	mux.HandleFunc(launchProxyPrefix, s.serveLaunchProxy)
+	mux.HandleFunc(terminalPrefix, s.serveTerminal)
 	mux.Handle("/", s.baseHandler())
 	return mux
 }

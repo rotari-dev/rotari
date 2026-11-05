@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -41,6 +42,14 @@ type Result struct {
 	ExitCode int
 	// Signal is the signal that ended the shell, or 0.
 	Signal syscall.Signal
+}
+
+// String describes how the shell ended.
+func (result Result) String() string {
+	if result.Signal != 0 {
+		return "signal " + result.Signal.String()
+	}
+	return "exit status " + strconv.Itoa(result.ExitCode)
 }
 
 // Session is a started shell and its terminal. Read and Write may run at the

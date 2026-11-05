@@ -90,8 +90,9 @@ func (sessions *webSessions) revoke(request *http.Request) {
 }
 
 // WithAuthToken protects the Web UI with an interactive login session and
-// accepts bearer or X-Rotari-Token credentials for API clients.
-func WithAuthToken(next http.Handler, token string) http.Handler {
+// accepts bearer or X-Rotari-Token credentials for API clients. onSignOut, if
+// given, runs when a browser signs out.
+func WithAuthToken(next http.Handler, token string, onSignOut ...func()) http.Handler {
 	sessions := &webSessions{}
 	launchSession := launchAuth{key: []byte(rand.Text())}
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -116,7 +117,7 @@ func WithAuthToken(next http.Handler, token string) http.Handler {
 				http.Error(writer, "authentication required", http.StatusUnauthorized)
 				return
 			}
-			handleWebLogout(writer, request, sessions)
+			handleWebLogout(writer, request, sessions, onSignOut)
 			return
 		}
 		if !authenticated {
@@ -185,7 +186,7 @@ func handleWebLogin(writer http.ResponseWriter, request *http.Request, token str
 	}
 }
 
-func handleWebLogout(writer http.ResponseWriter, request *http.Request, sessions *webSessions) {
+func handleWebLogout(writer http.ResponseWriter, request *http.Request, sessions *webSessions, onSignOut []func()) {
 	noCacheAuthResponse(writer)
 	if request.Method != http.MethodPost {
 		writer.Header().Set("Allow", http.MethodPost)
@@ -197,6 +198,9 @@ func handleWebLogout(writer http.ResponseWriter, request *http.Request, sessions
 		return
 	}
 	sessions.revoke(request)
+	for _, signedOut := range onSignOut {
+		signedOut()
+	}
 	http.SetCookie(writer, &http.Cookie{
 		Name:     webSessionCookie,
 		Value:    "",

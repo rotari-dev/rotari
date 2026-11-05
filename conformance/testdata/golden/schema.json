@@ -2204,6 +2204,9 @@
           "name": "allow-exec"
         },
         {
+          "name": "allow-terminal"
+        },
+        {
           "name": "allowed-host",
           "value_name": "NAME"
         }

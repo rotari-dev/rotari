@@ -31,6 +31,8 @@ func TestWebLaunchFlagsRejectConflicts(t *testing.T) {
 		want string
 	}{
 		{[]string{"--allow-exec", "--allow-control=false"}, "--allow-exec requires job control"},
+		{[]string{"--allow-terminal", "--allow-control=false"}, "--allow-terminal requires job control"},
+		{[]string{"--allow-terminal", "--static-dir", t.TempDir()}, "--allow-terminal cannot be combined with --static-dir"},
 		{[]string{"--allowed-host", "gpu01"}, "--allowed-host only applies with --allow-exec"},
 		{[]string{"--allow-exec", "--allowed-host", "gpu01:8765"}, "without a port"},
 		{[]string{"--allow-exec", "--allowed-host", "a/b"}, "host name or IP address"},
@@ -44,6 +46,9 @@ func TestWebLaunchFlagsRejectConflicts(t *testing.T) {
 		if code == 0 || !strings.Contains(stderr, test.want) {
 			t.Errorf("web %v = %d %q, want an error containing %q", test.args, code, stderr, test.want)
 		}
+	}
+	if flags, code := parseWebFlags([]string{"--allow-terminal", "--allowed-host", "gpu01"}); code != 0 || !flags.allowTerminal || flags.allowExec || len(flags.allowedHosts) != 1 {
+		t.Fatalf("parseWebFlags with --allow-terminal = %+v, %d", flags, code)
 	}
 	flags, code := parseWebFlags([]string{"--allow-exec", "--allowed-host", "gpu01.example", "--allowed-host", "[fe80::1]"})
 	if code != 0 || !flags.allowExec || len(flags.allowedHosts) != 2 {
@@ -71,9 +76,9 @@ func TestExecAllowedHosts(t *testing.T) {
 }
 
 func TestLaunchBaseEnvironmentDropsWebToken(t *testing.T) {
-	got := launchBaseEnvironment([]string{"PATH=/bin", envWebAuthToken + "=secret", "ROTARI_WEB_AUTH_TOKENS=kept"})
+	got := webChildEnvironment([]string{"PATH=/bin", envWebAuthToken + "=secret", "ROTARI_WEB_AUTH_TOKENS=kept"})
 	if strings.Join(got, " ") != "PATH=/bin ROTARI_WEB_AUTH_TOKENS=kept" {
-		t.Fatalf("launchBaseEnvironment = %v", got)
+		t.Fatalf("webChildEnvironment = %v", got)
 	}
 }
 

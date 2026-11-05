@@ -8,6 +8,7 @@ import (
 	"github.com/rotari-dev/rotari/internal/notificationlog"
 	"github.com/rotari-dev/rotari/internal/queueops"
 	"github.com/rotari-dev/rotari/internal/state"
+	"github.com/rotari-dev/rotari/internal/terminal"
 	"github.com/rotari-dev/rotari/internal/web"
 )
 
@@ -45,6 +46,8 @@ type Options struct {
 	NotificationLog *notificationlog.Log
 	// Launches is set when rotari web runs with --allow-exec.
 	Launches *LaunchOptions
+	// Terminal is set when rotari web runs with --allow-terminal.
+	Terminal *terminal.Keeper
 	// LauncherFile is where launchers.toml is read from. Explanations of why
 	// launching is unavailable name it even when Launches is nil.
 	LauncherFile string

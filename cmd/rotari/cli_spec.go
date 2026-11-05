@@ -467,7 +467,8 @@ var cliCommandSpecs = []cliCommandSpec{
 			cliFlagSpec{Name: "static-artifact-contents", Description: "copy previewable artifact files (up to 10 MiB each, 100 MiB in all) into the static export so previews work there; requires --static-dir", CommandLineOnly: true},
 			cliFlagSpec{Name: "artifact-root", Description: "also serve recorded artifact files under this directory, besides each job's working directory (live server only; may be repeated; cannot be combined with --static-dir)", ValueName: "DIR", Repeated: true, CommandLineOnly: true},
 			cliFlagSpec{Name: "allow-exec", Description: "let the Web UI run the commands registered in the global launchers.toml against artifacts; requires job control and a token (generated and printed when none is set); cannot be combined with --static-dir", CommandLineOnly: true},
-			cliFlagSpec{Name: "allowed-host", Description: "with --allow-exec, also accept this Host name besides localhost, 127.0.0.1, ::1, and a specific --host (may be repeated)", ValueName: "NAME", Repeated: true, CommandLineOnly: true},
+			cliFlagSpec{Name: "allow-terminal", Description: "let the Web UI open a shell on this host, as you, for anyone who can sign in; requires job control and a token (generated and printed when none is set), and a direct localhost connection or HTTPS; cannot be combined with --static-dir", CommandLineOnly: true},
+			cliFlagSpec{Name: "allowed-host", Description: "with --allow-exec or --allow-terminal, also accept this Host name besides localhost, 127.0.0.1, ::1, and a specific --host (may be repeated)", ValueName: "NAME", Repeated: true, CommandLineOnly: true},
 		),
 	},
 	{

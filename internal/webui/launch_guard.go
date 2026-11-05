@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// loopbackHostNames are always accepted as Host while launching is enabled,
-// with any port: SSH forwarding can use a different local port, and DNS
+// loopbackHostNames are always accepted as Host while launching or the terminal
+// is enabled, with any port: SSH forwarding can use a different local port, and DNS
 // rebinding needs an attacker's name, not these.
 var loopbackHostNames = []string{"localhost", "127.0.0.1", "::1"}
 
@@ -31,7 +31,7 @@ func WithExecGuard(next http.Handler, allowedHosts []string) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		host := requestHostName(request.Host)
 		if !allowed[host] {
-			http.Error(writer, "Host "+request.Host+" is not allowed while launching is enabled; open the server as localhost, or restart rotari web with --allowed-host "+host, http.StatusMisdirectedRequest)
+			http.Error(writer, "Host "+request.Host+" is not allowed while launching or the terminal is enabled; open the server as localhost, or restart rotari web with --allowed-host "+host, http.StatusMisdirectedRequest)
 			return
 		}
 		// A WebSocket handshake is a GET, but it opens a channel another
@@ -65,11 +65,11 @@ func crossOriginRejection(request *http.Request) string {
 		if request.Header.Get("X-Rotari-Token") != "" || strings.HasPrefix(request.Header.Get("Authorization"), authBearerPrefix) {
 			return ""
 		}
-		return "a request without Origin must authenticate with X-Rotari-Token or Authorization: Bearer while launching is enabled"
+		return "a request without Origin must authenticate with X-Rotari-Token or Authorization: Bearer while launching or the terminal is enabled"
 	}
 	parsed, err := url.Parse(origin)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || !strings.EqualFold(parsed.Host, request.Host) {
-		return "cross-origin request from " + origin + " rejected while launching is enabled"
+		return "cross-origin request from " + origin + " rejected while launching or the terminal is enabled"
 	}
 	return ""
 }

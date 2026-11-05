@@ -58,6 +58,8 @@ type KeeperOptions struct {
 	IdleLimit time.Duration
 	// RingSize is how many bytes of recent output a new Attach replays.
 	RingSize int
+	// Log, if set, is told when a shell starts and ends, and never what it shows.
+	Log func(message string)
 }
 
 // Keeper holds at most one shell, which outlives the attachments that show it:
@@ -115,6 +117,7 @@ func (keeper *Keeper) Attach(rows, cols uint16) (*Attachment, error) {
 		}
 		shell = &keptShell{session: session, ring: outputRing{limit: keeper.options.RingSize}, finished: make(chan struct{})}
 		keeper.shell = shell
+		keeper.log("terminal: shell started")
 		go keeper.pump(shell)
 	}
 	keeper.stopIdleTimer()
@@ -229,6 +232,7 @@ func signal(events chan struct{}) {
 func (keeper *Keeper) finish(shell *keptShell) {
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
+	keeper.log("terminal: shell ended: " + shell.session.Result().String())
 	if keeper.shell == shell {
 		keeper.shell = nil
 		keeper.stopIdleTimer()
@@ -238,6 +242,12 @@ func (keeper *Keeper) finish(shell *keptShell) {
 		keeper.detach(ShellExited)
 	}
 	close(shell.finished)
+}
+
+func (keeper *Keeper) log(message string) {
+	if keeper.options.Log != nil {
+		keeper.options.Log(message)
+	}
 }
 
 // detach ends the current attachment; the caller holds mu.

@@ -3518,9 +3518,20 @@ CLI_SCHEMA: dict[str, Any] = {
                 },
                 {
                     "command_line_only": True,
-                    "description": "with --allow-exec, also accept this Host "
-                    "name besides localhost, 127.0.0.1, ::1, and "
-                    "a specific --host (may be repeated)",
+                    "description": "let the Web UI open a shell on this host, as "
+                    "you, for anyone who can sign in; requires "
+                    "job control and a token (generated and "
+                    "printed when none is set), and a direct "
+                    "localhost connection or HTTPS; cannot be "
+                    "combined with --static-dir",
+                    "name": "allow-terminal",
+                },
+                {
+                    "command_line_only": True,
+                    "description": "with --allow-exec or --allow-terminal, also "
+                    "accept this Host name besides localhost, "
+                    "127.0.0.1, ::1, and a specific --host (may "
+                    "be repeated)",
                     "name": "allowed-host",
                     "repeated": True,
                     "value_name": "NAME",

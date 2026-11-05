@@ -44,7 +44,7 @@ func newWebLaunches() (*webui.LaunchOptions, error) {
 	}
 	manager, err := launcher.NewManager(launcher.ManagerConfig{
 		Wrapper:     []string{executable, launcher.WrapperCommand},
-		Env:         launchBaseEnvironment(os.Environ()),
+		Env:         webChildEnvironment(os.Environ()),
 		ServicePath: webui.LaunchProxyPath,
 	})
 	if err != nil {
@@ -53,9 +53,9 @@ func newWebLaunches() (*webui.LaunchOptions, error) {
 	return &webui.LaunchOptions{Manager: manager, Registry: registry}, nil
 }
 
-// launchBaseEnvironment is the Web server's environment without its own
-// token, which a launched command has no use for.
-func launchBaseEnvironment(env []string) []string {
+// webChildEnvironment is the Web server's environment without its own
+// token, which a launched command or the terminal's shell has no use for.
+func webChildEnvironment(env []string) []string {
 	result := make([]string, 0, len(env))
 	for _, entry := range env {
 		if !strings.HasPrefix(entry, envWebAuthToken+"=") {

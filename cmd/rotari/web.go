@@ -62,6 +62,8 @@ type webCommandFlags struct {
 	// extra Host names accepted while it is on.
 	allowExec    bool
 	allowedHosts []string
+	// allowTerminal enables the Web UI's shell.
+	allowTerminal bool
 	// artifactRoots are absolute --artifact-root directories.
 	artifactRoots []string
 	// staticArtifactContents copies artifact files into a static export.
@@ -81,6 +83,7 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 	cliValue(fs, &artifactRoots, "artifact-root")
 	staticArtifactContents := cliBool(fs, "static-artifact-contents", false)
 	allowExec := cliBool(fs, "allow-exec", false)
+	allowTerminal := cliBool(fs, "allow-terminal", false)
 	var allowedHosts stringSliceFlag
 	cliValue(fs, &allowedHosts, "allowed-host")
 	if err := cliParse(fs, args); err != nil {
@@ -105,8 +108,12 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 		printError("--allow-exec requires job control; remove --allow-control=false")
 		return webCommandFlags{}, 1
 	}
-	if len(allowedHosts) > 0 && !*allowExec {
-		printError("--allowed-host only applies with --allow-exec")
+	if *allowTerminal && !*allowControl {
+		printError("--allow-terminal requires job control; remove --allow-control=false")
+		return webCommandFlags{}, 1
+	}
+	if len(allowedHosts) > 0 && !*allowExec && !*allowTerminal {
+		printError("--allowed-host only applies with --allow-exec or --allow-terminal")
 		return webCommandFlags{}, 1
 	}
 	for _, name := range allowedHosts {
@@ -116,7 +123,7 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 		}
 	}
 	flags := webCommandFlags{basedir: *basedir, host: *host, port: *port, staticDir: *staticDir, authToken: *authToken, allowControl: *allowControl, notifications: *notifications, staticArtifactContents: *staticArtifactContents,
-		allowExec: *allowExec, allowedHosts: allowedHosts}
+		allowExec: *allowExec, allowedHosts: allowedHosts, allowTerminal: *allowTerminal}
 	for _, root := range artifactRoots {
 		absolute, err := filepath.Abs(root)
 		if info, statErr := os.Stat(absolute); err != nil || statErr != nil || !info.IsDir() {
@@ -196,16 +203,34 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 		}
 		defer launches.Manager.Close()
 		options.Launches = launches
+	}
+	if flags.allowTerminal {
+		keeper, err := newWebTerminal()
+		if err != nil {
+			printErrorf("cannot enable the terminal: %v", err)
+			return 1
+		}
+		defer keeper.Close()
+		options.Terminal = keeper
+	}
+	if flags.allowExec || flags.allowTerminal {
+		option := "--allow-exec"
+		if !flags.allowExec {
+			option = "--allow-terminal"
+		}
 		if flags.authToken == "" {
+			var err error
 			if flags.authToken, err = newWebAuthToken(); err != nil {
 				printErrorf("cannot generate a Web token: %v", err)
 				return 1
 			}
-			fmt.Fprintf(os.Stderr, "--allow-exec requires authentication. Sign in with user name %q and this token as the password:\n  %s\nSet %s to keep one token across restarts.\n", "rotari", flags.authToken, envWebAuthToken)
+			fmt.Fprintf(os.Stderr, "%s requires authentication. Sign in with user name %q and this token as the password:\n  %s\nSet %s to keep one token across restarts.\n", option, "rotari", flags.authToken, envWebAuthToken)
 		} else {
-			fmt.Fprintf(os.Stderr, "--allow-exec requires authentication. Sign in with user name %q and the configured token as the password.\n", "rotari")
+			fmt.Fprintf(os.Stderr, "%s requires authentication. Sign in with user name %q and the configured token as the password.\n", option, "rotari")
 		}
-		printLaunchRegistry(launches.Registry)
+	}
+	if options.Launches != nil {
+		printLaunchRegistry(options.Launches.Registry)
 	}
 	if !webui.IsLoopbackHost(flags.host) && flags.authToken == "" {
 		controlWarning := "registered basedir paths, job logs, artifact files under job working directories and --artifact-root, and environment variable names"
@@ -219,9 +244,13 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 	}
 	handler := webui.Handler(options)
 	if flags.authToken != "" {
-		handler = webui.WithAuthToken(handler, flags.authToken)
+		var onSignOut []func()
+		if options.Terminal != nil {
+			onSignOut = append(onSignOut, options.Terminal.EndShell)
+		}
+		handler = webui.WithAuthToken(handler, flags.authToken, onSignOut...)
 	}
-	if flags.allowExec {
+	if flags.allowExec || flags.allowTerminal {
 		handler = webui.WithExecGuard(handler, execAllowedHosts(flags))
 	}
 	listener, err := webui.Listen(flags.host, flags.port, !flags.portExplicit)
@@ -236,6 +265,10 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 		if options.Launches != nil {
 			_ = options.Launches.Manager.Close()
 		}
+		// The server does not close the terminal's connection itself; this does.
+		if options.Terminal != nil {
+			options.Terminal.Close()
+		}
 		_ = server.Close()
 	}()
 	fmt.Printf("rotari web listening at http://%s\n", listener.Addr())
@@ -247,7 +280,7 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 }
 
 func webStaticServerOptions(fs *flag.FlagSet) []string {
-	return staticServerOptions(fs, "web", []string{"allow-control", "allow-exec", "allowed-host", "artifact-root", "auth-token", "host", "port"})
+	return staticServerOptions(fs, "web", []string{"allow-control", "allow-exec", "allow-terminal", "allowed-host", "artifact-root", "auth-token", "host", "port"})
 }
 
 // staticServerOptions lists the names, options of command that only a live
