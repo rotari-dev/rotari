@@ -1,7 +1,7 @@
 # Plan: Export a Table Viewer's Selected Rows
 
 Created: 2026-11-05
-Status: Implemented, not yet tried in a browser or in `main`; see
+Status: Implemented. Its browser checks are under Remaining work; see
 [work-log.md](work-log.md).
 Related: [keyboard row navigation](../2026-11-05-table-viewer-row-navigation/plan.md),
 which is independent of this plan.

@@ -1,7 +1,7 @@
 # Plan: Show Distributions in Table Viewer Describe
 
 Created: 2026-11-05
-Status: Implemented, not yet tried in a browser or in `main`; see
+Status: Implemented. Its browser checks are under Remaining work; see
 [work-log.md](work-log.md).
 Related: [keyboard row navigation](../2026-11-05-table-viewer-row-navigation/plan.md)
 and [row export](../2026-11-05-table-viewer-export-rows/plan.md), which are
