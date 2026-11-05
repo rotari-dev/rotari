@@ -40,7 +40,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const home = '/home/u';
 const plain = (id, number) => ({ id, number, basedir: '', project: '', dir: home, link: '/' });
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
-const load = (file, { stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', limit = 8, path = '/' } = {}) => {
+const load = (file, { stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', limit = 8, path = '/', maximized = false } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [];
   const server = { shells: [...shells], lastID: 100, limit, startError: '' };
   const fakeShells = (url, method) => {
@@ -70,6 +70,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
     virtualConsole: new VirtualConsole(),
     beforeParse(window) {
       if (stored) window.localStorage.setItem('rotari-terminal-open', stored);
+      if (maximized) window.localStorage.setItem('rotari-terminal-maximized', '1');
       if (remembered) window.sessionStorage.setItem(remembered[0], remembered[1]);
       window.fetch = (url, init = {}) => {
         const address = String(url);
@@ -319,6 +320,25 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(sockets[11].sent.length, sentBefore, 'forgot the replay of a full-screen program');
   assert.match(status().textContent, /full-screen program/);
   terminals[0].buffer.active.type = 'normal';
+
+  // Maximize covers the page, comes back with the next page, and changes no connection.
+  const maximizeButton = [...document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === 'Maximize');
+  assert.equal(maximizeButton.getAttribute('aria-pressed'), 'false');
+  maximizeButton.click();
+  assert.equal(document.documentElement.classList.contains('terminal-maximized'), true);
+  assert.equal(maximizeButton.textContent, 'Restore');
+  assert.equal(maximizeButton.getAttribute('aria-pressed'), 'true');
+  assert.equal(window.localStorage.getItem('rotari-terminal-maximized'), '1');
+  assert.equal(sockets.length, 12, 'maximizing reconnected');
+  maximizeButton.click();
+  assert.equal(document.documentElement.classList.contains('terminal-maximized'), false);
+  assert.equal(maximizeButton.textContent, 'Maximize');
+  assert.equal(window.localStorage.getItem('rotari-terminal-maximized'), '0');
+  const big = load(process.argv[1], { stored: '1', maximized: true });
+  await wait(50);
+  assert.equal(big.document.documentElement.classList.contains('terminal-maximized'), true, 'the next page lost it');
+  assert.equal([...big.document.querySelectorAll('.terminal-bar button')].some((item) => item.textContent === 'Restore'), true);
+  assert.match(webShellCSS, /html\.terminal-open\.terminal-maximized #terminal-panel \{\s*top: 0;\s*z-index: 50;/);
 
   // Hide leaves the shell and the connection alone.
   [...document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === 'Hide').click();

@@ -234,7 +234,9 @@ their buttons every couple of seconds.
 From here the user decides each one in turn, easiest first: Clear, a maximized panel, font size,
 project variables in the shell, and clickable links, then a tab menu. Clear also forgets the server's
 replay, or following a link would bring back what it cleared. The user found that it also blanked `vim`,
-so it now does nothing on the alternate screen, as they chose.
+so it now does nothing on the alternate screen, as they chose. Maximize covers the page with the panel
+rather than changing the panel's height, so the page behind stays as it was, and takes only CSS and a
+value in the browser.
 
 ## Interfaces and documents
 

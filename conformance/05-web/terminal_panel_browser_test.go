@@ -118,6 +118,19 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
     '})()');
   if (!fits) throw new Error('a dialog does not fit above the panel');
   await collect();
+
+  // Maximized, the panel takes the whole window, over the top bar, and gives it back.
+  const covers = '(() => {' +
+    'const box = document.getElementById("terminal-panel").getBoundingClientRect();' +
+    'const top = document.elementFromPoint(innerWidth / 2, 2);' +
+    'return box.top === 0 && box.bottom === innerHeight && top.closest("#terminal-panel") !== null;' +
+    '})()';
+  if (await page.evaluate(covers)) throw new Error('the panel covered the page before it was maximized');
+  await page.evaluate('[...document.querySelectorAll(".terminal-bar button")].find((item) => item.textContent === "Maximize").click()');
+  await until('the panel to cover the window', covers);
+  await page.evaluate('[...document.querySelectorAll(".terminal-bar button")].find((item) => item.textContent === "Restore").click()');
+  await until('the panel to give the window back', '!' + covers);
+  await collect();
 }).catch((error) => { failure = error.stack || String(error); });
 await close();
 console.log(JSON.stringify({ failure, violations: [...violations] }));

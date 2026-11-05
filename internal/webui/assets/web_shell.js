@@ -134,6 +134,7 @@
   const openKey = "rotari-terminal-open";
   const heightKey = "rotari-terminal-height";
   const shownKey = "rotari-terminal-shell";
+  const maximizedKey = "rotari-terminal-maximized";
   const shellsPath = "/_terminal/shells";
   // How often a page in view picks up shells started or ended from elsewhere.
   const shellsRefresh = 5000;
@@ -175,7 +176,7 @@
   // This script runs first.
   const rootFetch = window.fetch;
   const serverFetch = (...args) => rootFetch.apply(window, args);
-  let panel, status, retry, viewport, groups, tabs, add, term, fit, socket, retryTimer;
+  let panel, status, retry, viewport, groups, tabs, add, maximize, term, fit, socket, retryTimer;
   let shells = [];
   let shellLimit = 0;
   let groupLimit = 0;
@@ -209,6 +210,27 @@
   const clampHeight = (height) =>
     Math.max(minHeight, Math.min(height, Math.max(minHeight, innerHeight - minHeight)));
   const root = document.documentElement;
+  const rememberedMaximized = () => {
+    try {
+      return localStorage.getItem(maximizedKey) === "1";
+    } catch {
+      return false;
+    }
+  };
+  const applyMaximized = (maximized) => {
+    root.classList.toggle("terminal-maximized", maximized);
+    if (!maximize) return;
+    maximize.textContent = maximized ? "Restore" : "Maximize";
+    maximize.setAttribute("aria-pressed", String(maximized));
+  };
+  const toggleMaximized = () => {
+    const maximized = !root.classList.contains("terminal-maximized");
+    applyMaximized(maximized);
+    try {
+      localStorage.setItem(maximizedKey, maximized ? "1" : "0");
+    } catch {}
+    term?.focus();
+  };
   const applyHeight = (height) => {
     // Only an open panel takes room, which web_shell.css decides from this.
     root.style.setProperty("--terminal-saved-height", clampHeight(height) + "px");
@@ -699,11 +721,15 @@
       term.clear();
       send(JSON.stringify({ type: "clear" }));
     };
+    maximize = document.createElement("button");
+    maximize.type = "button";
+    maximize.onclick = toggleMaximized;
+    applyMaximized(rememberedMaximized());
     const hide = document.createElement("button");
     hide.type = "button";
     hide.textContent = "Hide";
     hide.onclick = () => window.toggleTerminalPanel();
-    bar.append(title, groups, tabs, add, status, retry, spacer, clear, hide);
+    bar.append(title, groups, tabs, add, status, retry, spacer, clear, maximize, hide);
     viewport = document.createElement("div");
     viewport.className = "terminal-viewport";
     panel.append(buildResizer(), bar, viewport);
@@ -798,6 +824,7 @@
   // Before the page is drawn, so a panel left open does not make it jump.
   if (savedHeight()) applyHeight(savedHeight());
   if (remembered()) root.classList.add("terminal-open");
+  if (rememberedMaximized()) root.classList.add("terminal-maximized");
   addEventListener("resize", () => {
     if (savedHeight()) applyHeight(savedHeight());
   });

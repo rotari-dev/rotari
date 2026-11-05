@@ -756,6 +756,19 @@ html.terminal-open .artifact-view {
 #terminal-panel[hidden] {
   display: none;
 }
+/* The panel over the whole page, top bar included. Only an open panel does this, and
+   the page behind keeps its size and does not scroll. */
+html.terminal-open.terminal-maximized {
+  overflow: hidden;
+}
+html.terminal-open.terminal-maximized #terminal-panel {
+  top: 0;
+  z-index: 50;
+  height: auto;
+}
+html.terminal-open.terminal-maximized .terminal-resizer {
+  display: none;
+}
 /* No shell to show yet: an empty terminal would read as something broken. */
 #terminal-panel.terminal-empty,
 #terminal-panel.terminal-empty .terminal-viewport {
@@ -769,7 +782,8 @@ html.terminal-open .artifact-view {
   position: fixed;
   right: 16px;
   bottom: calc(var(--terminal-height, 0px) + 12px);
-  z-index: 20;
+  /* Over a maximized panel too. */
+  z-index: 60;
   max-width: min(420px, calc(100vw - 32px));
   border: 1px solid var(--line);
   border-radius: 4px;

@@ -129,6 +129,9 @@ editor; elsewhere each line would run, so the button says so and sends nothing.
 link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing
 while a full-screen program such as `vim` runs, and says so.
 
+**Maximize** gives the panel the whole window, for programs such as `vim`, until you press **Restore**.
+The browser remembers it from page to page. Keep the panel small to reach the page's menus and dialogs.
+
 Opening the panel starts a shell if the project has none. Following a link to another project with
 the panel open starts nothing, so browsing leaves no shells behind; the panel offers to start one.
 
