@@ -103,12 +103,21 @@ export async function launchChrome(chrome) {
     { stdio: "ignore" },
   );
   const portFile = join(profile, "DevToolsActivePort");
-  // A loaded CI host can take well over ten seconds to start Chrome.
-  for (let i = 0; i < 600 && !existsSync(portFile); i++) await sleep(100);
-  if (!existsSync(portFile))
-    throw new Error("Chrome did not open a DevTools port");
-  const [port, path] = readFileSync(portFile, "utf8").trim().split("\n");
-  const cdp = await connect(`ws://127.0.0.1:${port}${path}`);
+  // The file can exist before Chrome has written to it, so what counts is its
+  // contents: the port, then the path. A loaded CI host can take well over ten
+  // seconds to start Chrome.
+  const devToolsAddress = () => {
+    if (!existsSync(portFile)) return null;
+    const match = /^(\d+)\n(\/\S+)/.exec(readFileSync(portFile, "utf8"));
+    return match && `ws://127.0.0.1:${match[1]}${match[2]}`;
+  };
+  let address = devToolsAddress();
+  for (let i = 0; i < 600 && !address; i++) {
+    await sleep(100);
+    address = devToolsAddress();
+  }
+  if (!address) throw new Error("Chrome did not open a DevTools port");
+  const cdp = await connect(address);
   return {
     cdp,
     async close() {
