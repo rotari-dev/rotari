@@ -1407,7 +1407,8 @@ lists them and attaches to the one this browser tab last showed for the project,
 replaying recent output, so following a link ends none of them. Only the tab shown is connected. A
 shell ending moves to a neighboring tab of the project without taking it from another browser tab;
 when the project's last one ends, the panel says how and a new shell is a choice. **Maximize** gives the
-panel the whole window until **Restore**, kept from page to page by the browser. Each one-line copy
+panel the whole window until **Restore**, and **A-** and **A+** set the text size between 8 and 32; the
+browser keeps both from page to page. Each one-line copy
 button has a send button beside it that types into the shown shell with no Enter, opening the panel if
 needed: a suggested command as its commands on one line, a job's command as it is, and any other value as
 one word, quoted if needed. A dialog's text and a log go in as pasted text with no control characters but

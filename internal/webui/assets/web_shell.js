@@ -135,6 +135,10 @@
   const heightKey = "rotari-terminal-height";
   const shownKey = "rotari-terminal-shell";
   const maximizedKey = "rotari-terminal-maximized";
+  const fontSizeKey = "rotari-terminal-font-size";
+  const defaultFontSize = 13;
+  const minFontSize = 8;
+  const maxFontSize = 32;
   const shellsPath = "/_terminal/shells";
   // How often a page in view picks up shells started or ended from elsewhere.
   const shellsRefresh = 5000;
@@ -230,6 +234,35 @@
       localStorage.setItem(maximizedKey, maximized ? "1" : "0");
     } catch {}
     term?.focus();
+  };
+  // A value someone edited or an older version left must not make the shell unreadable.
+  const savedFontSize = () => {
+    try {
+      const size = Number(localStorage.getItem(fontSizeKey));
+      if (Number.isInteger(size) && size >= minFontSize && size <= maxFontSize) return size;
+    } catch {}
+    return defaultFontSize;
+  };
+  const changeFontSize = (step) => {
+    term?.focus();
+    if (!term) return;
+    const size = term.options.fontSize + step;
+    if (size < minFontSize || size > maxFontSize) return;
+    term.options.fontSize = size;
+    // Fewer or more cells fit now, and the shell hears of it through the resize.
+    fit.fit();
+    try {
+      localStorage.setItem(fontSizeKey, String(size));
+    } catch {}
+  };
+  const fontButton = (text, label, step) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = text;
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.onclick = () => changeFontSize(step);
+    return button;
   };
   const applyHeight = (height) => {
     // Only an open panel takes room, which web_shell.css decides from this.
@@ -729,7 +762,20 @@
     hide.type = "button";
     hide.textContent = "Hide";
     hide.onclick = () => window.toggleTerminalPanel();
-    bar.append(title, groups, tabs, add, status, retry, spacer, clear, maximize, hide);
+    bar.append(
+      title,
+      groups,
+      tabs,
+      add,
+      status,
+      retry,
+      spacer,
+      fontButton("A-", "Smaller text", -1),
+      fontButton("A+", "Larger text", 1),
+      clear,
+      maximize,
+      hide,
+    );
     viewport = document.createElement("div");
     viewport.className = "terminal-viewport";
     panel.append(buildResizer(), bar, viewport);
@@ -748,7 +794,7 @@
     term = new window.Terminal({
       cursorBlink: true,
       fontFamily: fontFamily(),
-      fontSize: 13,
+      fontSize: savedFontSize(),
       theme: theme(),
     });
     fit = new window.FitAddon.FitAddon();

@@ -40,8 +40,8 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const home = '/home/u';
 const plain = (id, number) => ({ id, number, basedir: '', project: '', dir: home, link: '/' });
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
-const load = (file, { stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', limit = 8, path = '/', maximized = false } = {}) => {
-  const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [];
+const load = (file, { stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', limit = 8, path = '/', maximized = false, fontSize = '' } = {}) => {
+  const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
   const server = { shells: [...shells], lastID: 100, limit, startError: '' };
   const fakeShells = (url, method) => {
     requests.push(method + ' ' + url);
@@ -71,6 +71,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
     beforeParse(window) {
       if (stored) window.localStorage.setItem('rotari-terminal-open', stored);
       if (maximized) window.localStorage.setItem('rotari-terminal-maximized', '1');
+      if (fontSize) window.localStorage.setItem('rotari-terminal-font-size', fontSize);
       if (remembered) window.sessionStorage.setItem(remembered[0], remembered[1]);
       window.fetch = (url, init = {}) => {
         const address = String(url);
@@ -116,10 +117,10 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
         onBinary() {}
         onResize(callback) { this.resize = callback; }
       };
-      window.FitAddon = { FitAddon: class { fit() {} } };
+      window.FitAddon = { FitAddon: class { fit() { fits.push(1); } } };
     },
   });
-  return { dom, window: dom.window, document: dom.window.document, sockets, written, terminals, requests, polls, server, alive, aliveTimers, pasted };
+  return { dom, window: dom.window, document: dom.window.document, sockets, written, terminals, requests, polls, server, alive, aliveTimers, pasted, fits };
 };
 (async () => {
   // Any open page says so, with its panel closed and in the background too, and a page
@@ -139,7 +140,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(off.sockets.length, 0, 'connected with no terminal on offer');
   assert.deepEqual(off.alive, [], 'a page with no terminal kept shells alive');
 
-  const { window, document, sockets, written, terminals, requests, polls, server } = load(process.argv[1], { limit: 2 });
+  const { window, document, sockets, written, terminals, requests, polls, server, fits } = load(process.argv[1], { limit: 2 });
   await wait(50);
   assert.equal(sockets.length, 0, 'connected before the panel opened');
   assert.equal(document.getElementById('terminal-panel'), null);
@@ -339,6 +340,29 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(big.document.documentElement.classList.contains('terminal-maximized'), true, 'the next page lost it');
   assert.equal([...big.document.querySelectorAll('.terminal-bar button')].some((item) => item.textContent === 'Restore'), true);
   assert.match(webShellCSS, /html\.terminal-open\.terminal-maximized #terminal-panel \{\s*top: 0;\s*z-index: 50;/);
+
+  // The text size changes the terminal and fits it again, and stays within limits.
+  const fontButton = (text) => [...document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === text);
+  assert.equal(terminals[0].options.fontSize, 13);
+  const fitsBefore = fits.length;
+  fontButton('A+').click();
+  assert.equal(terminals[0].options.fontSize, 14);
+  assert.equal(window.localStorage.getItem('rotari-terminal-font-size'), '14');
+  assert.equal(fits.length, fitsBefore + 1, 'the terminal did not fit its new text size');
+  fontButton('A-').click();
+  fontButton('A-').click();
+  assert.equal(terminals[0].options.fontSize, 12);
+  for (let press = 0; press < 40; press++) fontButton('A-').click();
+  assert.equal(terminals[0].options.fontSize, 8, 'the text went under the minimum');
+  for (let press = 0; press < 40; press++) fontButton('A+').click();
+  assert.equal(terminals[0].options.fontSize, 32, 'the text went over the maximum');
+  assert.equal(sockets.length, 12, 'changing the text size reconnected');
+  // It comes back with the next page, unless what is saved makes no sense.
+  for (const [saved, want] of [['20', 20], ['9000', 13], ['1', 13], ['nope', 13], ['12.5', 13]]) {
+    const sized = load(process.argv[1], { stored: '1', fontSize: saved, shells: [plain('1', 1)] });
+    await wait(40);
+    assert.equal(sized.terminals[0].options.fontSize, want, 'saved text size ' + saved);
+  }
 
   // Hide leaves the shell and the connection alone.
   [...document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === 'Hide').click();

@@ -236,7 +236,7 @@ project variables in the shell, and clickable links, then a tab menu. Clear also
 replay, or following a link would bring back what it cleared. The user found that it also blanked `vim`,
 so it now does nothing on the alternate screen, as they chose. Maximize covers the page with the panel
 rather than changing the panel's height, so the page behind stays as it was, and takes only CSS and a
-value in the browser.
+value in the browser. The text size is kept the same way, per browser and not per project.
 
 ## Interfaces and documents
 
