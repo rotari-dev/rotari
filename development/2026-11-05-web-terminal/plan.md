@@ -1,8 +1,9 @@
 # Plan: A built-in terminal in `rotari web`
 
 Created: 2026-11-05
-Status: Steps 1 to 5 are implemented, and the user has tried the panel by hand. What remains is
-the first run of the browser tests on CI; see [the tests](#tests-and-validation). This replaces
+Status: Steps 1 to 5 are implemented, and the user has tried the panel by hand. Tabs for several
+shells followed; see [Tabs](#tabs). What remains is the first run of the browser tests on CI; see
+[the tests](#tests-and-validation). This replaces
 phases 3 to 5 of [the hardening plan](../2026-11-04-web-terminal/plan.md), whose hardening is done.
 
 ## Goal
@@ -46,7 +47,6 @@ on the application and Recent jobs pages.
 
 Non-goals, at least at first:
 
-- Several shells, or tabs inside the panel.
 - Multi-user terminals, or running as another user.
 - A sandbox. The shell has all the user's permissions.
 - A shell on a compute node, or attaching to a running job.
@@ -167,6 +167,25 @@ The panel:
 The 30-minute idle limit, the 256 KiB ring, the 1 MiB of waiting output, and the 30-second stall
 limit are provisional. They are meant to become configuration in the end, so nothing should
 depend on their values.
+
+## Tabs
+
+Added after the first version, as the first of several small improvements the user wants. Decided
+with the user:
+
+- A tab for each shell, up to eight (provisional). Tabs show numbers for now.
+- Only the shown tab is connected. Switching replays up to 256 KiB, as following a link does.
+- **The idle limit covers the shells together.** Per shell, tabs nobody is looking at would end after
+  30 minutes while the user works in another. It now runs only while nothing is attached to any.
+- Closing a tab asks, then ends its shell. A shell ending moves to a neighbor; the last one ending
+  leaves a **New shell** button.
+- Take-over is per shell, so two browser tabs can use two shells.
+
+Implementation choices: `Keeper` holds the shells itself rather than one `Keeper` per shell, because
+the idle limit and the sign-out need them together and a connection must not start a shell by naming
+one that has ended. IDs are never reused, while numbers are, so a stale page cannot reach a later
+shell. Each browser tab remembers its shell in `sessionStorage`. The list is read every five seconds
+while in view, so tabs started elsewhere appear.
 
 ## Interfaces and documents
 

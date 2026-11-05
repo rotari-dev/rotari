@@ -118,13 +118,19 @@
   }
 })();
 
-// The terminal panel along the bottom of the page. The shell lives on the server,
-// and every page load attaches to it again and replays recent output, so following
-// a link does not end it. Nothing loads until the panel first opens; a page without
-// the top bar's Terminal button has no terminal to offer.
+// The terminal panel along the bottom of the page, with a tab for each shell. The
+// shells live on the server, and every page load lists them, attaches to the tab this
+// browser tab last showed, and replays recent output, so following a link ends none of
+// them. Only the shown tab is connected; the others carry on with no one reading, and
+// replay when shown. Nothing loads until the panel first opens; a page without the top
+// bar's Terminal button has no terminal to offer.
 (() => {
   const openKey = "rotari-terminal-open";
   const heightKey = "rotari-terminal-height";
+  const shownKey = "rotari-terminal-shell";
+  const shellsPath = "/_terminal/shells";
+  // How often a page in view picks up shells started or ended from elsewhere.
+  const shellsRefresh = 5000;
   const minHeight = 120;
   // Colours programs ask for by name, and the tokens that hold them.
   const themeTokens = {
@@ -152,8 +158,13 @@
   const closeTakenOver = 4001;
   const closeExited = 4002;
   const closeFailed = 4000;
+  const closeNoShell = 4005;
   const scriptNonce = document.currentScript?.nonce || "";
-  let panel, status, retry, viewport, term, fit, socket, retryTimer;
+  let panel, status, retry, viewport, tabs, add, term, fit, socket, retryTimer;
+  let shells = [];
+  let shellLimit = 0;
+  let shown = null; // The ID of the shell this page shows.
+  let listSerial = 0;
   let retryDelay = 1000;
   // What to do when this tab next becomes visible: a tab nobody is looking at
   // neither connects nor retries. Browsers make connections to a server wait for
@@ -256,27 +267,99 @@
     })();
     return loaded;
   };
-  const showStatus = (message, action) => {
+  const showStatus = (message, action, handler) => {
     status.textContent = message;
     status.hidden = !message;
     retry.textContent = action || "";
     retry.hidden = !action;
+    retry.onclick = handler || null;
   };
   const send = (data) => {
     if (socket?.readyState === WebSocket.OPEN) socket.send(data);
   };
-  // connect attaches to the shell. Reconnecting by itself passes takeOver false,
+  const rememberShown = () => {
+    try {
+      sessionStorage.setItem(shownKey, shown);
+    } catch {}
+  };
+  const rememberedShown = () => {
+    try {
+      return sessionStorage.getItem(shownKey);
+    } catch {
+      return null;
+    }
+  };
+  const renderTabs = () => {
+    tabs.replaceChildren(
+      ...shells.map((shell) => {
+        const tab = document.createElement("span");
+        tab.className = "terminal-tab";
+        tab.setAttribute("role", "presentation");
+        const label = document.createElement("button");
+        label.type = "button";
+        label.setAttribute("role", "tab");
+        label.setAttribute("aria-selected", String(shell.id === shown));
+        label.setAttribute("aria-label", "Shell " + shell.number);
+        label.textContent = String(shell.number);
+        label.onclick = () => {
+          if (shell.id !== shown) show(shell.id);
+          else term.focus();
+        };
+        const close = document.createElement("button");
+        close.type = "button";
+        close.className = "terminal-tab-close";
+        close.setAttribute("aria-label", "End shell " + shell.number);
+        close.textContent = "\u00d7";
+        close.onclick = () => endShell(shell);
+        tab.append(label, close);
+        return tab;
+      }),
+    );
+    add.disabled = shells.length >= shellLimit;
+  };
+  // A sign-in that has gone cannot be retried away.
+  const signInGone = (response) => {
+    if (response?.status !== 401 && response?.status !== 403) return false;
+    showStatus("Sign in again to use the terminal.", "Reload", () => location.reload());
+    return true;
+  };
+  const refusal = async (response, what, handler) => {
+    if (signInGone(response)) return;
+    const reason = response ? (await response.text()).trim() : "the server did not answer";
+    showStatus(what + ": " + reason, "Try again", handler);
+  };
+  // refreshShells updates the tabs, and returns whether it could. A newer change here
+  // wins over an older answer, which may not have heard of it.
+  const refreshShells = async () => {
+    const serial = ++listSerial;
+    let response;
+    try {
+      response = await fetch(shellsPath);
+    } catch {}
+    if (!response?.ok) return { response };
+    const listed = await response.json();
+    if (serial === listSerial) {
+      shells = listed.shells;
+      shellLimit = listed.limit;
+      renderTabs();
+    }
+    return { ok: true };
+  };
+  // connect attaches to the shown shell. Reconnecting by itself passes takeOver false,
   // so it cannot take the shell from a tab in use; only someone opening a page or
   // pressing a button does that.
   const connect = (takeOver = true) => {
     clearTimeout(retryTimer);
     whenVisible = null;
+    const previous = socket;
+    socket = null;
+    previous?.close();
     showStatus("Connecting...");
     // Replay brings the screen back, so what is here would appear twice.
     term.reset();
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
     const current = new WebSocket(
-      scheme + "//" + location.host + "/_terminal/ws?rows=" + term.rows + "&cols=" + term.cols + (takeOver ? "" : "&takeover=0"),
+      scheme + "//" + location.host + "/_terminal/ws?shell=" + encodeURIComponent(shown) + "&rows=" + term.rows + "&cols=" + term.cols + (takeOver ? "" : "&takeover=0"),
     );
     socket = current;
     current.binaryType = "arraybuffer";
@@ -293,15 +376,84 @@
       if (socket !== current) return;
       socket = null;
       if (event.code === closeTakenOver) {
-        showStatus("Another tab has this terminal.", "Use it here");
+        showStatus("Another tab has this terminal.", "Use it here", () => connect());
       } else if (event.code === closeExited) {
-        showStatus("The shell ended: " + event.reason + ".", "New shell");
+        shellGone("The shell ended: " + event.reason + ".");
+      } else if (event.code === closeNoShell) {
+        shellGone("The shell has ended.");
       } else if (event.code === closeFailed) {
-        showStatus("The shell did not start: " + event.reason, "Try again");
+        showStatus("The shell could not be shown: " + event.reason, "Try again", () => connect());
       } else {
         reconnect();
       }
     };
+  };
+  const show = (id, takeOver = true) => {
+    shown = id;
+    rememberShown();
+    renderTabs();
+    connect(takeOver);
+    term.focus();
+  };
+  const newShell = async () => {
+    clearTimeout(retryTimer);
+    showStatus("Starting a shell...");
+    let response;
+    try {
+      response = await fetch(shellsPath + "?rows=" + term.rows + "&cols=" + term.cols, { method: "POST" });
+    } catch {}
+    if (!response?.ok) {
+      await refusal(response, "The shell did not start", newShell);
+      return;
+    }
+    const shell = await response.json();
+    listSerial++;
+    shells = [...shells, shell].sort((a, b) => a.number - b.number);
+    show(shell.id);
+  };
+  // The shown shell has ended. The screen stays if there is nothing to show instead,
+  // and a new shell is a choice: it may have been the last thing wanted.
+  const shellGone = async (message) => {
+    const place = shells.findIndex((shell) => shell.id === shown);
+    shown = null;
+    shells = shells.filter((_, index) => index !== place);
+    renderTabs();
+    showStatus(message, "New shell", newShell);
+    const { response, ok } = await refreshShells();
+    if (!ok) {
+      signInGone(response);
+      return;
+    }
+    if (shown !== null) return; // Someone chose meanwhile.
+    const next = shells[Math.min(Math.max(place, 0), shells.length - 1)];
+    if (next) show(next.id, false);
+  };
+  const endShell = async (shell) => {
+    if (!confirm("End shell " + shell.number + ", and anything running in it?")) return;
+    let response;
+    try {
+      response = await fetch(shellsPath + "/" + encodeURIComponent(shell.id), { method: "DELETE" });
+    } catch {}
+    if (!response?.ok && response?.status !== 404) {
+      await refusal(response, "The shell did not end", () => endShell(shell));
+      return;
+    }
+    // The shown shell's connection closes, which moves on to another.
+    if (shell.id !== shown) await refreshShells();
+  };
+  // begin shows what this browser tab last showed, or starts the first shell.
+  const begin = async (takeOver = true) => {
+    whenVisible = null;
+    showStatus("Connecting...");
+    const { response, ok } = await refreshShells();
+    if (!ok) {
+      await refusal(response, "The shells could not be listed", () => begin());
+      return;
+    }
+    const wanted = rememberedShown();
+    const shell = shells.find((item) => item.id === wanted) || shells[0];
+    if (shell) show(shell.id, takeOver);
+    else await newShell();
   };
   const reconnect = () => {
     if (document.hidden) {
@@ -317,11 +469,7 @@
       try {
         response = await fetch("/_terminal/xterm-license.txt", { method: "HEAD" });
       } catch {}
-      if (response?.status === 401 || response?.status === 403) {
-        retry.onclick = () => location.reload();
-        showStatus("Sign in again to use the terminal.", "Reload");
-        return;
-      }
+      if (signInGone(response)) return;
       if (document.hidden) reconnect();
       else if (response?.ok) connect(false);
       else {
@@ -332,7 +480,9 @@
     retryDelay = Math.min(retryDelay * 2, 10000);
   };
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && whenVisible) whenVisible();
+    if (document.hidden) return;
+    if (whenVisible) whenVisible();
+    else if (term && !panel.hidden) refreshShells();
   });
   const build = () => {
     panel = document.createElement("section");
@@ -349,22 +499,25 @@
     status.hidden = true;
     retry = document.createElement("button");
     retry.type = "button";
+    retry.className = "terminal-action";
     retry.hidden = true;
-    retry.onclick = () => connect();
+    tabs = document.createElement("div");
+    tabs.className = "terminal-tabs";
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Shells");
+    add = document.createElement("button");
+    add.type = "button";
+    add.className = "terminal-add";
+    add.setAttribute("aria-label", "New shell");
+    add.textContent = "+";
+    add.onclick = () => newShell();
     const spacer = document.createElement("span");
     spacer.className = "terminal-spacer";
-    const end = document.createElement("button");
-    end.type = "button";
-    end.textContent = "End shell";
-    end.onclick = () => {
-      if (confirm("End the shell, and anything running in it?"))
-        send(JSON.stringify({ type: "end" }));
-    };
     const hide = document.createElement("button");
     hide.type = "button";
     hide.textContent = "Hide";
     hide.onclick = () => window.toggleTerminalPanel();
-    bar.append(title, status, retry, spacer, end, hide);
+    bar.append(title, tabs, add, status, retry, spacer, hide);
     viewport = document.createElement("div");
     viewport.className = "terminal-viewport";
     panel.append(buildResizer(), bar, viewport);
@@ -410,14 +563,17 @@
       term.options.fontFamily = fontFamily();
       fit.fit();
     });
-    // A page opened in the background waits to be looked at before taking the shell.
+    // A page opened in the background waits to be looked at before taking a shell.
     if (document.hidden) {
       showStatus("Waiting for this tab to be shown.");
-      whenVisible = () => connect();
+      whenVisible = () => begin();
     } else {
-      connect();
+      await begin();
     }
     term.focus();
+    setInterval(() => {
+      if (!document.hidden && !panel.hidden && !whenVisible) refreshShells();
+    }, shellsRefresh);
   };
   const setOpen = (open) => {
     root.classList.toggle("terminal-open", open);

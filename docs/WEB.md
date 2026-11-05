@@ -99,7 +99,8 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 
 `rotari web --allow-terminal` adds a **Terminal** button to the top bar, which opens a shell in
 a panel along the bottom of the page, so you can type while watching jobs or reading a log. Drag
-the panel's top edge to change its height.
+the panel's top edge to change its height. **+** opens another shell in a tab of its own, up to
+eight, and each tab's **×** ends its shell.
 
 ```sh
 export ROTARI_WEB_AUTH_TOKEN=...      # optional; otherwise one is generated and printed
@@ -110,13 +111,17 @@ rotari web --allow-terminal
   `rotari web`. A token is always required, and it opens only on a direct `localhost` connection,
   such as an SSH forward, or over HTTPS. See the
   [security model](SECURITY.md#the-web-terminal).
-- **Following links:** the shell lives on the server, so it carries on as you move between pages,
-  and the panel shows recent output again. This includes full-screen programs such as `vim`.
-- **Several tabs:** there is one shell. The tab you open last takes it, and the others say so and
-  offer to take it back.
-- **When it ends:** with **End shell** or `exit`, when you sign out, when `rotari web` stops, or
-  **after 30 minutes with no tab connected**, which also ends what is running in its foreground.
-  Use `rotari run` or `tmux` for long work: a run started in the terminal carries on regardless.
+- **Following links:** shells live on the server, so they carry on as you move between pages, and
+  the panel shows recent output again. This includes full-screen programs such as `vim`.
+- **Tabs you are not looking at:** their programs keep running. Switching to one shows up to its
+  last 256 KiB of output again, as following a link does, not its whole scrollback.
+- **Several browser tabs:** each browser tab shows one shell and remembers which. Two can use
+  different shells at once. If one opens a shell another is using, it takes it, and the other says
+  so and offers to take it back.
+- **When a shell ends:** with its tab's **×** or `exit`, which moves to a neighboring tab.
+- **When all of them end:** when you sign out, when `rotari web` stops, or **after 30 minutes with
+  no browser tab connected to any shell**, which also ends what is running in their foregrounds. Use
+  `rotari run` or `tmux` for long work: a run started in the terminal carries on regardless.
 - **Keys:** a browser keeps some keys for itself, such as Ctrl-W, which do not reach the shell.
 - **Behind a reverse proxy:** the proxy must pass WebSocket connections to `/_terminal/ws`.
 

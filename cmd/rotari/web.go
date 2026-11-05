@@ -62,7 +62,7 @@ type webCommandFlags struct {
 	// extra Host names accepted while it is on.
 	allowExec    bool
 	allowedHosts []string
-	// allowTerminal enables the Web UI's shell.
+	// allowTerminal enables the Web UI's shells.
 	allowTerminal bool
 	// artifactRoots are absolute --artifact-root directories.
 	artifactRoots []string
@@ -246,7 +246,7 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 	if flags.authToken != "" {
 		var onSignOut []func()
 		if options.Terminal != nil {
-			onSignOut = append(onSignOut, options.Terminal.EndShell)
+			onSignOut = append(onSignOut, options.Terminal.EndAll)
 		}
 		handler = webui.WithAuthToken(handler, flags.authToken, onSignOut...)
 	}

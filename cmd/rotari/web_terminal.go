@@ -8,16 +8,17 @@ import (
 	"github.com/rotari-dev/rotari/internal/terminal"
 )
 
-// Provisional limits of the Web UI's shell, until they become configuration.
+// Provisional limits of the Web UI's shells, until they become configuration.
 const (
-	webTerminalIdleLimit = 30 * time.Minute
-	webTerminalRingSize  = 256 << 10
+	webTerminalIdleLimit  = 30 * time.Minute
+	webTerminalRingSize   = 256 << 10
+	webTerminalShellLimit = 8
 	// webTerminalDefaultShell runs when $SHELL is unset.
 	webTerminalDefaultShell = "/bin/sh"
 )
 
-// newWebTerminal returns the keeper of the Web UI's shell. The shell starts in the
-// home directory when the browser first asks for it.
+// newWebTerminal returns the keeper of the Web UI's shells. Each starts in the home
+// directory when the browser asks for it.
 func newWebTerminal() (*terminal.Keeper, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -28,9 +29,10 @@ func newWebTerminal() (*terminal.Keeper, error) {
 		shell = webTerminalDefaultShell
 	}
 	return terminal.NewKeeper(terminal.KeeperOptions{
-		Shell:     terminal.Options{Shell: shell, Dir: home, Env: webChildEnvironment(os.Environ())},
-		IdleLimit: webTerminalIdleLimit,
-		RingSize:  webTerminalRingSize,
-		Log:       func(message string) { fmt.Fprintln(os.Stderr, message) },
+		Shell:      terminal.Options{Shell: shell, Dir: home, Env: webChildEnvironment(os.Environ())},
+		IdleLimit:  webTerminalIdleLimit,
+		RingSize:   webTerminalRingSize,
+		ShellLimit: webTerminalShellLimit,
+		Log:        func(message string) { fmt.Fprintln(os.Stderr, message) },
 	})
 }

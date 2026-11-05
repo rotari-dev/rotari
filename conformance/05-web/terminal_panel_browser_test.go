@@ -70,6 +70,22 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await typeLine('echo "value-$VALUE"');
   await until('the kept shell', screenHas('value-kept'));
   await collect();
+
+  // A second tab is another shell, and the first comes back as it was. The status
+  // clears once the shell has shown something, so typing cannot come too soon.
+  const settled = 'document.querySelector(".terminal-status")?.hidden === true';
+  await page.evaluate('document.querySelector(".terminal-add").click()');
+  await until('a second tab', 'document.querySelectorAll(".terminal-tab [role=tab]")[1]?.getAttribute("aria-selected") === "true"');
+  await until('the second shell', settled);
+  await typeLine('echo "second-[$VALUE]"');
+  await until('the second shell to run a command', screenHas('second-[]'));
+  await page.evaluate('document.querySelectorAll(".terminal-tab [role=tab]")[0].click()');
+  await until('the first tab', 'document.querySelectorAll(".terminal-tab [role=tab]")[0]?.getAttribute("aria-selected") === "true"');
+  await until('the first shell replayed', screenHas('value-kept'));
+  await until('the first shell', settled);
+  await typeLine('echo "again-$VALUE"');
+  await until('the first shell to keep its state', screenHas('again-kept'));
+  await collect();
 }).catch((error) => { failure = error.stack || String(error); });
 await close();
 console.log(JSON.stringify({ failure, violations: [...violations] }));
@@ -77,7 +93,8 @@ process.exit(0);
 `
 
 // TestTerminalPanelInBrowser uses the real xterm.js in Chrome, signed in as a browser
-// is: opening the panel, typing, and following a link with the shell still there.
+// is: opening the panel, typing, following a link with the shell still there, and a
+// second tab.
 func TestTerminalPanelInBrowser(t *testing.T) {
 	covers(t, "WEB-33")
 	chrome := browserForTests(t)

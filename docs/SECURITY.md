@@ -179,9 +179,9 @@ stored value ever became script, which [the page policy](#script-on-web-ui-pages
 and a launched service's own pages, which that policy does not cover, can reach it just as they can
 call the API. Treat them as trusted code either way.
 
-The shell outlives its connection, like a launched VS Code server, so one left open stays reachable
-to anyone with your session for up to 30 minutes, and recent output is replayed to them. Signing out
-ends it.
+Shells outlive their connections, like a launched VS Code server, so ones left open stay reachable
+to anyone with your session for up to 30 minutes after the last connection to any of them, and recent
+output is replayed to them. Signing out ends them all.
 
 ## Limits
 

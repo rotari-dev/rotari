@@ -772,6 +772,34 @@ html.terminal-open .output-modal {
   color: var(--text);
   font-weight: 600;
 }
+.terminal-tabs {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+}
+.terminal-tab {
+  display: flex;
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+.terminal-tab:has([aria-selected="true"]) {
+  border-color: var(--line);
+  background: var(--terminal-background);
+  color: var(--text);
+}
+.terminal-bar .terminal-tab button {
+  padding: 1px 6px;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+.terminal-bar .terminal-tab .terminal-tab-close {
+  padding: 1px 5px 1px 0;
+  color: var(--text-2);
+}
 .terminal-status {
   overflow: hidden;
   text-overflow: ellipsis;

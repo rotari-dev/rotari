@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -22,15 +23,29 @@ func newTestKeeperWithShell(t *testing.T, shell string, idle time.Duration, ring
 	t.Helper()
 	home := t.TempDir()
 	keeper, err := NewKeeper(KeeperOptions{
-		Shell:     Options{Shell: shell, Dir: home, Env: []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "PS1=$ "}},
-		IdleLimit: idle,
-		RingSize:  ring,
+		Shell:      Options{Shell: shell, Dir: home, Env: []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "PS1=$ "}},
+		IdleLimit:  idle,
+		RingSize:   ring,
+		ShellLimit: testShellLimit,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(keeper.Close)
 	return keeper
+}
+
+// aShell is the first running shell, started if there is none.
+func aShell(t *testing.T, keeper *Keeper) string {
+	t.Helper()
+	if shells := keeper.Shells(); len(shells) > 0 {
+		return shells[0].ID
+	}
+	shell, err := keeper.Start(24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return shell.ID
 }
 
 // watcher collects an attachment's output until it ends.
@@ -43,7 +58,12 @@ type watcher struct {
 
 func watch(t *testing.T, keeper *Keeper) *watcher {
 	t.Helper()
-	attachment, err := keeper.Attach(24, 80)
+	return watchShell(t, keeper, aShell(t, keeper))
+}
+
+func watchShell(t *testing.T, keeper *Keeper, id string) *watcher {
+	t.Helper()
+	attachment, err := keeper.Attach(id, 24, 80)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,12 +122,16 @@ func (seen *watcher) awaitEnd(t *testing.T, want DetachReason) {
 	}
 }
 
-const testIdle = time.Hour
+const (
+	testIdle       = time.Hour
+	testShellLimit = 3
+)
 
 func TestNewKeeperRejectsBadOptions(t *testing.T) {
 	for name, options := range map[string]KeeperOptions{
-		"no idle limit": {RingSize: 1},
-		"no ring":       {IdleLimit: time.Second},
+		"no idle limit":  {RingSize: 1, ShellLimit: 1},
+		"no ring":        {IdleLimit: time.Second, ShellLimit: 1},
+		"no shell limit": {IdleLimit: time.Second, RingSize: 1},
 	} {
 		if _, err := NewKeeper(options); err == nil {
 			t.Errorf("%s: NewKeeper succeeded", name)
@@ -148,21 +172,23 @@ func TestAttachIfFreeLeavesAnotherAttachmentAlone(t *testing.T) {
 	keeper := newTestKeeper(t, testIdle, 1<<16)
 	first := watch(t, keeper)
 	first.run(t, `VALUE=kept; echo "one-$((1+1))"`, "one-2")
-	if _, err := keeper.AttachIfFree(24, 80); !errors.Is(err, ErrAttachedElsewhere) {
+	id := aShell(t, keeper)
+	if _, err := keeper.AttachIfFree(id, 24, 80); !errors.Is(err, ErrAttachedElsewhere) {
 		t.Fatalf("AttachIfFree with another attached = %v", err)
 	}
 	first.run(t, `echo "still-$((1+1))"`, "still-2")
 	first.Detach()
 	first.awaitEnd(t, DetachedByCaller)
-	second, err := keeper.AttachIfFree(24, 80)
+	second, err := keeper.AttachIfFree(id, 24, 80)
 	if err != nil {
 		t.Fatalf("AttachIfFree with nothing attached = %v", err)
 	}
 	second.Detach()
 }
 
-func TestShellExitEndsAttachmentAndNextAttachStartsAFreshShell(t *testing.T) {
+func TestShellExitEndsAttachmentAndTheShellIsGone(t *testing.T) {
 	keeper := newTestKeeper(t, testIdle, 1<<16)
+	id := aShell(t, keeper)
 	first := watch(t, keeper)
 	first.run(t, `echo "old-$((1+1))"`, "old-2")
 	if _, err := first.Write([]byte("exit 3\n")); err != nil {
@@ -171,6 +197,12 @@ func TestShellExitEndsAttachmentAndNextAttachStartsAFreshShell(t *testing.T) {
 	first.awaitEnd(t, ShellExited)
 	if result := first.Result(); result.ExitCode != 3 {
 		t.Errorf("Result() = %+v, want exit 3", result)
+	}
+	if _, err := keeper.Attach(id, 24, 80); !errors.Is(err, ErrNoShell) {
+		t.Errorf("Attach to the ended shell = %v, want ErrNoShell", err)
+	}
+	if shells := keeper.Shells(); len(shells) != 0 {
+		t.Errorf("Shells() = %v, want none", shells)
 	}
 	second := watch(t, keeper)
 	second.run(t, `echo "new-$((1+1))"`, "new-2")
@@ -239,7 +271,7 @@ func TestAttachedReaderMissesNothingInABurst(t *testing.T) {
 // A reader that falls behind slows the program down rather than losing output.
 func TestSlowReaderMakesTheProgramWait(t *testing.T) {
 	keeper := newTestKeeper(t, testIdle, 1<<12)
-	attachment, err := keeper.Attach(24, 80)
+	attachment, err := keeper.Attach(aShell(t, keeper), 24, 80)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +321,7 @@ func TestStalledReaderIsDetachedAndTheProgramContinues(t *testing.T) {
 	stallLimit = 200 * time.Millisecond
 	t.Cleanup(func() { stallLimit = limit })
 	keeper := newTestKeeper(t, testIdle, 1<<12)
-	attachment, err := keeper.Attach(24, 80)
+	attachment, err := keeper.Attach(aShell(t, keeper), 24, 80)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -362,12 +394,18 @@ func TestAttachMakesARunningProgramRedraw(t *testing.T) {
 	second.run(t, `echo "size-$(stty size)"`, "size-24 80")
 }
 
-func TestEndShellAndCloseEndTheShell(t *testing.T) {
+func TestEndAndCloseEndTheShell(t *testing.T) {
 	keeper := newTestKeeper(t, testIdle, 1<<16)
+	id := aShell(t, keeper)
 	first := watch(t, keeper)
 	first.run(t, `VALUE=first; echo "up-$((1+1))"`, "up-2")
-	keeper.EndShell()
+	if err := keeper.End(id); err != nil {
+		t.Fatal(err)
+	}
 	first.awaitEnd(t, ShellExited)
+	if err := keeper.End(id); !errors.Is(err, ErrNoShell) {
+		t.Errorf("End of an ended shell = %v, want ErrNoShell", err)
+	}
 	second := watch(t, keeper)
 	second.run(t, `echo "value-[$VALUE]"`, "value-[]")
 	keeper.Close()
@@ -378,36 +416,163 @@ func TestEndShellAndCloseEndTheShell(t *testing.T) {
 	default:
 		t.Error("Close returned with the shell still running")
 	}
-	if _, err := keeper.Attach(24, 80); !errors.Is(err, ErrKeeperClosed) {
+	if _, err := keeper.Attach(id, 24, 80); !errors.Is(err, ErrKeeperClosed) {
 		t.Errorf("Attach after Close = %v, want ErrKeeperClosed", err)
+	}
+	if _, err := keeper.Start(24, 80); !errors.Is(err, ErrKeeperClosed) {
+		t.Errorf("Start after Close = %v, want ErrKeeperClosed", err)
 	}
 }
 
-func TestAttachReportsAFailedStartAndKeepsNoShell(t *testing.T) {
-	keeper, err := NewKeeper(KeeperOptions{Shell: Options{Shell: filepath.Join(t.TempDir(), "missing"), Dir: t.TempDir()}, IdleLimit: testIdle, RingSize: 1})
+func TestStartReportsAFailureAndKeepsNoShell(t *testing.T) {
+	keeper, err := NewKeeper(KeeperOptions{Shell: Options{Shell: filepath.Join(t.TempDir(), "missing"), Dir: t.TempDir()}, IdleLimit: testIdle, RingSize: 1, ShellLimit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(keeper.Close)
-	if _, err := keeper.Attach(24, 80); err == nil {
-		t.Fatal("Attach succeeded with a missing shell")
+	if _, err := keeper.Start(24, 80); err == nil {
+		t.Fatal("Start succeeded with a missing shell")
 	}
-	if keeper.shell != nil {
-		t.Error("a failed start left a shell behind")
+	if shells := keeper.Shells(); len(shells) != 0 {
+		t.Errorf("a failed start left %v behind", shells)
 	}
 }
 
-func TestAttachRejectsABadSize(t *testing.T) {
+func TestStartAndAttachRejectABadSize(t *testing.T) {
 	keeper := newTestKeeper(t, testIdle, 1<<16)
-	if _, err := keeper.Attach(0, 80); err == nil {
+	if _, err := keeper.Start(0, 80); err == nil {
+		t.Error("Start accepted no rows")
+	}
+	id := aShell(t, keeper)
+	if _, err := keeper.Attach(id, 0, 80); err == nil {
 		t.Error("the first Attach accepted no rows")
 	}
 	first := watch(t, keeper)
 	first.run(t, `echo "up-$((1+1))"`, "up-2")
-	if _, err := keeper.Attach(24, 0); err == nil {
+	if _, err := keeper.Attach(id, 24, 0); err == nil {
 		t.Error("a later Attach accepted no columns")
 	}
 	first.run(t, `echo "still-$((1+1))"`, "still-2")
+}
+
+// Each shell has its own state, output, and take-over.
+func TestShellsAreSeparate(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	one, err := keeper.Start(24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := keeper.Start(24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, second := watchShell(t, keeper, one.ID), watchShell(t, keeper, two.ID)
+	first.run(t, `VALUE=first; echo "one-$((1+1))"`, "one-2")
+	second.run(t, `VALUE=second; echo "two-$((1+1))"`, "two-2")
+	first.run(t, `echo "value-$VALUE"`, "value-first")
+	second.run(t, `echo "value-$VALUE"`, "value-second")
+	if strings.Contains(second.shown(), "one-2") {
+		t.Errorf("one shell's output reached the other:\n%s", second.shown())
+	}
+
+	if err := keeper.End(one.ID); err != nil {
+		t.Fatal(err)
+	}
+	first.awaitEnd(t, ShellExited)
+	second.run(t, `echo "still-$((1+1))"`, "still-2")
+	if err := keeper.End("no such id"); !errors.Is(err, ErrNoShell) {
+		t.Errorf("End of an unknown shell = %v, want ErrNoShell", err)
+	}
+}
+
+func TestShellsAreNumberedAndLimited(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	var started []ShellInfo
+	for range testShellLimit {
+		shell, err := keeper.Start(24, 80)
+		if err != nil {
+			t.Fatal(err)
+		}
+		started = append(started, shell)
+	}
+	if _, err := keeper.Start(24, 80); !errors.Is(err, ErrTooManyShells) {
+		t.Fatalf("Start past the limit = %v, want ErrTooManyShells", err)
+	}
+	if err := keeper.End(started[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	// The freed number comes back, under an ID that does not.
+	replacement, err := keeper.Start(24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replacement.Number != 1 || replacement.ID == started[0].ID {
+		t.Errorf("the replacement is %+v, after %+v", replacement, started[0])
+	}
+	var numbers []int
+	for _, shell := range keeper.Shells() {
+		numbers = append(numbers, shell.Number)
+	}
+	if want := []int{1, 2, 3}; !slices.Equal(numbers, want) {
+		t.Errorf("numbers = %v, want %v", numbers, want)
+	}
+	keeper.EndAll()
+	if shells := keeper.Shells(); len(shells) != 0 {
+		t.Errorf("EndAll left %v", shells)
+	}
+}
+
+// A shell nobody is looking at is not idle while another one is in use, since a
+// person watches one at a time. With nothing attached to any, they all end.
+func TestIdleLimitAppliesToTheShellsTogether(t *testing.T) {
+	const idle = 200 * time.Millisecond
+	keeper := newTestKeeper(t, idle, 1<<16)
+	background, err := keeper.Start(24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreground, err := keeper.Start(24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attachment, err := keeper.Attach(foreground.ID, 24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(3 * idle)
+	if shells := keeper.Shells(); len(shells) != 2 {
+		t.Fatalf("with one shell in use, %v are left; %s did not count as in use", shells, background.ID)
+	}
+	attachment.Detach()
+	for deadline := time.Now().Add(testWait); len(keeper.Shells()) != 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%v outlived the idle limit", keeper.Shells())
+		}
+	}
+}
+
+// The last attached shell ending leaves the others under the idle limit.
+func TestIdleLimitStartsWhenTheAttachedShellEnds(t *testing.T) {
+	const idle = 150 * time.Millisecond
+	keeper := newTestKeeper(t, idle, 1<<16)
+	if _, err := keeper.Start(24, 80); err != nil {
+		t.Fatal(err)
+	}
+	attached, err := keeper.Start(24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := keeper.Attach(attached.ID, 24, 80); err != nil {
+		t.Fatal(err)
+	}
+	if err := keeper.End(attached.ID); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(testWait); len(keeper.Shells()) != 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%v outlived the idle limit", keeper.Shells())
+		}
+	}
 }
 
 func TestOutputRingKeepsRecentOutputFromAWholeLineOrCharacter(t *testing.T) {

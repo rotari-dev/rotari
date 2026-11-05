@@ -2,7 +2,9 @@ package webui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,7 +19,10 @@ import (
 	"github.com/rotari-dev/rotari/internal/terminal"
 )
 
-const terminalTestToken = "secret"
+const (
+	terminalTestToken      = "secret"
+	terminalTestShellLimit = 3
+)
 
 // terminalServer is a Web server with the terminal enabled, wrapped as rotari web
 // wraps it.
@@ -25,16 +30,17 @@ func terminalServer(t *testing.T, shell string) (*httptest.Server, *terminal.Kee
 	t.Helper()
 	home := t.TempDir()
 	keeper, err := terminal.NewKeeper(terminal.KeeperOptions{
-		Shell:     terminal.Options{Shell: shell, Dir: home, Env: []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "PS1=$ "}},
-		IdleLimit: time.Hour,
-		RingSize:  1 << 16,
+		Shell:      terminal.Options{Shell: shell, Dir: home, Env: []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "PS1=$ "}},
+		IdleLimit:  time.Hour,
+		RingSize:   1 << 16,
+		ShellLimit: terminalTestShellLimit,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(keeper.Close)
 	handler := Handler(Options{BaseDir: t.TempDir(), Terminal: keeper})
-	server := httptest.NewServer(WithExecGuard(WithAuthToken(handler, terminalTestToken, keeper.EndShell), nil))
+	server := httptest.NewServer(WithExecGuard(WithAuthToken(handler, terminalTestToken, keeper.EndAll), nil))
 	t.Cleanup(server.Close)
 	return server, keeper
 }
@@ -52,11 +58,73 @@ type terminalClient struct {
 	text       strings.Builder
 }
 
+// terminalRequest makes a request with the token and returns the status and body.
+func terminalRequest(t *testing.T, server *httptest.Server, method, path string) (int, string) {
+	t.Helper()
+	request, err := http.NewRequest(method, server.URL+path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("X-Rotari-Token", terminalTestToken)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return response.StatusCode, string(body)
+}
+
+func startTerminalShell(t *testing.T, server *httptest.Server) terminal.ShellInfo {
+	t.Helper()
+	status, body := terminalRequest(t, server, http.MethodPost, terminalShellsPath+"?rows=24&cols=80")
+	if status != http.StatusCreated {
+		t.Fatalf("starting a shell: status %d: %s", status, body)
+	}
+	var shell terminal.ShellInfo
+	if err := json.Unmarshal([]byte(body), &shell); err != nil {
+		t.Fatal(err)
+	}
+	return shell
+}
+
+func listTerminalShells(t *testing.T, server *httptest.Server) []terminal.ShellInfo {
+	t.Helper()
+	status, body := terminalRequest(t, server, http.MethodGet, terminalShellsPath)
+	if status != http.StatusOK {
+		t.Fatalf("listing shells: status %d: %s", status, body)
+	}
+	var listed struct {
+		Shells []terminal.ShellInfo `json:"shells"`
+		Limit  int                  `json:"limit"`
+	}
+	if err := json.Unmarshal([]byte(body), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if listed.Limit != terminalTestShellLimit {
+		t.Errorf("limit = %d, want %d", listed.Limit, terminalTestShellLimit)
+	}
+	return listed.Shells
+}
+
+// dialTerminal connects to the first running shell, starting one if none is.
 func dialTerminal(t *testing.T, server *httptest.Server) *terminalClient {
+	t.Helper()
+	shells := listTerminalShells(t, server)
+	if len(shells) == 0 {
+		shells = []terminal.ShellInfo{startTerminalShell(t, server)}
+	}
+	return dialTerminalShell(t, server, shells[0].ID)
+}
+
+func dialTerminalShell(t *testing.T, server *httptest.Server, id string) *terminalClient {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	connection, _, err := websocket.Dial(ctx, terminalSocketURL(server, "rows=24&cols=80"), &websocket.DialOptions{
+	connection, _, err := websocket.Dial(ctx, terminalSocketURL(server, "shell="+id+"&rows=24&cols=80"), &websocket.DialOptions{
 		HTTPHeader: http.Header{"X-Rotari-Token": {terminalTestToken}},
 	})
 	if err != nil {
@@ -181,7 +249,8 @@ func TestTerminalReconnectingDoesNotTakeOver(t *testing.T) {
 	first.await("one-2")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	connection, _, err := websocket.Dial(ctx, terminalSocketURL(server, "rows=24&cols=80&takeover=0"), &websocket.DialOptions{
+	id := listTerminalShells(t, server)[0].ID
+	connection, _, err := websocket.Dial(ctx, terminalSocketURL(server, "shell="+id+"&rows=24&cols=80&takeover=0"), &websocket.DialOptions{
 		HTTPHeader: http.Header{"X-Rotari-Token": {terminalTestToken}},
 	})
 	if err != nil {
@@ -202,16 +271,144 @@ func TestTerminalReportsHowTheShellEnded(t *testing.T) {
 	}
 }
 
-func TestTerminalEndMessageEndsTheShell(t *testing.T) {
+func TestTerminalEndingAShellClosesItsConnection(t *testing.T) {
 	server, _ := terminalServer(t, "/bin/sh")
 	client := dialTerminal(t, server)
 	client.typeLine(`VALUE=first; echo "one-$((1+1))"`)
 	client.await("one-2")
-	client.control(`{"type":"end"}`)
+	id := listTerminalShells(t, server)[0].ID
+	if status, body := terminalRequest(t, server, http.MethodDelete, terminalShellsPath+"/"+id); status != http.StatusNoContent {
+		t.Fatalf("ending the shell: status %d: %s", status, body)
+	}
 	client.awaitClose(terminalCloseExited)
+	if status, _ := terminalRequest(t, server, http.MethodDelete, terminalShellsPath+"/"+id); status != http.StatusNotFound {
+		t.Errorf("ending it again: status %d, want 404", status)
+	}
 	next := dialTerminal(t, server)
 	next.typeLine(`echo "value-[$VALUE]"`)
 	next.await("value-[]")
+}
+
+// Shells run side by side, each with its own connection, up to the limit.
+func TestTerminalKeepsSeveralShells(t *testing.T) {
+	server, _ := terminalServer(t, "/bin/sh")
+	if shells := listTerminalShells(t, server); len(shells) != 0 {
+		t.Fatalf("shells before any was asked for: %v", shells)
+	}
+	one, two := startTerminalShell(t, server), startTerminalShell(t, server)
+	if one.Number != 1 || two.Number != 2 || one.ID == two.ID {
+		t.Errorf("started %+v and %+v", one, two)
+	}
+	first, second := dialTerminalShell(t, server, one.ID), dialTerminalShell(t, server, two.ID)
+	first.typeLine(`VALUE=first; echo "one-$((1+1))"`)
+	first.await("one-2")
+	second.typeLine(`VALUE=second; echo "two-$((1+1))"`)
+	second.await("two-2")
+	first.typeLine(`echo "value-$VALUE"`)
+	first.await("value-first")
+	second.typeLine(`echo "value-$VALUE"`)
+	second.await("value-second")
+
+	startTerminalShell(t, server)
+	if status, body := terminalRequest(t, server, http.MethodPost, terminalShellsPath+"?rows=24&cols=80"); status != http.StatusConflict || !strings.Contains(body, "3") {
+		t.Errorf("past the limit: status %d: %s", status, body)
+	}
+
+	if status, body := terminalRequest(t, server, http.MethodDelete, terminalShellsPath+"/"+one.ID); status != http.StatusNoContent {
+		t.Fatalf("ending a shell: status %d: %s", status, body)
+	}
+	first.awaitClose(terminalCloseExited)
+	second.typeLine(`echo "still-$((1+1))"`)
+	second.await("still-2")
+}
+
+// A page holding a shell that has ended hears so rather than getting a new one.
+func TestTerminalConnectionToAShellNotRunning(t *testing.T) {
+	server, _ := terminalServer(t, "/bin/sh")
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	connection, _, err := websocket.Dial(ctx, terminalSocketURL(server, "shell=7&rows=24&cols=80"), &websocket.DialOptions{
+		HTTPHeader: http.Header{"X-Rotari-Token": {terminalTestToken}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	readTerminal(t, connection).awaitClose(terminalCloseNoShell)
+	if shells := listTerminalShells(t, server); len(shells) != 0 {
+		t.Errorf("a connection started %v", shells)
+	}
+}
+
+func TestTerminalShellRoutes(t *testing.T) {
+	server, _ := terminalServer(t, "/bin/sh")
+	shell := startTerminalShell(t, server)
+	for name, test := range map[string]struct {
+		method, path string
+		want         int
+	}{
+		"start with no size":  {http.MethodPost, terminalShellsPath, http.StatusBadRequest},
+		"start with no rows":  {http.MethodPost, terminalShellsPath + "?rows=0&cols=80", http.StatusBadRequest},
+		"replace the list":    {http.MethodPut, terminalShellsPath, http.StatusMethodNotAllowed},
+		"read one shell":      {http.MethodGet, terminalShellsPath + "/" + shell.ID, http.StatusMethodNotAllowed},
+		"end an unknown one":  {http.MethodDelete, terminalShellsPath + "/7", http.StatusNotFound},
+		"end a path in there": {http.MethodDelete, terminalShellsPath + "/" + shell.ID + "/more", http.StatusNotFound},
+	} {
+		if status, body := terminalRequest(t, server, test.method, test.path); status != test.want {
+			t.Errorf("%s: status %d, want %d: %s", name, status, test.want, body)
+		}
+	}
+	if shells := listTerminalShells(t, server); len(shells) != 1 {
+		t.Errorf("the requests left %v", shells)
+	}
+}
+
+// Starting and ending shells are guarded like the connection.
+func TestTerminalShellRoutesAreGuarded(t *testing.T) {
+	server, _ := terminalServer(t, "/bin/sh")
+	shell := startTerminalShell(t, server)
+	for _, route := range []struct{ method, path string }{
+		{http.MethodGet, terminalShellsPath},
+		{http.MethodPost, terminalShellsPath + "?rows=24&cols=80"},
+		{http.MethodDelete, terminalShellsPath + "/" + shell.ID},
+	} {
+		mutates := route.method != http.MethodGet
+		for _, test := range []struct {
+			name    string
+			headers map[string]string
+			want    int
+		}{
+			{"wrong token", map[string]string{"X-Rotari-Token": "wrong"}, http.StatusUnauthorized},
+			{"rebinding host", map[string]string{"X-Rotari-Token": terminalTestToken, "Host": "attacker.example"}, http.StatusMisdirectedRequest},
+			{"plain HTTP proxy", map[string]string{"X-Rotari-Token": terminalTestToken, "X-Forwarded-For": "192.0.2.1"}, http.StatusForbidden},
+			{"another site", map[string]string{"X-Rotari-Token": terminalTestToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
+		} {
+			if test.name == "another site" && !mutates {
+				continue
+			}
+			request, err := http.NewRequest(route.method, server.URL+route.path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for name, value := range test.headers {
+				if name == "Host" {
+					request.Host = value
+				} else {
+					request.Header.Set(name, value)
+				}
+			}
+			response, err := http.DefaultClient.Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response.Body.Close()
+			if response.StatusCode != test.want {
+				t.Errorf("%s %s, %s: status %d, want %d", route.method, route.path, test.name, response.StatusCode, test.want)
+			}
+		}
+	}
+	if shells := listTerminalShells(t, server); len(shells) != 1 || shells[0].ID != shell.ID {
+		t.Errorf("a refused request changed the shells: %v", shells)
+	}
 }
 
 func TestTerminalRejectsUnknownControlMessages(t *testing.T) {
@@ -236,9 +433,9 @@ func TestTerminalBadResizeKeepsTheShell(t *testing.T) {
 
 func TestTerminalReportsAFailedStart(t *testing.T) {
 	server, _ := terminalServer(t, filepath.Join(t.TempDir(), "missing"))
-	client := dialTerminal(t, server)
-	if reason := client.awaitClose(terminalCloseFailed); !strings.Contains(reason, "missing") {
-		t.Errorf("reason = %q, want the shell named", reason)
+	status, body := terminalRequest(t, server, http.MethodPost, terminalShellsPath+"?rows=24&cols=80")
+	if status != http.StatusInternalServerError || !strings.Contains(body, "missing") {
+		t.Errorf("status %d, body %q, want the shell named", status, body)
 	}
 }
 
@@ -260,14 +457,15 @@ func TestTerminalHandshakeIsGuarded(t *testing.T) {
 		headers map[string]string
 		want    int
 	}{
-		{"no credentials", terminalSocketPath + "?rows=24&cols=80", nil, http.StatusForbidden},
-		{"wrong token", terminalSocketPath + "?rows=24&cols=80", map[string]string{"X-Rotari-Token": "wrong"}, http.StatusUnauthorized},
-		{"another site", terminalSocketPath + "?rows=24&cols=80", map[string]string{"X-Rotari-Token": terminalTestToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
-		{"rebinding host", terminalSocketPath + "?rows=24&cols=80", map[string]string{"X-Rotari-Token": terminalTestToken, "Host": "attacker.example"}, http.StatusMisdirectedRequest},
-		{"through a plain HTTP proxy, with a token", terminalSocketPath + "?rows=24&cols=80", map[string]string{"X-Rotari-Token": terminalTestToken, "X-Forwarded-For": "192.0.2.1"}, http.StatusForbidden},
-		{"no size", terminalSocketPath, map[string]string{"X-Rotari-Token": terminalTestToken}, http.StatusBadRequest},
-		{"no rows", terminalSocketPath + "?rows=0&cols=80", map[string]string{"X-Rotari-Token": terminalTestToken}, http.StatusBadRequest},
-		{"size too large", terminalSocketPath + "?rows=70000&cols=80", map[string]string{"X-Rotari-Token": terminalTestToken}, http.StatusBadRequest},
+		{"no credentials", terminalSocketPath + "?shell=1&rows=24&cols=80", nil, http.StatusForbidden},
+		{"wrong token", terminalSocketPath + "?shell=1&rows=24&cols=80", map[string]string{"X-Rotari-Token": "wrong"}, http.StatusUnauthorized},
+		{"another site", terminalSocketPath + "?shell=1&rows=24&cols=80", map[string]string{"X-Rotari-Token": terminalTestToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
+		{"rebinding host", terminalSocketPath + "?shell=1&rows=24&cols=80", map[string]string{"X-Rotari-Token": terminalTestToken, "Host": "attacker.example"}, http.StatusMisdirectedRequest},
+		{"through a plain HTTP proxy, with a token", terminalSocketPath + "?shell=1&rows=24&cols=80", map[string]string{"X-Rotari-Token": terminalTestToken, "X-Forwarded-For": "192.0.2.1"}, http.StatusForbidden},
+		{"no shell", terminalSocketPath + "?rows=24&cols=80", map[string]string{"X-Rotari-Token": terminalTestToken}, http.StatusBadRequest},
+		{"no size", terminalSocketPath + "?shell=1", map[string]string{"X-Rotari-Token": terminalTestToken}, http.StatusBadRequest},
+		{"no rows", terminalSocketPath + "?shell=1&rows=0&cols=80", map[string]string{"X-Rotari-Token": terminalTestToken}, http.StatusBadRequest},
+		{"size too large", terminalSocketPath + "?shell=1&rows=70000&cols=80", map[string]string{"X-Rotari-Token": terminalTestToken}, http.StatusBadRequest},
 		{"another path", terminalPrefix + "other", map[string]string{"X-Rotari-Token": terminalTestToken}, http.StatusNotFound},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -297,9 +495,9 @@ func TestTerminalHandshakeIsGuarded(t *testing.T) {
 	}
 }
 
-// A browser signing in reaches the shell by its session, and signing out ends it.
+// A browser signing in reaches a shell by its session, and signing out ends them all.
 func TestTerminalSessionAndSignOut(t *testing.T) {
-	server, _ := terminalServer(t, "/bin/sh")
+	server, keeper := terminalServer(t, "/bin/sh")
 	browser := &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	var session string
 	post := func(path string, form url.Values) *http.Response {
@@ -334,7 +532,14 @@ func TestTerminalSessionAndSignOut(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	connection, _, err := websocket.Dial(ctx, terminalSocketURL(server, "rows=24&cols=80"), &websocket.DialOptions{
+	if _, err := keeper.Start(24, 80); err != nil {
+		t.Fatal(err)
+	}
+	shell, err := keeper.Start(24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	connection, _, err := websocket.Dial(ctx, terminalSocketURL(server, "shell="+shell.ID+"&rows=24&cols=80"), &websocket.DialOptions{
 		HTTPHeader: http.Header{"Origin": {server.URL}, "Cookie": {session}},
 	})
 	if err != nil {
@@ -347,17 +552,22 @@ func TestTerminalSessionAndSignOut(t *testing.T) {
 		t.Fatalf("sign out: status %d", response.StatusCode)
 	}
 	client.awaitClose(terminalCloseExited)
+	if shells := keeper.Shells(); len(shells) != 0 {
+		t.Errorf("signing out left %v", shells)
+	}
 }
 
 func TestTerminalIsAbsentWithoutTheOption(t *testing.T) {
 	server := httptest.NewServer(Handler(Options{BaseDir: t.TempDir()}))
 	defer server.Close()
-	response, err := http.Get(server.URL + terminalSocketPath + "?rows=24&cols=80")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusNotFound {
-		t.Errorf("status %d, want 404", response.StatusCode)
+	for _, path := range []string{terminalSocketPath + "?shell=1&rows=24&cols=80", terminalShellsPath} {
+		response, err := http.Get(server.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusNotFound {
+			t.Errorf("%s: status %d, want 404", path, response.StatusCode)
+		}
 	}
 }

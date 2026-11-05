@@ -3,8 +3,10 @@ package web
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -26,6 +28,8 @@ const (
 	terminalTakenOver   = websocket.StatusCode(4001)
 	terminalShellExited = websocket.StatusCode(4002)
 	terminalStopping    = websocket.StatusCode(4004)
+	terminalNoShell     = websocket.StatusCode(4005)
+	terminalShellLimit  = 8
 )
 
 // terminalEnv is a web server's environment with a known token and a plain shell,
@@ -45,11 +49,73 @@ type terminalPage struct {
 	shown      strings.Builder
 }
 
+type terminalShell struct {
+	ID     string `json:"id"`
+	Number int    `json:"number"`
+}
+
+// terminalShellsRequest makes a request as a page does, returning the status and body.
+func terminalShellsRequest(t *testing.T, method, address string, headers http.Header) (int, []byte) {
+	t.Helper()
+	request, err := http.NewRequest(method, address, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header = headers.Clone()
+	response, err := (&http.Client{Timeout: terminalWait}).Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return response.StatusCode, body
+}
+
+func listTerminalShells(t *testing.T, base string, headers http.Header) []terminalShell {
+	t.Helper()
+	status, body := terminalShellsRequest(t, http.MethodGet, base+"/_terminal/shells", headers)
+	if status != http.StatusOK {
+		t.Fatalf("listing shells: status %d: %s", status, body)
+	}
+	var listed struct {
+		Shells []terminalShell `json:"shells"`
+	}
+	if err := json.Unmarshal(body, &listed); err != nil {
+		t.Fatal(err)
+	}
+	return listed.Shells
+}
+
+func startTerminalShell(t *testing.T, base string, headers http.Header) terminalShell {
+	t.Helper()
+	status, body := terminalShellsRequest(t, http.MethodPost, base+"/_terminal/shells?rows=24&cols=80", headers)
+	if status != http.StatusCreated {
+		t.Fatalf("starting a shell: status %d: %s", status, body)
+	}
+	var shell terminalShell
+	if err := json.Unmarshal(body, &shell); err != nil {
+		t.Fatal(err)
+	}
+	return shell
+}
+
+// aTerminalShell is the first running shell, started if none is.
+func aTerminalShell(t *testing.T, base string, headers http.Header) string {
+	t.Helper()
+	if shells := listTerminalShells(t, base, headers); len(shells) > 0 {
+		return shells[0].ID
+	}
+	return startTerminalShell(t, base, headers).ID
+}
+
 func dialTerminalPage(t *testing.T, base, query string, headers http.Header) (*terminalPage, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), terminalWait)
 	defer cancel()
-	address := "ws" + strings.TrimPrefix(base, "http") + "/_terminal/ws?rows=24&cols=80" + query
+	address := "ws" + strings.TrimPrefix(base, "http") + "/_terminal/ws?shell=" + aTerminalShell(t, base, headers) + "&rows=24&cols=80" + query
 	connection, _, err := websocket.Dial(ctx, address, &websocket.DialOptions{HTTPHeader: headers})
 	if err != nil {
 		return nil, err
@@ -206,7 +272,7 @@ func TestTerminalIsOfferedAndGuarded(t *testing.T) {
 	if got := e.HTTPDo(http.MethodGet, base+"/_terminal/xterm.js", token, ""); got.Status != http.StatusOK || !strings.Contains(got.Body, "Terminal") {
 		t.Errorf("GET xterm.js: status %d", got.Status)
 	}
-	address := base + "/_terminal/ws?rows=24&cols=80"
+	address := base + "/_terminal/ws?shell=1&rows=24&cols=80"
 	upgrade := map[string]string{"Connection": "Upgrade", "Upgrade": "websocket", "Sec-WebSocket-Version": "13", "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ=="}
 	with := func(extra map[string]string) map[string]string {
 		headers := map[string]string{}
@@ -227,11 +293,103 @@ func TestTerminalIsOfferedAndGuarded(t *testing.T) {
 		"another site":     {address, with(map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}), http.StatusForbidden},
 		"rebinding host":   {address, with(map[string]string{"X-Rotari-Token": launchToken, "Host": "attacker.example"}), http.StatusMisdirectedRequest},
 		"plain HTTP proxy": {address, with(map[string]string{"X-Rotari-Token": launchToken, "X-Forwarded-For": "192.0.2.1"}), http.StatusForbidden},
-		"no size":          {base + "/_terminal/ws", with(map[string]string{"X-Rotari-Token": launchToken}), http.StatusBadRequest},
+		"no shell":         {base + "/_terminal/ws?rows=24&cols=80", with(map[string]string{"X-Rotari-Token": launchToken}), http.StatusBadRequest},
+		"no size":          {base + "/_terminal/ws?shell=1", with(map[string]string{"X-Rotari-Token": launchToken}), http.StatusBadRequest},
 	} {
 		if got := e.HTTPDo(http.MethodGet, test.address, test.headers, ""); got.Status != test.want {
 			t.Errorf("%s: status %d, want %d: %s", name, got.Status, test.want, got.Body)
 		}
+	}
+	// Starting and ending shells are guarded the same way, and none was started.
+	for name, test := range map[string]struct {
+		method, address string
+		headers         map[string]string
+		want            int
+	}{
+		"list, no credentials":  {http.MethodGet, base + "/_terminal/shells", map[string]string{}, http.StatusUnauthorized},
+		"start, no credentials": {http.MethodPost, base + "/_terminal/shells?rows=24&cols=80", map[string]string{}, http.StatusForbidden},
+		"start, another site":   {http.MethodPost, base + "/_terminal/shells?rows=24&cols=80", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
+		"start, plain proxy":    {http.MethodPost, base + "/_terminal/shells?rows=24&cols=80", map[string]string{"X-Rotari-Token": launchToken, "X-Forwarded-For": "192.0.2.1"}, http.StatusForbidden},
+		"end, no credentials":   {http.MethodDelete, base + "/_terminal/shells/1", map[string]string{}, http.StatusForbidden},
+		"end, another site":     {http.MethodDelete, base + "/_terminal/shells/1", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
+		"start, no size":        {http.MethodPost, base + "/_terminal/shells", map[string]string{"X-Rotari-Token": launchToken}, http.StatusBadRequest},
+		"end, not running":      {http.MethodDelete, base + "/_terminal/shells/7", map[string]string{"X-Rotari-Token": launchToken}, http.StatusNotFound},
+	} {
+		if got := e.HTTPDo(test.method, test.address, test.headers, ""); got.Status != test.want {
+			t.Errorf("%s: status %d, want %d: %s", name, got.Status, test.want, got.Body)
+		}
+	}
+	if shells := listTerminalShells(t, base, http.Header{"X-Rotari-Token": {launchToken}}); len(shells) != 0 {
+		t.Errorf("guarded requests left %v", shells)
+	}
+}
+
+// Shells run side by side, each with its own state and connection, up to the limit,
+// and a connection reaches only the shell it names.
+func TestTerminalKeepsSeveralShells(t *testing.T) {
+	covers(t, "WEB-34")
+	e := terminalEnv(t)
+	base := e.StartWeb("--allow-terminal")
+	token := http.Header{"X-Rotari-Token": {launchToken}}
+	one, two := startTerminalShell(t, base, token), startTerminalShell(t, base, token)
+	if one.Number != 1 || two.Number != 2 || one.ID == two.ID {
+		t.Errorf("started %+v and %+v", one, two)
+	}
+	dial := func(id, query string) *terminalPage {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), terminalWait)
+		defer cancel()
+		address := "ws" + strings.TrimPrefix(base, "http") + "/_terminal/ws?shell=" + id + "&rows=24&cols=80" + query
+		connection, _, err := websocket.Dial(ctx, address, &websocket.DialOptions{HTTPHeader: token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		connection.SetReadLimit(1 << 24)
+		t.Cleanup(func() { _ = connection.CloseNow() })
+		return &terminalPage{t: t, connection: connection}
+	}
+	first, second := dial(one.ID, ""), dial(two.ID, "")
+	first.typeLine(`VALUE=first; echo "one-$((1+1))"`)
+	first.await("one-2")
+	second.typeLine(`VALUE=second; echo "two-$((1+1))"`)
+	second.await("two-2")
+	first.typeLine(`echo "value-$VALUE"`)
+	first.await("value-first")
+	second.typeLine(`echo "value-$VALUE"`)
+	second.await("value-second")
+	if strings.Contains(second.shown.String(), "one-2") {
+		t.Errorf("one shell's output reached the other:\n%s", second.shown.String())
+	}
+
+	// Take-over is per shell.
+	third := dial(two.ID, "")
+	second.awaitClose(terminalTakenOver)
+	third.await("two-2")
+	first.typeLine(`echo "still-$((1+1))"`)
+	first.await("still-2")
+
+	// Ending one closes its connection as an exit does, and leaves the other.
+	status, body := terminalShellsRequest(t, http.MethodDelete, base+"/_terminal/shells/"+one.ID, token)
+	if status != http.StatusNoContent {
+		t.Fatalf("ending a shell: status %d: %s", status, body)
+	}
+	first.awaitClose(terminalShellExited)
+	third.typeLine(`echo "alive-$((1+1))"`)
+	third.await("alive-2")
+	dial(one.ID, "").awaitClose(terminalNoShell)
+
+	// A freed number comes back, under an ID that does not, up to the limit.
+	replacement := startTerminalShell(t, base, token)
+	if replacement.Number != 1 || replacement.ID == one.ID {
+		t.Errorf("the replacement is %+v, after %+v", replacement, one)
+	}
+	for number := 3; number <= terminalShellLimit; number++ {
+		if shell := startTerminalShell(t, base, token); shell.Number != number {
+			t.Errorf("started %+v, want number %d", shell, number)
+		}
+	}
+	if status, body := terminalShellsRequest(t, http.MethodPost, base+"/_terminal/shells?rows=24&cols=80", token); status != http.StatusConflict {
+		t.Errorf("past the limit: status %d: %s", status, body)
 	}
 }
 
@@ -285,7 +443,7 @@ func TestTerminalShellOutlivesItsConnections(t *testing.T) {
 	}()
 	third.await("again-kept")
 
-	// The shell's end says how, and a new connection starts another.
+	// The shell's end says how, and it is gone: a page starts another.
 	third.typeLine("exit 3")
 	if reason := third.awaitClose(terminalShellExited); reason != "exit status 3" {
 		t.Errorf("reason = %q", reason)
@@ -309,7 +467,10 @@ func TestTerminalRunOutlivesItsShell(t *testing.T) {
 		state := e.CheckState("panel")
 		return state == "running", "state " + state
 	})
-	page.send(websocket.MessageText, `{"type":"end"}`)
+	token := http.Header{"X-Rotari-Token": {launchToken}}
+	if status, body := terminalShellsRequest(t, http.MethodDelete, base+"/_terminal/shells/"+aTerminalShell(t, base, token), token); status != http.StatusNoContent {
+		t.Fatalf("ending the shell: status %d: %s", status, body)
+	}
 	page.awaitClose(terminalShellExited)
 	for deadline := time.Now().Add(terminalWait); ; time.Sleep(50 * time.Millisecond) {
 		if _, err := os.Stat(done); err == nil {
@@ -349,14 +510,19 @@ func TestTerminalSignOutEndsTheShell(t *testing.T) {
 		t.Fatalf("sign-in cookies = %v", cookies)
 	}
 	session := cookies[0].Name + "=" + cookies[0].Value
-	page, err := dialTerminalPage(t, base, "", http.Header{"Cookie": {session}, "Origin": {base}})
+	browserHeaders := http.Header{"Cookie": {session}, "Origin": {base}}
+	page, err := dialTerminalPage(t, base, "", browserHeaders)
 	if err != nil {
 		t.Fatalf("a signed-in browser could not connect: %v", err)
 	}
+	startTerminalShell(t, base, browserHeaders)
 	page.typeLine(`echo "in-$((1+1))"`)
 	page.await("in-2")
 	post("/_auth/logout", session, url.Values{})
 	page.awaitClose(terminalShellExited)
+	if shells := listTerminalShells(t, base, http.Header{"X-Rotari-Token": {launchToken}}); len(shells) != 0 {
+		t.Errorf("signing out left %v", shells)
+	}
 }
 
 // The shell ends with the server, however the server ends, while a process that left

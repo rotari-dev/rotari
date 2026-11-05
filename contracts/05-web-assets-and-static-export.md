@@ -1371,23 +1371,33 @@ and `TestLoadJobsShowsRunningAttemptID` in
 it, and the flag is rejected with `--allow-control=false` or `--static-dir`. With it, as with
 `--allow-exec`, every route requires the Web token, generated and printed when none is set, and
 `Host` and `Origin` are checked (WEB-14). The WebSocket at `/_terminal/ws` also requires HTTPS
-or a direct loopback connection, even with a token. One shell runs at a time, in the home
-directory, as `$SHELL -l` or `/bin/sh`, with the server's environment less the Web token. It
-outlives its connections and replays recent output to the next. A new connection takes it over,
-closing the last with code 4001; one with `takeover=0`, which a page reconnecting by itself sends,
-gets 4001 itself when another connection has the shell. The shell ends with its own exit
-(4002 with how it ended), the page's `end` message, signing out, the server stopping (4004) or
-being killed, or thirty minutes with no connection, a limit that is provisional and checked at the
-package level by `TestUnattendedShellEndsAfterTheIdleLimit`. A process that left its session or
-ignores the hangup, including a run started in the shell, goes on. Covered by the tests in
+or a direct loopback connection, even with a token, and so do `/_terminal/shells`, which lists the
+shells on `GET` and starts one on `POST` with `rows` and `cols` (409 at the limit), and
+`/_terminal/shells/ID`, which ends one on `DELETE` (404 if it is not running). Up to eight shells
+run at once, a limit that is provisional, each in the home directory, as `$SHELL -l` or `/bin/sh`,
+with the server's environment less the Web token. A shell's `id` is never reused while the server
+runs, and its `number` is the lowest not in use when it started. A connection names its shell with
+`shell`, and never starts one: a shell not running closes it with 4005. A shell outlives its
+connections and replays recent output to the next. A new connection to it takes it over, closing
+the last with code 4001; one with `takeover=0`, which a page reconnecting by itself sends, gets 4001
+itself when another connection has that shell. Connections to different shells do not disturb each
+other. A shell ends with its own exit or `DELETE` (4002 with how it ended). All of them end on
+signing out, the server stopping (4004) or being killed, or thirty minutes with no connection to any
+shell, a limit that is provisional and checked at the package level by
+`TestIdleLimitAppliesToTheShellsTogether`. A process that left its session or ignores the hangup,
+including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
 **WEB-33** `rotari web --allow-terminal` adds a Terminal button to the top bar of the
-application and Recent jobs pages, which opens a panel along the bottom. The shell lives on
-the server and each page load attaches to it again and replays recent output, so following
-a link does not end it. xterm.js loads when the panel first opens, under the page's nonce. A tab
-that is not visible neither connects nor retries, and a page whose sign-in has gone stops
-retrying and says so (`TestTerminalPanel`). `TestTerminalPanelInBrowser` checks the panel in
+application and Recent jobs pages, which opens a panel along the bottom, with a tab for each
+shell. Opening it with no shell running starts one, and **+** starts another; closing a tab asks,
+then ends that shell. Shells live on the server: each page load lists them and attaches to the one
+this browser tab last showed, or the first, replaying recent output, so following a link ends none
+of them. Only the tab shown is connected. A shell ending moves to a neighboring tab without taking
+it from another browser tab; when the last one ends, the panel says how and a new shell is a choice.
+xterm.js loads when the panel first opens, under the page's nonce. A browser tab that is not visible
+neither connects nor retries, and a page whose sign-in has gone stops retrying and says so
+(`TestTerminalPanel`). `TestTerminalPanelInBrowser` checks the panel in
 headless Chrome.
 
 **WEB-29** Live application, Recent jobs, and Table viewer pages send a

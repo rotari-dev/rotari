@@ -3,6 +3,8 @@ package terminal
 import (
 	"bytes"
 	"errors"
+	"slices"
+	"strconv"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -26,13 +28,17 @@ const (
 var stallLimit = 30 * time.Second
 
 var (
-	// ErrKeeperClosed is returned by Attach after Close.
+	// ErrKeeperClosed is returned by Start and Attach after Close.
 	ErrKeeperClosed = errors.New("terminal keeper is closed")
 	// ErrDetached is returned when using an Attachment that has ended.
 	ErrDetached = errors.New("terminal attachment has ended")
 	// ErrAttachedElsewhere is returned by AttachIfFree when another attachment
 	// has the shell.
 	ErrAttachedElsewhere = errors.New("terminal is attached elsewhere")
+	// ErrNoShell is returned for a shell that is not running, which may have ended.
+	ErrNoShell = errors.New("no such shell")
+	// ErrTooManyShells is returned by Start at the limit on shells.
+	ErrTooManyShells = errors.New("too many shells are running")
 )
 
 // DetachReason says why an Attachment ended.
@@ -52,41 +58,61 @@ const (
 	KeeperClosed
 )
 
-// KeeperOptions says how a Keeper runs its shell.
+// KeeperOptions says how a Keeper runs its shells.
 type KeeperOptions struct {
-	// Shell starts each shell; its Rows and Cols are ignored, since each
-	// Attach gives the size.
+	// Shell starts each shell; its Rows and Cols are ignored, since Start gives
+	// the size.
 	Shell Options
-	// IdleLimit is how long a shell runs with nothing attached.
+	// IdleLimit is how long shells run with nothing attached to any of them.
 	IdleLimit time.Duration
-	// RingSize is how many bytes of recent output a new Attach replays.
+	// RingSize is how many bytes of recent output, per shell, a new Attach replays.
 	RingSize int
+	// ShellLimit is how many shells may run at once.
+	ShellLimit int
 	// Log, if set, is told when a shell starts and ends, and never what it shows.
 	Log func(message string)
 }
 
-// Keeper holds at most one shell, which outlives the attachments that show it:
-// callers come and go, and each new one sees recent output. With nothing attached,
-// output goes only to the ring, so a program never waits. An attached reader that
-// falls behind makes the program wait, so it misses nothing, unless it stalls.
+// ShellInfo describes a running shell.
+type ShellInfo struct {
+	// ID names this shell for as long as the Keeper lasts, and is never reused, so
+	// that a stale reference cannot reach a later shell.
+	ID string `json:"id"`
+	// Number is what a person calls it: the lowest not in use when it started.
+	Number int `json:"number"`
+}
+
+// Keeper holds shells, which outlive the attachments that show them: callers come
+// and go, and each new one sees recent output. A shell with nothing attached sends
+// its output only to its ring, so a program never waits. An attached reader that falls
+// behind makes the program wait, so it misses nothing, unless it stalls.
+//
+// A person watches one shell at a time, so a shell with nothing attached says nothing
+// about whether anyone is there. The idle limit therefore applies to them together: it
+// runs only while nothing is attached to any shell, and then ends them all.
 type Keeper struct {
 	options KeeperOptions
 
 	mu         sync.Mutex
 	closed     bool
-	shell      *keptShell
-	attached   *Attachment
+	lastID     int
+	shells     []*keptShell // By Number.
 	idleTimer  *time.Timer
 	idleSerial int
 }
 
 type keptShell struct {
+	info     ShellInfo
 	session  *Session
 	ring     outputRing
+	attached *Attachment
+	// shown says something has attached before, so a program may be running that
+	// needs to redraw.
+	shown    bool
 	finished chan struct{}
 }
 
-// NewKeeper returns a Keeper with no shell yet.
+// NewKeeper returns a Keeper with no shells yet.
 func NewKeeper(options KeeperOptions) (*Keeper, error) {
 	if options.IdleLimit <= 0 {
 		return nil, errors.New("terminal idle limit must be above zero")
@@ -94,52 +120,117 @@ func NewKeeper(options KeeperOptions) (*Keeper, error) {
 	if options.RingSize <= 0 {
 		return nil, errors.New("terminal output ring size must be above zero")
 	}
+	if options.ShellLimit <= 0 {
+		return nil, errors.New("terminal shell limit must be above zero")
+	}
 	return &Keeper{options: options}, nil
 }
 
-// Attach shows the shell at the given size, starting one if none is running, and
-// ends any earlier Attachment with TakenOver. Next begins with the replay of recent
-// output. A program already running is made to redraw itself.
-func (keeper *Keeper) Attach(rows, cols uint16) (*Attachment, error) {
-	return keeper.attach(rows, cols, true)
+// Start starts a shell at the given size. A shell nobody attaches to falls under the
+// idle limit, which starting one restarts.
+func (keeper *Keeper) Start(rows, cols uint16) (ShellInfo, error) {
+	keeper.mu.Lock()
+	defer keeper.mu.Unlock()
+	if keeper.closed {
+		return ShellInfo{}, ErrKeeperClosed
+	}
+	if len(keeper.shells) >= keeper.options.ShellLimit {
+		return ShellInfo{}, ErrTooManyShells
+	}
+	options := keeper.options.Shell
+	options.Rows, options.Cols = rows, cols
+	session, err := Start(options)
+	if err != nil {
+		return ShellInfo{}, err
+	}
+	keeper.lastID++
+	number := 1
+	for _, shell := range keeper.shells {
+		if shell.info.Number != number {
+			break
+		}
+		number++
+	}
+	shell := &keptShell{
+		info:     ShellInfo{ID: strconv.Itoa(keeper.lastID), Number: number},
+		session:  session,
+		ring:     outputRing{limit: keeper.options.RingSize},
+		finished: make(chan struct{}),
+	}
+	keeper.shells = append(keeper.shells, shell)
+	slices.SortFunc(keeper.shells, func(a, b *keptShell) int { return a.info.Number - b.info.Number })
+	keeper.log("terminal: shell started")
+	go keeper.pump(shell)
+	keeper.stopIdleTimer()
+	keeper.armIdleTimer()
+	return shell.info, nil
+}
+
+// Shells lists the running shells, by Number.
+func (keeper *Keeper) Shells() []ShellInfo {
+	keeper.mu.Lock()
+	defer keeper.mu.Unlock()
+	infos := make([]ShellInfo, 0, len(keeper.shells))
+	for _, shell := range keeper.shells {
+		infos = append(infos, shell.info)
+	}
+	return infos
+}
+
+// Limit is how many shells may run at once.
+func (keeper *Keeper) Limit() int {
+	return keeper.options.ShellLimit
+}
+
+func (keeper *Keeper) find(id string) *keptShell {
+	for _, shell := range keeper.shells {
+		if shell.info.ID == id {
+			return shell
+		}
+	}
+	return nil
+}
+
+// Attach shows the shell at the given size, and ends any earlier Attachment to it
+// with TakenOver. Next begins with the replay of recent output. A program already
+// running is made to redraw itself.
+func (keeper *Keeper) Attach(id string, rows, cols uint16) (*Attachment, error) {
+	return keeper.attach(id, rows, cols, true)
 }
 
 // AttachIfFree is Attach that leaves another attachment alone and returns
 // ErrAttachedElsewhere instead. It is for reconnecting by itself, which must not
 // take the shell from whoever is using it.
-func (keeper *Keeper) AttachIfFree(rows, cols uint16) (*Attachment, error) {
-	return keeper.attach(rows, cols, false)
+func (keeper *Keeper) AttachIfFree(id string, rows, cols uint16) (*Attachment, error) {
+	return keeper.attach(id, rows, cols, false)
 }
 
-func (keeper *Keeper) attach(rows, cols uint16, takeOver bool) (*Attachment, error) {
+func (keeper *Keeper) attach(id string, rows, cols uint16, takeOver bool) (*Attachment, error) {
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
 	if keeper.closed {
 		return nil, ErrKeeperClosed
 	}
-	if keeper.attached != nil && !takeOver {
+	shell := keeper.find(id)
+	if shell == nil {
+		return nil, ErrNoShell
+	}
+	if shell.attached != nil && !takeOver {
 		return nil, ErrAttachedElsewhere
 	}
-	shell := keeper.shell
-	if shell != nil {
-		if err := redraw(shell.session, rows, cols); err != nil {
-			return nil, err
-		}
-	} else {
-		options := keeper.options.Shell
-		options.Rows, options.Cols = rows, cols
-		session, err := Start(options)
-		if err != nil {
-			return nil, err
-		}
-		shell = &keptShell{session: session, ring: outputRing{limit: keeper.options.RingSize}, finished: make(chan struct{})}
-		keeper.shell = shell
-		keeper.log("terminal: shell started")
-		go keeper.pump(shell)
+	resize := redraw
+	if !shell.shown {
+		// A shell still starting has nothing to redraw, and telling it would have
+		// some shells print their prompt twice.
+		resize = (*Session).Resize
 	}
+	if err := resize(shell.session, rows, cols); err != nil {
+		return nil, err
+	}
+	shell.shown = true
 	keeper.stopIdleTimer()
-	if keeper.attached != nil {
-		keeper.detach(TakenOver)
+	if shell.attached != nil {
+		shell.detach(TakenOver)
 	}
 	attachment := &Attachment{
 		keeper:  keeper,
@@ -149,7 +240,7 @@ func (keeper *Keeper) attach(rows, cols uint16, takeOver bool) (*Attachment, err
 		room:    make(chan struct{}, 1),
 		ended:   make(chan struct{}),
 	}
-	keeper.attached = attachment
+	shell.attached = attachment
 	return attachment, nil
 }
 
@@ -197,14 +288,14 @@ func (keeper *Keeper) pump(shell *keptShell) {
 }
 
 // deliver records output and passes it to the attached reader, waiting while that
-// reader is behind. Only this goroutine adds output, so a program waits only as
-// long as it does.
+// reader is behind. Only this shell's goroutine adds its output, so a program waits
+// only as long as it does.
 func (keeper *Keeper) deliver(shell *keptShell, output []byte) {
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
 	shell.ring.write(output)
-	attachment := keeper.attached
-	if attachment == nil || attachment.shell != shell {
+	attachment := shell.attached
+	if attachment == nil {
 		return
 	}
 	attachment.pending = append(attachment.pending, output...)
@@ -214,7 +305,7 @@ func (keeper *Keeper) deliver(shell *keptShell, output []byte) {
 	}
 	stall := time.NewTimer(stallLimit)
 	defer stall.Stop()
-	for keeper.attached == attachment && len(attachment.pending) >= pendingLimit {
+	for shell.attached == attachment && len(attachment.pending) >= pendingLimit {
 		keeper.mu.Unlock()
 		select {
 		case <-attachment.room:
@@ -230,9 +321,9 @@ func (keeper *Keeper) deliver(shell *keptShell, output []byte) {
 			keeper.mu.Lock()
 		case <-stall.C:
 			keeper.mu.Lock()
-			if keeper.attached == attachment {
-				keeper.detach(TooSlow)
-				keeper.startIdleTimer(shell)
+			if shell.attached == attachment {
+				shell.detach(TooSlow)
+				keeper.armIdleTimer()
 			}
 		}
 	}
@@ -250,14 +341,12 @@ func (keeper *Keeper) finish(shell *keptShell) {
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
 	keeper.log("terminal: shell ended: " + shell.session.Result().String())
-	if keeper.shell == shell {
-		keeper.shell = nil
-		keeper.stopIdleTimer()
+	keeper.shells = slices.DeleteFunc(keeper.shells, func(other *keptShell) bool { return other == shell })
+	if shell.attached != nil {
+		shell.attached.result = shell.session.Result()
+		shell.detach(ShellExited)
 	}
-	if keeper.attached != nil && keeper.attached.shell == shell {
-		keeper.attached.result = shell.session.Result()
-		keeper.detach(ShellExited)
-	}
+	keeper.armIdleTimer()
 	close(shell.finished)
 }
 
@@ -267,24 +356,37 @@ func (keeper *Keeper) log(message string) {
 	}
 }
 
-// detach ends the current attachment; the caller holds mu.
-func (keeper *Keeper) detach(reason DetachReason) {
-	keeper.attached.reason = reason
-	close(keeper.attached.ended)
-	keeper.attached = nil
+// detach ends the current attachment; the caller holds the keeper's mu.
+func (shell *keptShell) detach(reason DetachReason) {
+	shell.attached.reason = reason
+	close(shell.attached.ended)
+	shell.attached = nil
 }
 
-// startIdleTimer ends shell after the idle limit unless something attaches first;
-// the caller holds mu.
-func (keeper *Keeper) startIdleTimer(shell *keptShell) {
-	keeper.stopIdleTimer()
+func (keeper *Keeper) anyAttached() bool {
+	return slices.ContainsFunc(keeper.shells, func(shell *keptShell) bool { return shell.attached != nil })
+}
+
+// armIdleTimer starts the idle limit if nothing is attached to any shell and it is not
+// running already, and stops it if no shell is left; the caller holds mu.
+func (keeper *Keeper) armIdleTimer() {
+	if len(keeper.shells) == 0 || keeper.closed {
+		keeper.stopIdleTimer()
+		return
+	}
+	if keeper.idleTimer != nil || keeper.anyAttached() {
+		return
+	}
 	serial := keeper.idleSerial
 	keeper.idleTimer = time.AfterFunc(keeper.options.IdleLimit, func() {
 		keeper.mu.Lock()
-		expired := serial == keeper.idleSerial && keeper.shell == shell && keeper.attached == nil
+		expired := serial == keeper.idleSerial && !keeper.anyAttached()
+		if expired {
+			keeper.idleTimer = nil
+		}
 		keeper.mu.Unlock()
 		if expired {
-			shell.session.Close()
+			keeper.EndAll()
 		}
 	})
 }
@@ -298,28 +400,47 @@ func (keeper *Keeper) stopIdleTimer() {
 	}
 }
 
-// EndShell ends the running shell, if any, and returns once it has. The next
-// Attach starts a new one.
-func (keeper *Keeper) EndShell() {
+// End ends a shell and returns once it has.
+func (keeper *Keeper) End(id string) error {
 	keeper.mu.Lock()
-	shell := keeper.shell
+	shell := keeper.find(id)
 	keeper.mu.Unlock()
-	if shell != nil {
-		shell.session.Close()
-		<-shell.finished
+	if shell == nil {
+		return ErrNoShell
 	}
+	shell.session.Close()
+	<-shell.finished
+	return nil
 }
 
-// Close ends the shell and refuses further attachments.
+// EndAll ends every shell and returns once they have. Each may take a moment to hang
+// up, so they end together rather than in turn.
+func (keeper *Keeper) EndAll() {
+	keeper.mu.Lock()
+	shells := slices.Clone(keeper.shells)
+	keeper.mu.Unlock()
+	var ending sync.WaitGroup
+	for _, shell := range shells {
+		ending.Go(func() {
+			shell.session.Close()
+			<-shell.finished
+		})
+	}
+	ending.Wait()
+}
+
+// Close ends the shells and refuses further ones.
 func (keeper *Keeper) Close() {
 	keeper.mu.Lock()
 	keeper.closed = true
-	if keeper.attached != nil {
-		keeper.detach(KeeperClosed)
+	for _, shell := range keeper.shells {
+		if shell.attached != nil {
+			shell.detach(KeeperClosed)
+		}
 	}
 	keeper.stopIdleTimer()
 	keeper.mu.Unlock()
-	keeper.EndShell()
+	keeper.EndAll()
 }
 
 // Attachment is one caller's view of the shell.
@@ -374,7 +495,7 @@ func (attachment *Attachment) Result() Result {
 func (attachment *Attachment) current() bool {
 	attachment.keeper.mu.Lock()
 	defer attachment.keeper.mu.Unlock()
-	return attachment.keeper.attached == attachment
+	return attachment.shell.attached == attachment
 }
 
 // Write sends input to the shell. A tab that lost the shell cannot type into it.
@@ -393,17 +514,18 @@ func (attachment *Attachment) Resize(rows, cols uint16) error {
 	return attachment.shell.session.Resize(rows, cols)
 }
 
-// Detach ends the attachment and leaves the shell running; the idle limit starts.
+// Detach ends the attachment and leaves the shell running; the idle limit starts if
+// this was the last attachment to any shell.
 // It does nothing to an attachment that has already ended.
 func (attachment *Attachment) Detach() {
 	keeper := attachment.keeper
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
-	if keeper.attached != attachment {
+	if attachment.shell.attached != attachment {
 		return
 	}
-	keeper.detach(DetachedByCaller)
-	keeper.startIdleTimer(attachment.shell)
+	attachment.shell.detach(DetachedByCaller)
+	keeper.armIdleTimer()
 }
 
 // outputRing keeps the most recent output. It holds up to twice its limit, so that
