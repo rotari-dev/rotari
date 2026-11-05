@@ -1,11 +1,15 @@
 package webui
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"log"
 	"maps"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1191,6 +1195,139 @@ func TestTableViewDescribeShowsItsRowsInBrowser(t *testing.T) {
   await until('closed', () => !document.querySelector('#tv-table tr.tv-describe'));
   await wait(50);
   if (page.scrollTop !== 100 || scroller.scrollTop !== 200) fail('closing scrolled', page.scrollTop, scroller.scrollTop);
+`)
+}
+
+func TestTableViewExportsRows(t *testing.T) {
+	f := newArtifactFixture(t)
+	write(t, filepath.Join(f.work, "data.csv"), "id,score\n1,3\n2,1\n3,2\n")
+	options := testOptions(f.baseDir, false)
+	selected := url.Values{
+		"sep":     {","},
+		"filters": {`[{"column":1,"op":">","value":"1"}]`},
+		"sort":    {"1"},
+		"desc":    {"1"},
+	}
+	recorder := f.viewerGet(t, options, "api/export", "data.csv", selected)
+	if recorder.Code != http.StatusOK || recorder.Body.String() != "id,score\n1,3\n3,2\n" {
+		t.Fatalf("export = (%d, %q)", recorder.Code, recorder.Body.String())
+	}
+	if got := recorder.Header().Get("Content-Disposition"); got != "attachment; filename=data.export.csv" {
+		t.Fatalf("disposition = %q", got)
+	}
+	if recorder.Header().Get("X-Content-Type-Options") != "nosniff" || recorder.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("headers = %v", recorder.Header())
+	}
+	for name, extra := range map[string]url.Values{
+		"offset":  {"sep": {","}, "offset": {"1"}},
+		"limit":   {"sep": {","}, "limit": {"1"}},
+		"base":    {"sep": {","}, "base": {"wd"}},
+		"filters": {"sep": {","}, "filters": {`[{"column":9,"op":"="}]`}},
+		"sort":    {"sep": {","}, "sort": {"9"}},
+		"sep":     {"sep": {",,"}},
+	} {
+		if recorder := f.viewerGet(t, options, "api/export", "data.csv", extra); recorder.Code != http.StatusBadRequest {
+			t.Errorf("%s = (%d, %q)", name, recorder.Code, recorder.Body.String())
+		}
+	}
+	if recorder := f.viewerGet(t, options, "api/export", "link.csv", url.Values{"sep": {","}}); recorder.Code < 400 {
+		t.Fatalf("outside the roots = (%d, %q)", recorder.Code, recorder.Body.String())
+	}
+	if recorder := f.viewerGet(t, options, "api/export", "wd", url.Values{"pattern": {"data.csv"}}); recorder.Code != http.StatusOK ||
+		!strings.HasPrefix(recorder.Body.String(), "path,") || !strings.Contains(recorder.Body.String(), "data.csv,") ||
+		!strings.HasSuffix(recorder.Header().Get("Content-Disposition"), `.export.csv`) {
+		t.Fatalf("directory = (%d, %q, %v)", recorder.Code, recorder.Body.String(), recorder.Header())
+	}
+}
+
+func TestTableViewExportNamesEncodeTheSource(t *testing.T) {
+	for _, test := range []struct {
+		path      string
+		directory bool
+		want      string
+	}{
+		{"/a/eval.tsv", false, "eval.export.tsv"},
+		{"/a/noext", false, "noext.export"},
+		{"/a/results", true, "results.export.csv"},
+		{"/a/評価 \"x\".csv", false, "評価 \"x\".export.csv"},
+	} {
+		source := tableViewSource{target: tableview.Target{Path: test.path}, directory: test.directory}
+		_, params, err := mime.ParseMediaType(tableViewExportDisposition(source))
+		if err != nil || params["filename"] != test.want {
+			t.Errorf("%s = %v, %v; want %s", test.path, params, err, test.want)
+		}
+	}
+}
+
+// failingExport writes some of its rows, then fails.
+type failingExport struct{}
+
+func (failingExport) Stream(_ context.Context, writer io.Writer) error {
+	if _, err := writer.Write([]byte("id\n1\n")); err != nil {
+		return err
+	}
+	if flusher, ok := writer.(http.Flusher); ok {
+		flusher.Flush()
+	}
+	return errors.New("read failed")
+}
+
+// A read failing after the status has gone must not pass for a whole file.
+func TestTableViewExportFailureAbortsTheResponse(t *testing.T) {
+	log.SetOutput(io.Discard)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		streamTableViewExport(writer, request, failingExport{})
+	}))
+	defer server.Close()
+	response, err := http.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if body, err := io.ReadAll(response.Body); err == nil {
+		t.Fatalf("read whole body %q without an error", body)
+	}
+}
+
+func TestTableViewExportLinkInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	write(t, filepath.Join(f.work, "data.csv"), "id,score\n1,3\n2,1\n3,2\n")
+	runTableViewScript(t, testOptions(f.baseDir, false), f, "data.csv", "#base=wd", `
+  await until('rows', () => cells().length === 3);
+  const link = () => document.querySelector('.tv-export');
+  if (!link() || link().textContent !== 'Export rows' || !link().hasAttribute('download')) fail('link', document.getElementById('tv-pager').innerHTML);
+  const url = () => new window.URL(link().href);
+  if (url().pathname !== '/tableview/api/export' || url().searchParams.has('base') || url().searchParams.get('sep') !== ',') fail('url', link().href);
+  if (!link().title.includes('all 3 ')) fail('title', link().title);
+
+  // It follows the sort and the filters, and fetching it gives those rows.
+  [...document.querySelectorAll('.tv-sort')].find(button => button.textContent.startsWith('score')).click();
+  await until('sort', () => cells()[0][1] === '2');
+  document.querySelector('select[aria-label="Column"]').value = '1';
+  document.querySelector('select[aria-label="Column"]').dispatchEvent(new window.Event('change'));
+  const operator = document.querySelector('select[aria-label="Operator"]');
+  operator.value = '>';
+  operator.dispatchEvent(new window.Event('change'));
+  const value = document.querySelector('.tv-filter-value');
+  value.value = '1';
+  value.dispatchEvent(new window.Event('input'));
+  [...document.querySelectorAll('.tv-filter-form button')].find(button => button.textContent === '+ Add').click();
+  await until('filter', () => cells().length === 2);
+  if (!link().title.includes('all 2 ')) fail('filtered title', link().title);
+  const response = await window.fetch(link().href);
+  if ((await response.text()) !== 'id,score\n3,2\n1,3\n') fail('fetched', response.status);
+
+  // With no rows, or a query refused, there is nothing to offer.
+  value.value = '';
+  const form = document.querySelector('select[aria-label="Column"]');
+  form.value = '1';
+  form.dispatchEvent(new window.Event('change'));
+  document.querySelector('.tv-filter-value').value = '99';
+  document.querySelector('.tv-filter-value').dispatchEvent(new window.Event('input'));
+  [...document.querySelectorAll('.tv-filter-form button')].find(button => button.textContent === '+ Add').click();
+  await until('no rows', () => cells().length === 1 && cells()[0][0] === 'No rows.');
+  if (link()) fail('link with no rows');
 `)
 }
 

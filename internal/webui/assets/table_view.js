@@ -684,6 +684,12 @@ function pageCount() {
   return Math.max(1, Math.ceil(rows.matched / view.limit));
 }
 
+function sortParams() {
+  return view.sort
+    ? { sort: view.sort.column, desc: view.sort.desc ? "1" : undefined }
+    : {};
+}
+
 // tableParams are the parameters that choose the rows, for both the rows
 // and their description.
 function tableParams() {
@@ -725,9 +731,7 @@ async function loadRows() {
   noteRowTable();
   writeView();
   const params = tableParams();
-  const sort = view.sort
-    ? { sort: view.sort.column, desc: view.sort.desc ? "1" : undefined }
-    : {};
+  const sort = sortParams();
   const [rowsResult, describeResult] = await Promise.allSettled([
     fetchJSON(
       apiURL(
@@ -1493,6 +1497,30 @@ function goToPage(number) {
   loadRows();
 }
 
+// exportLink downloads every row the current view selects. It appears only after
+// those rows have loaded, so the query is known to be good: a browser shows no
+// response body for a download that fails. A static snapshot has no server.
+function exportLink() {
+  if (info.static || !rows.matched) return null;
+  const params = Object.assign({}, tableParams(), sortParams());
+  delete params.base;
+  const scope = info.kind === "directory" ? " listed" : "";
+  return el(
+    "a",
+    {
+      className: "tv-export",
+      href: apiURL("api/export", params),
+      download: "",
+      title:
+        "Download all " +
+        formatCount(rows.matched) +
+        scope +
+        " selected rows, in this order",
+    },
+    "Export rows",
+  );
+}
+
 function renderPager() {
   const pager = document.getElementById("tv-pager");
   if (!rows) {
@@ -1576,7 +1604,7 @@ function renderPager() {
       ),
     ),
   );
-  pager.replaceChildren(count, buttons, size);
+  setChildren(pager, count, exportLink(), buttons, size);
 }
 
 // loadSource shows the source the page's query names: its header, and its

@@ -77,6 +77,11 @@ func TestStaticTableViewInBrowser(t *testing.T) {
   press('ArrowDown');
   await until('the copy', () => document.querySelector('.tv-tab-view audio') && new URL(document.querySelector('.tv-tab-view audio').src).pathname === '/media/0.wav');
 
+  // A snapshot has no server to export from.
+  if (document.querySelector('.tv-export')) fail('export link', document.getElementById('tv-pager').innerHTML);
+  const exportRoute = await window.fetch('api/export');
+  if (exportRoute.status !== 404 || !(await exportRoute.text()).includes('A static snapshot has no')) fail('export route', exportRoute.status);
+
   // What only the live server does is refused with the reason.
   const refused = await window.fetch('api/rows?filters=' + encodeURIComponent('[{"column":0,"op":"empty"}]'));
   if (refused.status !== 400 || !(await refused.text()).includes('Filters are not available')) fail('filters');

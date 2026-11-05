@@ -751,6 +751,10 @@ a:hover {
 .tv-pager:empty {
   display: none;
 }
+.tv-export {
+  font-size: 13px;
+  white-space: nowrap;
+}
 .tv-pager-count {
   color: var(--text-2);
 }

@@ -1,7 +1,7 @@
 # Plan: Export a Table Viewer's Selected Rows
 
 Created: 2026-11-05
-Status: Proposed. Nothing is implemented.
+Status: Implemented; not yet tried in a browser or committed.
 Related: [keyboard row navigation](../2026-11-05-table-viewer-row-navigation/plan.md),
 which is independent of this plan.
 
@@ -86,9 +86,9 @@ The user chose full rows in the original format on 2026-11-05.
   `utterances.export.csv`, and `<directory>.export.csv` for a listing. It is
   encoded with `mime.FormatMediaType`, because names are arbitrary strings.
 - **Static snapshots have no export.** They have no server, and their filters
-  are fixed, so they would offer little beyond the sort. The page info gains a
-  flag only the live server sets, as it does for **Download**, and the snapshot's
-  API replacement refuses the route with a reason, like other live-only requests.
+  are fixed, so they would offer little beyond the sort. The page hides the link
+  on the existing `info.static`, and the snapshot's API replacement already refuses
+  routes it does not have, with a reason.
 
 ## Variants to cover
 

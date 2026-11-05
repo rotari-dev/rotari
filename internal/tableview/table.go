@@ -30,6 +30,12 @@ type source interface {
 	scan(visit func(number int, cells []string) bool) error
 	// rows returns the rows numbered, which ascend.
 	rows(numbers []int) ([][]string, error)
+	// exportHeader is what an export writes before its rows, in the source's
+	// own format.
+	exportHeader() ([]byte, error)
+	// exportRecords returns the rows numbered, which ascend, each as a record of
+	// the source's own format with its line ending.
+	exportRecords(numbers []int) ([][]byte, error)
 }
 
 // Table is a source of rows the viewer pages through.

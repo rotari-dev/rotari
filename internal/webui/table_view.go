@@ -1,9 +1,13 @@
 package webui
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"html"
+	"io"
+	"log"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
@@ -24,7 +28,9 @@ import (
 // content request does; the page passes it through to its API requests and
 // adds its own parameters (sep and header for a file; view, pattern, expanded, group,
 // suffix_sep, and incomplete for a directory; filters, sort, desc, offset,
-// limit, base, and for a cell's media or text, ref).
+// limit, base, and for a cell's media or text, ref). /api/export takes the same
+// parameters as /api/rows but for offset, limit, and base, since it writes every
+// selected row and no media.
 
 //go:embed assets/table_view.html
 var tableViewHTML string
@@ -126,17 +132,7 @@ func (view tableView) handler() http.Handler {
 			writeArtifactError(writer, err)
 			return
 		}
-		table, err := openTableView(source, query)
-		if err != nil {
-			writeArtifactError(writer, err)
-			return
-		}
-		filters, err := tableview.ParseConditions(query.Get("filters"))
-		if err != nil {
-			writeArtifactError(writer, err)
-			return
-		}
-		sort, err := tableViewSort(query)
+		table, filters, sort, err := openTableViewSelection(source, query)
 		if err != nil {
 			writeArtifactError(writer, err)
 			return
@@ -148,6 +144,34 @@ func (view tableView) handler() http.Handler {
 		}
 		noStore(writer)
 		writeWebJSON(writer, page)
+	})
+	mux.HandleFunc("GET /api/export", func(writer http.ResponseWriter, request *http.Request) {
+		query := request.URL.Query()
+		source, err := view.resolve(query)
+		if err != nil {
+			writeArtifactError(writer, err)
+			return
+		}
+		for _, name := range []string{"offset", "limit", "base"} {
+			if query.Has(name) {
+				writeArtifactError(writer, fmt.Errorf("%s does not apply to an export, which writes every selected row and no media", name))
+				return
+			}
+		}
+		table, filters, sort, err := openTableViewSelection(source, query)
+		if err != nil {
+			writeArtifactError(writer, err)
+			return
+		}
+		export, err := table.PrepareExport(filters, sort)
+		if err != nil {
+			writeArtifactError(writer, err)
+			return
+		}
+		noStore(writer)
+		writer.Header().Set(headerContentType, "application/octet-stream")
+		writer.Header().Set("Content-Disposition", tableViewExportDisposition(source))
+		streamTableViewExport(writer, request, export)
 	})
 	mux.HandleFunc("GET /api/media", func(writer http.ResponseWriter, request *http.Request) {
 		query := request.URL.Query()
@@ -387,6 +411,56 @@ func serveTableViewText(writer http.ResponseWriter, source tableViewSource, quer
 }
 
 // tableViewSort reads sort, a column counted from 0, and desc=1.
+// openTableViewSelection opens a request's table, with the rows it selects.
+func openTableViewSelection(source tableViewSource, query url.Values) (*tableview.Table, []tableview.Condition, *tableview.Sort, error) {
+	table, err := openTableView(source, query)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	filters, err := tableview.ParseConditions(query.Get("filters"))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	sort, err := tableViewSort(query)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return table, filters, sort, nil
+}
+
+// tableViewExportDisposition names an export after its source. Names are
+// arbitrary strings, so the header encodes them.
+func tableViewExportDisposition(source tableViewSource) string {
+	name := filepath.Base(source.target.Path)
+	if source.directory {
+		name += ".export.csv"
+	} else {
+		extension := filepath.Ext(name)
+		name = strings.TrimSuffix(name, extension) + ".export" + extension
+	}
+	if value := mime.FormatMediaType("attachment", map[string]string{"filename": name}); value != "" {
+		return value
+	}
+	return "attachment"
+}
+
+// tableViewExportStream is what streamTableViewExport writes.
+type tableViewExportStream interface {
+	Stream(ctx context.Context, writer io.Writer) error
+}
+
+// streamTableViewExport writes an export. The status has gone by the time a read
+// fails, so it aborts the connection: the browser then reports a failed download
+// rather than keeping a short file.
+func streamTableViewExport(writer http.ResponseWriter, request *http.Request, export tableViewExportStream) {
+	if err := export.Stream(request.Context(), writer); err != nil {
+		if request.Context().Err() == nil {
+			log.Printf("table viewer export: %v", err)
+		}
+		panic(http.ErrAbortHandler)
+	}
+}
+
 func tableViewSort(query url.Values) (*tableview.Sort, error) {
 	if query.Get("sort") == "" {
 		if query.Get("desc") != "" {

@@ -488,6 +488,25 @@ func (table *directoryTable) scan(visit func(number int, cells []string) bool) e
 	return nil
 }
 
+// exportHeader names a listing's columns, in CSV: a listing has no format of
+// its own.
+func (table *directoryTable) exportHeader() ([]byte, error) {
+	columns := table.columns()
+	names := make([]string, len(columns))
+	for index, column := range columns {
+		names[index] = column.Name
+	}
+	return encodeRecord(',', names)
+}
+
+func (table *directoryTable) exportRecords(numbers []int) ([][]byte, error) {
+	rows, err := table.rows(numbers)
+	if err != nil {
+		return nil, err
+	}
+	return encodeRecords(',', rows)
+}
+
 func (table *directoryTable) rows(numbers []int) ([][]string, error) {
 	rows := make([][]string, len(numbers))
 	for index, number := range numbers {

@@ -1208,6 +1208,24 @@ there are no row keys for a document preview. Implemented in
 `TestTableViewerMovesBetweenRows` and, in Chrome, `TestTableViewerRowKeysInBrowser`
 in [conformance/05-web/table_view_rows_test.go](../conformance/05-web/table_view_rows_test.go).
 
+**WEB-31** `/tableview/api/export`, with the parameters of `/tableview/api/rows`
+except `offset`, `limit`, and `base`, which are refused, downloads every row the
+filters select, in the sort's order, under the same roots and refusals and limits
+as `rows`, with whole cells. A delimited file gives records in its separator, with
+its own first record as the header when `header=1`; quoting and line endings may
+differ, but reading the output with the same settings gives the same cells. A JSON
+Lines file gives each selected record's original line. A directory listing gives
+CSV of the listing's columns and rows, covering expanded directories only. No rows
+give the header alone. The file is named `<stem>.export<ext>`, or
+`<directory>.export.csv`. Anything refused is refused before the first byte; a read
+failing later aborts the connection, so a short file cannot pass for a whole one.
+The page offers it as **Export rows** once the selected rows have loaded and at
+least one matched. A static snapshot has no export. Implemented in
+[internal/tableview/export.go](../internal/tableview/export.go) and
+[internal/webui/table_view.go](../internal/webui/table_view.go); covered by
+`TestTableViewerExportsRows` in
+[conformance/05-web/table_view_export_test.go](../conformance/05-web/table_view_export_test.go).
+
 **WEB-22** `rotari tableview --static-dir DIR FILE` writes a static snapshot
 of the Table viewer for one delimited or JSON Lines table instead of serving,
 reading under the file's directory as WEB-20 does. A delimited file is read

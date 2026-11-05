@@ -251,6 +251,23 @@ func (table *delimitedTable) rows(numbers []int) ([][]string, error) {
 	return rows, nil
 }
 
+// exportHeader is the file's own first record: columns substitutes names for
+// blank cells and pads to the widest row, and neither is in the file.
+func (table *delimitedTable) exportHeader() ([]byte, error) {
+	if !table.format.Header || table.index.first == nil {
+		return nil, nil
+	}
+	return encodeRecord(table.format.Separator, table.index.first)
+}
+
+func (table *delimitedTable) exportRecords(numbers []int) ([][]byte, error) {
+	rows, err := table.rows(numbers)
+	if err != nil {
+		return nil, err
+	}
+	return encodeRecords(table.format.Separator, rows)
+}
+
 // recordReader reads records from an offset whose record number is known.
 type recordReader struct {
 	file  *os.File

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 )
 
@@ -188,22 +189,50 @@ func (table *jsonLinesTable) scan(visit func(number int, cells []string) bool) e
 }
 
 func (table *jsonLinesTable) rows(numbers []int) ([][]string, error) {
+	rows := make([][]string, 0, len(numbers))
+	err := table.lines(numbers, func(_ []byte, value any) {
+		rows = append(rows, jsonLinesCells(value, table.columnNames))
+	})
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// exportHeader is nothing: every record carries its own keys.
+func (table *jsonLinesTable) exportHeader() ([]byte, error) { return nil, nil }
+
+// exportRecords returns the original lines: cells turn numbers into text, nulls
+// into blanks, and nested values into compact JSON.
+func (table *jsonLinesTable) exportRecords(numbers []int) ([][]byte, error) {
+	records := make([][]byte, 0, len(numbers))
+	err := table.lines(numbers, func(line []byte, _ any) {
+		records = append(records, append(slices.Clone(line), '\n'))
+	})
+	if err != nil {
+		return nil, err
+	}
+	return records, nil
+}
+
+// lines visits the records numbered, which ascend, as their lines without an
+// ending and their values.
+func (table *jsonLinesTable) lines(numbers []int, visit func(line []byte, value any)) error {
 	if len(numbers) == 0 {
-		return [][]string{}, nil
+		return nil
 	}
 	first := numbers[0]
 	checkpoint := first / jsonLinesCheckpointInterval
 	start := checkpoint * jsonLinesCheckpointInterval
 	file, err := table.target.open(table.target.Path)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer file.Close()
 	if _, err := file.Seek(table.index.checkpoints[checkpoint], io.SeekStart); err != nil {
-		return nil, err
+		return err
 	}
 	reader := bufio.NewReaderSize(file, 64<<10)
-	rows := make([][]string, 0, len(numbers))
 	wanted := 0
 	for number := start; wanted < len(numbers); {
 		line, err := readJSONLinesRecord(reader)
@@ -211,7 +240,7 @@ func (table *jsonLinesTable) rows(numbers []int) ([][]string, error) {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return err
 		}
 		line = trimJSONLinesEnding(line)
 		if len(bytes.TrimSpace(line)) == 0 {
@@ -219,18 +248,18 @@ func (table *jsonLinesTable) rows(numbers []int) ([][]string, error) {
 		}
 		value, err := decodeJSONLinesRecord(line, number+1)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if number == numbers[wanted] {
-			rows = append(rows, jsonLinesCells(value, table.columnNames))
+			visit(line, value)
 			wanted++
 		}
 		number++
 	}
 	if wanted != len(numbers) {
-		return nil, fmt.Errorf("JSON Lines file changed while reading its index")
+		return fmt.Errorf("JSON Lines file changed while reading its index")
 	}
-	return rows, nil
+	return nil
 }
 
 func jsonLinesCells(value any, columns []string) []string {
