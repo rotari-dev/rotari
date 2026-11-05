@@ -240,3 +240,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The user said OK. `go test ./...` passed all 55 packages, `go vet ./...` and `gofmt` found nothing, and `-race` passed on `internal/terminal` and the terminal tests of `internal/webui` and `conformance/05-web`. Not setting the variables failed `TestTerminalShellsFollowTheirProject`.
 
 **Remaining:** None.
+
+## Click web addresses
+
+**Commits:** 2026-11-06 00:06:39 `a39a2bdd`.
+
+**Change:** `@xterm/addon-web-links` 0.11.0 in `internal/webui/assets/vendor`, served from `/_terminal/` and loaded with the panel. Contract WEB-33, `docs/WEB.md`, and the plan's [Small improvements](plan.md#small-improvements) section.
+
+**Reason:** The fifth small improvement.
+
+**Plan impact:** One more vendored file, about 3 KB, MIT. Its SHA-512 matched npm's and its whole source was read before vendoring. New tabs get `noopener`.
+
+**Validation:** The user said OK. `tsc` and `gofmt` found nothing and the terminal tests passed. In `go test ./...`, 54 of 55 packages passed; `TestSSHJobReadsAsRunning`, an Open item in [ISSUES.md](../ISSUES.md), failed once and passed five repetitions alone. The handler was checked against a stand-in, and the browser test only checks that the addon loads.
+
+**Remaining:** None.
