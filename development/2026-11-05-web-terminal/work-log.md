@@ -58,3 +58,17 @@ See [plan.md](plan.md) for current scope and status.
 
 **Remaining:** Steps 2 to 5; how full-screen programs redraw in practice; `Close` on macOS.
 
+## Serve the shell over a WebSocket
+
+**Commits:** 2026-11-05 16:07:17 `da294e38`.
+
+**Change:** Added `internal/webui/terminal.go` with `/_terminal/ws`, `--allow-terminal` in `cmd/rotari`, shell start and end logging, ending the shell on sign-out and server stop, `github.com/coder/websocket`, and the generated CLI files. The flag pair tests and schema golden gained the flag.
+
+**Reason:** Step 2 of the plan.
+
+**Plan impact:** Step 2 is done. Conformance for it moves to step 5, with the contract.
+
+**Validation:** `go test ./...` and `go vet ./...` passed, and `go test -race` on the changed packages passed before the last test records changed. A throwaway test through the built binary showed no Web token in the shell's environment, and that SIGINT, SIGTERM, and SIGKILL of the server end the shell while a `setsid` process survives. After rebasing, the changed packages' tests passed again. No browser or macOS run.
+
+**Remaining:** Steps 3 to 5.
+
