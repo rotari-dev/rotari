@@ -217,6 +217,23 @@ func TestCloseKillsAShellThatIgnoresTheHangup(t *testing.T) {
 	}
 }
 
+// readPID waits for a process to write its PID to path.
+func readPID(t *testing.T, path string) int {
+	t.Helper()
+	for deadline := time.Now().Add(testWait); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		data, err := os.ReadFile(path)
+		if err == nil && bytes.HasSuffix(data, []byte("\n")) {
+			pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+			if err != nil {
+				t.Fatalf("%s holds %q", path, data)
+			}
+			return pid
+		}
+	}
+	t.Fatalf("no process wrote %s", path)
+	return 0
+}
+
 // checkAlive fails unless pid is still running shortly after a Close.
 func checkAlive(t *testing.T, pid int) {
 	t.Helper()
@@ -227,14 +244,14 @@ func checkAlive(t *testing.T, pid int) {
 }
 
 // What ignores the hangup keeps running and keeps the terminal's other end open;
-// Close must still end the Read, or the connection's goroutine would never end.
+// Close must still end the Read, or the connection's goroutine would never end. The
+// command writes its PID only once nohup has started it: closing before nohup ignores
+// the hangup would rightly end it.
 func TestCloseLeavesProcessesThatIgnoreTheHangup(t *testing.T) {
 	shell := startShell(t)
-	output := shell.run(t, "nohup sleep 300 >/dev/null 2>&1 & echo $!")
-	pid, err := strconv.Atoi(output)
-	if err != nil {
-		t.Fatalf("nohup printed %q", output)
-	}
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	shell.run(t, `nohup sh -c 'echo $$ > `+pidFile+`; exec sleep 300' >/dev/null 2>&1 & echo started`)
+	pid := readPID(t, pidFile)
 	t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
 	shell.Close()
 	shell.awaitRead(t)
@@ -247,17 +264,7 @@ func TestCloseLeavesDetachedProcessesRunning(t *testing.T) {
 	shell := startShell(t)
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	shell.run(t, `setsid sh -c 'echo $$ > `+pidFile+`; exec sleep 300' >/dev/null 2>&1 < /dev/null & echo started`)
-	var pid int
-	deadline := time.Now().Add(testWait)
-	for pid == 0 && time.Now().Before(deadline) {
-		if data, err := os.ReadFile(pidFile); err == nil && bytes.HasSuffix(data, []byte("\n")) {
-			pid, _ = strconv.Atoi(strings.TrimSpace(string(data)))
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if pid == 0 {
-		t.Fatal("the detached process did not start")
-	}
+	pid := readPID(t, pidFile)
 	t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
 	shell.Close()
 	checkAlive(t, pid)
