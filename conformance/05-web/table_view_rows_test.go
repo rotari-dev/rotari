@@ -230,14 +230,26 @@ try {
     if ((await value(pageTop)) !== 0) throw new Error('a move scrolled the page');
     if ((await value('document.querySelector(".tv-scroll").scrollTop')) <= 0) throw new Error('a move did not scroll the table');
     const inView = '(() => { const box = document.querySelector("#tv-table tr.tv-row-current").getBoundingClientRect(); return box.top >= 0 && box.bottom <= document.querySelector(".tv-main").getBoundingClientRect().bottom + 1; })()';
-    if (!(await value(inView))) throw new Error('the current row is out of view');
+    const where = 'JSON.stringify({ row: document.querySelector("#tv-table tr.tv-row-current").getBoundingClientRect(), page: document.querySelector(".tv-main").getBoundingClientRect(), table: document.querySelector(".tv-scroll").getBoundingClientRect(), scroll: document.querySelector(".tv-scroll").scrollTop, max: document.querySelector(".tv-scroll").scrollHeight - document.querySelector(".tv-scroll").clientHeight })';
+    if (!(await value(inView))) throw new Error('the current row is out of view: ' + await value(where));
+
+    // Near the end of the table, which the page cuts off however far the table
+    // scrolls, the page scrolls as well.
+    for (let times = 0; times < 35; times++) await press('ArrowDown');
+    await until('row 60', current + ' === "60"');
+    if (!(await value(inView))) throw new Error('the last row is out of view: ' + await value(where));
+    if ((await value(pageTop)) <= 0) throw new Error('the page did not scroll to the last row');
+    await value('document.querySelector(".tv-main").scrollTop = 0');
+    for (let times = 0; times < 35; times++) await press('ArrowUp');
+    await until('row 25 again', current + ' === "25"');
+    await value('document.querySelector(".tv-main").scrollTop = 0');
 
     // A window too short to show a row of the table scrolls the page as well.
     await page.send('Emulation.setDeviceMetricsOverride', { width: 1000, height: 420, deviceScaleFactor: 1, mobile: false });
     await sleep(100);
     await press('ArrowDown');
     await until('row 26', current + ' === "26"');
-    if (!(await value(inView))) throw new Error('the current row is out of view in a short window');
+    if (!(await value(inView))) throw new Error('the current row is out of view in a short window: ' + await value(where));
 
     for (let times = 0; times < 21; times++) await press('ArrowUp');
     await until('row 5', current + ' === "5"');
@@ -310,7 +322,7 @@ func TestTableViewerRowKeysInBrowser(t *testing.T) {
 	covers(t, "WEB-30")
 	chrome, node, helper := browserCheckTools(t)
 	e := support.NewEnv(t)
-	address := e.StartTableView(writeRowsTable(t, e.Root, 30))
+	address := e.StartTableView(writeRowsTable(t, e.Root, 60))
 	input, err := json.Marshal(map[string]string{"chrome": chrome, "address": address})
 	if err != nil {
 		t.Fatal(err)

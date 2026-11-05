@@ -1172,7 +1172,9 @@ function markCurrentRow() {
 // scrollCurrentRow brings the current row and framed cell into view by scrolling
 // the table alone. The panes above it stay where they are, so the part of the
 // table in view can end above its own bottom edge, where the page cuts it off.
-// Only when that part has no room for the row does the page scroll, just enough.
+// The page scrolls only as far as the table cannot show the row: when that part
+// has no room for it, or the row is near the table's end, which stays cut off however
+// far the table scrolls.
 function scrollCurrentRow() {
   const row = document.querySelector("#tv-table tr.tv-row-current");
   if (!row) return;
@@ -1201,6 +1203,10 @@ function scrollCurrentRow() {
   if (box.top < view.top) scroller.scrollTop -= view.top - box.top;
   else if (box.bottom > view.bottom)
     scroller.scrollTop += box.bottom - view.bottom;
+  const settled = row.getBoundingClientRect();
+  const pageBox = main.getBoundingClientRect();
+  if (settled.bottom > pageBox.bottom)
+    main.scrollTop += settled.bottom - pageBox.bottom;
   const cell = row.querySelector("td.tv-cell-current");
   if (!cell) return;
   const edges = cell.getBoundingClientRect();

@@ -94,8 +94,9 @@ result export and Describe distributions are not part of this one.
 - **Moves scroll the table alone.** The user asked for this on 2026-11-05, because
   `scrollIntoView` also scrolled the page. The page cuts off the table's bottom while
   panes are open, so the row is kept above whichever bottom edge comes first. The
-  Chrome test found on its first CI run that a short window can leave no room for a
-  row at all; the page then scrolls just enough.
+  Chrome test found on its first CI runs that a short window can leave no room for a
+  row at all, and that rows near the table's end stay cut off however far it scrolls;
+  the page then scrolls just enough.
 - **The pager sits under the filter bar.** The user asked for this on 2026-11-05,
   so the count, key hint, and page controls stay in view above the scrolling table
   even when the page cuts off the table's bottom.

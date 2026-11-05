@@ -963,6 +963,18 @@ func TestTableViewMovesBetweenRowsInBrowser(t *testing.T) {
     window.Element.prototype.getBoundingClientRect = stub;
     page.scrollTop = 0;
     scroller.scrollTop = 0;
+    // Near the table's end, the table cannot scroll the row into view: it stays
+    // at 590px however far the table scrolls, and the page ends at 200px.
+    window.Element.prototype.getBoundingClientRect = function () {
+      if (this === scroller) return { top: 100 - page.scrollTop, bottom: 620 - page.scrollTop, left: 0, right: 500 };
+      if (this.dataset.number) return { top: 560 - page.scrollTop, bottom: 590 - page.scrollTop, left: 0, right: 500 };
+      return stub.call(this);
+    };
+    press('ArrowDown');
+    if (page.scrollTop !== 390) fail('near the end', page.scrollTop);
+    window.Element.prototype.getBoundingClientRect = stub;
+    page.scrollTop = 0;
+    scroller.scrollTop = 0;
     window.Element.prototype.getBoundingClientRect = box;
     delete window.Element.prototype.scrollIntoView;
     await wait(200);
