@@ -360,6 +360,8 @@ func TestTerminalShellRoutes(t *testing.T) {
 		"here, a bad project": {http.MethodGet, terminalHerePath + "?project=a%2Fb", http.StatusBadRequest},
 		"change here":         {http.MethodPost, terminalHerePath, http.StatusMethodNotAllowed},
 		"say alive":           {http.MethodPost, terminalAlivePath, http.StatusNoContent},
+		"rename, no body":     {http.MethodPatch, terminalShellsPath + "/" + shell.ID, http.StatusBadRequest},
+		"rename an unknown":   {http.MethodPatch, terminalShellsPath + "/7", http.StatusBadRequest},
 		"read alive":          {http.MethodGet, terminalAlivePath, http.StatusMethodNotAllowed},
 	} {
 		if status, body := terminalRequest(t, server, test.method, test.path); status != test.want {
@@ -368,6 +370,52 @@ func TestTerminalShellRoutes(t *testing.T) {
 	}
 	if shells := listTerminalShells(t, server); len(shells) != 1 {
 		t.Errorf("the requests left %v", shells)
+	}
+}
+
+func TestTerminalRenamesAShell(t *testing.T) {
+	server, _ := terminalServer(t, "/bin/sh")
+	shell := startTerminalShell(t, server)
+	rename := func(id, body string) (int, string) {
+		t.Helper()
+		request, err := http.NewRequest(http.MethodPatch, server.URL+terminalShellsPath+"/"+id, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("X-Rotari-Token", terminalTestToken)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		text, err := io.ReadAll(response.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response.StatusCode, string(text)
+	}
+	if status, body := rename(shell.ID, `{"name":"  ビルド <b>  "}`); status != http.StatusOK || !strings.Contains(body, "ビルド \\u003cb\\u003e") {
+		t.Errorf("rename: status %d: %s", status, body)
+	}
+	status, body := terminalRequest(t, server, http.MethodGet, terminalShellsPath)
+	if status != http.StatusOK || !strings.Contains(body, `"name":"ビルド \u003cb\u003e"`) {
+		t.Errorf("the list lost the name: status %d: %s", status, body)
+	}
+	for name, test := range map[string]struct {
+		id, body string
+		want     int
+	}{
+		"a line break": {shell.ID, `{"name":"a\nb"}`, http.StatusBadRequest},
+		"an escape":    {shell.ID, `{"name":"a\u001bb"}`, http.StatusBadRequest},
+		"too long":     {shell.ID, `{"name":"` + strings.Repeat("あ", terminalNameLimit+1) + `"}`, http.StatusBadRequest},
+		"not JSON":     {shell.ID, `name`, http.StatusBadRequest},
+		"unknown":      {"7", `{"name":"x"}`, http.StatusNotFound},
+		"longest":      {shell.ID, `{"name":"` + strings.Repeat("あ", terminalNameLimit) + `"}`, http.StatusOK},
+		"cleared":      {shell.ID, `{"name":""}`, http.StatusOK},
+	} {
+		if status, body := rename(test.id, test.body); status != test.want {
+			t.Errorf("%s: status %d, want %d: %s", name, status, test.want, body)
+		}
 	}
 }
 
@@ -380,6 +428,7 @@ func TestTerminalShellRoutesAreGuarded(t *testing.T) {
 		{http.MethodPost, terminalShellsPath + "?rows=24&cols=80"},
 		{http.MethodDelete, terminalShellsPath + "/" + shell.ID},
 		{http.MethodPost, terminalAlivePath},
+		{http.MethodPatch, terminalShellsPath + "/" + shell.ID},
 	} {
 		mutates := route.method != http.MethodGet
 		for _, test := range []struct {

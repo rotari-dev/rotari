@@ -423,11 +423,97 @@
     );
     groups.value = "";
   };
+  // endShells ends several shells after asking once. The shown one goes last, so that
+  // moving on from it does not land on one about to end.
+  const endShells = async (targets) => {
+    if (!targets.length) return;
+    const noun = targets.length === 1 ? "shell" : targets.length + " shells";
+    const running = targets.length === 1 ? "it" : "them";
+    if (!confirm("End " + noun + ", and anything running in " + running + "?")) return;
+    const ordered = [...targets].sort((a, b) => (a.id === shown) - (b.id === shown));
+    for (const shell of ordered) {
+      if (shell.id === shown) await refreshShells();
+      let response;
+      try {
+        response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), { method: "DELETE" });
+      } catch {}
+      if (!response?.ok && response?.status !== 404) {
+        await refusal(response, "The shell did not end", () => endShells(targets));
+        return;
+      }
+    }
+    if (!targets.some((shell) => shell.id === shown)) await refreshShells();
+  };
+  const renameShell = async (shell) => {
+    const name = prompt("Name for shell " + shell.number + " (empty for its number):", shell.name || "");
+    if (name === null) return;
+    let response;
+    try {
+      response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+    } catch {}
+    if (!response?.ok) {
+      await refusal(response, "The tab was not renamed", () => renameShell(shell));
+      return;
+    }
+    await refreshShells();
+  };
+  let tabMenu = null;
+  const closeTabMenu = () => {
+    tabMenu?.remove();
+    tabMenu = null;
+  };
+  const openTabMenu = (event, shell) => {
+    event.preventDefault();
+    closeTabMenu();
+    const inGroup = shellsHere().sort((a, b) => a.number - b.number);
+    const right = inGroup.slice(inGroup.findIndex((item) => item.id === shell.id) + 1);
+    tabMenu = document.createElement("div");
+    tabMenu.className = "terminal-tab-menu";
+    tabMenu.setAttribute("role", "menu");
+    for (const [label, action, enabled] of [
+      ["Rename...", () => renameShell(shell), true],
+      ["Close tabs to the right", () => endShells(right), right.length > 0],
+      ["Close all tabs", () => endShells(inGroup), true],
+    ]) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.setAttribute("role", "menuitem");
+      item.textContent = label;
+      item.disabled = !enabled;
+      item.onclick = () => {
+        closeTabMenu();
+        action();
+      };
+      tabMenu.append(item);
+    }
+    document.body.append(tabMenu);
+    // By the pointer, or by the tab for the keyboard's menu key, and inside the window.
+    const anchor = event.currentTarget.getBoundingClientRect();
+    const size = tabMenu.getBoundingClientRect();
+    const x = event.clientX || anchor.left;
+    const y = event.clientY || anchor.bottom;
+    tabMenu.style.left = Math.max(0, Math.min(x, innerWidth - size.width)) + "px";
+    tabMenu.style.top = Math.max(0, Math.min(y, innerHeight - size.height)) + "px";
+    tabMenu.querySelector("button").focus();
+  };
+  document.addEventListener("pointerdown", (event) => {
+    if (tabMenu && !tabMenu.contains(event.target)) closeTabMenu();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && tabMenu) {
+      closeTabMenu();
+      term?.focus();
+    }
+  });
   const renderTabs = () => {
     renderGroups();
     const inGroup = shellsHere().sort((a, b) => a.number - b.number);
     add.disabled = inGroup.length >= groupLimit || shells.length >= shellLimit;
-    const drawn = JSON.stringify([inGroup.map((shell) => [shell.id, shell.number, shell.dir]), shown]);
+    const drawn = JSON.stringify([inGroup.map((shell) => [shell.id, shell.number, shell.name, shell.dir]), shown]);
     // Drawing them again would take focus from a tab and move nothing.
     if (drawn === tabsDrawn) return;
     tabsDrawn = drawn;
@@ -440,9 +526,9 @@
         label.type = "button";
         label.setAttribute("role", "tab");
         label.setAttribute("aria-selected", String(shell.id === shown));
-        label.setAttribute("aria-label", "Shell " + shell.number);
+        label.setAttribute("aria-label", "Shell " + shell.number + (shell.name ? ", " + shell.name : ""));
         label.title = "Started in " + shell.dir;
-        label.textContent = String(shell.number);
+        label.textContent = shell.name || String(shell.number);
         label.onclick = () => {
           if (shell.id !== shown) show(shell.id);
           else term.focus();
@@ -453,6 +539,7 @@
         close.setAttribute("aria-label", "End shell " + shell.number);
         close.textContent = "\u00d7";
         close.onclick = () => endShell(shell);
+        tab.oncontextmenu = (event) => openTabMenu(event, shell);
         tab.append(label, close);
         return tab;
       }),

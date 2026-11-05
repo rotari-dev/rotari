@@ -1373,7 +1373,8 @@ it, and the flag is rejected with `--allow-control=false` or `--static-dir`. Wit
 `Host` and `Origin` are checked (WEB-14). The WebSocket at `/_terminal/ws` also requires HTTPS
 or a direct loopback connection, even with a token, and so do `/_terminal/shells`, which lists the
 shells on `GET` and starts one on `POST` with `rows` and `cols` (409 at the limit), and
-`/_terminal/shells/ID`, which ends one on `DELETE` (404 if it is not running). `POST` and
+`/_terminal/shells/ID`, which ends one on `DELETE` (404 if it is not running) and names it on `PATCH` with
+`{"name": ...}`, up to 64 characters on one line, or empty for none. `POST` and
 `/_terminal/here`, which says where a new shell would go, take a page's place: `project`, with
 `basedir` for a mounted one (404 if unknown), and `run`, read on the server and never a path from the
 page. A shell runs as `$SHELL -l` or `/bin/sh` with the server's environment less the Web token. With

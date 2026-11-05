@@ -241,6 +241,13 @@ shells get `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME`, so they follow the projec
 Links use the official web links addon, vendored after checking npm's SHA-512, with a plain click as the
 user asked and `noopener`, so a page reached from program output cannot reach this one.
 
+## The tab menu
+
+A tab's right-click menu renames it and closes tabs, as the user first asked. Names live on the server, with
+the shell, so that other browser tabs and later pages see them, and never come back after the shell ends.
+Closing asks once for all of them, covers only this project, and ends the shown shell last, so that moving on
+from it does not land on one about to end.
+
 ## Interfaces and documents
 
 - CLI: `--allow-terminal`, in `cli_spec.go`, and the generated Python CLI metadata through its

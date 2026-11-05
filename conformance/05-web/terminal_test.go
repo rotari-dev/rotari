@@ -318,6 +318,8 @@ func TestTerminalIsOfferedAndGuarded(t *testing.T) {
 		"alive, no credentials": {http.MethodPost, base + "/_terminal/alive", map[string]string{}, http.StatusForbidden},
 		"alive, another site":   {http.MethodPost, base + "/_terminal/alive", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
 		"alive":                 {http.MethodPost, base + "/_terminal/alive", map[string]string{"X-Rotari-Token": launchToken}, http.StatusNoContent},
+		"name, another site":    {http.MethodPatch, base + "/_terminal/shells/1", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
+		"name, not running":     {http.MethodPatch, base + "/_terminal/shells/7", map[string]string{"X-Rotari-Token": launchToken}, http.StatusBadRequest},
 		"end, not running":      {http.MethodDelete, base + "/_terminal/shells/7", map[string]string{"X-Rotari-Token": launchToken}, http.StatusNotFound},
 	} {
 		if got := e.HTTPDo(test.method, test.address, test.headers, ""); got.Status != test.want {
@@ -382,6 +384,18 @@ func TestTerminalKeepsSeveralShells(t *testing.T) {
 	third.typeLine(`echo "alive-$((1+1))"`)
 	third.await("alive-2")
 	dial(one.ID, "").awaitClose(terminalNoShell)
+
+	// A name stays with its shell in the list, on the one line a tab has room for.
+	got := e.HTTPDo(http.MethodPatch, base+"/_terminal/shells/"+two.ID, map[string]string{"X-Rotari-Token": launchToken}, `{"name":"build"}`)
+	if got.Status != http.StatusOK || !strings.Contains(got.Body, `"name":"build"`) {
+		t.Errorf("renaming: status %d: %s", got.Status, got.Body)
+	}
+	if got := e.HTTPDo(http.MethodPatch, base+"/_terminal/shells/"+two.ID, map[string]string{"X-Rotari-Token": launchToken}, `{"name":"a\nb"}`); got.Status != http.StatusBadRequest {
+		t.Errorf("a name with a line break: status %d: %s", got.Status, got.Body)
+	}
+	if status, body := terminalShellsRequest(t, http.MethodGet, base+"/_terminal/shells", token); status != http.StatusOK || !strings.Contains(string(body), `"name":"build"`) {
+		t.Errorf("the list lost the name: status %d: %s", status, body)
+	}
 
 	// A freed number comes back, under an ID that does not, up to the limit.
 	replacement := startTerminalShell(t, base, token)

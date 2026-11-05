@@ -564,6 +564,27 @@ func TestGroupsNumberAndLimitTheirShells(t *testing.T) {
 	}
 }
 
+func TestRenameNamesOneShell(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	one, err := keeper.Start(StartOptions{Rows: 24, Cols: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := keeper.Start(StartOptions{Rows: 24, Cols: 80}); err != nil {
+		t.Fatal(err)
+	}
+	renamed, err := keeper.Rename(one.ID, "build")
+	if err != nil || renamed.Name != "build" {
+		t.Fatalf("Rename = %+v, %v", renamed, err)
+	}
+	if shells := keeper.Shells(); shells[0].Name != "build" || shells[1].Name != "" {
+		t.Errorf("shells = %+v", shells)
+	}
+	if _, err := keeper.Rename("no such id", "x"); !errors.Is(err, ErrNoShell) {
+		t.Errorf("Rename of an unknown shell = %v, want ErrNoShell", err)
+	}
+}
+
 // A shell can start elsewhere, and what it is told first stays with its output.
 func TestStartPlacesTheShellAndKeepsItsBanner(t *testing.T) {
 	keeper := newTestKeeper(t, testIdle, 1<<16)

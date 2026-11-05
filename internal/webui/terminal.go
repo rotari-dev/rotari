@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/coder/websocket"
 
@@ -74,6 +76,10 @@ const (
 	// terminalPingInterval keeps proxies from dropping an idle connection, and
 	// finds one that is gone.
 	terminalPingInterval = 30 * time.Second
+	// terminalNameLimit is the longest name a tab can have, and terminalNameBodyLimit
+	// holds it in any encoding.
+	terminalNameLimit     = 64
+	terminalNameBodyLimit = 4096
 	// closeReasonLimit is the most a WebSocket close reason can hold.
 	closeReasonLimit = 123
 )
@@ -113,7 +119,7 @@ func (s site) serveTerminal(writer http.ResponseWriter, request *http.Request) {
 	case path == terminalAlivePath:
 		s.serveTerminalAlive(writer, request)
 	case strings.HasPrefix(path, terminalShellsPath+"/"):
-		s.endTerminalShell(writer, request, strings.TrimPrefix(path, terminalShellsPath+"/"))
+		s.serveTerminalShell(writer, request, strings.TrimPrefix(path, terminalShellsPath+"/"))
 	default:
 		http.NotFound(writer, request)
 	}
@@ -216,6 +222,7 @@ func terminalGroup(place terminalPlace) string {
 type terminalShellResponse struct {
 	ID      string `json:"id"`
 	Number  int    `json:"number"`
+	Name    string `json:"name"`
 	BaseDir string `json:"basedir"`
 	Project string `json:"project"`
 	Dir     string `json:"dir"`
@@ -224,7 +231,7 @@ type terminalShellResponse struct {
 }
 
 func (s site) terminalShellResponse(shell terminal.ShellInfo) terminalShellResponse {
-	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Dir: shell.Dir, Link: "/"}
+	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Name: shell.Name, Dir: shell.Dir, Link: "/"}
 	baseDir, project, ok := strings.Cut(shell.Group, "\x00")
 	if !ok {
 		return response
@@ -317,18 +324,44 @@ func writeTerminalJSON(writer http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(writer).Encode(value)
 }
 
-// endTerminalShell ends a shell on DELETE. Any connection to it closes as for an exit.
-func (s site) endTerminalShell(writer http.ResponseWriter, request *http.Request, id string) {
-	if request.Method != http.MethodDelete {
-		writer.Header().Set("Allow", http.MethodDelete)
+// serveTerminalShell ends a shell on DELETE, whose connection closes as for an exit, and
+// names it on PATCH.
+func (s site) serveTerminalShell(writer http.ResponseWriter, request *http.Request, id string) {
+	switch request.Method {
+	case http.MethodDelete:
+		if err := s.Terminal.End(id); errors.Is(err, terminal.ErrNoShell) {
+			http.Error(writer, err.Error(), http.StatusNotFound)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	case http.MethodPatch:
+		s.renameTerminalShell(writer, request, id)
+	default:
+		writer.Header().Set("Allow", "DELETE, PATCH")
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s site) renameTerminalShell(writer http.ResponseWriter, request *http.Request, id string) {
+	var body struct {
+		Name string `json:"name"`
+	}
+	request.Body = http.MaxBytesReader(writer, request.Body, terminalNameBodyLimit)
+	if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+		http.Error(writer, "the body must be JSON with a name", http.StatusBadRequest)
 		return
 	}
-	if err := s.Terminal.End(id); errors.Is(err, terminal.ErrNoShell) {
+	name := strings.TrimSpace(body.Name)
+	if utf8.RuneCountInString(name) > terminalNameLimit || strings.ContainsFunc(name, unicode.IsControl) {
+		http.Error(writer, "a name is up to "+strconv.Itoa(terminalNameLimit)+" characters on one line", http.StatusBadRequest)
+		return
+	}
+	shell, err := s.Terminal.Rename(id, name)
+	if err != nil {
 		http.Error(writer, err.Error(), http.StatusNotFound)
 		return
 	}
-	writer.WriteHeader(http.StatusNoContent)
+	writeTerminalJSON(writer, http.StatusOK, s.terminalShellResponse(shell))
 }
 
 func (s site) serveTerminalSocket(writer http.ResponseWriter, request *http.Request) {

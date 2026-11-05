@@ -100,7 +100,9 @@ type ShellInfo struct {
 	// Number is what a person calls it within its group: the lowest not in use when
 	// it started.
 	Number int
-	Group  string
+	// Name is what someone has called it, if anyone has.
+	Name  string
+	Group string
 	// Dir is where it started.
 	Dir string
 }
@@ -445,6 +447,18 @@ func (keeper *Keeper) stopIdleTimer() {
 		keeper.idleTimer.Stop()
 		keeper.idleTimer = nil
 	}
+}
+
+// Rename sets a shell's name, which means nothing to the Keeper.
+func (keeper *Keeper) Rename(id, name string) (ShellInfo, error) {
+	keeper.mu.Lock()
+	defer keeper.mu.Unlock()
+	shell := keeper.find(id)
+	if shell == nil {
+		return ShellInfo{}, ErrNoShell
+	}
+	shell.info.Name = name
+	return shell.info, nil
 }
 
 // KeepAlive says someone is still there, attached or not, and restarts the idle limit.

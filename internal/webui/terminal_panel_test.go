@@ -43,7 +43,7 @@ const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedi
 const load = (file, { stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', limit = 8, path = '/', maximized = false, fontSize = '' } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
   const server = { shells: [...shells], lastID: 100, limit, startError: '' };
-  const fakeShells = (url, method) => {
+  const fakeShells = (url, method, body) => {
     requests.push(method + ' ' + url);
     const refused = (code, text) => Promise.resolve({ ok: false, status: code, text: async () => text });
     if (status() !== 200) return refused(status(), 'refused');
@@ -59,6 +59,11 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
       const shell = project ? inProject(id, number, project) : plain(id, number);
       server.shells = [...server.shells, shell].sort((a, b) => a.number - b.number);
       return Promise.resolve({ ok: true, status: 201, json: async () => shell });
+    }
+    if (method === 'PATCH') {
+      const shell = server.shells.find((item) => url.endsWith('/' + item.id));
+      shell.name = JSON.parse(body).name;
+      return Promise.resolve({ ok: true, status: 200, json: async () => shell });
     }
     server.shells = server.shells.filter((shell) => !url.endsWith('/' + shell.id));
     return Promise.resolve({ ok: true, status: 204 });
@@ -80,7 +85,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
           alive.push(init.method);
           return Promise.resolve({ ok: true, status: 204 });
         }
-        if (address.startsWith('/_terminal/shells')) return fakeShells(address, init.method || 'GET');
+        if (address.startsWith('/_terminal/shells')) return fakeShells(address, init.method || 'GET', init.body);
         if (address.startsWith('/_terminal/here')) {
           requests.push('GET ' + address);
           if (status() !== 200) return Promise.resolve({ ok: false, status: status(), text: async () => 'refused' });
@@ -565,6 +570,70 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(runPage.requests.every((request) => !/\/_basedir\//.test(request)), true, 'a request took the mounted basedir\'s prefix');
   // A page with no terminal, such as a static export, has no such button.
   assert.equal(off.window.terminalHereIcon(), '');
+
+  // A tab's menu renames it, closes those to its right, and closes them all, in this
+  // project only, asking once and ending the shown one last.
+  const menuPage = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [
+    inProject('1', 1, 'p1'), inProject('2', 2, 'p1'), inProject('3', 3, 'p1'), inProject('4', 4, 'p1'), inProject('9', 1, 'p2'),
+  ], remembered: ['rotari-terminal-shell:/b:p1', '4'] });
+  await wait(50);
+  const mw = menuPage.window, md = menuPage.document;
+  const tabEls = () => [...md.querySelectorAll('.terminal-tab')];
+  const menuItem = (label) => [...md.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === label);
+  const openMenu = (index) => {
+    const event = new mw.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 });
+    tabEls()[index].dispatchEvent(event);
+    assert.equal(event.defaultPrevented, true, 'the browser menu opened too');
+  };
+  openMenu(0);
+  assert.equal(md.querySelector('.terminal-tab-menu').getAttribute('role'), 'menu');
+  md.body.dispatchEvent(new mw.Event('pointerdown', { bubbles: true }));
+  assert.equal(md.querySelector('.terminal-tab-menu'), null, 'clicking away left the menu');
+  openMenu(0);
+  md.dispatchEvent(new mw.KeyboardEvent('keydown', { key: 'Escape' }));
+  assert.equal(md.querySelector('.terminal-tab-menu'), null, 'Escape left the menu');
+  // Renaming; markup stays text, and cancelling changes nothing.
+  mw.prompt = () => null;
+  openMenu(0);
+  menuItem('Rename...').click();
+  await wait(20);
+  assert.equal(menuPage.requests.some((request) => request.startsWith('PATCH')), false, 'cancelling renamed the tab');
+  mw.prompt = () => '<b>build</b>';
+  openMenu(0);
+  menuItem('Rename...').click();
+  await wait(20);
+  assert.equal(md.querySelector('.terminal-tab [role=tab]').textContent, '<b>build</b>');
+  assert.equal(md.querySelector('.terminal-tab b'), null, 'a tab name ran as markup');
+  // The last tab has nothing to its right.
+  openMenu(3);
+  assert.equal(menuItem('Close tabs to the right').disabled, true);
+  md.dispatchEvent(new mw.KeyboardEvent('keydown', { key: 'Escape' }));
+  // Declining the question ends nothing.
+  let asked = [];
+  mw.confirm = (text) => { asked.push(text); return false; };
+  openMenu(1);
+  menuItem('Close tabs to the right').click();
+  await wait(20);
+  assert.deepEqual(asked, ['End 2 shells, and anything running in them?']);
+  assert.equal(menuPage.server.shells.length, 5, 'declining ended a shell');
+  // Closing to the right of tab 2 ends 3 and the shown 4, 4 last, and moves to a neighbour.
+  mw.confirm = () => true;
+  openMenu(1);
+  menuItem('Close tabs to the right').click();
+  await wait(30);
+  const deleted = () => menuPage.requests.filter((request) => request.startsWith('DELETE'));
+  assert.deepEqual(deleted(), ['DELETE /_terminal/shells/3', 'DELETE /_terminal/shells/4']);
+  assert.equal(menuPage.server.shells.some((shell) => shell.id === '9'), true);
+  menuPage.sockets[0].onclose({ code: 4002, reason: 'hangup' });
+  await wait(30);
+  assert.equal(tabEls().length, 2);
+  assert.match(menuPage.sockets[1].url, /shell=2&/);
+  // Closing all ends this project's, and not another's.
+  openMenu(0);
+  menuItem('Close all tabs').click();
+  await wait(30);
+  assert.deepEqual(deleted().slice(2), ['DELETE /_terminal/shells/1', 'DELETE /_terminal/shells/2']);
+  assert.deepEqual(menuPage.server.shells.map((shell) => shell.id), ['9'], 'closing all reached another project');
 
   // A guide's send button types into the project's shown shell, as one line and with no
   // Enter. With no shell it says so, and starts none.
