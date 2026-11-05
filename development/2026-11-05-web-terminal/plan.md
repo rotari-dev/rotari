@@ -1,14 +1,16 @@
 # Plan: A built-in terminal in `rotari web`
 
 Created: 2026-11-05
-Status: Phase 1 in progress, a small step at a time; `internal/terminal` is done and
-not yet reachable. This replaces phases 3 to 5 of
+Status: In progress, a small step at a time. `internal/terminal` is done and not yet
+reachable; [the steps](#steps) list what is next. This replaces phases 3 to 5 of
 [the hardening plan](../2026-11-04-web-terminal/plan.md), whose hardening is done.
 
 ## Goal
 
-Open a shell in the browser from `rotari web`, in one click and with nothing else
-installed, for the user running the server.
+Type commands while watching jobs. A panel along the bottom of the Web UI holds a shell
+on the server's host, and stays with the user from page to page. A terminal in its own
+tab would add little over a real terminal, so being beside the jobs is the point of this
+feature.
 
 ## Existing implementation
 
@@ -21,32 +23,36 @@ installed, for the user running the server.
   including WebSocket handshakes, but is installed only with `--allow-exec`.
 - `/_launch/` ([launch_proxy.go](../../internal/webui/launch_proxy.go)) sits outside
   basedir mounts because launches belong to the server. A terminal does too.
+- The application pages have no client-side routing: each link reloads the whole page,
+  so nothing in a page can hold a shell across navigation. The Recent jobs page has its
+  own template, and every page inlines its scripts under a nonce.
 - `launchBaseEnvironment` ([web_launch.go](../../cmd/rotari/web_launch.go)) removes the
   Web token from a child's environment.
-- `internal/launcher` runs commands without stdin, so its process model does not fit.
+- [internal/terminal](../../internal/terminal/session.go) runs a shell on a
+  pseudo-terminal and ends it when the terminal closes. `internal/launcher` runs commands
+  without stdin, so its process model does not fit.
 - [web.go](../../cmd/rotari/web.go) sets no server timeouts, so long connections work,
   and stops launches and then calls `server.Close`, which does not close hijacked
   connections.
-- Go's standard library has no server WebSocket, and `go.mod` has no WebSocket or PTY
-  module.
+- Go's standard library has no server WebSocket, and `go.mod` has no WebSocket module.
 
-Built-in VS Code and Jupyter Lab launches can probably already give a browser terminal
-with `--allow-exec`, though neither has been tried for this. They start from an artifact
-row, and VS Code's first start is slow. The advantage of this plan is a permanent entry
-and no extra software.
+Built-in VS Code and Jupyter Lab launches can probably also give a browser terminal, though
+neither has been tried for this. They open in their own tab, away from the jobs.
 
 ## Scope and non-goals
 
-In scope: one user's shell on the host running `rotari web`, on Linux and macOS.
+In scope: one user's shell on the host running `rotari web`, on Linux and macOS, in a panel
+on the application and Recent jobs pages.
 
-Non-goals:
+Non-goals, at least at first:
 
+- Several shells, or tabs inside the panel.
 - Multi-user terminals, or running as another user.
 - A sandbox. The shell has all the user's permissions.
 - A shell on a compute node, or attaching to a running job.
-- Shells that outlive their connection, recording, and sharing. `tmux` inside the
-  terminal covers persistence.
-- Static exports, the Python client's API, and MCP. The flag is CLI only.
+- A shell that survives `rotari web` stopping, recording, and sharing. `tmux` inside the
+  terminal covers long-lived work.
+- The Table viewer, static exports, the Python client's API, and MCP. The flag is CLI only.
 
 ## Decisions
 
@@ -63,80 +69,119 @@ Non-goals:
    shares the origin ([SECURITY.md](../../docs/SECURITY.md#launching-services-and-commands)).
 5. **The shell opens only over a direct loopback connection or HTTPS.** The rest of the API
    accepts a token over plain HTTP on a trusted network, but this would expose a shell.
-6. **Its own page, `/_terminal/`, in a new tab.** It shows no job data, loads only xterm.js
-   and a small script, and is outside basedir mounts. Navigating the main UI never touches
-   the shell.
-7. **Closing the connection ends the session.** No reattach.
-8. **xterm.js, `creack/pty`, and `coder/websocket`.** Each saves real work: terminal
-   emulation, PTY setup, and the WebSocket protocol. Before phase 1, confirm that both Go
-   modules have no transitive dependencies and support the release targets.
+6. **A panel along the bottom, not a page of its own.** Decided with the user: the value is
+   seeing jobs while typing.
+7. **The shell lives on the server, and pages only attach to it.** Each page load reattaches
+   and replays recent output, so navigation does not end the shell, and neither does a
+   dropped connection. Rejected: rewriting the UI with client-side routing, which is far
+   larger, and putting the whole application in an iframe, which breaks the URL and the back
+   button.
+8. **One shell per server; the newest tab takes it over.** Decided with the user. The tab that
+   lost it says so and offers to take it back. This avoids two tabs typing into one shell and
+   disagreeing about its size.
+9. **An unattended shell ends after 30 minutes.** Decided with the user, counted from the last
+   connection closing. Whatever is running in the foreground ends with it, so long work
+   belongs in `rotari run` or `tmux`. This is documented where the terminal is introduced.
+10. **xterm.js loads when the panel first opens,** as its own file served at `/_terminal/` under
+    the page's nonce, so pages stay as light as they are for those who never open it.
+11. **xterm.js, `creack/pty`, and `coder/websocket`.** Each saves real work. Before adding
+    `coder/websocket`, confirm it has no transitive dependencies and supports the release
+    targets. `creack/pty` has none.
 
 ## Design
 
 ```text
-Browser: xterm.js on /_terminal/
-   | WebSocket /_terminal/ws
-rotari web: internal/webui/terminal.go   frames, handshake, limits
+Browser: panel with xterm.js, on every application page
+   | WebSocket /_terminal/ws, reattached on each page load
+rotari web: internal/webui/terminal.go   frames, handshake, take-over
+   | attach, input, resize, end
+internal/terminal: Keeper                one shell, recent output, idle timer
    | io.ReadWriteCloser, Resize, Close
-internal/terminal                        PTY sessions; no HTTP
-   | PTY
-$SHELL -l
+internal/terminal: Session               a shell on a PTY (done)
 ```
 
-- `internal/terminal` knows nothing of HTTP, jobs, or runs, with a rule in
-  [internal/archtest](../../internal/archtest/boundaries_test.go).
-- Terminal output is binary frames; input and resize are explicit message types.
-- The `pty` package leaves its file blocking, where `Close` waits for a `Read` in
-  progress, so the terminal would never close while in use. `Session` uses a pollable
-  copy and must not call `Fd` on it. This relies on the poller supporting terminals,
-  which is checked only on Linux so far.
-- The shell is `$SHELL -l` in the home directory, or `/bin/sh` when `$SHELL` is unset, as
-  documented. A failed start is reported in the terminal rather than retried with another
-  shell.
-- `TERM` is set, and the environment filter is shared with launches.
-- A fixed limit of concurrent sessions, beyond which opening fails with a clear message.
-- Keepalive pings stop proxies dropping idle shells. A blocked WebSocket write stops
-  reading from the PTY, so output cannot grow memory without bound.
-- Each session's open and close go to the server's standard error, with no content.
+The keeper:
+
+- One goroutine always reads the terminal into a ring of recent output, 256 KiB at first, and
+  on to the attached connection. Output therefore never stalls a program, whether or not
+  anyone is watching, and what falls out of the ring is lost.
+- Attaching replays the ring and then streams. A connection too slow to keep up is dropped,
+  and reattaches from the ring.
+- After replay, it sends the program a resize, so that a full-screen program such as `vim`
+  redraws. The ring can start in the middle of a sequence or character; start it at a line
+  boundary where one exists.
+- Attaching when another connection is attached closes that one with a code the page
+  recognizes.
+- Starting takes the first size from the page. When no shell is running, opening the panel
+  starts one.
+
+The shell is `$SHELL -l` in the home directory, or `/bin/sh` when `$SHELL` is unset, as
+documented. A failed start is shown in the panel rather than retried with another shell. The
+environment filter is shared with launches. Each shell's start and end go to the server's
+standard error, with no content. Keepalive pings stop proxies dropping an idle connection.
+
+The `pty` package leaves its file blocking, where `Close` waits for a `Read` in progress, so
+the terminal would never close while in use. `Session` uses a pollable copy and must not call
+`Fd` on it. This relies on the poller supporting terminals, checked only on Linux so far.
 
 Lifecycle:
 
 | Event | Behavior |
 | --- | --- |
-| Tab closed or connection lost | Close the PTY; the shell gets `SIGHUP`. |
-| Shell exits | Send a close frame with its status; the page shows it. |
-| `rotari web` stops | Sessions close before the server does. |
+| Page reload or link | Reattach; the shell continues. |
+| Panel hidden | Stays attached; the shell continues. |
+| Connection lost, or last tab closed | The shell continues; the 30-minute timer starts. |
+| Reattached | The timer stops. |
+| The panel's end button, or 30 minutes unattended | Close the PTY; the shell gets `SIGHUP`. |
+| Shell exits | The panel shows its status and offers a new shell. |
+| Sign out | The shell ends, since the next person to sign in on that browser should not get it. |
+| `rotari web` stops | The shell ends before the server does. |
 | `rotari web` is killed | The kernel closes the PTY and sends `SIGHUP`. |
 | `nohup`, `setsid`, rotari supervisors | Keep running, as after closing any terminal. |
 
-This is deliberately weaker than launches, which always stop with the server: a run
-started in the terminal must outlive it. Sessions are not runs, take no project lock, and
-write nothing under a basedir.
+This is deliberately weaker than launches, which always stop with the server: a run started in
+the terminal must outlive it. Shells are not runs, take no project lock, and write nothing under
+a basedir.
+
+The panel:
+
+- A **Terminal** control in the top bar of the application and Recent jobs pages, only when
+  enabled. Both templates share `web_shell.js` and `web_shell.css`, where the panel belongs.
+- Height and whether it is open are kept per browser, as the sidebar's width is, so the panel
+  comes back open after a link. The page's content shrinks to make room rather than sitting
+  under it, and dialogs stay above it.
+- It follows the theme. On a narrow screen it takes the full width.
+- A browser keeps some keys for itself, such as Ctrl-W, and these cannot reach the shell. The
+  documentation says so.
 
 ## Interfaces and documents
 
-- CLI: `--allow-terminal`, in `cli_spec.go`, and the generated Python CLI metadata through
-  its generator.
-- Web UI: a **Terminal** link in the top bar of the application and Recent jobs pages,
-  only when enabled.
-- [WEB.md](../../docs/WEB.md): the mode table, and the statement that execution starts
-  only through `rotari run`, which a terminal changes in practice.
-- [RUNNING.md](../../docs/RUNNING.md): `rotari wait` and terminal controls inside a Web
-  terminal, if they differ.
-- [SECURITY.md](../../docs/SECURITY.md), [ARCHITECTURE.md](../../docs/ARCHITECTURE.md),
-  the CLI reference, and reverse proxy notes for WebSocket.
+- CLI: `--allow-terminal`, in `cli_spec.go`, and the generated Python CLI metadata through its
+  generator.
+- [WEB.md](../../docs/WEB.md): the mode table, the panel and its 30-minute limit, and the
+  statement that execution starts only through `rotari run`, which a terminal changes in
+  practice.
+- [RUNNING.md](../../docs/RUNNING.md): `rotari wait` and terminal controls inside the panel, if
+  they differ.
+- [SECURITY.md](../../docs/SECURITY.md), [ARCHITECTURE.md](../../docs/ARCHITECTURE.md), the CLI
+  reference, and reverse proxy notes for WebSocket.
 - A new WEB contract ID with conformance, and the status table in `contracts/README.md`.
 
-## Phases
+## Steps
 
-| Phase | Work | Estimate |
+Each is a commit or two that passes alone.
+
+| Step | Work | Estimate |
 | --- | --- | --- |
-| 1 | `internal/terminal`, the handler, the flag, and the guard, with the lifecycle above | 2 to 3 days |
-| 2 | The page: vendored xterm.js and its fit addon with licenses, resize, a clear state on disconnect | 1 to 2 days |
-| 3 | Contracts, conformance, and documents | 2 to 3 days |
+| Done | `Session` in `internal/terminal` | |
+| 1 | The keeper: ring, attach and take-over, idle timer, with unit tests | 1 to 2 days |
+| 2 | The WebSocket handler, `--allow-terminal`, the guard, sign-out, and shutdown | 2 days |
+| 3 | A plain panel: vendored xterm.js and its fit addon with licenses, reattach, resize | 1 to 2 days |
+| 4 | The panel's finish: height, open state, content layout, theme, take-over and exit states | 2 days |
+| 5 | Contracts, conformance, and documents | 2 to 3 days |
 
-A version that merely works is about one to two days of this. The rest is shutdown, the
-second platform, and tests. These are rough person-day estimates.
+A version that merely works is steps 1 to 3, about three to four days. These are rough
+person-day estimates, eight to twelve days in all.
 
 ## Tests and validation
 
@@ -144,38 +189,37 @@ Conformance through the binary:
 
 | Case | Expected |
 | --- | --- |
-| Without the flag | Routes are absent and the UI entry is hidden. |
+| Without the flag | Routes are absent and the control is hidden. |
 | Invalid flag combinations | Rejected with an error, not ignored. |
-| No session or token | Page and handshake refused. |
+| No session or token | Handshake and script refused. |
 | Cross-origin, missing `Origin`, or unexpected `Host` | Refused. |
 | Plain HTTP beyond direct loopback | Refused, including with a token. |
 | A command typed through the WebSocket | Its output returns; a resize reaches `stty size`. |
+| Reconnecting | The same shell, with recent output replayed. |
+| A second connection | Takes over; the first closes with its code. |
+| Unattended past the limit, tested with a shorter one | The shell ends; a new connection starts another. |
+| Sign out, server stopped, server killed | The shell ends; no ordinary process remains. |
+| `rotari run` in the shell, then the shell ended | The run continues. |
 | Shell environment | No `ROTARI_WEB_AUTH_TOKEN`. |
-| Connection closed, server stopped, server killed | The shell ends; no ordinary process remains. |
-| `rotari run` in a session, then the session closed | The run continues. |
-| Session limit reached | Clear error. |
 
-In Chrome, extending the browser checks of WEB-28 and WEB-29: the page opens a session with
-no policy violation, a typed command's output appears, and `/_terminal/` has the nonce.
+In Chrome, extending the browser checks of WEB-28 and WEB-29: the panel opens with no policy
+violation, a typed command's output appears, following a link keeps the shell and its output,
+and xterm.js has not loaded before the panel opens.
 
-By hand, since CI has neither: macOS, including that `Close` hangs up at once, and an
-HTTPS reverse proxy. Also Japanese input and
-wide characters, copy and paste, `vim`, `less`, `top`, and `rotari run` with Ctrl-C and
-Ctrl-D. Safari's handling of `connect-src 'self'` for WebSocket needs checking there.
-
-## Before building
-
-Answer these first:
-
-1. **What is it for?** If only for `rotari` operations, add them to the Web UI instead.
-2. **Do the VS Code or Jupyter Lab terminals fall short?** Try one with
-   `rotari web --allow-exec`, and note what is missing.
-3. **Is one click worth six to nine days, plus keeping three more dependencies current?**
+By hand, since CI has neither: macOS, including that `Close` hangs up at once, and an HTTPS
+reverse proxy. Also Japanese input and wide characters, copy and paste, `vim`, `less`, `top`,
+reattaching while each runs, and `rotari run` with Ctrl-C and Ctrl-D. Safari's handling of
+`connect-src 'self'` for WebSocket needs checking there.
 
 ## Risks
 
 - Anyone who signs in has a shell as this user, so a leaked token is worth more.
-- A launched service's page and any future hole in WEB-28 can open a shell. The policy does
+- A shell now outlives the connection, so one left open by mistake stays reachable for 30
+  minutes to anyone with the session, and something typed earlier can be replayed. Accepted
+  with the user: a launched VS Code server survives a closed tab in the same way.
+- A launched service's page and any future hole in WEB-28 can reach the shell. The policy does
   not cover a launched service's own pages.
-- A shell over a badly configured proxy may drop or buffer. The notes and keepalive help
-  but cannot fix every proxy.
+- Replaying raw output may not restore a full-screen program exactly. The resize should
+  redraw most of them, which has not been tried.
+- A shell over a badly configured proxy may drop or buffer. Reattaching and keepalive help but
+  cannot fix every proxy.
