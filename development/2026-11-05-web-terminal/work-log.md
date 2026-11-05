@@ -142,3 +142,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The user tried it in a browser and it worked. `tsc`, `go vet ./...`, and `gofmt` found nothing. In `go test ./...`, 54 of 55 packages passed; `internal/terminal` failed once in `TestCloseHangsUpTheShellAndIsRepeatable`, which this change did not touch, and that package then passed five repetitions; see [ISSUES.md](../ISSUES.md). `-race` passed on `internal/terminal` and on the terminal tests of `internal/webui` and `conformance/05-web`; the whole suite was not run with it. Moving to a neighbor with take-over, and leaving the idle timer unstarted when an attached shell ends, each failed a test. `TestTerminalPanelInBrowser`, extended with a second tab, was skipped here for lack of Chrome.
 
 **Remaining:** The browser test's first run on CI; this change has not been on CI. Further panel improvements.
+
+## Keep shells with their project
+
+**Commits:** 2026-11-05 21:03:45 `0371601e`.
+
+**Change:** `Keeper` gains groups, a per-group limit, a start directory, a first line kept with the output, and `KeepAlive`. `internal/webui/terminal.go` looks up a page's place from its basedir ID, project, and run, adds `/_terminal/here` and `/_terminal/alive`, and gives each shell its project and page link. `web_shell.js` shows the page's project's tabs and a list of the others, and `web_app_core.js` adds **Open a terminal here** to the run page. Contracts WEB-33 and WEB-34, `docs/WEB.md`, `docs/SECURITY.md`, `docs/ARCHITECTURE.md`, and the plan's [Projects](plan.md#projects) section.
+
+**Reason:** The user wants terminals by project, like an editor's. They chose switching tabs by page over listing all tabs, and said any open page should keep the shells, which replaced the rule that counted only connections.
+
+**Plan impact:** Limits are eight per project and 32 in all, provisional. Choices the user has not reviewed one by one are listed in the plan. Two bugs in earlier commits were fixed here. The first tabs commit `02a5a3ad` could not list shells on a mounted basedir's page, because the application's `fetch` wrapper added the prefix; a jsdom test on such a path found it. Since `02ff9b58`, a saved height set `--terminal-height` on the page even with the panel closed, which shortened the sidebar; this was found by reading the code after the user reported a dark area, and it was not confirmed that this was what they saw. A project with no shell now hides the empty terminal, the other candidate for it.
+
+**Validation:** The user tried the build and said OK. `go test ./...` passed all 55 packages, and `go vet ./...`, `gofmt`, and `tsc` found nothing. `-race` passed on `internal/terminal` and the terminal tests of `internal/webui` and `conformance/05-web`, before the dark-area fix. Starting a shell on page load, and an unescaped first line, each failed a test. `TestTerminalPanelInBrowser`, extended with a project page, was skipped here for lack of Chrome. No CI result has been read for the panel or tabs.
+
+**Remaining:** The browser test's first run on CI. An HTTPS reverse proxy is still untried by hand. Further panel improvements.
