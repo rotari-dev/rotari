@@ -102,12 +102,14 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
       if (!stubs) return;
       window.Terminal = class {
         rows = 24; cols = 80;
+        buffer = { active: { type: 'normal' } };
         options = {};
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
         loadAddon() {} open() {} focus() {}
         reset() { written.length = 0; }
         write(data, done) { written.push(Buffer.from(data).toString()); done?.(); }
         paste(text) { pasted.push(text); }
+        clear() { this.cleared = (this.cleared || 0) + 1; }
         onData(callback) { this.data = callback; }
         onBinary() {}
         onResize(callback) { this.resize = callback; }
@@ -298,6 +300,24 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.match(sockets[11].url, /takeover=0/);
   assert.equal(/shell=\d+/.exec(sockets[11].url)[0], shownNow, 'reconnected to another shell');
   assert.doesNotMatch(sockets[0].url, /takeover/, 'opening the panel did not take the shell');
+
+  // Clear empties the screen and the server's replay, and does neither unconnected.
+  const clearButton = [...document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === 'Clear');
+  clearButton.click();
+  assert.equal(terminals[0].cleared, 1);
+  assert.deepEqual(JSON.parse(sockets[11].sent.at(-1)), { type: 'clear' });
+  sockets[11].readyState = 0;
+  clearButton.click();
+  assert.equal(terminals[0].cleared, 1, 'cleared a screen the server would bring back');
+  sockets[11].readyState = 1;
+  // A full-screen program keeps its screen, and the replay that restores it.
+  const sentBefore = sockets[11].sent.length;
+  terminals[0].buffer.active.type = 'alternate';
+  clearButton.click();
+  assert.equal(terminals[0].cleared, 1, 'cleared a full-screen program\'s screen');
+  assert.equal(sockets[11].sent.length, sentBefore, 'forgot the replay of a full-screen program');
+  assert.match(status().textContent, /full-screen program/);
+  terminals[0].buffer.active.type = 'normal';
 
   // Hide leaves the shell and the connection alone.
   [...document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === 'Hide').click();

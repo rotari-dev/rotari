@@ -426,6 +426,21 @@ func TestTerminalShellOutlivesItsConnections(t *testing.T) {
 	second.await("value-kept")
 	_ = second.connection.Close(websocket.StatusNormalClosure, "")
 
+	// Clearing forgets what would be replayed, and leaves the shell as it was.
+	clearing := openTerminalPage(t, base)
+	clearing.typeLine(`echo "gone-$((1+1))"`)
+	clearing.await("gone-2")
+	clearing.send(websocket.MessageText, `{"type":"clear"}`)
+	clearing.typeLine(`echo "after-$((1+1))"`)
+	clearing.await("after-2")
+	cleared := openTerminalPage(t, base)
+	clearing.awaitClose(terminalTakenOver)
+	cleared.await("after-2")
+	if strings.Contains(cleared.shown.String(), "gone-2") {
+		t.Errorf("cleared output came back:\n%s", cleared.shown.String())
+	}
+	_ = cleared.connection.Close(websocket.StatusNormalClosure, "")
+
 	// With nothing attached, reconnecting by itself may attach.
 	third := func() *terminalPage {
 		for deadline := time.Now().Add(terminalWait); ; time.Sleep(20 * time.Millisecond) {

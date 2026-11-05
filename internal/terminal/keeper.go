@@ -568,6 +568,20 @@ func (attachment *Attachment) Resize(rows, cols uint16) error {
 	return attachment.shell.session.Resize(rows, cols)
 }
 
+// ClearOutput forgets the output kept to replay, so what has been cleared from the
+// screen does not come back with the next Attach. What already waits for this reader
+// still arrives.
+func (attachment *Attachment) ClearOutput() error {
+	keeper := attachment.keeper
+	keeper.mu.Lock()
+	defer keeper.mu.Unlock()
+	if attachment.shell.attached != attachment {
+		return ErrDetached
+	}
+	attachment.shell.ring = outputRing{limit: keeper.options.RingSize}
+	return nil
+}
+
 // Detach ends the attachment and leaves the shell running; the idle limit starts if
 // this was the last attachment to any shell.
 // It does nothing to an attachment that has already ended.

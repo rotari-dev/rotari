@@ -76,7 +76,8 @@ const (
 
 // terminalControl is a text message from the page; binary messages are input.
 type terminalControl struct {
-	// Type is "resize", with Rows and Cols.
+	// Type is "resize", with Rows and Cols, or "clear", which forgets the output kept
+	// to replay.
 	Type string `json:"type"`
 	Rows uint16 `json:"rows"`
 	Cols uint16 `json:"cols"`
@@ -426,6 +427,10 @@ func readTerminalInput(ctx context.Context, connection *websocket.Conn, attachme
 		case "resize":
 			// A bad size is a bug in the page, not a reason to drop the shell.
 			if err := attachment.Resize(control.Rows, control.Cols); err != nil && errors.Is(err, terminal.ErrDetached) {
+				return
+			}
+		case "clear":
+			if err := attachment.ClearOutput(); err != nil {
 				return
 			}
 		default:

@@ -668,6 +668,27 @@ func TestIdleLimitStartsWhenTheAttachedShellEnds(t *testing.T) {
 	}
 }
 
+// Cleared output does not come back, while what follows it does.
+func TestClearOutputForgetsWhatWouldBeReplayed(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	first := watch(t, keeper)
+	first.run(t, `echo "old-$((1+1))"`, "old-2")
+	if err := first.ClearOutput(); err != nil {
+		t.Fatal(err)
+	}
+	first.run(t, `echo "new-$((1+1))"`, "new-2")
+	first.Detach()
+	first.awaitEnd(t, DetachedByCaller)
+	if err := first.ClearOutput(); !errors.Is(err, ErrDetached) {
+		t.Errorf("ClearOutput after Detach = %v, want ErrDetached", err)
+	}
+	second := watch(t, keeper)
+	second.await(t, "new-2")
+	if shown := second.shown(); strings.Contains(shown, "old-2") {
+		t.Errorf("cleared output came back:\n%s", shown)
+	}
+}
+
 func TestOutputRingKeepsRecentOutputFromAWholeLineOrCharacter(t *testing.T) {
 	for _, test := range []struct {
 		name   string

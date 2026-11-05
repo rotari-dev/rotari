@@ -667,11 +667,31 @@
     add.onpointerenter = () => refreshHere().catch(() => {});
     const spacer = document.createElement("span");
     spacer.className = "terminal-spacer";
+    const clear = document.createElement("button");
+    clear.type = "button";
+    clear.textContent = "Clear";
+    clear.title = "Clear this shell's screen and scrollback, here and on the server";
+    clear.onclick = () => {
+      term?.focus();
+      // Not connected, the server would bring it all back.
+      if (socket?.readyState !== WebSocket.OPEN) return;
+      // A full-screen program draws its own screen, and would not know it had gone.
+      if (term.buffer.active.type === "alternate") {
+        const message = "Clear is off while a full-screen program runs.";
+        showStatus(message);
+        setTimeout(() => {
+          if (status.textContent === message) showStatus("");
+        }, 4000);
+        return;
+      }
+      term.clear();
+      send(JSON.stringify({ type: "clear" }));
+    };
     const hide = document.createElement("button");
     hide.type = "button";
     hide.textContent = "Hide";
     hide.onclick = () => window.toggleTerminalPanel();
-    bar.append(title, groups, tabs, add, status, retry, spacer, hide);
+    bar.append(title, groups, tabs, add, status, retry, spacer, clear, hide);
     viewport = document.createElement("div");
     viewport.className = "terminal-viewport";
     panel.append(buildResizer(), bar, viewport);

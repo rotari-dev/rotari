@@ -433,6 +433,24 @@ func TestTerminalRejectsUnknownControlMessages(t *testing.T) {
 	}
 }
 
+func TestTerminalClearForgetsTheReplay(t *testing.T) {
+	server, _ := terminalServer(t, "/bin/sh")
+	first := dialTerminal(t, server)
+	first.typeLine(`VALUE=kept; echo "old-$((1+1))"`)
+	first.await("old-2")
+	first.control(`{"type":"clear"}`)
+	first.typeLine(`echo "new-$((1+1))"`)
+	first.await("new-2")
+	_ = first.connection.Close(websocket.StatusNormalClosure, "")
+	second := dialTerminal(t, server)
+	second.await("new-2")
+	second.typeLine(`echo "value-$VALUE"`)
+	second.await("value-kept")
+	if strings.Contains(second.text.String(), "old-2") {
+		t.Errorf("cleared output came back:\n%s", second.text.String())
+	}
+}
+
 func TestTerminalBadResizeKeepsTheShell(t *testing.T) {
 	server, _ := terminalServer(t, "/bin/sh")
 	client := dialTerminal(t, server)

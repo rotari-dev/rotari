@@ -227,6 +227,13 @@ quoted if needed, so they can finish a half-typed command, and a job's command g
 several lines and keep only **Copy**. A note at the page's corner says what happened, since pages redraw
 their buttons every couple of seconds.
 
+## Small improvements
+
+From here the user decides each one in turn, easiest first: Clear, a maximized panel, font size,
+project variables in the shell, and clickable links, then a tab menu. Clear also forgets the server's
+replay, or following a link would bring back what it cleared. The user found that it also blanked `vim`,
+so it now does nothing on the alternate screen, as they chose.
+
 ## Interfaces and documents
 
 - CLI: `--allow-terminal`, in `cli_spec.go`, and the generated Python CLI metadata through its

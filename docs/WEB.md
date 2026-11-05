@@ -123,6 +123,10 @@ goes in as one word, quoted if it needs to be, so it can finish a command you ha
 goes to whatever is running there, such as `vim`. If the project has no shell, the button says so and
 starts none. Logs and other text of several lines have only **Copy**.
 
+**Clear** empties the tab's screen and scrollback, and what would be shown again after following a
+link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing
+while a full-screen program such as `vim` runs, and says so.
+
 Opening the panel starts a shell if the project has none. Following a link to another project with
 the panel open starts nothing, so browsing leaves no shells behind; the panel offers to start one.
 

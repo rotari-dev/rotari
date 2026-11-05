@@ -1384,7 +1384,7 @@ project. Up to eight shells run per project of a basedir, and thirty-two in all,
 provisional. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
 use in its project when it started, and its `link` is the page that shows it. A connection names its shell with
 `shell`, and never starts one: a shell not running closes it with 4005. A shell outlives its
-connections and replays recent output to the next. A new connection to it takes it over, closing
+connections and replays recent output to the next, except what came before a `clear` message. A new connection to it takes it over, closing
 the last with code 4001; one with `takeover=0`, which a page reconnecting by itself sends, gets 4001
 itself when another connection has that shell. Connections to different shells do not disturb each
 other. A shell ends with its own exit or `DELETE` (4002 with how it ended). All of them end on
