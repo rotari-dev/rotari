@@ -276,11 +276,16 @@ Start the local web status UI separately from the job runner:
 ```sh
 rotari web
 rotari web --allow-exec
+rotari web --allow-terminal
 ```
 
 `--allow-exec` also lets the UI launch TensorBoard, Jupyter, and other
 registered commands against artifacts; see
 [Launching commands](docs/WEB.md#launching-commands).
+
+`--allow-terminal` adds a terminal panel beside your jobs, with a tab for each
+shell of the project you are viewing; see [Terminal](docs/WEB.md#terminal). Anyone
+who can sign in gets a shell as you, so it always requires a token.
 
 See the [web demo](https://rotari-dev.github.io/rotari/) for a read-only UI
 using generated example data. For remote access, authentication, and read-only
