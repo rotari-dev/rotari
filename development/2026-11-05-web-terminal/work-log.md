@@ -156,3 +156,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The user tried the build and said OK. `go test ./...` passed all 55 packages, and `go vet ./...`, `gofmt`, and `tsc` found nothing. `-race` passed on `internal/terminal` and the terminal tests of `internal/webui` and `conformance/05-web`, before the dark-area fix. Starting a shell on page load, and an unescaped first line, each failed a test. `TestTerminalPanelInBrowser`, extended with a project page, was skipped here for lack of Chrome. No CI result has been read for the panel or tabs.
 
 **Remaining:** The browser test's first run on CI. An HTTPS reverse proxy is still untried by hand. Further panel improvements.
+
+## Send from copy buttons
+
+**Commits:** 2026-11-05 21:32:58 `a38d5829`.
+
+**Change:** `commandGuideHTML` takes the commands a guide sends, and `copyIconForValue` and `copyButtonHTML` add a send button; `web_shell.js` adds `sendToTerminal` and the same buttons on the server-drawn Recent jobs page. Contract WEB-33, `docs/WEB.md`, and the plan's [Sending suggested commands](plan.md#sending-suggested-commands) section.
+
+**Reason:** The user asked for it on suggested commands, with no Enter and no shell started for a project with none, then beside every copy button.
+
+**Plan impact:** Each guide names what it sends, because its text holds comments and alternatives and a line break could run what came before it. A browser test for the real xterm.js was added.
+
+**Validation:** The user answered "ok" to integrating it after being given the build. `go test ./...` passed all 55 packages, and `tsc` and `gofmt` found nothing. `-race` was not run for this change, which is mostly JavaScript. `TestTerminalPanelInBrowser` was skipped here for lack of Chrome, so the real xterm.js has not run this, and it uses stand-ins in `TestTerminalPanel`.
+
+**Remaining:** The browser test's first run on CI.
