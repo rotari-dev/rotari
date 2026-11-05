@@ -1204,7 +1204,9 @@ of the active pane; playing one pauses the others. On a cell without an audio or
 video file, it plays or pauses the active pane's file. A row change never starts
 playback.
 
-Opening Describe scrolls the page to the table and the table to its head.
+Opening Describe scrolls the page to the table and the table to its head. Opening
+a file with a click, **Open row**, `Enter`, or `Shift+Enter`, or a histogram, scrolls
+the page to the panes; a file following a row move or opened by `Space` does not.
 
 About 150 ms after moves stop, the active pane's current tab, if it was opened from
 a row of this table, shows its column of the new row, keeping the layout and

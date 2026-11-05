@@ -230,6 +230,10 @@ try {
     await until('the table at the top', 'Math.abs(document.querySelector(".tv-table-area").getBoundingClientRect().top - document.querySelector(".tv-main").getBoundingClientRect().top) <= 1 || document.querySelector(".tv-main").scrollTop >= document.querySelector(".tv-main").scrollHeight - document.querySelector(".tv-main").clientHeight - 1');
     if ((await value('document.querySelector(".tv-main").scrollTop')) <= 0) throw new Error('Describe did not scroll past the panes');
 
+    // Opening a file on request scrolls back to the panes.
+    await value('document.querySelector("#tv-table tr[data-number=\'6\'] a.tv-media-path").click()');
+    await until('the panes in view', 'Math.abs(document.getElementById("tv-panes").getBoundingClientRect().top - document.querySelector(".tv-main").getBoundingClientRect().top) <= 1');
+
     // A button keeps Space, and the player stays paused.
     await value('document.querySelector(".tv-sort").focus()');
     await press('Space');

@@ -97,6 +97,10 @@ result export and Describe distributions are not part of this one.
 - **The pager sits under the filter bar.** The user asked for this on 2026-11-05,
   so the count, key hint, and page controls stay in view above the scrolling table
   even when the page cuts off the table's bottom.
+- **Opening a file on request shows the panes.** The user asked on 2026-11-05 for the
+  page to scroll to the panes after a click or `Enter`, and not for a file that follows
+  a cursor move. `Space` opening a file to play also stays put, since the user did not
+  ask to look at it.
 - **Opening Describe shows it.** The user asked on 2026-11-05 for the page to scroll
   to the table when Describe opens, since panes can push it out of view.
 - **A short pane keeps its spectrogram.** The user found that splitting panes down

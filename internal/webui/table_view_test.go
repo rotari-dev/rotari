@@ -1556,6 +1556,69 @@ func TestTableViewExportLinkInBrowser(t *testing.T) {
 `)
 }
 
+// Opening a file on request scrolls the page to the panes; a file following a row
+// move, or one Space opens to play, leaves it where it is. jsdom has no layout, so
+// the page gets one.
+func TestTableViewOpeningScrollsToThePanesInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	writeRowNavigationTable(t, f.work, 4)
+	runTableViewScript(t, testOptions(f.baseDir, false), f, "data.csv", "#base=wd", rowNavigationHelpers+`
+  await until('rows', () => cells().length === 4);
+  const page = document.querySelector('.tv-main');
+  const area = document.getElementById('tv-panes');
+  window.Element.prototype.getBoundingClientRect = function () {
+    if (this === page) return { top: 50, bottom: 500, left: 0, right: 500 };
+    if (this === area) return { top: 50 - page.scrollTop, left: 0, right: 500 };
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  };
+  window.HTMLMediaElement.prototype.play = function () { return Promise.resolve(); };
+  window.HTMLMediaElement.prototype.pause = function () {};
+  const scrolled = () => { page.scrollTop = 200; };
+  const check = (what, want) => { if (page.scrollTop !== want) fail(what, page.scrollTop); };
+
+  // A click on a file.
+  scrolled();
+  link('ref/u1.wav').click();
+  check('click', 0);
+  await untilShown('ref/u1.wav');
+
+  // A row move, and the file that follows it.
+  scrolled();
+  press('ArrowDown');
+  await untilShown('ref/u2.wav');
+  check('row move', 200);
+
+  // A frame move.
+  press('ArrowRight');
+  check('frame move', 200);
+
+  // Space on a file not open yet, which opens it to play.
+  press(' ');
+  await untilShown('hyp/u2.wav');
+  check('Space', 200);
+
+  // Enter on the framed file, and Shift+Enter on the row.
+  press('Enter');
+  check('Enter', 0);
+  scrolled();
+  press('Enter', { shiftKey: true });
+  check('Shift+Enter', 0);
+
+  // A click on a row's own text moves, and is not a request to open.
+  scrolled();
+  document.querySelector('#tv-table tr[data-number="4"]').children[1].click();
+  await wait(200);
+  check('row click', 200);
+
+  // A histogram.
+  document.querySelector('.tv-describe-toggle').click();
+  await until('describe', () => document.querySelector('.tv-open-histogram'));
+  scrolled();
+  document.querySelector('.tv-open-histogram').click();
+  check('histogram', 0);
+`)
+}
+
 // A document has no rows, so the keys leave the page alone.
 func TestTableViewRowKeysIgnoreDocumentsInBrowser(t *testing.T) {
 	data := t.TempDir()

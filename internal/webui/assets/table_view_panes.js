@@ -106,6 +106,15 @@ function openMedia(opened) {
   selectTab(pane, tab.id);
 }
 
+// showPanes scrolls the page to the panes. A file the user asked to open calls it;
+// one that follows a row move does not, so moving through rows leaves the page still.
+function showPanes() {
+  const page = document.querySelector(".tv-main");
+  const area = document.getElementById("tv-panes");
+  page.scrollTop +=
+    area.getBoundingClientRect().top - page.getBoundingClientRect().top;
+}
+
 // followActiveTab replaces the active pane's current tab, if it was opened from
 // a row of this table, with the file fileOf gives for its column in another row.
 // The layout and every other tab stay. The time range and playback position start

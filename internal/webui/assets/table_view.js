@@ -1272,6 +1272,7 @@ function openRowFile(row, index) {
   setCurrentRow(row);
   openMedia(rowFile(row, index));
   releaseTableFocus();
+  showPanes();
 }
 
 // openWholeRow opens a row's files side by side.
@@ -1280,6 +1281,7 @@ function openWholeRow(row, media) {
   setCurrentRow(row);
   openMediaRow(media);
   releaseTableFocus();
+  showPanes();
 }
 
 // moveRow moves the current row by one in the displayed order. From a row not
@@ -1539,6 +1541,7 @@ function histogramCell(histogram, column) {
           filtered: view.filters.length > 0,
         });
         releaseTableFocus();
+        showPanes();
       },
     },
     "Histogram",
