@@ -44,3 +44,17 @@ See [plan.md](plan.md) for current scope and status.
 
 **Remaining:** Steps 1 to 5 of the plan.
 
+## Keep one shell across connections
+
+**Commits:** 2026-11-05 15:45:49 `bcf4a6f1`.
+
+**Change:** Added `Keeper` and `Attachment` in `internal/terminal/keeper.go` with tests, updated `docs/ARCHITECTURE.md`, and noted the design change and provisional limits in `plan.md`.
+
+**Reason:** Step 1 of the plan: pages reload on every link, so the shell has to outlive its connections.
+
+**Plan impact:** Step 1 is done. An attached reader now applies backpressure. The first design detached a reader whose queue filled, which a test showed cut off a healthy reader within a second of `yes`. The user noted the limits are provisional and will become configuration.
+
+**Validation:** `go test ./internal/terminal` passed, also five times under `-race` and three on one CPU in the final form, and five under CPU load before the last test change. Disabling stall detection, the redraw, or the wait for a reader each failed a test; the last at first did not, so that test was changed to check how much output piles up. After rebasing, `go vet` and `go test ./internal/terminal ./internal/archtest ./conformance` passed. Nothing ran on macOS, and full `go test ./...` was not run, since nothing reaches this package yet.
+
+**Remaining:** Steps 2 to 5; how full-screen programs redraw in practice; `Close` on macOS.
+
