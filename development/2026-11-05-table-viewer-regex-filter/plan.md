@@ -1,7 +1,8 @@
 # Plan: Regular Expression Filters in the Table Viewer
 
 Created: 2026-11-05
-Status: Implemented; not yet tried in a browser or committed to `main`.
+Status: Implemented, not yet tried in a browser or in `main`; see
+[work-log.md](work-log.md).
 Related: [row export](../2026-11-05-table-viewer-export-rows/plan.md), which will
 export whatever these filters select, and
 [Describe distributions](../2026-11-05-table-viewer-describe-distributions/plan.md).
@@ -146,5 +147,4 @@ In `internal/webui/assets/table_view.js`:
 
 ## Remaining work
 
-All phases. Add `work-log.md` after the first commit, as
-[development/README.md](../README.md) describes.
+Trying it in a browser.

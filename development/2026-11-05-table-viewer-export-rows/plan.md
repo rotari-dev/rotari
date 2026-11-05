@@ -1,7 +1,8 @@
 # Plan: Export a Table Viewer's Selected Rows
 
 Created: 2026-11-05
-Status: Implemented; not yet tried in a browser or committed.
+Status: Implemented, not yet tried in a browser or in `main`; see
+[work-log.md](work-log.md).
 Related: [keyboard row navigation](../2026-11-05-table-viewer-row-navigation/plan.md),
 which is independent of this plan.
 
@@ -189,5 +190,4 @@ change. `rotari tableview` gets this through the shared handler.
 
 ## Remaining work
 
-All phases. Add `work-log.md` after the first commit, as
-[development/README.md](../README.md) describes.
+Trying it in a browser, including with a Web token.

@@ -1,7 +1,8 @@
 # Plan: Show Distributions in Table Viewer Describe
 
 Created: 2026-11-05
-Status: Implemented; not yet tried in a browser or committed to `main`.
+Status: Implemented, not yet tried in a browser or in `main`; see
+[work-log.md](work-log.md).
 Related: [keyboard row navigation](../2026-11-05-table-viewer-row-navigation/plan.md)
 and [row export](../2026-11-05-table-viewer-export-rows/plan.md), which are
 independent of this plan.
@@ -179,5 +180,4 @@ The user chose quartiles, top values, and histograms together on 2026-11-05.
 
 ## Remaining work
 
-All phases. Add `work-log.md` after the first commit, as
-[development/README.md](../README.md) describes.
+Trying it in a browser in both themes, and timing a large file.
