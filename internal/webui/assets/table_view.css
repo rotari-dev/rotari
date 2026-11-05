@@ -462,6 +462,8 @@ a:hover {
 }
 .tv-spectrogram-box {
   flex: 1 1 120px;
+  /* A short pane scrolls rather than squeezing the plot away. */
+  min-height: 120px;
 }
 .tv-spectrogram-box[data-top]::before {
   content: attr(data-top);
@@ -682,6 +684,22 @@ a:hover {
 .tv-table tbody tr:hover {
   background: var(--highlight);
 }
+.tv-table tbody tr.tv-row-current {
+  background: var(--highlight);
+}
+.tv-table tbody tr.tv-row-current > td:first-child {
+  box-shadow: inset 3px 0 0 var(--link);
+  font-weight: 600;
+}
+.tv-table tbody td.tv-cell-current {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.tv-row-notice {
+  margin: 0;
+  padding: 1rem;
+  color: var(--muted);
+}
 .tv-media {
   display: flex;
   flex-direction: column;
@@ -728,7 +746,10 @@ a:hover {
   justify-content: space-between;
   gap: 10px 16px;
   padding: 10px 16px;
-  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.tv-pager:empty {
+  display: none;
 }
 .tv-pager-count {
   color: var(--text-2);

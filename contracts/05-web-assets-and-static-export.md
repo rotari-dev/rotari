@@ -1166,6 +1166,48 @@ in [internal/webui/table_view.go](../internal/webui/table_view.go); covered by
 `TestTableViewCommandServesOnePath` in
 [conformance/05-web/tableview_command_test.go](../conformance/05-web/tableview_command_test.go).
 
+**WEB-30** The Table viewer has a current row, marked with `aria-current`.
+`↓` and `↑` make the next or previous row current in the displayed order, under
+the current filters and sort and across pages, stopping at either end; from a row
+not on the page, they take the page's first row. A click on a row's own text
+moves the same way. A click on a cell's file, or **Open row**, makes its row
+current and opens the file. Focus does not stay
+on the clicked control, so the keys below keep working.
+
+One cell of the current row is framed: the one clicked, or at first the row's
+first file (or first column). The frame keeps its column as the row moves. `←` and
+`→` move it along the row, stopping at either end, and open nothing. `Enter` opens
+the framed file, and `Shift+Enter` every file the row names, side by side. `Space`
+plays or pauses the framed file, in its tab or, when it is not open, in a new tab
+of the active pane; playing one pauses the others. On a cell without an audio or
+video file, it plays or pauses the active pane's file. A row change never starts
+playback.
+
+Opening Describe scrolls the page to the table and the table to its head.
+
+About 150 ms after moves stop, the active pane's current tab, if it was opened from
+a row of this table, shows its column of the new row, keeping the layout and
+resetting the file's time range, playback position, and channel. Other panes and
+hidden tabs stay as they are. Moves scroll only the table, not the page, to keep the
+row in view, and only the last row is loaded after a held key. If the new row has no file there (a blank cell, a directory row, or a
+file with an error), the tab says so and can go on following; it never keeps the
+previous row's file.
+
+The row number is kept in the URL fragment as `row`, and reloading marks it
+without opening files. A value that is not a positive integer or not on the page
+marks nothing. Filters, the sort, and paging keep it. A different separator, header
+row, base, listing, expansion, or directory clears it, and tabs opened before that
+no longer follow, because row numbers then mean something else.
+
+Keys are left alone with a modifier held and when focus is in an input, select,
+textarea, editable element, or audio or video element; `Enter` and `Space` also on
+a button or link. `Space` scrolls the page as usual when there is nothing to play. The rules are the same in a live viewer and a static snapshot, and
+there are no row keys for a document preview. Implemented in
+[internal/webui/assets/table_view.js](../internal/webui/assets/table_view.js) and
+[table_view_panes.js](../internal/webui/assets/table_view_panes.js); covered by
+`TestTableViewerMovesBetweenRows` and, in Chrome, `TestTableViewerRowKeysInBrowser`
+in [conformance/05-web/table_view_rows_test.go](../conformance/05-web/table_view_rows_test.go).
+
 **WEB-22** `rotari tableview --static-dir DIR FILE` writes a static snapshot
 of the Table viewer for one delimited or JSON Lines table instead of serving,
 reading under the file's directory as WEB-20 does. A delimited file is read

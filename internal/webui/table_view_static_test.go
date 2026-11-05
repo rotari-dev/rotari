@@ -67,6 +67,16 @@ func TestStaticTableViewInBrowser(t *testing.T) {
   const link = document.querySelector('#tv-table tbody a.tv-media-path');
   if (new URL(link.href).pathname !== '/media/0.wav' || (await window.fetch(link.href)).status !== 200) fail('media link', link.href);
 
+  // Keys move through the snapshot's rows, and a row without a file says so.
+  const press = key => document.body.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  link.click();
+  await until('pane', () => document.querySelector('.tv-tab-view strong'));
+  press('ArrowDown');
+  if (document.querySelector('#tv-table tr.tv-row-current').dataset.number !== '2') fail('row', window.location.hash);
+  await until('missing file', () => (document.querySelector('.tv-row-notice') || {}).textContent === 'Row 2: audio/gone.wav: File not found');
+  press('ArrowDown');
+  await until('the copy', () => document.querySelector('.tv-tab-view audio') && new URL(document.querySelector('.tv-tab-view audio').src).pathname === '/media/0.wav');
+
   // What only the live server does is refused with the reason.
   const refused = await window.fetch('api/rows?filters=' + encodeURIComponent('[{"column":0,"op":"empty"}]'));
   if (refused.status !== 400 || !(await refused.text()).includes('Filters are not available')) fail('filters');

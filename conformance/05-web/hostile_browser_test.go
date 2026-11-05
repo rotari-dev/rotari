@@ -201,12 +201,12 @@ func browserForTests(t *testing.T) string {
 	return ""
 }
 
-// TestStoredValuesStayTextInBrowser repeats TestStoredValuesStayText in a real
-// browser, with the values that attack markup and a quoted argument. It also
-// fails on any Content-Security-Policy violation.
-func TestStoredValuesStayTextInBrowser(t *testing.T) {
-	covers(t, "WEB-28")
-	chrome := browserForTests(t)
+// browserCheckTools finds what a browser check runs with: Chrome, a Node with
+// WebSocket, and the protocol helper. A check skips without them unless
+// ROTARI_REQUIRE_BROWSER_TESTS is set.
+func browserCheckTools(t *testing.T) (chrome, node, helper string) {
+	t.Helper()
+	chrome = browserForTests(t)
 	node, err := exec.LookPath("node")
 	if err != nil || exec.Command(node, "-e", `if (typeof WebSocket !== "function") process.exit(1)`).Run() != nil {
 		if os.Getenv("ROTARI_REQUIRE_BROWSER_TESTS") != "" {
@@ -214,10 +214,19 @@ func TestStoredValuesStayTextInBrowser(t *testing.T) {
 		}
 		t.Skip("the browser check needs Node 22 or later")
 	}
-	helper, err := filepath.Abs(filepath.Join("..", "..", "scripts", "web-browser.mjs"))
+	helper, err = filepath.Abs(filepath.Join("..", "..", "scripts", "web-browser.mjs"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	return chrome, node, helper
+}
+
+// TestStoredValuesStayTextInBrowser repeats TestStoredValuesStayText in a real
+// browser, with the values that attack markup and a quoted argument. It also
+// fails on any Content-Security-Policy violation.
+func TestStoredValuesStayTextInBrowser(t *testing.T) {
+	covers(t, "WEB-28")
+	chrome, node, helper := browserCheckTools(t)
 	for _, name := range []string{"html", "single quoted"} {
 		// One at a time: starting two browsers on a loaded host is slow enough
 		// to time out.
@@ -235,18 +244,7 @@ func TestStoredValuesStayTextInBrowser(t *testing.T) {
 // which is what makes its finding none on the other pages mean something.
 func TestPagePolicyBlocksPlantedScript(t *testing.T) {
 	covers(t, "WEB-29")
-	chrome := browserForTests(t)
-	node, err := exec.LookPath("node")
-	if err != nil || exec.Command(node, "-e", `if (typeof WebSocket !== "function") process.exit(1)`).Run() != nil {
-		if os.Getenv("ROTARI_REQUIRE_BROWSER_TESTS") != "" {
-			t.Fatal("the browser check needs Node 22 or later")
-		}
-		t.Skip("the browser check needs Node 22 or later")
-	}
-	helper, err := filepath.Abs(filepath.Join("..", "..", "scripts", "web-browser.mjs"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	chrome, node, helper := browserCheckTools(t)
 	e := support.NewEnv(t)
 	run := e.CreateFinishedRun()
 	table := filepath.Join(e.Root, "data.csv")

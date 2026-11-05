@@ -194,7 +194,20 @@ the same window (Ctrl+click opens a new tab); the path above the table links
 back to each directory up to the one the viewer was opened on, **↑** (or
 Alt+↑) goes up one level, and the browser's Back returns. Files open in panes
 stay open while you move, so `ref/u1.wav` and `hyp/u1.wav` can be compared
-from their own directories. The URL keeps the view, so a link can be shared. Try
+from their own directories. The URL keeps the view, so a link can be shared.
+
+To go through a table from the keyboard, press `↓` or `↑` to move between rows, in
+the order shown and across pages, and `←` or `→` to move a frame between the row's
+cells. Moving opens nothing. `Enter` opens the framed file, `Shift+Enter` opens all of
+the row's files side by side, and `Space` plays or pauses the framed file, opening it
+if needed. Nothing plays on its own.
+
+The file showing in the active pane changes to its column of each new row, and says
+so when that row has no file there. Other panes and hidden tabs stay, so one can be
+kept to compare against; click a pane to make it the one that changes. Click a
+player's controls and the arrow keys stay with it until you click elsewhere.
+
+Try
 it in the [Table viewer demo](https://rotari-dev.github.io/rotari/tableview/),
 an evaluation table whose cells name WAV files; it is a static snapshot
 (below), so filters are off there.

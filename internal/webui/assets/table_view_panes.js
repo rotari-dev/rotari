@@ -96,7 +96,91 @@ function openMedia(opened) {
     tab = newTab(media);
     pane.tabs.push(tab);
   }
+  // The same file named by another row now follows that row.
+  tab.media.origin = media.origin;
   selectTab(pane, tab.id);
+}
+
+// followActiveTab replaces the active pane's current tab, if it was opened from
+// a row of this table, with the file fileOf gives for its column in another row.
+// The layout and every other tab stay. The time range and playback position start
+// over, as the new file has its own length.
+function followActiveTab(table, row, fileOf) {
+  const pane = activePane();
+  const tab = pane && pane.tabs.find((tab) => tab.id === pane.current);
+  const origin = tab && tab.media.origin;
+  if (!origin || origin.table !== table || origin.row === row) return;
+  const view = tabViews.get(tab.id);
+  if (view) {
+    view.dispose();
+    tabViews.delete(tab.id);
+  }
+  tab.media = placeMedia(fileOf(origin.column));
+  pane.range = null;
+  link.range = null;
+  link.time = 0;
+  renderPanes();
+}
+
+function playerOfView(view) {
+  return view ? view.root.querySelector("audio, video") : null;
+}
+
+// activePlayer is the audio or video element of the active pane's file.
+function activePlayer() {
+  const pane = activePane();
+  return playerOfView(pane && tabViews.get(pane.current));
+}
+
+// playerOf is the player of a file: its tab, shown if it was hidden, or a new
+// tab in the active pane.
+function playerOf(media) {
+  const placed = placeMedia(media);
+  const found = [];
+  allPanes().forEach((pane) => {
+    pane.tabs.forEach((tab) => {
+      if (sameMedia(tab.media, placed)) found.push({ pane, tab });
+    });
+  });
+  const shown =
+    found.find(({ pane, tab }) => pane.current === tab.id) || found[0];
+  if (shown) {
+    shown.tab.media.origin = placed.origin;
+    selectTab(shown.pane, shown.tab.id);
+  } else {
+    openMedia(placed);
+  }
+  return activePlayer();
+}
+
+// togglePlayer plays or pauses a player. Playing one pauses the others, so
+// that moving the frame to another file does not play both.
+function togglePlayer(player) {
+  if (!player.paused) {
+    player.pause();
+    return;
+  }
+  // A hidden tab's player is not in the page, and would go on playing.
+  tabViews.forEach((view) => {
+    const other = playerOfView(view);
+    if (other && other !== player && !other.paused) other.pause();
+  });
+  const started = player.play();
+  if (started)
+    started.catch((error) => {
+      // Pausing again before playback starts is not a failure.
+      if (error.name !== "AbortError")
+        showError("Cannot play the file: " + error.message);
+    });
+}
+
+// toggleActivePlayer plays or pauses the active pane's file, and reports
+// whether it has a player.
+function toggleActivePlayer() {
+  const player = activePlayer();
+  if (!player) return false;
+  togglePlayer(player);
+  return true;
 }
 
 // openMediaRow lays out files side by side, one pane each, replacing what
@@ -785,6 +869,12 @@ class TabView {
     this.root = el("div", { className: "tv-tab-view" });
     if (media.kind === "text" || media.kind === "markdown") {
       this.showText();
+      return;
+    }
+    if (media.kind === "notice") {
+      this.root.append(
+        el("p", { className: "tv-row-notice", role: "status" }, media.message),
+      );
       return;
     }
     const properties = media.properties

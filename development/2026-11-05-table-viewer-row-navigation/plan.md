@@ -1,14 +1,15 @@
 # Plan: Move Between Table Viewer Rows from the Keyboard
 
 Created: 2026-11-05
-Status: Proposed. Nothing is implemented.
+Status: Implemented, and tried by the user in a browser; see
+[work-log.md](work-log.md). The Chrome test has not run.
 
 ## Purpose
 
 Reviewing an evaluation table means opening hundreds of rows in turn. Each
 row now takes mouse clicks on each of its files, or on **Open row**, which
 also resets the pane layout. Let a user press one key to move to the next row
-and have the files they opened follow, keeping the panes as they arranged
+and have the file in the active pane follow, keeping the panes as they arranged
 them.
 
 This is the first of several Table viewer improvements. Each has its own plan;
@@ -17,17 +18,21 @@ result export and Describe distributions are not part of this one.
 ## Scope
 
 1. **A current row.** The table marks one row as current. Clicking a row, one
-   of its file cells, or its **Open row** makes it current.
+   of its file cells, or its **Open row** makes it current. A click on the row's
+   own text moves as a key does, so the active pane's file follows; a click on a
+   file or **Open row** opens it.
 2. **Keys.**
 
    | Key | Action |
    | --- | --- |
    | `↓` / `↑` | Make the next or previous row current |
-   | `Enter` | Same as the current row's **Open row** |
-   | `Space` | Play or pause the player in the active pane |
+   | `←` / `→` | Move the frame between the row's cells, opening nothing |
+   | `Enter` | Open the framed file |
+   | `Shift+Enter` | Open every file the current row names, side by side |
+   | `Space` | Play or pause the framed file, opening it if needed |
 
-3. **Files follow the row.** A pane's visible tab that came from the current
-   row is replaced by the same column's file in the new row.
+3. **The active file follows the row.** The active pane's current tab is
+   replaced by its column's file in the new row. Nothing else changes.
 4. **Discoverability.** A short key hint beside the pager, shown when the
    table has rows.
 
@@ -41,16 +46,18 @@ result export and Describe distributions are not part of this one.
 
 ## Decisions
 
-- **Files change with the row (option A).** Moving replaces the files in the
-  panes straight away rather than waiting for `Enter`, so one key moves `ref`
-  and `hyp` together. The user confirmed this on 2026-11-05.
+- **The active file changes with the row.** Moving replaces it straight away
+  rather than waiting for `Enter`. The first version moved every tab from the row,
+  so that one key moved `ref` and `hyp` together; after trying it, the user asked on
+  2026-11-05 for only the active pane's current file to change. To step another file,
+  they click its pane.
 - **No automatic playback.** A row change must not make a sound, and browsers
   may refuse to start playback anyway. `Space` plays.
-- **Only tabs of the current row follow.** Tabs record the source, row number,
-  and column they were opened from. A tab from another row, or a file opened
-  from another directory, stays where it is. This keeps today's way of
-  comparing files across directories, and lets a user hold one row's file as a
-  reference while stepping through another column.
+- **Which tab follows.** Tabs record the source, row number, and column they were
+  opened from. The active pane's current tab follows from whichever row it is on, so
+  a pane made active later joins in. A file opened from another directory has no
+  origin in this table and stays. Other panes and hidden tabs stay as they are, which
+  lets a user hold one file as a reference while stepping through another.
 - **A row without the file says so.** If the new row's cell is blank, is a
   directory row, or has a media error, the pane shows that message with the row
   and column. It never keeps the old file, which would look like the new row's
@@ -74,6 +81,32 @@ result export and Describe distributions are not part of this one.
   link. `Alt+↑` keeps meaning "up one directory". `Space` does not call
   `preventDefault` when the active pane has no player, so the page still
   scrolls.
+- **One cell is framed and moves with the row.** The user asked for this on
+  2026-11-05 after trying the first version, in which the browser's focus ring
+  stayed on the clicked link. A click frames its cell and releases focus from the
+  control, which otherwise also kept `Enter` and `Space` from reaching the table.
+  Without a click, the frame starts on the row's first file. It is a class on the
+  cell, not focus, because real focus on a link would keep those keys.
+- **`Enter` and `Space` act on the framed cell,** as the user asked. Opening the
+  whole row moved to `Shift+Enter` to keep it available. `Space` on a cell without
+  audio or video falls back to the active pane's player, so that what is playing
+  can still be paused from any cell.
+- **Moves scroll the table alone.** The user asked for this on 2026-11-05, because
+  `scrollIntoView` also scrolled the page. The page cuts off the table's bottom while
+  panes are open, so the row is kept above whichever bottom edge comes first.
+- **The pager sits under the filter bar.** The user asked for this on 2026-11-05,
+  so the count, key hint, and page controls stay in view above the scrolling table
+  even when the page cuts off the table's bottom.
+- **Opening Describe shows it.** The user asked on 2026-11-05 for the page to scroll
+  to the table when Describe opens, since panes can push it out of view.
+- **A short pane keeps its spectrogram.** The user found that splitting panes down
+  squeezed it to nothing, with no scrolling to reach it. It was there before this
+  work: its box could shrink to zero. It now keeps 120 px, and the pane scrolls.
+- **What a row number means is one rule.** `tableIdentity` covers the source,
+  separator, header row, base, listing, pattern, expansion, and grouping. If any
+  of them changes, the current row clears, and tabs opened under the old identity
+  no longer follow. Filters, sort, and paging are not part of it, as they keep each
+  row's number.
 - **The URL keeps the current row.** `row=N` joins the fragment, so a reload or
   shared link highlights it. Files do not open from it, as panes are not in the
   URL. An unknown or malformed value, or a row not on the page, highlights
@@ -171,10 +204,8 @@ In `internal/webui/assets/table_view_panes.js`:
   and the arrows belong to the browser's control. Returning focus to the table
   after a click on a player is deferred until this has been tried in a real
   browser, because its behavior differs by browser.
-- **Lost pinned files.** A tab from the current row follows even if the user
-  wanted to keep it. The workaround is to open the reference from another row.
 
 ## Remaining work
 
-All phases. Add `work-log.md` after the first commit, as
-[development/README.md](../README.md) describes.
+`TestTableViewerRowKeysInBrowser` skips without Chrome and has not run. Its script
+was only syntax-checked. CI runs it, requiring a browser.

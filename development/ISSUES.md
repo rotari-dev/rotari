@@ -8,6 +8,8 @@ When an item is a bug, fix it, then as the last step check that `rotari bug-repo
 
 ## Open
 
+- **Prettier cannot parse the Table viewer page template** ([internal/webui/assets/table_view.html](../internal/webui/assets/table_view.html)): on 2026-11-05, `prettier --check` from the repository's `node_modules` failed on this file at the head of the template, with `main`'s version failing the same way, so the Table viewer row navigation change did not cause it. `.pre-commit-config.yaml` sends `internal/webui/assets/*.html` to Prettier at a pinned `v4.0.0-alpha.8`, and `pre-commit` is not installed here, so whether the hook fails too is unknown. The likely cause is the `<script__ROTARI_SCRIPT_NONCE__>` placeholder, which is not established. Check with the pinned hook, then exclude the template or change the placeholder.
+
 <!-- Add items here as they are discovered. Include the relevant file or area when possible. -->
 
 - **`bug-report` path redaction damages ordinary text** ([internal/report/report.go](../internal/report/report.go), which defines the placeholder): in a run's `progress.jsonl`, the message `Job running:\n  ID:` became `Job runnin[REDACTED_PATH]  ID:`, and `Show:\n` lost text the same way (found 2026-11-04). The command survived in that case. Expected: only paths are replaced. The cause is not established.

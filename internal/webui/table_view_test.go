@@ -747,6 +747,471 @@ func TestTableViewOpensFilesInPanesInBrowser(t *testing.T) {
 `)
 }
 
+// rowNavigationHelpers are what the row navigation scripts share.
+const rowNavigationHelpers = `
+  const press = (key, init) => {
+    const event = new window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+    (init && init.on || document.body).dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  const current = () => {
+    const rows = [...document.querySelectorAll('#tv-table tr.tv-row-current')];
+    if (rows.length > 1) fail('several current rows', rows.length);
+    if (rows.length && rows[0].getAttribute('aria-current') !== 'true') fail('aria-current');
+    return rows.length ? rows[0].dataset.number : '';
+  };
+  const shown = () => [...document.querySelectorAll('.tv-pane')].map(pane => {
+    const view = pane.querySelector('.tv-tab-view');
+    const notice = view.querySelector('.tv-row-notice');
+    return notice ? notice.textContent : view.querySelector('strong').textContent;
+  });
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const untilShown = (...want) => until('panes to show ' + want, () => same(shown(), want));
+  const link = text => [...document.querySelectorAll('#tv-table a.tv-media-path, #tv-table .tv-text-file')].find(a => a.textContent === text);
+`
+
+// writeRowNavigationTable writes an evaluation table of rows with ref and hyp
+// columns: row 3 has a blank hyp, and row 4's names a missing file.
+func writeRowNavigationTable(t *testing.T, directory string, rows int) {
+	t.Helper()
+	wav, err := os.ReadFile(filepath.Join("..", "tableview", "testdata", "media", "pcm16.wav"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var table strings.Builder
+	table.WriteString("id,ref,hyp\n")
+	for row := 1; row <= rows; row++ {
+		ref, hyp := fmt.Sprintf("ref/u%d.wav", row), fmt.Sprintf("hyp/u%d.wav", row)
+		write(t, filepath.Join(directory, filepath.FromSlash(ref)), string(wav))
+		switch row {
+		case 3:
+			hyp = ""
+		case 4:
+			hyp = "hyp/gone.wav"
+		default:
+			write(t, filepath.Join(directory, filepath.FromSlash(hyp)), string(wav))
+		}
+		fmt.Fprintf(&table, "%d,%s,%s\n", rows-row, ref, hyp)
+	}
+	write(t, filepath.Join(directory, "data.csv"), table.String())
+}
+
+func TestTableViewMovesBetweenRowsInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	writeRowNavigationTable(t, f.work, 52)
+	runTableViewScript(t, testOptions(f.baseDir, false), f, "data.csv", "#base=wd&limit=50", rowNavigationHelpers+`
+  await until('rows', () => cells().length === 50);
+  if (!document.querySelector('.tv-pager-keys').textContent.includes('Enter')) fail('key hint');
+  if (current() !== '') fail('current before a move', current());
+
+  // Without a current row, the first move takes the page's first row, and
+  // a row with nothing open changes no panes.
+  if (!press('ArrowDown')) fail('arrow not handled');
+  if (current() !== '1' || fragment().get('row') !== '1') fail('first move', current(), window.location.hash);
+  if (!document.getElementById('tv-panes').hidden) fail('panes opened by a move');
+
+  // A click on a cell's file makes its row current and frames the cell. Focus
+  // does not stay on the link, which would keep Enter and Space.
+  const framed = () => {
+    const found = [...document.querySelectorAll('#tv-table td.tv-cell-current')];
+    if (found.length > 1) fail('several framed cells', found.length);
+    return found.length ? found[0].parentElement.dataset.number + ':' + found[0].dataset.column : '';
+  };
+  if (framed() !== '1:1') fail('frame after a key starts at the first file', framed());
+  link('ref/u2.wav').focus();
+  link('ref/u2.wav').click();
+  if (current() !== '2') fail('click current', current());
+  if (framed() !== '2:1') fail('frame after a click', framed());
+  if (document.activeElement.closest('#tv-table')) fail('focus stayed in the table', document.activeElement.outerHTML);
+  await untilShown('ref/u2.wav');
+  document.querySelector('.tv-pane button[aria-label="Split right"]').click();
+  link('hyp/u2.wav').click();
+  if (framed() !== '2:2') fail('frame on the other cell', framed());
+  const tabs = [...document.querySelectorAll('.tv-pane')].map(pane => pane.querySelectorAll('.tv-tab').length);
+  if (!same(tabs, [1, 2])) fail('tabs', tabs);
+  await untilShown('ref/u2.wav', 'hyp/u2.wav');
+  const active = document.querySelector('.tv-pane-active').dataset.pane;
+
+  // The row moves at once, and the active pane's current file follows, keeping
+  // the layout; the other pane stays. A row without the file says so instead of
+  // showing the last row's.
+  press('ArrowDown');
+  if (current() !== '3') fail('row did not move at once', current());
+  if (framed() !== '3:2') fail('frame did not move', framed());
+  if (!same(shown(), ['ref/u2.wav', 'hyp/u2.wav'])) fail('tab followed at once', shown());
+  await untilShown('ref/u2.wav', 'Row 3 has no file in hyp.');
+  press('ArrowDown');
+  await until('missing file', () => shown()[1].startsWith('Row 4: hyp/gone.wav: ') && shown()[1].includes('File not found'));
+  press('ArrowDown');
+  await untilShown('ref/u2.wav', 'hyp/u5.wav');
+  if (document.querySelector('.tv-pane-active').dataset.pane !== active) fail('active pane changed');
+  press('ArrowUp');
+  await until('row 4 again', () => shown()[0] === 'ref/u2.wav' && shown()[1].startsWith('Row 4: '));
+
+  // The tab is replaced in place, so tabs do not pile up, and a hidden tab
+  // stays: split right copied row 2's ref beside the hyp opened after it.
+  const paneTabs = index => [...document.querySelectorAll('.tv-pane')[index].querySelectorAll('.tv-tab-name')];
+  const after = [...document.querySelectorAll('.tv-pane')].map(pane => pane.querySelectorAll('.tv-tab').length);
+  if (!same(after, [1, 2])) fail('tabs after moves', after);
+  paneTabs(1)[0].click();
+  if (shown()[1] !== 'ref/u2.wav') fail('hidden tab followed', shown());
+  paneTabs(1)[1].click();
+
+  // Another pane follows once it is active, from whichever row it was on.
+  document.querySelectorAll('.tv-pane')[0].dispatchEvent(new window.Event('pointerdown'));
+  press('ArrowDown');
+  await until('the other pane', () => shown()[0] === 'ref/u5.wav' && shown()[1].startsWith('Row 4: '));
+  document.querySelectorAll('.tv-pane')[1].dispatchEvent(new window.Event('pointerdown'));
+  press('ArrowUp');
+  press('ArrowDown');
+  await wait(200);
+  if (shown()[0] !== 'ref/u5.wav') fail('inactive pane followed', shown());
+
+  // A held key loads only where it stops.
+  await untilShown('ref/u5.wav', 'hyp/u5.wav');
+  // jsdom cannot decode audio; with a stand-in, the view asks for the file.
+  window.AudioContext = class {
+    decodeAudioData() { return Promise.reject(new window.Error('no decoder')); }
+    close() {}
+  };
+  const loaded = [];
+  const pageFetch = window.fetch;
+  window.fetch = (input, init) => {
+    const media = new window.URL(String(input), window.location.href);
+    if (media.pathname.endsWith('/api/media')) loaded.push(media.searchParams.get('ref'));
+    return pageFetch(input, init);
+  };
+  for (let times = 0; times < 5; times++) press('ArrowDown', { repeat: true });
+  if (current() !== '10') fail('held key', current());
+  await untilShown('ref/u5.wav', 'hyp/u10.wav');
+  await wait(50);
+  // The other pane's failed decode may retry on a redraw; no row passed through loads.
+  if (!loaded.includes('hyp/u10.wav') || loaded.some(ref => /u[6-9]\.wav/.test(ref))) fail('held key loaded', loaded);
+  window.fetch = pageFetch;
+  delete window.AudioContext;
+
+  // A clicked file opens in the active pane, and is the one that follows.
+  link('ref/u20.wav').click();
+  await untilShown('ref/u5.wav', 'ref/u20.wav');
+  press('ArrowDown');
+  await untilShown('ref/u5.wav', 'ref/u21.wav');
+
+  // A move scrolls the table alone, up to where the page cuts it off. jsdom has
+  // no layout, so the page gets one: rows 30px high in a scrolling table that
+  // starts 100px down, with the page ending at 200px.
+  {
+    const scroller = document.querySelector('.tv-scroll');
+    const page = document.querySelector('.tv-main');
+    const box = window.Element.prototype.getBoundingClientRect;
+    window.Element.prototype.getBoundingClientRect = function () {
+      if (this === scroller) return { top: 100, bottom: 500, left: 0, right: 500 };
+      if (this === page) return { top: 0, bottom: 200, left: 0, right: 500 };
+      if (this.dataset.number) {
+        const top = 100 + (Number(this.dataset.number) - 21) * 30 - scroller.scrollTop;
+        return { top, bottom: top + 30, left: 0, right: 500 };
+      }
+      return { top: 0, bottom: 0, left: 0, right: 0 };
+    };
+    window.Element.prototype.scrollIntoView = () => fail('a move scrolled the page');
+    scroller.scrollTop = 0;
+    const row = number => document.querySelector('#tv-table tr[data-number="' + number + '"]');
+    row(22).children[1].click(); // ends at 160px: in view
+    if (scroller.scrollTop !== 0 || page.scrollTop !== 0) fail('scrolled a row in view', scroller.scrollTop);
+    press('ArrowDown');
+    if (scroller.scrollTop !== 0) fail('scrolled to a row in view', scroller.scrollTop);
+    press('ArrowDown'); // 24: ends at 220px, past the page's end
+    if (scroller.scrollTop !== 20 || page.scrollTop !== 0) fail('scrolled down', scroller.scrollTop, page.scrollTop);
+    press('ArrowUp');
+    press('ArrowUp');
+    press('ArrowUp'); // 21: starts at 80px, above the table
+    if (scroller.scrollTop !== 0 || page.scrollTop !== 0) fail('scrolled up', scroller.scrollTop, page.scrollTop);
+    window.Element.prototype.getBoundingClientRect = box;
+    delete window.Element.prototype.scrollIntoView;
+    await wait(200);
+  }
+
+  // A click on a row's own text moves as a key does; a click on its controls
+  // does not.
+  const rowOf = number => document.querySelector('#tv-table tr[data-number="' + number + '"]');
+  rowOf(30).children[1].click();
+  if (current() !== '30' || framed() !== '30:0') fail('row click', current(), framed());
+  await untilShown('ref/u5.wav', 'ref/u30.wav');
+
+  // Moves cross pages both ways and stop at the ends.
+  rowOf(50).children[1].click();
+  await untilShown('ref/u5.wav', 'ref/u50.wav');
+  press('ArrowDown');
+  await until('page 2', () => current() === '51');
+  if (framed() !== '51:0') fail('frame across pages', framed());
+  if (fragment().get('page') !== '2' || cells().length !== 2) fail('page 2', window.location.hash);
+  await untilShown('ref/u5.wav', 'ref/u51.wav');
+  press('ArrowDown');
+  await until('last row', () => current() === '52');
+  if (!press('ArrowDown')) fail('arrow at the end not handled');
+  await wait(50);
+  if (current() !== '52' || fragment().get('page') !== '2') fail('past the end', current());
+  press('ArrowUp');
+  press('ArrowUp');
+  await until('page 1', () => current() === '50');
+  if (fragment().get('page') !== '1') fail('page 1', window.location.hash);
+  rowOf(1).children[1].click();
+  await until('row 1', () => current() === '1');
+  press('ArrowUp');
+  await wait(50);
+  if (current() !== '1' || fragment().get('page') !== '1') fail('before the start', current());
+
+  // A sort keeps the current row and moves in the order shown: id descends
+  // with the file, so ascending id shows the file backwards.
+  const sortBy = name => [...document.querySelectorAll('.tv-sort')].find(button => button.textContent.startsWith(name)).click();
+  sortBy('id');
+  await until('sorted', () => cells()[0][1] === '0');
+  if (fragment().get('row') !== '1' || current() !== '') fail('row off the page after a sort', current(), window.location.hash);
+  press('ArrowDown');
+  if (current() !== '52') fail('off-page row moves to the first shown', current());
+  press('ArrowDown');
+  if (current() !== '51') fail('sorted move', current());
+  sortBy('id');
+  await until('descending', () => cells()[0][1] === '51');
+  sortBy('id');
+  await until('file order', () => cells()[0][1] === '51' && fragment().get('sort') === null);
+
+  // Another separator changes what numbers mean, so the row is forgotten and
+  // tabs stop following.
+  rowOf(5).children[1].click();
+  await until('row 5', () => current() === '5');
+  await wait(200);
+  const before = shown();
+  const separator = document.querySelector('.tv-toolbar select');
+  separator.value = ';';
+  separator.dispatchEvent(new window.Event('change'));
+  await until('one column', () => headings().length === 2);
+  if (current() !== '' || framed() !== '' || fragment().get('row') !== null) fail('row kept', current(), window.location.hash);
+  press('ArrowDown');
+  await wait(200);
+  if (!same(shown(), before)) fail('tabs followed another table', shown());
+`)
+}
+
+// Controls keep the keys they use. The frame moves along a row and opens
+// nothing; Enter opens its file, Shift+Enter the row's, and Space plays it. jsdom
+// has no media playback, so the page gets a stand-in.
+func TestTableViewRowKeysRespectControlsInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	writeRowNavigationTable(t, f.work, 5)
+	options := testOptions(f.baseDir, false)
+	runTableViewScript(t, options, f, "data.csv", "#base=wd", rowNavigationHelpers+`
+  await until('rows', () => cells().length === 5);
+  const framed = () => {
+    const cell = document.querySelector('#tv-table td.tv-cell-current');
+    return cell ? cell.parentElement.dataset.number + ':' + cell.dataset.column : '';
+  };
+  const played = [];
+  Object.defineProperty(window.HTMLMediaElement.prototype, 'paused', { configurable: true, get() { return !this.playing; } });
+  window.HTMLMediaElement.prototype.play = function () { this.playing = true; played.push('play ' + new window.URL(this.src).searchParams.get('ref')); return Promise.resolve(); };
+  window.HTMLMediaElement.prototype.pause = function () { this.playing = false; played.push('pause ' + new window.URL(this.src).searchParams.get('ref')); };
+
+  // With nothing current and no player, Enter does nothing and Space scrolls.
+  if (press(' ') || press('Enter')) fail('key taken without a row');
+
+  // Keys stay with controls, and with modifiers held.
+  const filter = document.querySelector('.tv-filter-value');
+  const operator = document.querySelector('select[aria-label="Operator"]');
+  for (const on of [filter, operator]) {
+    for (const key of ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Enter', ' ']) {
+      if (key === 'Enter' && on === filter) continue; // adds the condition
+      if (press(key, { on })) fail('key taken from a control', key, on.outerHTML);
+    }
+  }
+  for (const modifier of ['ctrlKey', 'metaKey', 'altKey', 'shiftKey']) {
+    for (const key of ['ArrowDown', 'ArrowLeft']) {
+      if (press(key, { [modifier]: true })) fail('key taken with', modifier, key);
+    }
+  }
+  if (current() !== '') fail('row moved', current());
+  const sort = document.querySelector('.tv-sort');
+  if (press('Enter', { on: sort }) || press(' ', { on: sort })) fail('button key taken');
+
+  // An arrow key frames the row's first file and opens nothing.
+  press('ArrowDown');
+  press('ArrowDown');
+  if (current() !== '2' || framed() !== '2:1') fail('frame', current(), framed());
+  if (!document.getElementById('tv-panes').hidden) fail('a move opened a file');
+
+  // Left and right move the frame, stopping at the ends, and open nothing.
+  if (!press('ArrowRight') || framed() !== '2:2') fail('right', framed());
+  if (!press('ArrowRight') || framed() !== '2:2') fail('past the last column', framed());
+  press('ArrowLeft');
+  press('ArrowLeft');
+  if (framed() !== '2:0') fail('left', framed());
+  if (!press('ArrowLeft') || framed() !== '2:0') fail('past the first column', framed());
+  if (!document.getElementById('tv-panes').hidden) fail('a frame move opened a file');
+  if (current() !== '2') fail('a frame move changed the row', current());
+
+  // A cell without a file leaves Enter alone.
+  if (press('Enter') || !document.getElementById('tv-panes').hidden) fail('Enter on a cell without a file');
+
+  // Enter opens the framed file only, and a held key does not repeat it.
+  press('ArrowRight');
+  if (!press('Enter')) fail('Enter not handled');
+  await untilShown('ref/u2.wav');
+  // Row moves keep the column.
+  press('ArrowDown');
+  if (framed() !== '3:1') fail('frame column after a move', framed());
+  await untilShown('ref/u3.wav');
+  press('ArrowUp');
+  await untilShown('ref/u2.wav');
+
+  // Space on a file already open plays and pauses it.
+  if (!press(' ') || !same(played, ['play ref/u2.wav'])) fail('play', played);
+  if (!press(' ', { repeat: true }) || !same(played, ['play ref/u2.wav'])) fail('repeat', played);
+  if (!press(' ') || !same(played, ['play ref/u2.wav', 'pause ref/u2.wav'])) fail('pause', played);
+  const audio = document.querySelector('.tv-pane-active audio');
+  if (press(' ', { on: audio })) fail('key taken from the player');
+
+  // Space on a file not open opens it, in the active pane, and plays it, pausing
+  // the other one. Back on the first, it finds that tab again.
+  played.length = 0;
+  press(' ');
+  press('ArrowRight');
+  press(' ');
+  if (!same(played, ['play ref/u2.wav', 'pause ref/u2.wav', 'play hyp/u2.wav'])) fail('another file', played);
+  if (!same(shown(), ['hyp/u2.wav'])) fail('shown', shown());
+  press('ArrowLeft');
+  played.length = 0;
+  press(' ');
+  if (!same(played, ['pause hyp/u2.wav', 'play ref/u2.wav']) || !same(shown(), ['ref/u2.wav'])) fail('back', played, shown());
+  if (document.querySelector('.tv-pane-active').querySelectorAll('.tv-tab').length !== 2) fail('a second tab for one file');
+
+  // On a cell without a file, Space still pauses what is playing.
+  press('ArrowLeft');
+  played.length = 0;
+  if (!press(' ') || !same(played, ['pause ref/u2.wav'])) fail('pause from another cell', played);
+  press('ArrowRight');
+
+  // A move does not start playback, and stops what was playing.
+  press(' ');
+  const playing = document.querySelector('.tv-pane-active audio');
+  played.length = 0;
+  press('ArrowDown');
+  await untilShown('ref/u3.wav');
+  if (playing.playing || !same(played, ['pause ref/u2.wav'])) fail('moved while playing', played);
+
+  // Shift+Enter opens every file the row names, side by side, and only the
+  // active pane's follows.
+  press('ArrowUp');
+  if (!press('Enter', { shiftKey: true })) fail('Shift+Enter not handled');
+  await untilShown('ref/u2.wav', 'hyp/u2.wav');
+  press('ArrowDown');
+  await untilShown('ref/u3.wav', 'hyp/u2.wav');
+
+  // A refused start is reported.
+  press('ArrowUp');
+  await untilShown('ref/u2.wav', 'hyp/u2.wav');
+  window.HTMLMediaElement.prototype.play = () => Promise.reject(new window.Error('not allowed'));
+  press(' ');
+  await until('refusal', () => document.getElementById('tv-error').textContent === 'Cannot play the file: not allowed');
+`)
+	// The URL brings the row back, framed, without opening anything.
+	runTableViewScript(t, options, f, "data.csv", "#base=wd&row=2", rowNavigationHelpers+`
+  await until('rows', () => cells().length === 5);
+  if (current() !== '2' || !document.querySelector('#tv-table tr[data-number="2"] td.tv-cell-current')) fail('row from the URL', current());
+  if (!document.getElementById('tv-panes').hidden) fail('opened from the URL');
+`)
+	// A bad row in the URL shows nothing current.
+	runTableViewScript(t, options, f, "data.csv", "#base=wd&row=abc", rowNavigationHelpers+`
+  await until('rows', () => cells().length === 5);
+  if (current() !== '' || document.querySelector('.tv-cell-current') || fragment().get('row') !== null) fail('bad row', current(), window.location.hash);
+`)
+	runTableViewScript(t, options, f, "data.csv", "#base=wd&row=99", rowNavigationHelpers+`
+  await until('rows', () => cells().length === 5);
+  if (current() !== '' || document.querySelector('.tv-cell-current')) fail('row past the end', current());
+`)
+}
+
+// A directory's rows move too: a file follows, as media or text, and a row
+// that has none says so. Expanding renumbers rows, so it forgets the row.
+func TestTableViewMovesBetweenDirectoryRowsInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	wav, err := os.ReadFile(filepath.Join("..", "tableview", "testdata", "media", "pcm16.wav"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(f.work, "set", "a.wav"), string(wav))
+	write(t, filepath.Join(f.work, "set", "b.txt"), "text\n")
+	write(t, filepath.Join(f.work, "set", "sub", "c.wav"), string(wav))
+	write(t, filepath.Join(f.work, "pair", "ref", "u1.wav"), string(wav))
+	write(t, filepath.Join(f.work, "pair", "hyp", "u1.wav"), string(wav))
+	write(t, filepath.Join(f.work, "pair", "ref", "u2.wav"), string(wav))
+	options := testOptions(f.baseDir, false)
+	runTableViewScript(t, options, f, "wd", "#pattern=set%2F**&expanded=set", rowNavigationHelpers+`
+  await until('files', () => link('set/a.wav'));
+  link('set/a.wav').click();
+  await untilShown('set/a.wav');
+  press('ArrowDown');
+  await until('text file', () => document.querySelector('.tv-pane .tv-tab-kind').textContent === 'text');
+  press('ArrowDown');
+  await until('directory row', () => (document.querySelector('.tv-row-notice') || {}).textContent === 'Row ' + current() + ' has no file in ' + headings()[1] + '.');
+  const number = current();
+  [...document.querySelectorAll('.tv-directory')].find(button => button.getAttribute('aria-label') === 'Expand set/sub').click();
+  await until('expanded', () => link('set/sub/c.wav'));
+  if (current() !== '' || fragment().get('row') !== null) fail('row kept after expanding', number, window.location.hash);
+`)
+	runTableViewScript(t, options, f, "wd", "#listing=stems&pattern=pair%2F**%2F*.wav&expanded=pair&expanded=pair%2Fhyp&expanded=pair%2Fref&group=parent", rowNavigationHelpers+`
+  await until('stems', () => document.querySelector('.tv-open-row'));
+  document.querySelector('.tv-open-row').click();
+  await untilShown('pair/hyp/u1.wav', 'pair/ref/u1.wav');
+  press('ArrowDown');
+  await until('missing member', () => shown()[1] === 'pair/ref/u1.wav' && shown()[0].startsWith('Row 2 has no file in '));
+`)
+}
+
+// Opening Describe scrolls the page to the table, and the table to its head;
+// closing it moves nothing. jsdom has no layout, so the page gets one.
+func TestTableViewDescribeShowsItsRowsInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	runTableViewScript(t, testOptions(f.baseDir, false), f, "data.csv", "", `
+  await until('rows', () => cells().length === 1);
+  const page = document.querySelector('.tv-main');
+  const area = document.querySelector('.tv-table-area');
+  const scroller = document.querySelector('.tv-scroll');
+  window.Element.prototype.getBoundingClientRect = function () {
+    if (this === page) return { top: 50 };
+    if (this === area) return { top: 450 - page.scrollTop };
+    return { top: 0 };
+  };
+  scroller.scrollTop = 300;
+  const toggle = () => document.querySelector('.tv-describe-toggle');
+  toggle().click();
+  await until('describe', () => document.querySelector('#tv-table tr.tv-describe'));
+  await until('scroll', () => page.scrollTop === 400);
+  if (scroller.scrollTop !== 0) fail('table scroll', scroller.scrollTop);
+  page.scrollTop = 100;
+  scroller.scrollTop = 200;
+  toggle().click();
+  await until('closed', () => !document.querySelector('#tv-table tr.tv-describe'));
+  await wait(50);
+  if (page.scrollTop !== 100 || scroller.scrollTop !== 200) fail('closing scrolled', page.scrollTop, scroller.scrollTop);
+`)
+}
+
+// A document has no rows, so the keys leave the page alone.
+func TestTableViewRowKeysIgnoreDocumentsInBrowser(t *testing.T) {
+	data := t.TempDir()
+	write(t, filepath.Join(data, "notes.md"), "# Notes\n")
+	handler, err := TableViewHandler(filepath.Join(data, "notes.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+	runTableViewPage(t, server.URL+"/", rowNavigationHelpers+`
+  await until('document', () => document.querySelector('.tv-tab-view') && document.querySelector('.tv-table-area').hidden);
+  for (const key of ['ArrowDown', 'ArrowUp', 'Enter', ' ']) {
+    if (press(key)) fail('key taken', key);
+  }
+`)
+}
+
 // A plot computes its spectra once for what it shows: drawing again at the
 // same size reuses them, a new size is drawn stretched until it has held,
 // and a new height alone needs no new spectra; only a sideways or Shift

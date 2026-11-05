@@ -73,6 +73,8 @@ const view = {
   filters: [],
   sort: null,
   describe: false,
+  // row is the current row's number, or null.
+  row: null,
 };
 // defaultView is the view a source starts with when the fragment sets
 // nothing.
@@ -215,6 +217,8 @@ function readView() {
     view.sort = { column: sort, desc: fragment.get("desc") === "1" };
   }
   view.describe = fragment.get("describe") === "1";
+  const row = Number(fragment.get("row"));
+  if (Number.isInteger(row) && row > 0) view.row = row;
 }
 
 function writeView() {
@@ -246,6 +250,7 @@ function writeView() {
     if (view.sort.desc) fragment.set("desc", "1");
   }
   if (view.describe) fragment.set("describe", "1");
+  if (view.row) fragment.set("row", String(view.row));
   history.replaceState(null, "", "#" + fragment);
 }
 
@@ -406,6 +411,16 @@ function renderSummary() {
   document.getElementById("tv-summary").textContent = parts.join(" · ");
 }
 
+// showDescribe brings Describe's rows into view: open panes can push the table
+// down the page, and the table's own scrolling can have left its head above.
+function showDescribe() {
+  const page = document.querySelector(".tv-main");
+  const area = document.querySelector(".tv-table-area");
+  page.scrollTop +=
+    area.getBoundingClientRect().top - page.getBoundingClientRect().top;
+  document.querySelector(".tv-scroll").scrollTop = 0;
+}
+
 // describeToggle is the button that shows or hides Describe.
 function describeToggle() {
   return el(
@@ -415,10 +430,11 @@ function describeToggle() {
       className: "tv-describe-toggle",
       "aria-pressed": String(view.describe),
       title: "Summarize each column over the matching rows",
-      onclick: () => {
+      onclick: async () => {
         view.describe = !view.describe;
         renderToolbar();
-        loadRows();
+        const error = await loadRows();
+        if (view.describe && error === "") showDescribe();
       },
     },
     "Describe",
@@ -706,6 +722,7 @@ let loadSequence = 0;
 
 async function loadRows() {
   const sequence = ++loadSequence;
+  noteRowTable();
   writeView();
   const params = tableParams();
   const sort = view.sort
@@ -930,14 +947,29 @@ function renderTable() {
     rows.rows.map((row) =>
       el(
         "tr",
-        {},
+        {
+          "data-number": row.number,
+          onclick: (event) => {
+            // A click on a control in the row, or one ending a text
+            // selection, is not a move.
+            if (event.target.closest("a, button, input, select")) return;
+            if (String(window.getSelection())) return;
+            const cell = event.target.closest("td[data-column]");
+            if (cell) currentColumn = Number(cell.dataset.column);
+            stepToRow(row);
+            markCurrentRow();
+          },
+        },
         el("td", { className: "tv-number" }, formatCount(row.number)),
         rowActions ? el("td", {}, openRowButton(row)) : null,
-        rows.columns.map((_, index) => el("td", {}, tableCell(row, index))),
+        rows.columns.map((_, index) =>
+          el("td", { "data-column": index }, tableCell(row, index)),
+        ),
       ),
     ),
   );
   table.replaceChildren(head, body);
+  markCurrentRow();
   if (!rows.rows.length) {
     body.append(
       el(
@@ -1009,11 +1041,11 @@ function tableCell(row, index) {
     row.directory && index === 0
       ? directoryCell(row, text)
       : row.media && row.media[index]
-        ? mediaCell(row.media[index])
+        ? mediaCell(row, index)
         : info.kind === "directory" &&
             rows.columns[index].type === "path" &&
             text
-          ? fileCell(text, row.tables && row.tables.includes(index))
+          ? fileCell(row, index)
           : cellContent(text, rows.columns[index]);
   if (info.kind !== "directory" || view.listing !== "files" || index !== 0)
     return content;
@@ -1025,13 +1057,300 @@ function tableCell(row, index) {
   );
 }
 
+// The current row. Keys and clicks move it through the rows the page shows, in
+// their displayed order and across pages, and the active pane's current tab
+// follows: it shows its column of the new row.
+
+// How long moves must pause before the tab follows. Held keys must not start a
+// decode per row, since a decode cannot be cancelled.
+const followDelayMs = 150;
+// rowTable is the tableIdentity view.row counts rows in.
+let rowTable = null;
+// currentColumn is the framed cell's column in the current row. It stays as the
+// row moves, and is null until a row is current.
+let currentColumn = null;
+// pendingFollow is the move the tab has not followed yet.
+let pendingFollow = null;
+// rowPageLoading holds further moves while one loads the next page.
+let rowPageLoading = false;
+
+// tableIdentity names what a row number means. Filters, the sort, and paging
+// keep each row's number, so they are not part of it; expanding a directory
+// renumbers its rows, and a new separator or header row changes them.
+function tableIdentity() {
+  return JSON.stringify([
+    sourceQuery.toString(),
+    view.sep,
+    view.header,
+    view.base,
+    view.listing,
+    view.pattern,
+    view.expanded,
+    view.group,
+    view.suffixSep,
+    view.incomplete,
+  ]);
+}
+
+// noteRowTable forgets the current row when the table it counted in changes.
+function noteRowTable() {
+  const table = tableIdentity();
+  if (rowTable !== null && rowTable !== table) {
+    view.row = null;
+    currentColumn = null;
+    if (pendingFollow) clearTimeout(pendingFollow.timer);
+    pendingFollow = null;
+  }
+  rowTable = table;
+}
+
+// currentRow is the current row, if it is on this page.
+function currentRow() {
+  return rows ? rows.rows.find((row) => row.number === view.row) : undefined;
+}
+
+// firstFileColumn is where the frame starts in a row: its first file, so that
+// Enter and Space have something to act on, or its first column.
+function firstFileColumn(row) {
+  const index = rows.columns.findIndex(
+    (_, index) => rowFile(row, index).kind !== "notice",
+  );
+  return Math.max(index, 0);
+}
+
+function markCurrentRow() {
+  const row = currentRow();
+  if (row && currentColumn === null) currentColumn = firstFileColumn(row);
+  document
+    .querySelectorAll("#tv-table tbody tr[data-number]")
+    .forEach((element) => {
+      const current = Number(element.dataset.number) === view.row;
+      element.classList.toggle("tv-row-current", current);
+      if (current) element.setAttribute("aria-current", "true");
+      else element.removeAttribute("aria-current");
+      element.querySelectorAll("td[data-column]").forEach((cell) => {
+        cell.classList.toggle(
+          "tv-cell-current",
+          current && Number(cell.dataset.column) === currentColumn,
+        );
+      });
+    });
+}
+
+// scrollCurrentRow brings the current row and framed cell into view by scrolling
+// the table alone. The panes above it stay where they are, so the part of the
+// table in view can end above its own bottom edge, where the page cuts it off.
+function scrollCurrentRow() {
+  const row = document.querySelector("#tv-table tr.tv-row-current");
+  if (!row) return;
+  const scroller = document.querySelector(".tv-scroll");
+  const area = scroller.getBoundingClientRect();
+  const page = document.querySelector(".tv-main").getBoundingClientRect();
+  const header = document.querySelector("#tv-table thead tr");
+  const top = Math.max(area.top + (header ? header.offsetHeight : 0), page.top);
+  const bottom = Math.min(area.bottom, page.bottom);
+  const box = row.getBoundingClientRect();
+  if (box.top < top) scroller.scrollTop -= top - box.top;
+  else if (box.bottom > bottom) scroller.scrollTop += box.bottom - bottom;
+  const cell = row.querySelector("td.tv-cell-current");
+  if (!cell) return;
+  const edges = cell.getBoundingClientRect();
+  if (edges.left < area.left) scroller.scrollLeft -= area.left - edges.left;
+  else if (edges.right > area.right)
+    scroller.scrollLeft += edges.right - area.right;
+}
+
+function setCurrentRow(row) {
+  view.row = row.number;
+  markCurrentRow();
+  writeView();
+  scrollCurrentRow();
+}
+
+// releaseTableFocus takes focus from the control just clicked in the table,
+// which would otherwise keep Enter and Space and keep its focus ring on the row
+// left behind.
+function releaseTableFocus() {
+  const focused = document.activeElement;
+  if (focused && focused.closest("#tv-table")) focused.blur();
+}
+
+// stepToRow makes a row current, and shortly after, the tab follows.
+function stepToRow(row) {
+  if (row.number === view.row) return;
+  if (pendingFollow) clearTimeout(pendingFollow.timer);
+  setCurrentRow(row);
+  pendingFollow = { row, timer: setTimeout(finishFollow, followDelayMs) };
+}
+
+function finishFollow() {
+  if (!pendingFollow) return;
+  const { row, timer } = pendingFollow;
+  clearTimeout(timer);
+  pendingFollow = null;
+  followActiveTab(tableIdentity(), row.number, (column) =>
+    rowFile(row, column),
+  );
+}
+
+// rowFile is what a column of a row opens in a pane: the file its cell names,
+// or, so that a pane never goes on showing another row's file, a notice saying
+// why there is none.
+function rowFile(row, index) {
+  const origin = { table: tableIdentity(), row: row.number, column: index };
+  const media = row.media && row.media[index];
+  if (media && !media.error) return Object.assign({}, media, { origin });
+  const column = rows && rows.columns[index];
+  const text = row.cells[index];
+  if (
+    !media &&
+    !(row.directory && index === 0) &&
+    info.kind === "directory" &&
+    column &&
+    column.type === "path" &&
+    text
+  ) {
+    return { kind: "text", ref: text, origin };
+  }
+  const label = "Row " + formatCount(row.number);
+  return {
+    kind: "notice",
+    ref: label,
+    origin,
+    message: media
+      ? label + ": " + media.ref + ": " + media.error
+      : label +
+        " has no file in " +
+        (column ? column.name : "this column") +
+        ".",
+  };
+}
+
+// rowFiles is every file a row names, in column order.
+function rowFiles(row) {
+  return (rows ? rows.columns : [])
+    .map((_, index) => rowFile(row, index))
+    .filter((media) => media.kind !== "notice");
+}
+
+// openRowFile opens one cell's file in the active pane; the row becomes current.
+function openRowFile(row, index) {
+  finishFollow();
+  currentColumn = index;
+  setCurrentRow(row);
+  openMedia(rowFile(row, index));
+  releaseTableFocus();
+}
+
+// openWholeRow opens a row's files side by side.
+function openWholeRow(row, media) {
+  finishFollow();
+  setCurrentRow(row);
+  openMediaRow(media);
+  releaseTableFocus();
+}
+
+// moveRow moves the current row by one in the displayed order. From a row not
+// on this page, it starts at the page's first row.
+async function moveRow(delta) {
+  if (rowPageLoading) return;
+  const index = rows.rows.findIndex((row) => row.number === view.row);
+  if (index < 0) {
+    stepToRow(rows.rows[0]);
+    return;
+  }
+  const target = index + delta;
+  if (target >= 0 && target < rows.rows.length) {
+    stepToRow(rows.rows[target]);
+    return;
+  }
+  const page = view.page + delta;
+  if (page < 1 || page > pageCount()) return;
+  rowPageLoading = true;
+  view.page = page;
+  try {
+    const error = await loadRows();
+    if (error === "" && view.page === page && rows && rows.rows.length)
+      stepToRow(rows.rows[delta > 0 ? 0 : rows.rows.length - 1]);
+  } finally {
+    rowPageLoading = false;
+  }
+}
+
+// moveColumn moves the frame along the row, stopping at either end. It opens
+// nothing. Without a current row on this page, it starts as moveRow does.
+function moveColumn(delta) {
+  if (!currentRow()) {
+    moveRow(delta);
+    return;
+  }
+  const column = (currentColumn ?? 0) + delta;
+  if (column < 0 || column >= rows.columns.length) return;
+  currentColumn = column;
+  markCurrentRow();
+  scrollCurrentRow();
+}
+
+// rowKey handles the table's keys. Controls keep the keys they use.
+function rowKey(event) {
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  if (event.defaultPrevented) return;
+  const openRow = event.key === "Enter" && event.shiftKey;
+  if (event.shiftKey && !openRow) return;
+  const target = event.target;
+  const inside = (selector) => target.closest && target.closest(selector);
+  if (inside("input, select, textarea, audio, video, [contenteditable]"))
+    return;
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    if (!rows || !rows.rows.length) return;
+    event.preventDefault();
+    moveRow(event.key === "ArrowDown" ? 1 : -1);
+    return;
+  }
+  if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+    if (!rows || !rows.rows.length) return;
+    event.preventDefault();
+    moveColumn(event.key === "ArrowRight" ? 1 : -1);
+    return;
+  }
+  if (inside("button, a, summary")) return;
+  if (event.key === "Enter") {
+    const row = currentRow();
+    if (!row) return;
+    if (openRow) {
+      const files = rowFiles(row);
+      if (!files.length) return;
+      event.preventDefault();
+      if (!event.repeat) openWholeRow(row, files);
+      return;
+    }
+    if (rowFile(row, currentColumn).kind === "notice") return;
+    event.preventDefault();
+    if (!event.repeat) openRowFile(row, currentColumn);
+    return;
+  }
+  if (event.key !== " ") return;
+  // The framed file plays; on a cell without one, Space still pauses what is
+  // playing, and with no player at all it keeps scrolling the page.
+  const row = currentRow();
+  const file = row && rowFile(row, currentColumn);
+  const playable = file && (file.kind === "audio" || file.kind === "video");
+  if (event.repeat) {
+    if (playable || activePlayer()) event.preventDefault();
+    return;
+  }
+  if (playable) {
+    event.preventDefault();
+    finishFollow();
+    togglePlayer(playerOf(file));
+  } else if (toggleActivePlayer()) {
+    event.preventDefault();
+  }
+}
+
 // openRowButton opens a row's files in panes side by side, to compare them.
 function openRowButton(row) {
-  const media = Object.keys(row.media || {})
-    .map(Number)
-    .sort((a, b) => a - b)
-    .map((index) => row.media[index])
-    .filter((media) => !media.error);
+  const media = rowFiles(row).filter((media) => media.kind !== "text");
   return media.length
     ? el(
         "button",
@@ -1039,7 +1358,7 @@ function openRowButton(row) {
           type: "button",
           className: "tv-open-row",
           title: "Open this row's files in panes side by side",
-          onclick: () => openMediaRow(media),
+          onclick: () => openWholeRow(row, media),
         },
         "Open row",
       )
@@ -1049,7 +1368,9 @@ function openRowButton(row) {
 // fileCell is a directory's path to a file that is not media, which opens
 // as text in the active pane; a table file also opens in a Table viewer of
 // its own in a new tab.
-function fileCell(ref, table) {
+function fileCell(row, index) {
+  const ref = row.cells[index];
+  const table = row.tables && row.tables.includes(index);
   return el(
     "span",
     { className: "tv-media" },
@@ -1059,7 +1380,7 @@ function fileCell(ref, table) {
         type: "button",
         className: "tv-media-path tv-link-button tv-text-file",
         title: "Open in the active pane",
-        onclick: () => openMedia({ kind: "text", ref }),
+        onclick: () => openRowFile(row, index),
       },
       ref,
     ),
@@ -1117,7 +1438,8 @@ function mediaURL(media) {
 
 // mediaCell shows a path that names an image, audio, or video file: the
 // path, which opens the file, and its properties, or why it is not shown.
-function mediaCell(media) {
+function mediaCell(row, index) {
+  const media = row.media[index];
   return el(
     "span",
     { className: "tv-media" },
@@ -1136,7 +1458,7 @@ function mediaCell(media) {
             onclick: (event) => {
               if (!plainClick(event)) return;
               event.preventDefault();
-              openMedia(media);
+              openRowFile(row, index);
             },
           },
           media.ref,
@@ -1199,6 +1521,13 @@ function renderPager() {
     (rows.notes || []).map((note) =>
       el("span", { className: "tv-muted" }, " · " + note),
     ),
+    rows.rows.length
+      ? el(
+          "span",
+          { className: "tv-muted tv-pager-keys" },
+          " · ↑↓←→ move · Enter open · Shift+Enter open row · Space play",
+        )
+      : null,
   );
   const pages = pageCount();
   const button = (label, target, disabled) =>
@@ -1292,6 +1621,7 @@ async function loadSource() {
   }
   renderToolbar();
   await loadRows();
+  scrollCurrentRow();
 }
 
 // moveTo shows a directory or file inside the source's directory in this
@@ -1316,9 +1646,12 @@ async function start() {
   });
   document.addEventListener("keydown", (event) => {
     const child = currentChild();
-    if (!event.altKey || event.key !== "ArrowUp" || !child) return;
-    event.preventDefault();
-    moveTo(child.split("/").slice(0, -1).join("/"));
+    if (event.altKey && event.key === "ArrowUp" && child) {
+      event.preventDefault();
+      moveTo(child.split("/").slice(0, -1).join("/"));
+      return;
+    }
+    rowKey(event);
   });
   await loadSource();
 }
