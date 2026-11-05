@@ -134,6 +134,12 @@ flowchart LR
    nothing under a basedir; their output lives in a private
    `$TMPDIR/rotari-web-launches-*` directory removed at shutdown, or by the
    next Web server if this one was killed.
+   With `--allow-terminal`, it holds one shell in an `internal/terminal` `Keeper`
+   ([cmd/rotari/web_terminal.go](../cmd/rotari/web_terminal.go) builds it;
+   [internal/webui/terminal.go](../internal/webui/terminal.go) serves it at `/_terminal/ws`).
+   Pages only attach to the shell, since each link reloads the page, and the panel in
+   [web_shell.js](../internal/webui/assets/web_shell.js) loads xterm.js when first opened.
+   The shell is not a run: it takes no project lock and writes nothing under a basedir.
 - **Jobs and wrappers.** Local jobs are child processes of the supervisor.
   Scheduler jobs run elsewhere through a generated wrapper script that writes
   the attempt's `status.json`, which the supervisor polls.

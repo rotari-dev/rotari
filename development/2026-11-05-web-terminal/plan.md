@@ -1,9 +1,9 @@
 # Plan: A built-in terminal in `rotari web`
 
 Created: 2026-11-05
-Status: In progress, a small step at a time. `internal/terminal` is done and not yet
-reachable; [the steps](#steps) list what is next. This replaces phases 3 to 5 of
-[the hardening plan](../2026-11-04-web-terminal/plan.md), whose hardening is done.
+Status: Steps 1 to 5 are implemented, and the user has tried the panel by hand. What remains is
+the first run of the browser tests on CI; see [the tests](#tests-and-validation). This replaces
+phases 3 to 5 of [the hardening plan](../2026-11-04-web-terminal/plan.md), whose hardening is done.
 
 ## Goal
 
@@ -215,6 +215,9 @@ Conformance through the binary:
 | Sign out, server stopped, server killed | The shell ends; no ordinary process remains. |
 | `rotari run` in the shell, then the shell ended | The run continues. |
 | Shell environment | No `ROTARI_WEB_AUTH_TOKEN`. |
+
+`TestTerminalPanelInBrowser` has not yet run anywhere, since Chrome is not on the development
+machine and it needs a push to reach CI.
 
 In Chrome, extending the browser checks of WEB-28 and WEB-29: the panel opens with no policy
 violation, a typed command's output appears, following a link keeps the shell and its output,

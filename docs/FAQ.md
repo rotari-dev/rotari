@@ -595,7 +595,7 @@ example, generate one with
 `ROTARI_WEB_AUTH_TOKEN`, and restart `rotari web`. Keep the token out of
 source control and update or remove Chrome's saved rotari credential.
 
-When `--allow-exec` is used without a configured token, rotari generates a
+When `--allow-exec` or `--allow-terminal` is used without a configured token, rotari generates a
 new cryptographically random token at startup and prints it to stderr. If
 Chrome still warns for that generated token, check which saved credential
 Chrome is warning about and whether it belongs to this rotari server.

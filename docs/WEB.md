@@ -24,10 +24,12 @@ what you need.
 | Static export | `rotari web --static-dir DIR` | Browse a snapshot as plain files; nothing is served live. | n/a |
 | Read-only | `rotari web --allow-control=false` | View everything the live server serves; control and file-write APIs return `403`. | Recommended beyond loopback |
 | Control (default) | `rotari web` | Also copy, change, remove, cancel, and clear jobs, edit queues, and save config files. | Required beyond loopback |
+| Terminal | `rotari web --allow-terminal` | Also open a shell on this host, as you, in a panel beside the jobs. | Always required |
 | Launching | `rotari web --allow-exec` | Also run registered commands and built-in services against artifacts. | Always required |
 
-- Job control does not start runs; execution starts only through `rotari run`.
-- `--allow-exec` needs job control, so it cannot be combined with
+- Job control does not start runs; execution starts only through `rotari run`, which the
+  terminal can of course run.
+- `--allow-exec` and `--allow-terminal` need job control, so neither can be combined with
   `--allow-control=false` or `--static-dir`.
 - Options that only make sense for one mode, such as `--host` with
   `--static-dir`, are rejected rather than ignored.
@@ -44,7 +46,8 @@ environment variables are in
 | `--auth-token` | Require a token. Prefer `ROTARI_WEB_AUTH_TOKEN` so it stays out of the process list. |
 | `--allow-control` | Job control on (default) or `=false` for read-only. |
 | `--allow-exec` | Let the UI launch registered commands; see below. |
-| `--allowed-host NAME` | With `--allow-exec`, accept one more `Host` header name (repeatable). |
+| `--allow-terminal` | Add a terminal panel; see below. |
+| `--allowed-host NAME` | With `--allow-exec` or `--allow-terminal`, accept one more `Host` header name (repeatable). |
 | `--artifact-root DIR` | Also serve recorded artifact files under `DIR` (repeatable). |
 | `--static-dir DIR` | Write a static export instead of serving. |
 | `--static-artifact-contents` | With `--static-dir`, copy previewable artifact files into the export. |
@@ -91,6 +94,31 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 - **Notifications:** the in-page inbox and optional desktop popups; see
   [Notifications](NOTIFICATIONS.md#browser-notifications).
 - **Theme:** `Settings` selects Light, Dark, or System.
+
+## Terminal
+
+`rotari web --allow-terminal` adds a **Terminal** button to the top bar, which opens a shell in
+a panel along the bottom of the page, so you can type while watching jobs or reading a log. Drag
+the panel's top edge to change its height.
+
+```sh
+export ROTARI_WEB_AUTH_TOKEN=...      # optional; otherwise one is generated and printed
+rotari web --allow-terminal
+```
+
+- **Who can use it:** anyone who can sign in gets a shell as you, on the host running
+  `rotari web`. A token is always required, and it opens only on a direct `localhost` connection,
+  such as an SSH forward, or over HTTPS. See the
+  [security model](SECURITY.md#the-web-terminal).
+- **Following links:** the shell lives on the server, so it carries on as you move between pages,
+  and the panel shows recent output again. This includes full-screen programs such as `vim`.
+- **Several tabs:** there is one shell. The tab you open last takes it, and the others say so and
+  offer to take it back.
+- **When it ends:** with **End shell** or `exit`, when you sign out, when `rotari web` stops, or
+  **after 30 minutes with no tab connected**, which also ends what is running in its foreground.
+  Use `rotari run` or `tmux` for long work: a run started in the terminal carries on regardless.
+- **Keys:** a browser keeps some keys for itself, such as Ctrl-W, which do not reach the shell.
+- **Behind a reverse proxy:** the proxy must pass WebSocket connections to `/_terminal/ws`.
 
 ## Artifacts
 

@@ -833,7 +833,7 @@ The manager is [internal/launcher](../internal/launcher/), the Web side
 **WEB-13** Launching is off unless `rotari web` gets `--allow-exec` on the
 command line; no config file or environment variable enables it. It is
 rejected with `--allow-control=false`, `--allowed-host` is rejected without
-it, and both are rejected with `--static-dir` (WEB-3). With it, every route
+it or `--allow-terminal`, and both are rejected with `--static-dir` (WEB-3). With it, every route
 requires the Web token, on loopback listeners too: without
 `--auth-token` or `ROTARI_WEB_AUTH_TOKEN`, the server generates one and
 prints it on stderr; it always prints the sign-in user name and never prints a
@@ -1366,11 +1366,28 @@ and `TestLoadJobsShowsRunningAttemptID` in
 
 ## Generated Web pages
 
+**WEB-34** Without `--allow-terminal` the terminal's routes answer 404 and pages do not offer
+it, and the flag is rejected with `--allow-control=false` or `--static-dir`. With it, as with
+`--allow-exec`, every route requires the Web token, generated and printed when none is set, and
+`Host` and `Origin` are checked (WEB-14). The WebSocket at `/_terminal/ws` also requires HTTPS
+or a direct loopback connection, even with a token. One shell runs at a time, in the home
+directory, as `$SHELL -l` or `/bin/sh`, with the server's environment less the Web token. It
+outlives its connections and replays recent output to the next. A new connection takes it over,
+closing the last with code 4001; one with `takeover=0`, which a page reconnecting by itself sends,
+gets 4001 itself when another connection has the shell. The shell ends with its own exit
+(4002 with how it ended), the page's `end` message, signing out, the server stopping (4004) or
+being killed, or thirty minutes with no connection, a limit that is provisional and checked at the
+package level by `TestUnattendedShellEndsAfterTheIdleLimit`. A process that left its session or
+ignores the hangup, including a run started in the shell, goes on. Covered by the tests in
+[conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
+
 **WEB-33** `rotari web --allow-terminal` adds a Terminal button to the top bar of the
 application and Recent jobs pages, which opens a panel along the bottom. The shell lives on
 the server and each page load attaches to it again and replays recent output, so following
-a link does not end it. xterm.js loads when the panel first opens, under the page's nonce.
-`TestTerminalPanelInBrowser` checks this in headless Chrome.
+a link does not end it. xterm.js loads when the panel first opens, under the page's nonce. A tab
+that is not visible neither connects nor retries, and a page whose sign-in has gone stops
+retrying and says so (`TestTerminalPanel`). `TestTerminalPanelInBrowser` checks the panel in
+headless Chrome.
 
 **WEB-29** Live application, Recent jobs, and Table viewer pages send a
 `Content-Security-Policy` (`pagePolicy` in `internal/webui/page_policy.go`). Only

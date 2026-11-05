@@ -138,6 +138,23 @@ not start when another user could replace that directory: `$TMPDIR` and every
 directory above it, following symlinks, must be owned by you or root and not
 writable by group or others, unless sticky like `/tmp`.
 
+## The Web terminal
+
+The terminal is off by default. `rotari web --allow-terminal` gives anyone who can sign in a shell
+as you, with all your file permissions, so a leaked token is worth more with it on. Like launching,
+it always requires a token and checks `Host` and `Origin`. Its connection also requires HTTPS or
+a direct loopback connection, even with an API token, which the rest of the API accepts over plain
+HTTP. The shell's environment leaves out the Web token.
+
+Signing in is the entrance: there is no second prompt. A page's script could reach the shell if a
+stored value ever became script, which [the page policy](#script-on-web-ui-pages) exists to prevent,
+and a launched service's own pages, which that policy does not cover, can reach it just as they can
+call the API. Treat them as trusted code either way.
+
+The shell outlives its connection, like a launched VS Code server, so one left open stays reachable
+to anyone with your session for up to 30 minutes, and recent output is replayed to them. Signing out
+ends it.
+
 ## Limits
 
 This model does not defend against another user with access to your own UID
