@@ -1,7 +1,7 @@
 # Plan: Show Distributions in Table Viewer Describe
 
 Created: 2026-11-05
-Status: Proposed. Nothing is implemented.
+Status: Implemented; not yet tried in a browser or committed to `main`.
 Related: [keyboard row navigation](../2026-11-05-table-viewer-row-navigation/plan.md)
 and [row export](../2026-11-05-table-viewer-export-rows/plan.md), which are
 independent of this plan.

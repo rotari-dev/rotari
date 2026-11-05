@@ -126,6 +126,9 @@ func TestWebTableViewerReadsArtifacts(t *testing.T) {
 	if !strings.Contains(r.Body, `"count":5,"unique":5,"numeric":5,"mean":298`) || !strings.Contains(r.Body, `"sum":1490`) || !strings.Contains(r.Body, `"matched":5,"total":300`) {
 		t.Fatalf("describe = (%d, %s)", r.Status, r.Body)
 	}
+	if !strings.Contains(r.Body, `"q25":297,"q50":298,"q75":299,"histogram":{"min":296,"max":300,"counts":[1,`) {
+		t.Fatalf("describe distributions = (%d, %s)", r.Status, r.Body)
+	}
 	// A cell naming a media file under the roots gets its properties and
 	// the file is served; one outside them gets neither.
 	r = get("/tableview/api/rows", "media.csv", url.Values{"sep": {","}, "base": {"wd"}})

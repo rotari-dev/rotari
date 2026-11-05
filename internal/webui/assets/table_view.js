@@ -32,14 +32,19 @@ const filterOperators = [
 ];
 // The statistics Describe shows, one row each.
 const describeRows = [
+  ["histogram", (stats, column) => histogramCell(stats.histogram, column)],
   ["count", (stats) => formatCount(stats.count)],
   [
     "unique",
     (stats) => formatCount(stats.unique) + (stats.unique_over ? "+" : ""),
   ],
+  ["top", (stats, column) => topValuesCell(stats, column)],
   ["mean", (stats, column) => formatValue(stats.mean, column)],
   ["std", (stats, column) => formatValue(stats.std, column)],
   ["min", (stats, column) => formatValue(stats.min, column)],
+  ["25%", (stats, column) => formatValue(stats.q25, column)],
+  ["50%", (stats, column) => formatValue(stats.q50, column)],
+  ["75%", (stats, column) => formatValue(stats.q75, column)],
   ["max", (stats, column) => formatValue(stats.max, column)],
   ["sum", (stats, column) => formatValue(stats.sum, column)],
 ];
@@ -1475,10 +1480,91 @@ function mediaCell(row, index) {
   );
 }
 
+// histogramCell draws a column's numbers as bars, each with its range and count.
+function histogramCell(histogram, column) {
+  if (!histogram) return "–";
+  const counts = histogram.counts;
+  const tallest = Math.max(...counts);
+  const width = (histogram.max - histogram.min) / counts.length;
+  const value = (number) => formatValue(number, column);
+  const total = counts.reduce((sum, count) => sum + count, 0);
+  return el(
+    "div",
+    {
+      className: "tv-histogram",
+      role: "img",
+      "aria-label":
+        formatCount(total) +
+        " numbers from " +
+        value(histogram.min) +
+        " to " +
+        value(histogram.max),
+    },
+    counts.map((count, index) =>
+      el(
+        "span",
+        {
+          className: "tv-histogram-bin",
+          title:
+            value(histogram.min + index * width) +
+            " – " +
+            value(histogram.min + (index + 1) * width) +
+            ": " +
+            formatCount(count),
+        },
+        count
+          ? el("span", {
+              className: "tv-histogram-bar",
+              style: "height: " + (count / tallest) * 100 + "%",
+            })
+          : null,
+      ),
+    ),
+  );
+}
+
+// topValuesCell lists a column's most frequent values, as text.
+function topValuesCell(stats, column) {
+  if (stats.top_over)
+    return el(
+      "span",
+      { className: "tv-muted" },
+      "too many distinct values to list",
+    );
+  if (!stats.top) return "–";
+  return el(
+    "div",
+    { className: "tv-top-values" },
+    stats.top.map((top) => {
+      const shown = formatCell(top.value, column) + (top.cut ? "…" : "");
+      return el(
+        "div",
+        { className: "tv-top-value" },
+        el("span", { className: "tv-top-text", title: shown }, shown),
+        el("span", { className: "tv-muted" }, formatCount(top.count)),
+      );
+    }),
+  );
+}
+
 // describeHead is the Describe rows, under the column names.
 function describeHead(rowActions) {
   if (!view.describe || !description) return null;
-  return describeRows.map(([name, show]) =>
+  const note = description.distribution_over
+    ? el(
+        "tr",
+        { className: "tv-describe" },
+        el(
+          "td",
+          {
+            className: "tv-muted",
+            colSpan: rows.columns.length + (rowActions ? 2 : 1),
+          },
+          "Too many numbers for quartiles and histograms; add a filter to see them.",
+        ),
+      )
+    : null;
+  const lines = describeRows.map(([name, show]) =>
     el(
       "tr",
       { className: "tv-describe" },
@@ -1490,6 +1576,7 @@ function describeHead(rowActions) {
       }),
     ),
   );
+  return [note, lines];
 }
 
 function goToPage(number) {

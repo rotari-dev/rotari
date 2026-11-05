@@ -681,6 +681,38 @@ a:hover {
 .tv-table thead tr.tv-describe:last-child td {
   border-bottom: 2px solid var(--line);
 }
+.tv-histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  width: 140px;
+  height: 36px;
+}
+.tv-histogram-bin {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+}
+.tv-histogram-bar {
+  flex: 1;
+  background: var(--link);
+  border-radius: 1px 1px 0 0;
+}
+.tv-top-values {
+  min-width: 120px;
+  max-width: 280px;
+}
+.tv-top-value {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tv-top-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .tv-table tbody tr:hover {
   background: var(--highlight);
 }

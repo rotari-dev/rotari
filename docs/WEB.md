@@ -196,6 +196,11 @@ Alt+↑) goes up one level, and the browser's Back returns. Files open in panes
 stay open while you move, so `ref/u1.wav` and `hyp/u1.wav` can be compared
 from their own directories. The URL keeps the view, so a link can be shared.
 
+**Describe** also shows each column's quartiles, a small histogram, and its most
+frequent values. Numbers beyond 10,000,000 in the selected rows leave out quartiles
+and histograms, and past 10,000 distinct values a column lists no top values; a filter
+narrows both.
+
 **Export rows** downloads every row the current filters select, across all pages and
 in the current order, in the file's own format: a delimited file in its separator, a
 JSON Lines file as its original lines, and a directory listing as CSV of what is

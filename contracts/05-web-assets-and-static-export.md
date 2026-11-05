@@ -1023,7 +1023,15 @@ cells, for up to 1,000,000 rows. Rows keep their numbers in the file.
 `/tableview/api/describe` summarizes each column over the rows the filters
 select, as pandas' `describe` does: non-blank cells, distinct values (up to
 100,000, then `unique_over`), and over the cells that read as numbers their
-count, mean, sample standard deviation, minimum, maximum, and sum.
+count, mean, sample standard deviation, minimum, maximum, and sum. It also gives the
+quartiles of those numbers by linear interpolation (`q25`, `q50`, `q75`) and a
+`histogram` of 20 equal-width bins from minimum to maximum (one bin when all are
+equal, none when the range overflows), unless the selected rows hold more than
+10,000,000 numbers, which sets `distribution_over` and leaves them out of every
+column. `top` lists up to 5 most frequent non-blank values with their counts, the
+most frequent and then first seen first, each cut to 256 bytes (`cut`); it is absent
+when every value appears once, and past 10,000 distinct values `top_over` says so
+instead. The figures are exact or absent, from one read of the file.
 A `.jsonl` file instead has one JSON value per nonblank line. Object keys
 across all records become columns in sorted name order; arrays and scalar
 values use a `value` column. Strings and numbers become text, nested arrays

@@ -339,7 +339,7 @@ func TestTableViewFiltersInBrowser(t *testing.T) {
 
   // Describe summarizes the matching rows under the column names.
   document.querySelector('.tv-describe-toggle').click();
-  await until('describe', () => document.querySelectorAll('tr.tv-describe').length === 7);
+  await until('describe', () => document.querySelectorAll('tr.tv-describe').length === 12);
   const stat = name => [...document.querySelectorAll('tr.tv-describe')].find(row => row.children[0].textContent === name);
   if (stat('count').children[2].textContent !== '2' || stat('sum').children[2].textContent !== '10.9' || stat('mean').children[1].textContent !== '–') fail('describe', [...document.querySelectorAll('tr.tv-describe')].map(row => row.textContent));
   if (fragment().get('describe') !== '1') fail('fragment describe', window.location.hash);
@@ -612,7 +612,7 @@ func TestTableViewExpandsDirectoriesInBrowser(t *testing.T) {
   await until('expanded child', () => hasFile('tree/deep/grand.tree'));
   if (fragment().getAll('expanded').join() !== 'tree,tree/deep') fail('expanded fragment', window.location.hash);
   document.querySelector('.tv-describe-toggle').click();
-  await until('expanded describe', () => document.querySelector('tr.tv-describe')?.textContent.includes('count7'));
+  await until('expanded describe', () => [...document.querySelectorAll('tr.tv-describe')].some(row => row.textContent.includes('count7')));
   button('Expand tree/empty').click();
   await until('expanded empty directory', () => button('Collapse tree/empty'));
   if (cells().length !== 7) fail('empty directory rows', cells());
@@ -676,7 +676,7 @@ func TestTableViewGroupsStemsInBrowser(t *testing.T) {
   incomplete.dispatchEvent(new window.Event('change'));
   await until('incomplete', () => cells().length === 1);
   document.querySelector('.tv-describe-toggle').click();
-  await until('describe', () => document.querySelectorAll('tr.tv-describe').length === 7);
+  await until('describe', () => document.querySelectorAll('tr.tv-describe').length === 12);
 `)
 }
 
@@ -1195,6 +1195,32 @@ func TestTableViewDescribeShowsItsRowsInBrowser(t *testing.T) {
   await until('closed', () => !document.querySelector('#tv-table tr.tv-describe'));
   await wait(50);
   if (page.scrollTop !== 100 || scroller.scrollTop !== 200) fail('closing scrolled', page.scrollTop, scroller.scrollTop);
+`)
+}
+
+func TestTableViewDescribesDistributionsInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	write(t, filepath.Join(f.work, "data.csv"), "n,label\n1,<b data-x>\n2,<b data-x>\n3,other\n4,<b data-x>\n")
+	runTableViewScript(t, testOptions(f.baseDir, false), f, "data.csv", "", `
+  await until('rows', () => cells().length === 4);
+  document.querySelector('.tv-describe-toggle').click();
+  await until('describe', () => document.querySelector('#tv-table tr.tv-describe'));
+  const lines = [...document.querySelectorAll('#tv-table tr.tv-describe')];
+  const names = lines.map(line => line.children[0].textContent);
+  const want = ['histogram', 'count', 'unique', 'top', 'mean', 'std', 'min', '25%', '50%', '75%', 'max', 'sum'];
+  if (JSON.stringify(names) !== JSON.stringify(want)) fail('rows', names);
+  const cell = (name, column) => lines[names.indexOf(name)].children[column + 1];
+  if (cell('25%', 0).textContent !== '1.75' || cell('50%', 0).textContent !== '2.5' || cell('75%', 0).textContent !== '3.25') fail('quartiles', cell('25%', 0).textContent);
+  if (cell('50%', 1).textContent !== '–' || cell('histogram', 1).textContent !== '–') fail('text column', cell('50%', 1).textContent);
+  const bins = cell('histogram', 0).querySelectorAll('.tv-histogram-bin');
+  if (bins.length !== 20 || cell('histogram', 0).querySelectorAll('.tv-histogram-bar').length !== 4) fail('bars', bins.length);
+  if (bins[0].title !== '1 – 1.15: 1') fail('bar title', bins[0].title);
+  if (!cell('histogram', 0).querySelector('[role="img"]').getAttribute('aria-label').includes('4 numbers from 1 to 4')) fail('label');
+
+  // A value holding markup stays text.
+  const top = cell('top', 1);
+  if (top.querySelector('[data-x]') || !top.textContent.includes('<b data-x>3') || !top.textContent.includes('other1')) fail('top', top.innerHTML);
+  if (cell('top', 0).textContent !== '–') fail('all unique', cell('top', 0).textContent);
 `)
 }
 

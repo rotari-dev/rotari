@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // scores has a numeric column with a blank and a non-number in it, a text
@@ -175,6 +176,131 @@ func TestDescribeSummarizesColumns(t *testing.T) {
 	}
 	if description.Columns[1].Std != nil || *description.Columns[1].Mean != 10 {
 		t.Fatalf("one row = %s", describeJSON(description))
+	}
+}
+
+func TestDescribeShowsDistributions(t *testing.T) {
+	table := openScores(t)
+	description, err := table.Describe(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	score := description.Columns[1]
+	// Linear interpolation of 0.75, 0.80, 0.9, 10, as pandas' quantile gives.
+	for _, quartile := range []struct {
+		got  *float64
+		want float64
+	}{{score.Q25, 0.7875}, {score.Q50, 0.85}, {score.Q75, 3.175}} {
+		if quartile.got == nil || math.Abs(*quartile.got-quartile.want) > 1e-9 {
+			t.Fatalf("score = %s", describeJSON(score))
+		}
+	}
+	// Three of the four numbers fall in the first of 20 bins, and the largest
+	// in the last. A cell that is not a number is not counted.
+	histogram := score.Histogram
+	if histogram == nil || len(histogram.Counts) != 20 || histogram.Min != 0.75 || histogram.Max != 10 || histogram.Counts[0] != 3 || histogram.Counts[19] != 1 {
+		t.Fatalf("histogram = %s", describeJSON(histogram))
+	}
+	text := description.Columns[2]
+	if text.Q50 != nil || text.Histogram != nil || len(text.Top) == 0 || text.Top[0].Count != 2 {
+		t.Fatalf("text = %s", describeJSON(text))
+	}
+}
+
+func TestDescribeDistributionEdges(t *testing.T) {
+	var column strings.Builder
+	column.WriteString("same,once,mixed,blank,wide,top\n")
+	values := []string{"a", "b", "a", "c", "b", "a"}
+	for row := range 6 {
+		wide := "1"
+		if row == 5 {
+			wide = "1.7e308"
+		} else if row == 4 {
+			wide = "-1.7e308"
+		}
+		column.WriteString("7,id" + strconv.Itoa(row) + ",")
+		if row%2 == 0 {
+			column.WriteString("x")
+		} else {
+			column.WriteString(strconv.Itoa(row))
+		}
+		column.WriteString(",," + wide + "," + values[row] + "\n")
+	}
+	table, err := OpenFile(fileTarget(t, "edges.csv", column.String()), Format{Separator: ',', Header: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	description, err := table.Describe(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	same, once, mixed, blank, wide, top := description.Columns[0], description.Columns[1], description.Columns[2], description.Columns[3], description.Columns[4], description.Columns[5]
+	if *same.Q25 != 7 || *same.Q75 != 7 || len(same.Histogram.Counts) != 1 || same.Histogram.Counts[0] != 6 {
+		t.Fatalf("equal values = %s", describeJSON(same))
+	}
+	if once.Top != nil || once.TopOver {
+		t.Fatalf("all unique = %s", describeJSON(once))
+	}
+	// Numbers count only the numeric cells; top values, all of them.
+	if mixed.Numeric != 3 || *mixed.Q50 != 3 || mixed.Histogram == nil || mixed.Top[0].Value != "x" || mixed.Top[0].Count != 3 {
+		t.Fatalf("mixed = %s", describeJSON(mixed))
+	}
+	if blank.Count != 0 || blank.Top != nil || blank.Q50 != nil || blank.Histogram != nil {
+		t.Fatalf("blank = %s", describeJSON(blank))
+	}
+	// A range past float64's has no histogram, and encodes as JSON.
+	if wide.Histogram != nil || wide.Q50 == nil {
+		t.Fatalf("wide = %s", describeJSON(wide))
+	}
+	if _, err := json.Marshal(description); err != nil {
+		t.Fatal(err)
+	}
+	// Most frequent first; ties go to the value seen first.
+	if len(top.Top) != 3 || top.Top[0].Value != "a" || top.Top[1].Value != "b" || top.Top[2].Value != "c" {
+		t.Fatalf("top = %s", describeJSON(top))
+	}
+}
+
+func TestDescribeLimitsDistributions(t *testing.T) {
+	restore := []int{distributionLimit, topTrackLimit}
+	t.Cleanup(func() { distributionLimit, topTrackLimit = restore[0], restore[1] })
+	content := "n,m\n1,1\n2,2\n3,3\n4,4\n"
+	describe := func(name string) Description {
+		table, err := OpenFile(fileTarget(t, name, content), Format{Separator: ',', Header: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		description, err := table.Describe(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return description
+	}
+	distributionLimit = 7
+	description := describe("over.csv")
+	if !description.DistributionOver {
+		t.Fatalf("over = %s", describeJSON(description))
+	}
+	for _, column := range description.Columns {
+		if column.Q50 != nil || column.Histogram != nil || *column.Sum != 10 {
+			t.Fatalf("column over the limit = %s", describeJSON(column))
+		}
+	}
+	distributionLimit = 8
+	if description := describe("fits.csv"); description.DistributionOver || description.Columns[1].Q50 == nil {
+		t.Fatalf("at the limit = %s", describeJSON(description))
+	}
+	distributionLimit, topTrackLimit = restore[0], 3
+	content = "v\na\na\nb\nc\nd\n"
+	if column := describe("tops.csv").Columns[0]; !column.TopOver || column.Top != nil || column.Unique != 4 {
+		t.Fatalf("too many values = %s", describeJSON(column))
+	}
+	topTrackLimit = restore[1]
+	long := strings.Repeat("あ", 100)
+	content = "v\n" + long + "\n" + long + "\n"
+	column := describe("long.csv").Columns[0]
+	if len(column.Top) != 1 || !column.Top[0].Cut || !utf8.ValidString(column.Top[0].Value) || len(column.Top[0].Value) != 255 {
+		t.Fatalf("long value = %s", describeJSON(column))
 	}
 }
 
