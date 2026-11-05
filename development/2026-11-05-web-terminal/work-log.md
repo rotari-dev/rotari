@@ -282,3 +282,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The user said OK, and in trying it found the bug in the next entry. `tsc`, `go vet ./...`, and `gofmt` found nothing. In `go test ./...`, 54 of 55 packages passed; `TestSSHJobReadsAsRunning`, an Open item in [ISSUES.md](../ISSUES.md), failed for the second run in a row. `-race` passed on `internal/terminal` and the terminal tests of `internal/webui` and `conformance/05-web`.
 
 **Remaining:** None.
+
+## Keep fast output off the next tab
+
+**Commits:** 2026-11-06 00:32:27 `8baae4a9`.
+
+**Change:** `connect` in `web_shell.js` waits for xterm.js to finish what it was given before resetting and opening the next connection, and a connection left behind no longer writes to the screen. `TestTerminalPanel` covers both. An Open item in [ISSUES.md](../ISSUES.md) records the 50 MB limit.
+
+**Reason:** The user ran `yes`, opened a new tab, and saw `y` in it. Only the display was affected: nothing reached the other shell.
+
+**Plan impact:** None. Very fast output may still lose data at xterm.js's limit; that was read from its code and not reproduced.
+
+**Validation:** The user said OK. With the real xterm.js in jsdom, writing a lot and resetting at once left the old output on screen, and waiting for a write callback first did not. `go test ./...` passed all 55 packages before a one-line tidy, and the terminal tests of `internal/webui` and `tsc` passed after it. Removing the check for a connection left behind failed the test. `-race` was not run; the change is JavaScript.
+
+**Remaining:** The Open item above.
