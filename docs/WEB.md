@@ -111,6 +111,10 @@ such as Recent jobs, show the shells of no project.
 | A run's page | Where that run started |
 | Any other page | Your home directory |
 
+A project's shells have `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME` set to it, so `rotari show` and the
+like need no `-p`, wherever you `cd`. Give `-p` to reach another project. Other shells keep what
+`rotari web` itself has.
+
 **+** opens another shell in a tab of its own, up to eight per project and 32 in all, and each tab's
 **×** ends its shell. A run's page also has **Open a terminal here** beside its working directory.
 If the directory is gone or the project has no run, the shell opens in your home directory and its

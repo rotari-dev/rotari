@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	baseDirEnv      = "ROTARI_BASEDIR"
+	BaseDirEnv      = "ROTARI_BASEDIR"
 	masterDirEnv    = "ROTARI_MASTERDIR"
 	privateStateEnv = "ROTARI_PRIVATE_STATE"
 	xdgStateHomeEnv = "XDG_STATE_HOME"
@@ -37,7 +37,7 @@ func resolveBaseDir(cliBaseDir string) (string, bool, error) {
 	if cliBaseDir != "" {
 		return cliBaseDir, true, nil
 	}
-	if value := os.Getenv(baseDirEnv); value != "" {
+	if value := os.Getenv(BaseDirEnv); value != "" {
 		return value, true, nil
 	}
 	baseDir, err := defaultBaseDir()

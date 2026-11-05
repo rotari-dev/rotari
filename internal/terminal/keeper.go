@@ -88,6 +88,8 @@ type StartOptions struct {
 	Dir string
 	// Banner is shown before the shell's own output, and replayed with it.
 	Banner string
+	// Env is added to the Keeper's Shell.Env, overriding what is there.
+	Env []string
 }
 
 // ShellInfo describes a running shell.
@@ -176,6 +178,7 @@ func (keeper *Keeper) Start(start StartOptions) (ShellInfo, error) {
 	if start.Dir != "" {
 		options.Dir = start.Dir
 	}
+	options.Env = append(slices.Clone(options.Env), start.Env...)
 	session, err := Start(options)
 	if err != nil {
 		return ShellInfo{}, err

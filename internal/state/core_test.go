@@ -77,14 +77,14 @@ func TestContextAndFinalizeRun(t *testing.T) {
 
 func TestResolveProjectNamePrecedence(t *testing.T) {
 	baseDir := t.TempDir()
-	t.Setenv(projectNameEnv, "from-env")
+	t.Setenv(ProjectNameEnv, "from-env")
 	if got, err := ResolveProjectName(baseDir, "from-cli"); err != nil || got != "from-cli" {
 		t.Fatalf("CLI project name = %q, %v", got, err)
 	}
 	if got, err := ResolveProjectName(baseDir, ""); err != nil || got != "from-env" {
 		t.Fatalf("environment project name = %q, %v", got, err)
 	}
-	t.Setenv(projectNameEnv, "")
+	t.Setenv(ProjectNameEnv, "")
 	if err := os.MkdirAll(filepath.Join(baseDir, "projects", "only"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestResolveBaseDirDefaultIgnoresEnvironmentOverride(t *testing.T) {
 	stateHome := t.TempDir()
 	envBase := t.TempDir()
 	t.Setenv(xdgStateHomeEnv, stateHome)
-	t.Setenv(baseDirEnv, envBase)
+	t.Setenv(BaseDirEnv, envBase)
 
 	got, err := ResolveBaseDirDefault()
 	want := filepath.Join(stateHome, "rotari")

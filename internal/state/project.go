@@ -7,7 +7,7 @@ import (
 	"sort"
 )
 
-const projectNameEnv = "ROTARI_PROJECT_NAME"
+const ProjectNameEnv = "ROTARI_PROJECT_NAME"
 
 // DefaultProjectName is the project used when none is given and the base
 // directory does not have exactly one.
@@ -17,7 +17,7 @@ const DefaultProjectName = "default"
 // cliProjectName or ROTARI_PROJECT_NAME, rather than inferred from the base
 // directory.
 func ProjectNameGiven(cliProjectName string) bool {
-	return cliProjectName != "" || os.Getenv(projectNameEnv) != ""
+	return cliProjectName != "" || os.Getenv(ProjectNameEnv) != ""
 }
 
 func ResolveProjectName(baseDir, cliProjectName string) (string, error) {
@@ -27,7 +27,7 @@ func ResolveProjectName(baseDir, cliProjectName string) (string, error) {
 		}
 		return cliProjectName, nil
 	}
-	if value := os.Getenv(projectNameEnv); value != "" {
+	if value := os.Getenv(ProjectNameEnv); value != "" {
 		if !IsValidPathElement(value) {
 			return "", fmt.Errorf("invalid project name %q", value)
 		}

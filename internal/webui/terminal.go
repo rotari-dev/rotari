@@ -282,6 +282,9 @@ func (s site) serveTerminalShells(writer http.ResponseWriter, request *http.Requ
 			return
 		}
 		start := terminal.StartOptions{Rows: rows, Cols: cols, Group: terminalGroup(place), Dir: place.Dir}
+		if place.Project != "" {
+			start.Env = []string{stateinternal.BaseDirEnv + "=" + place.BaseDir, stateinternal.ProjectNameEnv + "=" + place.Project}
+		}
 		if place.note != "" {
 			start.Banner = "rotari: " + place.note + ", so this shell opened in your home directory.\r\n"
 		}

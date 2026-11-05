@@ -550,7 +550,14 @@ func TestTerminalShellsFollowTheirProject(t *testing.T) {
 	if latest.Number != 1 || latest.Project != "p1" || latest.Link != "/project/p1" {
 		t.Errorf("the project's shell: %+v", latest)
 	}
-	inDir(open(latest), second)
+	latestPage := open(latest)
+	inDir(latestPage, second)
+	// Its commands mean its project with no -p, wherever it has moved to.
+	latestPage.typeLine(`echo "project-$ROTARI_PROJECT_NAME"; echo "base-$ROTARI_BASEDIR"`)
+	latestPage.await("project-p1")
+	latestPage.await("base-" + e.Base)
+	latestPage.typeLine(fmt.Sprintf(`cd / && %q show --json >/dev/null && echo "shown-$((1+1))"`, e.Command().Path))
+	latestPage.await("shown-2")
 	ofRun := start("&project=p1&run=" + firstRun)
 	if ofRun.Number != 2 {
 		t.Errorf("the project's second shell: %+v", ofRun)
@@ -560,7 +567,10 @@ func TestTerminalShellsFollowTheirProject(t *testing.T) {
 	if plain.Number != 1 || plain.Project != "" || plain.Link != "/" {
 		t.Errorf("a shell of no project: %+v", plain)
 	}
-	inDir(open(plain), home)
+	plainPage := open(plain)
+	inDir(plainPage, home)
+	plainPage.typeLine(`echo "project-[$ROTARI_PROJECT_NAME]"`)
+	plainPage.await("project-[]")
 
 	// What a page would be told before starting one.
 	got := e.HTTPDo(http.MethodGet, base+"/_terminal/here?project=p1&run="+firstRun, map[string]string{"X-Rotari-Token": launchToken}, "")

@@ -215,7 +215,7 @@ See [plan.md](plan.md) for current scope and status.
 
 ## Change the text size
 
-**Commits:** .
+**Commits:** 2026-11-05 23:42:17 `b68f01f7`.
 
 **Change:** **A-** and **A+** in `web_shell.js`, contract WEB-33, `docs/WEB.md`, and the plan's [Small improvements](plan.md#small-improvements) section.
 

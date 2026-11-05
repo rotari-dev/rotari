@@ -571,7 +571,7 @@ func TestStartPlacesTheShellAndKeepsItsBanner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shell, err := keeper.Start(StartOptions{Rows: 24, Cols: 80, Dir: dir, Banner: "first-word\r\n"})
+	shell, err := keeper.Start(StartOptions{Rows: 24, Cols: 80, Dir: dir, Banner: "first-word\r\n", Env: []string{"ADDED=added", "HOME=/elsewhere"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -581,6 +581,7 @@ func TestStartPlacesTheShellAndKeepsItsBanner(t *testing.T) {
 	seen := watchShell(t, keeper, shell.ID)
 	seen.await(t, "first-word")
 	seen.run(t, `echo "in-$(pwd -P)"`, "in-"+dir)
+	seen.run(t, `echo "env-$ADDED-$HOME"`, "env-added-/elsewhere")
 	seen.Detach()
 	seen.awaitEnd(t, DetachedByCaller)
 	again := watchShell(t, keeper, shell.ID)
