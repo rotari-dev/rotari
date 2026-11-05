@@ -198,3 +198,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The user tried the build and said OK. `go test ./...` passed all 55 packages, and `tsc`, `go vet` on the changed packages, and `gofmt` found nothing. `-race` was not run; the change is CSS and JavaScript. Layout was not checked here without a browser, beyond the CSS rules a test reads, and `TestTerminalPanelInBrowser`'s new fit check was skipped for lack of Chrome.
 
 **Remaining:** That browser test's first run on CI.
+
+## Maximize the panel
+
+**Commits:** 2026-11-05 23:08:14 `62cc45fd`.
+
+**Change:** A **Maximize** button in `web_shell.js`, rules in `web_shell.css`, contract WEB-33, `docs/WEB.md`, and the plan's [Small improvements](plan.md#small-improvements) section.
+
+**Reason:** The second small improvement, for full-screen programs.
+
+**Plan impact:** The panel covers the page rather than changing its height, so the page keeps its layout. Page menus and dialogs are out of reach until **Restore**.
+
+**Validation:** The user tried the build and said OK. `go test ./...` passed all 55 packages, and `tsc`, `go vet` on the changed packages, and `gofmt` found nothing. `-race` was not run; the change is CSS and JavaScript. The new check in `TestTerminalPanelInBrowser` was skipped here for lack of Chrome.
+
+**Remaining:** That browser test on CI.
