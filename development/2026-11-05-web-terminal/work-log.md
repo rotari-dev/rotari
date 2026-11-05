@@ -30,3 +30,17 @@ See [plan.md](plan.md) for current scope and status.
 
 **Remaining:** The WebSocket handler and `--allow-terminal`, then phases 2 and 3; `Close` on macOS.
 
+## Plan a panel beside the jobs
+
+**Commits:** 2026-11-05 15:34:52 `d73f498a`.
+
+**Change:** Rewrote `plan.md` around a bottom panel, a shell kept on the server that pages reattach to, one shell per server with take-over, and a 30-minute limit on an unattended shell.
+
+**Reason:** The user pointed out that a separate tab adds little over a real terminal, so being beside the jobs is the feature. The UI reloads on every link, so a page cannot hold a shell.
+
+**Plan impact:** Replaced decisions on a separate page and on ending with the connection. The estimate rose to eight to twelve days. The user accepted the risk of a shell outliving its connection, as a launched VS Code server does.
+
+**Validation:** Documentation only; no tests run. Relative links were checked to exist.
+
+**Remaining:** Steps 1 to 5 of the plan.
+
