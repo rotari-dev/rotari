@@ -15,7 +15,7 @@ def render(schema: dict[str, Any]) -> str:
     return (
         '"""Generated from `rotari schema --json`; do not edit manually."""\n\n'
         "from __future__ import annotations\n\n"
-        "from typing import Any\n\n\n"
+        "from typing import Any\n\n"
         f"CLI_SCHEMA: dict[str, Any] = {payload}\n"
     )
 
