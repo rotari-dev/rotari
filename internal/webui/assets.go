@@ -145,12 +145,29 @@ func composeWebHTML(executors []string, notifications bool, bootstrap string, ba
 }
 
 func composeWebHTMLWithSession(executors []string, notifications bool, bootstrap, notificationSession string, basedirLists ...[]webBaseDir) string {
-	return composeWebPage("", executors, notifications, bootstrap, notificationSession, basedirLists...)
+	return composeWebPage(livePage{}, executors, notifications, bootstrap, notificationSession, basedirLists...)
 }
 
-// composeWebPage is the application page; nonce is the one its scripts run
-// under, or "" in a static export, which sends no policy.
-func composeWebPage(nonce string, executors []string, notifications bool, bootstrap, notificationSession string, basedirLists ...[]webBaseDir) string {
+// livePage is what only a page from the live server has. Its zero value is a
+// static export's: no response headers to carry a policy, and nothing to connect to.
+type livePage struct {
+	// nonce is the one the page's scripts run under.
+	nonce string
+	// terminal offers the terminal panel.
+	terminal bool
+}
+
+// terminalControl is the top bar's button, whose presence tells web_shell.js the
+// terminal is available.
+func (page livePage) terminalControl() string {
+	if !page.terminal {
+		return ""
+	}
+	return `<button id="terminal-button" type="button" aria-pressed="false" data-action="toggleTerminalPanel">Terminal</button>`
+}
+
+// composeWebPage is the application page.
+func composeWebPage(page livePage, executors []string, notifications bool, bootstrap, notificationSession string, basedirLists ...[]webBaseDir) string {
 	executorJSON, _ := json.Marshal(executors)
 	diagnosisGuidanceJSON, _ := json.Marshal(struct {
 		NoMatchNext     string `json:"noMatchNext"`
@@ -171,7 +188,8 @@ func composeWebPage(nonce string, executors []string, notifications bool, bootst
 	// text of a placeholder stays as written.
 	template := strings.NewReplacer("__ROTARI_SHELL_SCRIPT__", webShellJS, "__ROTARI_WEB_APP__", webAppJS).Replace(webTemplateHTML)
 	return strings.NewReplacer(
-		scriptNoncePlaceholder, scriptNonceAttribute(nonce),
+		scriptNoncePlaceholder, scriptNonceAttribute(page.nonce),
+		"__ROTARI_TERMINAL_CONTROL__", page.terminalControl(),
 		"__ROTARI_BASEDIRS__", string(basedirJSON),
 		"__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllNotificationBasedirs"),
 		"__ROTARI_EXECUTORS__", string(executorJSON),
@@ -227,11 +245,11 @@ func jobsHTML(homePath string, projects []string, rows []joblist.Row, selection 
 // window presets and range bar into .jobs-range, with this basedir's runs
 // from the Activity API behind the bar.
 func jobsHTMLWithSession(homePath string, projects []string, rows []joblist.Row, selection jobsSelection, canFilter, notifications bool, notificationSession string, basedirLists ...[]webBaseDir) string {
-	return jobsPage("", homePath, projects, rows, selection, canFilter, notifications, notificationSession, basedirLists...)
+	return jobsPage(livePage{}, homePath, projects, rows, selection, canFilter, notifications, notificationSession, basedirLists...)
 }
 
-// jobsPage is the Recent jobs page; nonce is as for composeWebPage.
-func jobsPage(nonce, homePath string, projects []string, rows []joblist.Row, selection jobsSelection, canFilter, notifications bool, notificationSession string, basedirLists ...[]webBaseDir) string {
+// jobsPage is the Recent jobs page.
+func jobsPage(page livePage, homePath string, projects []string, rows []joblist.Row, selection jobsSelection, canFilter, notifications bool, notificationSession string, basedirLists ...[]webBaseDir) string {
 	var builder strings.Builder
 	if canFilter {
 		basedirID := ""
@@ -285,7 +303,8 @@ func jobsPage(nonce, homePath string, projects []string, rows []joblist.Row, sel
 	}
 	crumbs.WriteString(`<span class="crumb-here">Recent jobs</span>`)
 	values := []string{
-		scriptNoncePlaceholder, scriptNonceAttribute(nonce),
+		scriptNoncePlaceholder, scriptNonceAttribute(page.nonce),
+		"__ROTARI_TERMINAL_CONTROL__", page.terminalControl(),
 		"__ROTARI_JOBS_PROJECTS__", sidebar.String(),
 		"__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllJobsNotificationBasedirs"),
 		"__ROTARI_BASEDIR_SCROLL_KEY__", scrollKey,

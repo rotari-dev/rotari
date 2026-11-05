@@ -78,6 +78,7 @@
     toggleReportSource: () => toggleReportSource(),
     toggleRunNotifications: () => toggleRunNotifications(),
     toggleSettingsMenu: () => toggleSettingsMenu(),
+    toggleTerminalPanel: () => toggleTerminalPanel(),
     toggleSidebarAllProjects: (el) => toggleSidebarAllProjects(el),
     toggleSidebarBasedir: (el) => toggleSidebarBasedir(el),
     toggleSidebarProject: (el) => toggleSidebarProject(el),
@@ -115,6 +116,177 @@
       true,
     );
   }
+})();
+
+// The terminal panel along the bottom of the page. The shell lives on the server,
+// and every page load attaches to it again and replays recent output, so following
+// a link does not end it. Nothing loads until the panel first opens; a page without
+// the top bar's Terminal button has no terminal to offer.
+(() => {
+  const openKey = "rotari-terminal-open";
+  const closeTakenOver = 4001;
+  const closeExited = 4002;
+  const closeFailed = 4000;
+  const scriptNonce = document.currentScript?.nonce || "";
+  let panel, status, retry, viewport, term, fit, socket, retryTimer;
+  let retryDelay = 1000;
+
+  const remember = (open) => {
+    try {
+      localStorage.setItem(openKey, open ? "1" : "0");
+    } catch {}
+  };
+  const remembered = () => {
+    try {
+      return localStorage.getItem(openKey) === "1";
+    } catch {
+      return false;
+    }
+  };
+  const loadScript = (src) =>
+    new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.nonce = scriptNonce;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("cannot load " + src));
+      document.head.append(script);
+    });
+  let loaded;
+  const loadAssets = () => {
+    if (loaded) return loaded;
+    const style = document.createElement("link");
+    style.rel = "stylesheet";
+    style.href = "/_terminal/xterm.css";
+    document.head.append(style);
+    loaded = (async () => {
+      if (!window.Terminal) await loadScript("/_terminal/xterm.js");
+      if (!window.FitAddon) await loadScript("/_terminal/xterm-addon-fit.js");
+    })();
+    return loaded;
+  };
+  const showStatus = (message, action) => {
+    status.textContent = message;
+    status.hidden = !message;
+    retry.textContent = action || "";
+    retry.hidden = !action;
+  };
+  const send = (data) => {
+    if (socket?.readyState === WebSocket.OPEN) socket.send(data);
+  };
+  const connect = () => {
+    clearTimeout(retryTimer);
+    showStatus("");
+    // Replay brings the screen back, so what is here would appear twice.
+    term.reset();
+    const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+    const current = new WebSocket(
+      scheme + "//" + location.host + "/_terminal/ws?rows=" + term.rows + "&cols=" + term.cols,
+    );
+    socket = current;
+    current.binaryType = "arraybuffer";
+    current.onopen = () => {
+      retryDelay = 1000;
+    };
+    current.onmessage = (event) => {
+      term.write(new Uint8Array(event.data));
+    };
+    current.onclose = (event) => {
+      if (socket !== current) return;
+      socket = null;
+      if (event.code === closeTakenOver) {
+        showStatus("Another tab has this terminal.", "Use it here");
+      } else if (event.code === closeExited) {
+        showStatus("The shell ended: " + event.reason + ".", "New shell");
+      } else if (event.code === closeFailed) {
+        showStatus("The shell did not start: " + event.reason, "Try again");
+      } else {
+        showStatus("Reconnecting...");
+        retryTimer = setTimeout(connect, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 10000);
+      }
+    };
+  };
+  const build = () => {
+    panel = document.createElement("section");
+    panel.id = "terminal-panel";
+    panel.setAttribute("aria-label", "Terminal");
+    const bar = document.createElement("div");
+    bar.className = "terminal-bar";
+    status = document.createElement("span");
+    status.className = "terminal-status";
+    status.setAttribute("role", "status");
+    status.hidden = true;
+    retry = document.createElement("button");
+    retry.type = "button";
+    retry.hidden = true;
+    retry.onclick = connect;
+    const spacer = document.createElement("span");
+    spacer.className = "terminal-spacer";
+    const end = document.createElement("button");
+    end.type = "button";
+    end.textContent = "End shell";
+    end.onclick = () => {
+      if (confirm("End the shell, and anything running in it?"))
+        send(JSON.stringify({ type: "end" }));
+    };
+    const hide = document.createElement("button");
+    hide.type = "button";
+    hide.textContent = "Hide";
+    hide.onclick = () => window.toggleTerminalPanel();
+    bar.append(status, retry, spacer, end, hide);
+    viewport = document.createElement("div");
+    viewport.className = "terminal-viewport";
+    panel.append(bar, viewport);
+    document.body.append(panel);
+  };
+  const start = async () => {
+    build();
+    try {
+      await loadAssets();
+    } catch (error) {
+      showStatus(error.message);
+      return;
+    }
+    term = new window.Terminal({ cursorBlink: true });
+    fit = new window.FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open(viewport);
+    fit.fit();
+    term.onData((data) => send(new TextEncoder().encode(data)));
+    term.onBinary((data) =>
+      send(Uint8Array.from(data, (character) => character.charCodeAt(0))),
+    );
+    term.onResize(({ rows, cols }) =>
+      send(JSON.stringify({ type: "resize", rows, cols })),
+    );
+    new ResizeObserver(() => {
+      if (!panel.hidden) fit.fit();
+    }).observe(viewport);
+    connect();
+    term.focus();
+  };
+  const setOpen = (open) => {
+    document.documentElement.classList.toggle("terminal-open", open);
+    document
+      .getElementById("terminal-button")
+      ?.setAttribute("aria-pressed", String(open));
+    remember(open);
+    if (!panel) {
+      if (open) start();
+      return;
+    }
+    panel.hidden = !open;
+    if (open && term) {
+      fit.fit();
+      term.focus();
+    }
+  };
+  window.toggleTerminalPanel = () =>
+    setOpen(!document.documentElement.classList.contains("terminal-open"));
+  document.addEventListener("DOMContentLoaded", () => {
+    if (document.getElementById("terminal-button") && remembered()) setOpen(true);
+  });
 })();
 
 // The page frame shared by the application and Recent jobs pages, inlined

@@ -335,7 +335,7 @@ func (s site) baseHandler() http.Handler {
 		_ = s.reloadBaseDirs()
 		nonce := setPagePolicy(writer)
 		writer.Header().Set(headerContentType, "text/html; charset=utf-8")
-		_, _ = writer.Write([]byte(s.webPage(nonce, "")))
+		_, _ = writer.Write([]byte(s.webPage(livePage{nonce: nonce, terminal: s.Terminal != nil}, "")))
 	})
 	mux.HandleFunc("/fonts/", serveWebFont)
 	mux.HandleFunc("/web_fonts.css", func(writer http.ResponseWriter, request *http.Request) {
@@ -387,7 +387,7 @@ func (s site) baseHandler() http.Handler {
 		_ = s.reloadBaseDirs()
 		nonce := setPagePolicy(writer)
 		writer.Header().Set(headerContentType, "text/html; charset=utf-8")
-		_, _ = writer.Write([]byte(jobsPage(nonce, s.currentBasePrefix()+"/", projects, rows, selection, true, s.Notifications, s.notificationSession, s.basedirEntries())))
+		_, _ = writer.Write([]byte(jobsPage(livePage{nonce: nonce, terminal: s.Terminal != nil}, s.currentBasePrefix()+"/", projects, rows, selection, true, s.Notifications, s.notificationSession, s.basedirEntries())))
 	})
 	mux.HandleFunc("/jobs", func(writer http.ResponseWriter, request *http.Request) {
 		http.Redirect(writer, request, s.currentBasePrefix()+"/jobs/", http.StatusMovedPermanently)
@@ -2114,10 +2114,10 @@ func (s site) webHTML() string {
 }
 
 func (s site) webHTMLWithStaticBootstrap(bootstrap string) string {
-	return s.webPage("", bootstrap)
+	return s.webPage(livePage{}, bootstrap)
 }
 
-func (s site) webPage(nonce, bootstrap string) string {
+func (s site) webPage(page livePage, bootstrap string) string {
 	basedirs := s.basedirEntries()
 	if bootstrap != "" {
 		for _, entry := range basedirs {
@@ -2127,7 +2127,7 @@ func (s site) webPage(nonce, bootstrap string) string {
 			}
 		}
 	}
-	html := composeWebPage(nonce, s.Executors, s.Notifications, bootstrap, s.notificationSession, basedirs)
+	html := composeWebPage(page, s.Executors, s.Notifications, bootstrap, s.notificationSession, basedirs)
 	logout := ""
 	if s.AuthEnabled {
 		logout = `<form method="post" action="/_auth/logout"><button type="submit">Sign out</button></form>`

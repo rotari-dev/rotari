@@ -1366,6 +1366,12 @@ and `TestLoadJobsShowsRunningAttemptID` in
 
 ## Generated Web pages
 
+**WEB-33** `rotari web --allow-terminal` adds a Terminal button to the top bar of the
+application and Recent jobs pages, which opens a panel along the bottom. The shell lives on
+the server and each page load attaches to it again and replays recent output, so following
+a link does not end it. xterm.js loads when the panel first opens, under the page's nonce.
+`TestTerminalPanelInBrowser` checks this in headless Chrome.
+
 **WEB-29** Live application, Recent jobs, and Table viewer pages send a
 `Content-Security-Policy` (`pagePolicy` in `internal/webui/page_policy.go`). Only
 scripts with that response's nonce run, requests stay on the same origin, and

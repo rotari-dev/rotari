@@ -81,7 +81,7 @@ main {
   width: 260px;
   min-width: 190px;
   max-width: 520px;
-  height: 100vh;
+  height: calc(100vh - var(--terminal-height, 0px));
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -711,4 +711,44 @@ main {
     right: 1rem;
     width: auto;
   }
+}
+
+/* The terminal panel along the bottom of the page; web_shell.js adds it. The page
+   keeps clear of it, so nothing it shows ends up underneath. */
+html.terminal-open {
+  --terminal-height: 320px;
+}
+html.terminal-open body {
+  padding-bottom: var(--terminal-height);
+}
+#terminal-panel {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  height: var(--terminal-height);
+  border-top: 1px solid var(--line-soft);
+  background: var(--bg);
+}
+#terminal-panel[hidden] {
+  display: none;
+}
+.terminal-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--bg);
+}
+.terminal-spacer {
+  flex: 1;
+}
+.terminal-viewport {
+  flex: 1;
+  min-height: 0;
+  padding: 4px;
 }

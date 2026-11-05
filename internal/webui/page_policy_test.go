@@ -83,8 +83,8 @@ func TestPagesApplyScriptNonceInOnePass(t *testing.T) {
 	const want = ` nonce="` + nonce + `"`
 	basedirs := []webBaseDir{newWebBaseDir("id", "/state/"+scriptNoncePlaceholder, true)}
 	pages := map[string]string{
-		"main":         composeWebPage(nonce, nil, false, "", "", basedirs),
-		"recent jobs":  jobsPage(nonce, "/", []string{scriptNoncePlaceholder}, nil, jobsSelection{}, true, false, ""),
+		"main":         composeWebPage(livePage{nonce: nonce}, nil, false, "", "", basedirs),
+		"recent jobs":  jobsPage(livePage{nonce: nonce}, "/", []string{scriptNoncePlaceholder}, nil, jobsSelection{}, true, false, ""),
 		"Table viewer": tableViewPage(nil, "", nonce),
 	}
 	for name, page := range pages {

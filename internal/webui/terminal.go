@@ -2,6 +2,7 @@ package webui
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -18,6 +19,27 @@ import (
 const terminalPrefix = "/_terminal/"
 
 const terminalSocketPath = terminalPrefix + "ws"
+
+//go:embed assets/vendor/xterm.js
+var xtermJS string
+
+//go:embed assets/vendor/xterm-addon-fit.js
+var xtermFitJS string
+
+//go:embed assets/vendor/xterm.css
+var xtermCSS string
+
+//go:embed assets/vendor/xterm-license.txt
+var xtermLicense string
+
+// terminalAssets are the files the panel loads when it first opens, so that pages
+// stay as light as they are for those who never open it.
+var terminalAssets = map[string]struct{ contentType, content string }{
+	terminalPrefix + "xterm.js":           {"text/javascript; charset=utf-8", xtermJS},
+	terminalPrefix + "xterm-addon-fit.js": {"text/javascript; charset=utf-8", xtermFitJS},
+	terminalPrefix + "xterm.css":          {"text/css; charset=utf-8", xtermCSS},
+	terminalPrefix + "xterm-license.txt":  {"text/plain; charset=utf-8", xtermLicense},
+}
 
 // Close codes the page tells apart. Private codes start at 4000.
 const (
@@ -48,7 +70,16 @@ type terminalControl struct {
 }
 
 func (s site) serveTerminal(writer http.ResponseWriter, request *http.Request) {
-	if s.Terminal == nil || request.URL.Path != terminalSocketPath {
+	if s.Terminal == nil {
+		http.NotFound(writer, request)
+		return
+	}
+	if asset, ok := terminalAssets[request.URL.Path]; ok {
+		writer.Header().Set(headerContentType, asset.contentType)
+		_, _ = writer.Write([]byte(asset.content))
+		return
+	}
+	if request.URL.Path != terminalSocketPath {
 		http.NotFound(writer, request)
 		return
 	}

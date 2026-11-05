@@ -213,6 +213,9 @@ In Chrome, extending the browser checks of WEB-28 and WEB-29: the panel opens wi
 violation, a typed command's output appears, following a link keeps the shell and its output,
 and xterm.js has not loaded before the panel opens.
 
+The user tried the plain panel by hand in a browser on Linux, on 2026-11-05: the shell, `vim`
+kept open across a link, Japanese input, and copy and paste all worked.
+
 By hand, since CI has neither: macOS, including that `Close` hangs up at once, and an HTTPS
 reverse proxy. Also Japanese input and wide characters, copy and paste, `vim`, `less`, `top`,
 reattaching while each runs, and `rotari run` with Ctrl-C and Ctrl-D. Safari's handling of
