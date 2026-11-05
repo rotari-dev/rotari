@@ -310,3 +310,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The user said OK. `go test ./...` passed all 55 packages, `go vet ./...`, `tsc`, and `gofmt` found nothing, and `-race` passed on `internal/terminal` and the terminal tests of `internal/webui` and `conformance/05-web`. Dragging was tested by dispatching events in jsdom with stand-ins for xterm.js.
 
 **Remaining:** None.
+
+## Flags for the limits
+
+**Commits:** 2026-11-06 01:27:30 `9906ae91`.
+
+**Change:** Five `--terminal-*` flags on `rotari web`, read in `cmd/rotari/web.go` and checked in `cmd/rotari/web_terminal.go`. The CLI schema, its golden file, the Python client's generated CLI, `docs/CLI_REFERENCE.md`, the flag pair samples and inventory, contract WEB-34, `docs/WEB.md`, `docs/SECURITY.md`, and the plan's [Flags](plan.md#flags) section.
+
+**Reason:** The user asked to change the idle time and tab limits by argument, and chose the other two from the list offered. They did not want an unlimited timeout.
+
+**Plan impact:** The provisional limits are now defaults. The flags are command-line only, which departs from what the user was first told about environment variables, because the existing helpers ignore bad values there.
+
+**Validation:** The user said OK. `go test ./...` passed all 55 packages, `go vet ./...` and `gofmt` found nothing, the generators' `--check` modes passed, and `-race` passed on the new unit tests and the terminal tests of `conformance/05-web`. `TestTerminalFollowsItsFlags` runs the limits, the replay size, and the shell through the binary. An idle timeout was accepted there but not waited out; the expiry is tested in `internal/terminal`.
+
+**Remaining:** None.
