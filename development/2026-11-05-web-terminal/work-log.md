@@ -170,3 +170,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The user answered "ok" to integrating it after being given the build. `go test ./...` passed all 55 packages, and `tsc` and `gofmt` found nothing. `-race` was not run for this change, which is mostly JavaScript. `TestTerminalPanelInBrowser` was skipped here for lack of Chrome, so the real xterm.js has not run this, and it uses stand-ins in `TestTerminalPanel`.
 
 **Remaining:** The browser test's first run on CI.
+
+## Clear the terminal
+
+**Commits:** 2026-11-05 21:47:13 `c26b20ac`.
+
+**Change:** `Attachment.ClearOutput`, a `clear` control message, and a **Clear** button in `web_shell.js`. Contract WEB-34, `docs/WEB.md`, and the plan's [Small improvements](plan.md#small-improvements) section.
+
+**Reason:** The first of the small improvements the user is deciding one at a time.
+
+**Plan impact:** The user tried a first version and found it blanked `vim`. They chose to do nothing on the alternate screen, with a message, from the options offered.
+
+**Validation:** `go test ./...` passed all 55 packages, and `tsc`, `go vet` on the changed packages, and `gofmt` found nothing. `-race` passed on the terminal tests before the alternate-screen change, which is JavaScript only. Removing the server's clear failed `TestTerminalShellOutlivesItsConnections`. The alternate-screen check ran against a stand-in, and the user has not tried that version in a browser.
+
+**Remaining:** Trying Clear with `vim` open in a browser.
