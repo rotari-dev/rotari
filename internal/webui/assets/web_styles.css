@@ -79,6 +79,15 @@
   opacity: 1;
   transform: translateX(0);
 }
+.command-guide-send {
+  right: 48px;
+}
+.command-guide:has(.command-guide-send) {
+  padding-right: 96px;
+}
+.command-guide:has(.command-guide-send) .command-guide-copied {
+  right: 88px;
+}
 .command-guide-copy svg {
   display: block;
   width: 100%;

@@ -93,6 +93,17 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   if (await page.evaluate('document.querySelectorAll(".terminal-tab").length !== 0')) throw new Error('another page\'s tabs showed on the project page');
   await page.evaluate('document.querySelector(".terminal-action").click()');
   await until('the project\'s shell', 'document.querySelectorAll(".terminal-tab").length === 1 && document.querySelectorAll(".terminal-groups option").length === 2');
+  await until('the project\'s shell to settle', settled);
+  await collect();
+
+  // A command from the page is typed and waits for Enter.
+  const problem = await page.evaluate('window.sendToTerminal(\'echo "sent-$((1+1))"\').then((value) => value || "")', { awaitPromise: true });
+  if (problem) throw new Error('sending a command: ' + problem);
+  await until('the sent command on screen', screenHas('sent-$((1+1))'));
+  await sleep(300);
+  if (await page.evaluate(screenHas('sent-2'))) throw new Error('a sent command ran without Enter');
+  await typeLine('');
+  await until('the sent command to run', screenHas('sent-2'));
   await collect();
 }).catch((error) => { failure = error.stack || String(error); });
 await close();

@@ -752,6 +752,23 @@ html.terminal-open .output-modal {
 #terminal-panel.terminal-empty .xterm {
   visibility: hidden;
 }
+/* What a send button did, which outlives the page redrawing the button. */
+.terminal-send-note {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--terminal-height, 0px) + 12px);
+  z-index: 20;
+  max-width: min(420px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 12px;
+}
+.terminal-send-note[hidden] {
+  display: none;
+}
 .terminal-resizer {
   flex: none;
   height: 5px;

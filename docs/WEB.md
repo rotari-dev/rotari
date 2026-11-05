@@ -116,6 +116,13 @@ such as Recent jobs, show the shells of no project.
 If the directory is gone or the project has no run, the shell opens in your home directory and its
 first line says why. A shell that has started stays where it is when newer runs start.
 
+Copy buttons have a send button beside them that types the same thing into the tab being shown, without
+running it: press Enter in the terminal to run it. A suggested command, such as how to run the queue,
+goes in as one line with its comments and alternatives left out. A value such as a run ID or a path
+goes in as one word, quoted if it needs to be, so it can finish a command you have started typing. It
+goes to whatever is running there, such as `vim`. If the project has no shell, the button says so and
+starts none. Logs and other text of several lines have only **Copy**.
+
 Opening the panel starts a shell if the project has none. Following a link to another project with
 the panel open starts nothing, so browsing leaves no shells behind; the panel offers to start one.
 

@@ -1406,7 +1406,11 @@ nothing, and offers to, so browsing leaves no shells behind. Shells live on the 
 lists them and attaches to the one this browser tab last showed for the project, or the first,
 replaying recent output, so following a link ends none of them. Only the tab shown is connected. A
 shell ending moves to a neighboring tab of the project without taking it from another browser tab;
-when the project's last one ends, the panel says how and a new shell is a choice. The panel's requests
+when the project's last one ends, the panel says how and a new shell is a choice. Each one-line copy
+button has a send button beside it that types into the shown shell with no Enter, opening the panel if
+needed: a suggested command as its commands on one line, a job's command as it is, and any other value as
+one word, quoted if needed. It starts no shell, takes none from another browser tab, and refuses text with
+control characters, saying why in each case; a page with no terminal has no such button. The panel's requests
 go to the server's root on a page under a basedir's mount too.
 xterm.js loads when the panel first opens, under the page's nonce. A browser tab that is not visible
 neither connects nor retries, and a page whose sign-in has gone stops retrying and says so

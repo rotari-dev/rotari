@@ -797,13 +797,16 @@ function failureCausesSection(run, runID, latest) {
     item.append(members);
     if (latest && !run.running) {
       const command = document.createElement("div");
+      const goToRun = run.cwd && run.cwd !== "-" ? ["cd " + shellQuote(run.cwd)] : [];
+      const retry =
+        "rotari retry -r " +
+        shellQuote(runID) +
+        " --filter-failure-cause " +
+        shellQuote(group.cause) +
+        " --dry-run";
       command.innerHTML = commandGuideHTML(
-        (run.cwd && run.cwd !== "-" ? "cd " + shellQuote(run.cwd) + "\n" : "") +
-          "rotari retry -r " +
-          shellQuote(runID) +
-          " --filter-failure-cause " +
-          shellQuote(group.cause) +
-          " --dry-run",
+        (goToRun.length ? goToRun[0] + "\n" : "") + retry,
+        [...goToRun, retry],
       );
       item.append(...command.childNodes);
     }

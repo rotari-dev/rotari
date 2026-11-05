@@ -14,6 +14,7 @@
     closeOutputModal: () => closeOutputModal(),
     controlSelectedRunJobs: (_, args) => controlSelectedRunJobs(...args),
     copyCommandGuide: (el) => copyCommandGuide(el.closest("pre"), el),
+    sendToTerminal: (el) => sendButtonPressed(el),
     copyIdentityValue: (el) => copyIdentityValue(el),
     copyJobsValue: (el) => copyJobsValue(el),
     copyLogTail: (el) => copyLogTail(el),
@@ -181,6 +182,7 @@
   let groupsDrawn = "";
   let startAsked = false; // Someone opened the panel: start a shell if there is none.
   let newAsked = false; // Someone asked for a new shell here.
+  let pendingSend = null; // A command waiting for this page to connect to a shell.
   let shown = null; // The ID of the shell this page shows.
   let listSerial = 0;
   let retryDelay = 1000;
@@ -333,7 +335,7 @@
     const response = await serverFetch("/_terminal/here?" + pagePlace());
     if (!response.ok) return response;
     here = await response.json();
-    add.title = "New shell in " + here.dir;
+    if (add) add.title = "New shell in " + here.dir;
     return null;
   };
   // The projects with shells, this page's first. Choosing one goes to its page, so that
@@ -423,7 +425,7 @@
       shells = listed.shells;
       shellLimit = listed.limit;
       groupLimit = listed.group_limit;
-      renderTabs();
+      if (panel) renderTabs();
     }
     return { ok: true };
   };
@@ -453,11 +455,17 @@
     };
     current.onmessage = (event) => {
       showStatus("");
-      term.write(new Uint8Array(event.data));
+      // After the replay, so that it lands at the end of what is on screen.
+      term.write(new Uint8Array(event.data), pendingSend ? deliverSend : undefined);
     };
     current.onclose = (event) => {
       if (socket !== current) return;
       socket = null;
+      settleSend(
+        event.code === closeTakenOver
+          ? "Another browser tab is using this shell, so nothing was sent."
+          : "The terminal lost its connection, so nothing was sent.",
+      );
       if (event.code === closeTakenOver) {
         showStatus("Another tab has this terminal.", "Use it here", () => connect());
       } else if (event.code === closeExited) {
@@ -528,12 +536,33 @@
     // The shown shell's connection closes, which moves on to another.
     if (shell.id !== shown) await refreshShells();
   };
+  const noShellMessage = () =>
+    (here.project ? "No shell for " + here.project + "." : "No shell here.") +
+    " Open the terminal to start one.";
+  const settleSend = (problem) => {
+    if (!pendingSend) return;
+    const { resolve, timer } = pendingSend;
+    clearTimeout(timer);
+    pendingSend = null;
+    resolve(problem);
+  };
+  const deliverSend = () => {
+    if (!pendingSend) return;
+    term.paste(pendingSend.text);
+    term.focus();
+    settleSend(null);
+  };
   // begin shows what this browser tab last showed for this project, or the project's
   // first shell. It starts one only if someone asked.
   const begin = async (takeOver = true) => {
     whenVisible = null;
     showStatus("Connecting...");
-    const listFailed = (response) => refusal(response, "The shells could not be listed", () => begin());
+    // Someone sending a command has not asked to take a shell from another browser tab.
+    if (pendingSend) takeOver = false;
+    const listFailed = (response) => {
+      settleSend("The shells could not be listed, so nothing was sent.");
+      return refusal(response, "The shells could not be listed", () => begin());
+    };
     let refused;
     try {
       refused = await refreshHere();
@@ -563,6 +592,7 @@
     if (shell) show(shell.id, takeOver);
     else if (mayStart) await newShell();
     else {
+      settleSend(noShellMessage());
       renderTabs();
       panel.classList.add("terminal-empty");
       showStatus(
@@ -654,6 +684,7 @@
       await loadAssets();
     } catch (error) {
       showStatus(error.message);
+      settleSend(error.message);
       return;
     }
     term = new window.Terminal({
@@ -710,6 +741,7 @@
         start().catch((error) => {
           console.error(error);
           showStatus("The terminal could not start: " + error.message);
+          settleSend("The terminal could not start: " + error.message);
         });
       return;
     }
@@ -737,6 +769,92 @@
   addEventListener("resize", () => {
     if (savedHeight()) applyHeight(savedHeight());
   });
+  // sendToTerminal types a command into this project's shown shell, without running it,
+  // and returns what stopped it, if anything. It starts no shell and takes none from
+  // another browser tab: having a command to hand is no reason for either.
+  window.sendToTerminal = async (text) => {
+    // A line break would run what came before it, and other control characters, from a
+    // value in the state, could do anything a keyboard can.
+    if (!text || /[\u0000-\u001f\u007f-\u009f]/.test(text))
+      return "This command has control characters, so it was not sent.";
+    if (pendingSend) return "The terminal is still connecting.";
+    let refused, listed;
+    try {
+      refused = await refreshHere();
+      listed = refused ? null : await refreshShells();
+    } catch {}
+    if (!listed?.ok) {
+      const response = refused || listed?.response;
+      return response?.status === 401 || response?.status === 403
+        ? "Sign in again to use the terminal."
+        : "The server did not answer, so nothing was sent.";
+    }
+    const inGroup = shellsHere();
+    if (!inGroup.length) return noShellMessage();
+    const showing = term && inGroup.some((shell) => shell.id === shown);
+    if (showing && !socket) {
+      setOpen(true);
+      return "This page is not connected to the shell, so nothing was sent.";
+    }
+    if (showing && socket.readyState === WebSocket.OPEN) {
+      setOpen(true);
+      term.paste(text);
+      term.focus();
+      return null;
+    }
+    const waiting = new Promise((resolve) => {
+      pendingSend = {
+        text,
+        resolve,
+        timer: setTimeout(() => settleSend("The terminal did not connect, so nothing was sent."), 15000),
+      };
+    });
+    setOpen(true);
+    // A panel already showing nothing has no shell to wait for until it looks again.
+    if (term && !showing) begin();
+    return waiting;
+  };
+  // A value goes in as one word of a command, so one that needs quoting gets it.
+  const asWord = (value) =>
+    /^[A-Za-z0-9_\/.:=@%+,-]+$/.test(value) ? value : "'" + value.replace(/'/g, "'\\''") + "'";
+  let sendNote, sendNoteTimer;
+  window.sendButtonPressed = async (button) => {
+    const { sendText, sendValue } = button.dataset;
+    const problem = await window.sendToTerminal(sendText ?? asWord(sendValue || ""));
+    if (!sendNote) {
+      sendNote = document.createElement("div");
+      sendNote.className = "terminal-send-note";
+      sendNote.setAttribute("role", "status");
+      document.body.append(sendNote);
+    }
+    sendNote.textContent = problem || "Sent. Nothing runs until you press Enter in the terminal.";
+    sendNote.hidden = false;
+    clearTimeout(sendNoteTimer);
+    sendNoteTimer = setTimeout(() => (sendNote.hidden = true), problem ? 6000 : 2500);
+  };
+  // The Recent jobs page is drawn on the server, which leaves its copy buttons plain.
+  const addJobsSendButtons = () => {
+    for (const copy of document.querySelectorAll(".jobs-copy")) {
+      const send = copy.cloneNode(true);
+      const label = (copy.getAttribute("aria-label") || "").replace(/^Copy /, "");
+      send.classList.add("terminal-send");
+      send.title = "Send " + label + " to the terminal";
+      send.setAttribute("aria-label", send.title);
+      // A command is already a command, and anything else is one word of one.
+      if (label === "command") send.dataset.sendText = copy.dataset.copyValue;
+      else send.dataset.sendValue = copy.dataset.copyValue;
+      delete send.dataset.copyValue;
+      send.dataset.action = "sendToTerminal";
+      const icon = send.querySelector("svg");
+      icon.replaceChildren();
+      for (const shape of ["M4 12h15", "m13 6 6 6-6 6"]) {
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", shape);
+        icon.append(path);
+      }
+      copy.after(send);
+    }
+  };
   const sayAlive = async () => {
     try {
       await serverFetch("/_terminal/alive", { method: "POST" });
@@ -745,6 +863,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     const offered = document.getElementById("terminal-button");
     if (offered) {
+      addJobsSendButtons();
       sayAlive();
       setInterval(sayAlive, aliveInterval);
     }

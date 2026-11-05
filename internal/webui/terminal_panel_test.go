@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/rotari-dev/rotari/internal/joblist"
 )
 
 // The panel's own logic, with stand-ins for xterm.js and the socket. That it works
@@ -24,6 +26,11 @@ func TestTerminalPanel(t *testing.T) {
 	if err := os.WriteFile(without, []byte(composeWebPage(livePage{nonce: "page-nonce"}, nil, false, "", "")), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	jobsWithTerminal := filepath.Join(dir, "jobs.html")
+	jobRows := []joblist.Row{{State: "success", Project: "p", RunID: "r", JobName: "decode", Command: "sh -c echo…", FullCommand: "sh -c 'echo hi'", AttemptID: "attempt-1"}}
+	if err := os.WriteFile(jobsWithTerminal, []byte(jobsPage(livePage{nonce: "page-nonce", terminal: true}, "/", nil, jobRows, jobsSelection{}, true, false, "")), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	script := `
 const fs = require('fs');
 const assert = require('node:assert/strict');
@@ -34,7 +41,7 @@ const home = '/home/u';
 const plain = (id, number) => ({ id, number, basedir: '', project: '', dir: home, link: '/' });
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
 const load = (file, { stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', limit = 8, path = '/' } = {}) => {
-  const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [];
+  const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [];
   const server = { shells: [...shells], lastID: 100, limit, startError: '' };
   const fakeShells = (url, method) => {
     requests.push(method + ' ' + url);
@@ -99,7 +106,8 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
         loadAddon() {} open() {} focus() {}
         reset() { written.length = 0; }
-        write(data) { written.push(Buffer.from(data).toString()); }
+        write(data, done) { written.push(Buffer.from(data).toString()); done?.(); }
+        paste(text) { pasted.push(text); }
         onData(callback) { this.data = callback; }
         onBinary() {}
         onResize(callback) { this.resize = callback; }
@@ -107,7 +115,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
       window.FitAddon = { FitAddon: class { fit() {} } };
     },
   });
-  return { dom, window: dom.window, document: dom.window.document, sockets, written, terminals, requests, polls, server, alive, aliveTimers };
+  return { dom, window: dom.window, document: dom.window.document, sockets, written, terminals, requests, polls, server, alive, aliveTimers, pasted };
 };
 (async () => {
   // Any open page says so, with its panel closed and in the background too, and a page
@@ -482,6 +490,126 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   // A page with no terminal, such as a static export, has no such button.
   assert.equal(off.window.terminalHereIcon(), '');
 
+  // A guide's send button types into the project's shown shell, as one line and with no
+  // Enter. With no shell it says so, and starts none.
+  const output = (page, socket) => page.sockets[socket].onmessage({ data: new TextEncoder().encode('prompt').buffer });
+  const runState = (cwd) => ({ project_name: 'p1', queue: { commands: [] }, runs: [
+    { run_id: 'new', status: 'failed', lifecycle: 'finished', started_at: '2026-10-11 05:52:22', jobs: [] },
+    { run_id: 'old', status: 'failed', lifecycle: 'finished', started_at: '2026-10-10 05:52:22', cwd, jobs: [] },
+  ] });
+  const sending = load(process.argv[1], { path: '/project/p1/run/old', stored: '1', shells: mixed() });
+  await wait(50);
+  sending.window.eval("state = { base_dir: '/b', projects: [] }");
+  sending.window.renderRun(runState('/w/o d'), 'old');
+  const guide = sending.document.querySelector('#app .execution-guide');
+  assert.equal(guide.querySelector('.command-guide-send').dataset.sendText, "cd '/w/o d' && rotari retry -r 'old'", 'the guide sends more than its one command');
+  assert.match(guide.dataset.copyText, /JOB_ID/, 'the copied text lost its alternative');
+  assert.equal(sending.sockets.length, 1);
+  guide.querySelector('.command-guide-send').click();
+  await wait(30);
+  assert.deepEqual(sending.pasted, ["cd '/w/o d' && rotari retry -r 'old'"]);
+  const note = (page) => page.document.querySelector('.terminal-send-note');
+  assert.match(note(sending).textContent, /press Enter/);
+  assert.equal(note(sending).hidden, false);
+  assert.equal(sending.sockets[0].sent.some((data) => String(data).includes('\n')), false);
+  const copyOnly = load(process.argv[2]);
+  await wait(30);
+  copyOnly.window.eval("state = { base_dir: '/b', projects: [] }");
+  copyOnly.window.renderRun(runState('/w'), 'old');
+  assert.equal(copyOnly.window.copyIconForValue('v', 'x').includes('terminal-send'), false, 'a value offered to send with no terminal');
+  assert.equal(copyOnly.window.copyButtonHTML('v', 'x').includes('terminal-send'), false);
+  assert.equal(copyOnly.document.querySelector('#app .command-guide-send'), null, 'a page with no terminal offers to send');
+  assert.notEqual(copyOnly.document.querySelector('#app .command-guide-copy'), null);
+
+  // Every one-line copy button has one beside it, which sends the value as one word.
+  const press = async (page, html) => {
+    const holder = page.document.createElement('div');
+    holder.innerHTML = html;
+    page.document.body.append(holder);
+    holder.querySelector('.terminal-send').click();
+    await wait(20);
+    return page.pasted.at(-1);
+  };
+  assert.equal(await press(sending, sending.window.copyIconForValue('run-1', 'run ID')), 'run-1');
+  assert.equal(await press(sending, sending.window.copyButtonHTML("sh -c 'echo hi'", 'command')), "sh -c 'echo hi'", 'a command was quoted as a word');
+  assert.equal(await press(sending, sending.window.copyButtonHTML('/w/o d', 'path')), "'/w/o d'");
+  assert.equal(await press(sending, sending.window.copyIconForValue("it's", 'name')), "'it'\\''s'");
+  assert.equal(await press(sending, sending.window.copyIconForValue('a;rm -rf "$HOME"<b>', 'name')), "'a;rm -rf \"$HOME\"<b>'");
+  const shown = sending.document.querySelector('.terminal-send-note');
+  await press(sending, sending.window.copyIconForValue('two\nlines', 'name'));
+  assert.match(shown.textContent, /control characters/);
+  assert.equal(sending.pasted.at(-1).includes('lines'), false, 'a line break reached the terminal');
+  // The Recent jobs page draws its buttons on the server, and gets the same ones.
+  const jobsFile = process.argv[4];
+  const jobs = load(jobsFile, { path: '/jobs/', stored: '1', shells: [plain('1', 1)] });
+  await wait(50);
+  const jobsSend = jobs.document.querySelector('.jobs-copy.terminal-send');
+  assert.notEqual(jobsSend, null, 'the Recent jobs page offers no send button');
+  assert.equal(jobsSend.dataset.action, 'sendToTerminal');
+  assert.equal(jobsSend.dataset.copyValue, undefined);
+  assert.equal(jobs.document.querySelectorAll('.jobs-copy:not(.terminal-send)').length, jobs.document.querySelectorAll('.jobs-copy.terminal-send').length);
+  jobs.sockets[0].onopen?.();
+  jobs.document.querySelector('.jobs-copy.terminal-send[aria-label="Send attempt ID to the terminal"]').click();
+  await wait(20);
+  assert.equal(jobs.pasted.at(-1), 'attempt-1');
+  // A command is already a command, so it goes in as it is.
+  jobs.document.querySelector('.jobs-copy.terminal-send[aria-label="Send command to the terminal"]').click();
+  await wait(20);
+  assert.equal(jobs.pasted.at(-1), "sh -c 'echo hi'");
+
+  // Control characters, a line break among them, are refused.
+  const typedBefore = sending.pasted.length;
+  for (const bad of ['a\nb', 'a\u001b[2Jb', 'a\u0003', 'a\u009bb', '']) {
+    assert.match(await sending.window.sendToTerminal(bad), /control characters/);
+  }
+  assert.equal(sending.pasted.length, typedBefore);
+
+  // No shell for the project: a message, and neither a shell nor another project's.
+  const noShell = load(process.argv[1], { path: '/project/p3', shells: mixed() });
+  await wait(30);
+  assert.match(await noShell.window.sendToTerminal('echo'), /No shell for p3/);
+  assert.equal(noShell.requests.some((request) => request.startsWith('POST')), false, 'sending started a shell');
+  assert.equal(noShell.sockets.length, 0);
+  assert.equal(noShell.document.getElementById('terminal-panel'), null, 'sending opened a panel with nothing to show');
+  // The same with the panel open and waiting.
+  const noShellOpen = load(process.argv[1], { path: '/project/p3', stored: '1', shells: mixed() });
+  await wait(50);
+  assert.match(await noShellOpen.window.sendToTerminal('echo'), /No shell for p3/);
+  assert.equal(noShellOpen.requests.some((request) => request.startsWith('POST')), false, 'sending started a shell');
+
+  // A closed panel opens and connects without taking the shell, and the command waits for it.
+  const later = load(process.argv[1], { path: '/project/p1', shells: mixed() });
+  await wait(30);
+  const sendingLater = later.window.sendToTerminal('echo later');
+  await wait(40);
+  assert.equal(later.document.documentElement.classList.contains('terminal-open'), true);
+  assert.equal(later.sockets.length, 1);
+  assert.match(later.sockets[0].url, /takeover=0/, 'sending took the shell from another browser tab');
+  assert.deepEqual(later.pasted, [], 'typed before the shell was connected');
+  output(later, 0);
+  assert.equal(await sendingLater, null);
+  assert.deepEqual(later.pasted, ['echo later']);
+
+  // The shell being used elsewhere stops it, and says so.
+  const elsewhere = load(process.argv[1], { path: '/project/p1', shells: mixed() });
+  await wait(30);
+  const refused = elsewhere.window.sendToTerminal('echo');
+  await wait(40);
+  elsewhere.sockets[0].onclose({ code: 4001, reason: '' });
+  assert.match(await refused, /Another browser tab/);
+  assert.deepEqual(elsewhere.pasted, []);
+  // So does a hidden panel's lost connection, while one still connected just shows.
+  const hiddenPanel = load(process.argv[1], { path: '/project/p1', stored: '1', shells: mixed() });
+  await wait(50);
+  hiddenPanel.document.getElementById('terminal-button').click();
+  assert.equal(hiddenPanel.document.getElementById('terminal-panel').hidden, true);
+  assert.equal(await hiddenPanel.window.sendToTerminal('echo shown'), null);
+  assert.equal(hiddenPanel.document.getElementById('terminal-panel').hidden, false);
+  assert.deepEqual(hiddenPanel.pasted, ['echo shown']);
+  assert.equal(hiddenPanel.requests.some((request) => request.startsWith('POST')), false);
+  hiddenPanel.sockets[0].onclose({ code: 1006, reason: '' });
+  assert.match(await hiddenPanel.window.sendToTerminal('echo gone'), /not connected/);
+
   // A failure while starting is shown, not left as an empty panel.
   const broken = load(process.argv[1]);
   await wait(30);
@@ -503,7 +631,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   process.exit(0);
 })().catch((error) => { console.error(error.stack || String(error)); process.exit(1); });
 `
-	if output, err := exec.Command("node", "-e", script, withTerminal, without, filepath.Join("assets", "web_shell.css")).CombinedOutput(); err != nil {
+	if output, err := exec.Command("node", "-e", script, withTerminal, without, filepath.Join("assets", "web_shell.css"), jobsWithTerminal).CombinedOutput(); err != nil {
 		t.Fatalf("terminal panel check failed: %v\n%s", err, output)
 	}
 }

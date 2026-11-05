@@ -1777,9 +1777,10 @@ function renderRun(q, runID) {
     if (attemptID) selectJobAttemptFields(job, attemptID);
   });
   const latest = latestRun(q.runs);
+  const goToRun = run.cwd && run.cwd !== "-" ? ["cd " + shellQuote(run.cwd)] : [];
   const retry =
     "# To retry failed or unfinished jobs from this run\n" +
-    (run.cwd && run.cwd !== "-" ? "cd " + shellQuote(run.cwd) + "\n" : "") +
+    (goToRun.length ? goToRun[0] + "\n" : "") +
     "rotari retry -r " +
     shellQuote(runID) +
     (latest && latest.run_id === runID
@@ -1787,7 +1788,7 @@ function renderRun(q, runID) {
       : "\nrotari retry -r " + shellQuote(runID) + " --job-id JOB_ID");
   document.getElementById("app").innerHTML =
     runNotesHTML(run) +
-    commandGuideHTML(retry) +
+    commandGuideHTML(retry, [...goToRun, "rotari retry -r " + shellQuote(runID)]) +
     runCardsHTML(run) +
     ((run.jobs || []).length
       ? runJobsHTML(q, run, runID)
@@ -2058,7 +2059,27 @@ function copyButtonHTML(value, label) {
     label +
     '" data-action="copyIdentityValue">' +
     copyIconSVG +
-    "</button>"
+    "</button>" +
+    sendValueButtonHTML(value, label, "table-copy identity-copy")
+  );
+}
+// sendValueButtonHTML types a value beside its copy button into the terminal, as a word
+// of a command, on a page that has the terminal.
+function sendValueButtonHTML(value, label, classes) {
+  if (!document.getElementById("terminal-button")) return "";
+  return (
+    '<button class="' +
+    classes +
+    ' terminal-send" type="button" title="Send ' +
+    label +
+    ' to the terminal" aria-label="Send ' +
+    label +
+    // A command is already a command, and anything else is one word of one.
+    ' to the terminal" data-send-' +
+    (label === "command" ? "text" : "value") +
+    '="' +
+    esc(value) +
+    '" data-action="sendToTerminal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15"></path><path d="m13 6 6 6-6 6"></path></svg></button>'
   );
 }
 // idTailHTML shows a long ID by its end, which tells a run's attempts
@@ -2410,13 +2431,23 @@ function runCardsHTML(run) {
 const copyIconSVG =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-4"></path><rect x="9" y="4" width="11" height="11" rx="1"></rect></svg>';
 // commandGuideHTML is a command a reader can copy to a terminal.
-function commandGuideHTML(text) {
+// commandGuideHTML shows commands to copy. On a page with the terminal, sendCommands are
+// what its send button types, joined into one line: a line break would run what came
+// before it, and only the person may do that. They leave out comments and alternatives.
+function commandGuideHTML(text, sendCommands) {
+  const sendable = sendCommands?.length && document.getElementById("terminal-button");
   return (
     '<pre class="command-guide execution-guide command-example" data-copy-text="' +
     esc(text) +
     '">' +
     esc(text) +
-    '<span class="command-guide-copied" role="status">Copied!</span><button class="command-guide-copy" type="button" title="Copy command" aria-label="Copy command" data-icon="' +
+    '<span class="command-guide-copied" role="status">Copied!</span>' +
+    (sendable
+      ? '<button class="command-guide-copy command-guide-send" type="button" title="Send to the terminal, without running it" aria-label="Send to the terminal, without running it" data-send-text="' +
+        esc(sendCommands.join(" && ")) +
+        '" data-action="sendToTerminal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15"></path><path d="m13 6 6 6-6 6"></path></svg></button>'
+      : "") +
+    '<button class="command-guide-copy" type="button" title="Copy command" aria-label="Copy command" data-icon="' +
     esc(copyIconSVG) +
     '" data-action="copyCommandGuide">' +
     copyIconSVG +
@@ -2537,7 +2568,8 @@ function copyIconForValue(value, label) {
     esc(value) +
     '" data-copy-title="Copy ' +
     label +
-    '" data-action="copyIdentityValue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-4"></path><rect x="9" y="4" width="11" height="11" rx="1"></rect></svg></button>'
+    '" data-action="copyIdentityValue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-4"></path><rect x="9" y="4" width="11" height="11" rx="1"></rect></svg></button>' +
+    sendValueButtonHTML(value, label, "command-guide-copy identity-copy")
   );
 }
 // terminalHereIcon starts a shell where the page's run started, on a page that has the
@@ -2722,17 +2754,19 @@ function renderQueueCommands(queue) {
       commands.map((job) => job.origin && job.origin.cwd).filter(Boolean),
     ),
   ];
+  const goToQueue = directories.length === 1 ? ["cd " + shellQuote(directories[0])] : [];
+  const runQueue =
+    "rotari run" +
+    (state && state.base_dir ? " -b " + shellQuote(state.base_dir) : " ") +
+    " --project-name " +
+    shellQuote(queue.project_name);
   section.insertAdjacentHTML(
     "beforeend",
     commandGuideHTML(
       "# To execute jobs in current queue\n" +
-        (directories.length === 1
-          ? "cd " + shellQuote(directories[0]) + "\n"
-          : "") +
-        "rotari run" +
-        (state && state.base_dir ? " -b " + shellQuote(state.base_dir) : " ") +
-        " --project-name " +
-        shellQuote(queue.project_name),
+        (goToQueue.length ? goToQueue[0] + "\n" : "") +
+        runQueue,
+      [...goToQueue, runQueue],
     ),
   );
   // Each field remembers its first value so Save is enabled only after an

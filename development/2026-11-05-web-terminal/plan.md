@@ -213,6 +213,20 @@ on a project page with no shell would count as idle while their shells run in an
 page offering the terminal says so each minute, so the limit now runs out only after the last page
 closes, the computer sleeps, or the sign-in expires.
 
+## Sending suggested commands
+
+Third improvement, asked for by the user: a button beside **Copy** on the commands pages suggest.
+It sends no Enter, which the user intended from the start, and starts no shell when the project has
+none. Each guide says which commands it sends, joined with `&&`, rather than sending its text: comments
+are of no use, the retry guide's `--job-id JOB_ID` line is an alternative, and on a shell without
+bracketed paste a line break would run what came before it. Text with control characters is refused,
+since it can come from values in the state.
+
+The user then asked for it beside the other copy buttons too: IDs, names, and paths go in as one word,
+quoted if needed, so they can finish a half-typed command, and a job's command goes in as it is. Logs have
+several lines and keep only **Copy**. A note at the page's corner says what happened, since pages redraw
+their buttons every couple of seconds.
+
 ## Interfaces and documents
 
 - CLI: `--allow-terminal`, in `cli_spec.go`, and the generated Python CLI metadata through its
