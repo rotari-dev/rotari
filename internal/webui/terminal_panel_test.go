@@ -59,7 +59,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
       while (inGroup.some((shell) => shell.number === number)) number++;
       const id = String(++server.lastID);
       const shell = project ? inProject(id, number, project) : plain(id, number);
-      server.shells = [...server.shells, shell].sort((a, b) => a.number - b.number);
+      server.shells = [...server.shells, shell];
       return Promise.resolve({ ok: true, status: 201, json: async () => shell });
     }
     if (method === 'PATCH') {
@@ -85,6 +85,14 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
         if (address.includes('xterm-license')) return Promise.resolve({ ok: status() === 200, status: status() });
         if (address === '/_terminal/alive') {
           alive.push(init.method);
+          return Promise.resolve({ ok: true, status: 204 });
+        }
+        if (address === '/_terminal/order') {
+          requests.push('PUT /_terminal/order');
+          if (server.orderStatus) return Promise.resolve({ ok: false, status: server.orderStatus, text: async () => 'refused' });
+          const ids = JSON.parse(init.body).ids;
+          const named = ids.map((id) => server.shells.find((shell) => shell.id === id)).filter(Boolean);
+          server.shells = [...named, ...server.shells.filter((shell) => !ids.includes(shell.id))];
           return Promise.resolve({ ok: true, status: 204 });
         }
         if (address.startsWith('/_terminal/shells')) return fakeShells(address, init.method || 'GET', init.body);
@@ -640,6 +648,92 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   await wait(30);
   assert.deepEqual(deleted().slice(2), ['DELETE /_terminal/shells/1', 'DELETE /_terminal/shells/2']);
   assert.deepEqual(menuPage.server.shells.map((shell) => shell.id), ['9'], 'closing all reached another project');
+
+  // Dragging a tab, or the menu, arranges this project's tabs, on the server too, and the
+  // menu's and neighbours' idea of right and left follows.
+  const arranging = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [
+    inProject('1', 1, 'p1'), inProject('2', 2, 'p1'), inProject('3', 3, 'p1'), inProject('9', 1, 'p2'),
+  ], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const ad = arranging.document, aw = arranging.window;
+  const arrangedTabs = () => [...ad.querySelectorAll('.terminal-tab')];
+  const arrangedNames = () => arrangedTabs().map((tab) => tab.querySelector('[role=tab]').textContent).join(',');
+  const dragEvent = (type, clientX) => {
+    const event = new aw.Event(type, { bubbles: true, cancelable: true });
+    event.clientX = clientX;
+    return event;
+  };
+  assert.equal(arrangedTabs()[0].draggable, true);
+  const box = (tab) => { tab.getBoundingClientRect = () => ({ left: 100, width: 40, top: 0, bottom: 10 }); return tab; };
+  const drag = (from, onto, clientX) => {
+    const target = box(arrangedTabs()[onto]);
+    arrangedTabs()[from].dispatchEvent(dragEvent('dragstart', 0));
+    target.dispatchEvent(dragEvent('dragover', clientX));
+    const drop = dragEvent('drop', clientX);
+    target.dispatchEvent(drop);
+    return target;
+  };
+  // Over a tab's right half lands after it, and over its left half before it.
+  arrangedTabs()[1].dispatchEvent(dragEvent('dragstart', 0));
+  const over = box(arrangedTabs()[2]);
+  const overEvent = dragEvent('dragover', 130);
+  over.dispatchEvent(overEvent);
+  assert.equal(overEvent.defaultPrevented, true, 'the tab refused the drop');
+  assert.equal(over.classList.contains('terminal-drop-after'), true);
+  over.dispatchEvent(dragEvent('dragover', 110));
+  assert.equal(over.classList.contains('terminal-drop-before'), true);
+  assert.equal(over.classList.contains('terminal-drop-after'), false);
+  // A list arriving during a drag does not end it.
+  arranging.polls[0]();
+  await wait(20);
+  assert.equal(arrangedTabs()[2], over, 'the tabs were drawn again during a drag');
+  arrangedTabs()[1].dispatchEvent(dragEvent('dragend', 0));
+  assert.equal(over.classList.contains('terminal-drop-before'), false);
+  // Dropping moves it, at once and on the server.
+  drag(0, 2, 130);
+  assert.equal(arrangedNames(), '2,3,1');
+  await wait(20);
+  assert.deepEqual(arranging.server.shells.map((shell) => shell.id), ['2', '3', '1', '9'], 'the server did not hear, or heard another project');
+  drag(2, 0, 110);
+  assert.equal(arrangedNames(), '1,2,3');
+  await wait(20);
+  // Dropping a tab on itself changes nothing.
+  const putsBefore = arranging.requests.filter((request) => request.startsWith('PUT')).length;
+  drag(1, 1, 130);
+  await wait(20);
+  assert.equal(arranging.requests.filter((request) => request.startsWith('PUT')).length, putsBefore);
+  // The shown shell stays connected through all of it.
+  assert.equal(arranging.sockets.length, 1, 'arranging tabs reconnected');
+  assert.equal(arranging.sockets[0].closed, undefined);
+  // The menu moves one place, and knows the ends.
+  const arrangeMenu = (index) => arrangedTabs()[index].dispatchEvent(new aw.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+  const arrangeItem = (label) => [...ad.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === label);
+  arrangeMenu(0);
+  assert.equal(arrangeItem('Move left').disabled, true);
+  arrangeItem('Move right').click();
+  assert.equal(arrangedNames(), '2,1,3');
+  await wait(20);
+  arrangeMenu(2);
+  assert.equal(arrangeItem('Move right').disabled, true);
+  arrangeItem('Move left').click();
+  assert.equal(arrangedNames(), '2,3,1');
+  await wait(20);
+  // Closing to the right follows the arranged order, not the numbers.
+  aw.confirm = () => true;
+  arrangeMenu(0);
+  arrangeItem('Close tabs to the right').click();
+  await wait(30);
+  assert.equal(arranging.server.shells.some((shell) => shell.id === '3'), false);
+  assert.equal(arranging.server.shells.some((shell) => shell.id === '2'), true, 'closed the tab it was asked to keep');
+  // A refusal puts back what the server has, and says so.
+  const refusedOrder = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1')] });
+  await wait(50);
+  refusedOrder.server.orderStatus = 500;
+  refusedOrder.document.querySelectorAll('.terminal-tab')[0].dispatchEvent(new refusedOrder.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+  [...refusedOrder.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Move right').click();
+  await wait(30);
+  assert.equal(tabsOf(refusedOrder), '1,2', 'a refused order stayed on screen');
+  assert.match(refusedOrder.document.querySelector('.terminal-status').textContent, /not rearranged/);
 
   // A fast program's output does not reach the next shell's screen, whether it is still
   // being parsed or still arriving from the connection left behind.

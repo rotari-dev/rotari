@@ -515,7 +515,7 @@ func TestShellsAreNumberedAndLimited(t *testing.T) {
 	for _, shell := range keeper.Shells() {
 		numbers = append(numbers, shell.Number)
 	}
-	if want := []int{1, 2, 3}; !slices.Equal(numbers, want) {
+	if want := []int{2, 3, 1}; !slices.Equal(numbers, want) {
 		t.Errorf("numbers = %v, want %v", numbers, want)
 	}
 	keeper.EndAll()
@@ -595,6 +595,52 @@ func TestUnseenOutputIsWhatNoAttachmentShowed(t *testing.T) {
 	second.await(t, "later-2")
 	if unseen() {
 		t.Error("attaching left the output unseen")
+	}
+}
+
+// A group takes the order given, with what it leaves out following, and its neighbors and
+// what has ended do not matter.
+func TestReorderArrangesOneGroup(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	start := func(group string) string {
+		t.Helper()
+		shell, err := keeper.Start(StartOptions{Rows: 24, Cols: 80, Group: group})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return shell.ID
+	}
+	a1, a2, b1 := start("a"), start("a"), start("b")
+	listed := func() []string {
+		var ids []string
+		for _, shell := range keeper.Shells() {
+			ids = append(ids, shell.ID)
+		}
+		return ids
+	}
+	if got, want := listed(), []string{a1, a2, b1}; !slices.Equal(got, want) {
+		t.Fatalf("at first, %v, want %v", got, want)
+	}
+	keeper.Reorder([]string{"gone", a2, b1, a1, a2})
+	if got, want := listed(), []string{a2, a1, b1}; !slices.Equal(got, want) {
+		t.Errorf("reordered, %v, want %v", got, want)
+	}
+	keeper.Reorder([]string{a1})
+	if got, want := listed(), []string{a1, a2, b1}; !slices.Equal(got, want) {
+		t.Errorf("naming one, %v, want %v", got, want)
+	}
+	keeper.Reorder(nil)
+	keeper.Reorder([]string{"gone"})
+	if got, want := listed(), []string{a1, a2, b1}; !slices.Equal(got, want) {
+		t.Errorf("naming nothing, %v, want %v", got, want)
+	}
+	// Numbers stay unique however the shells are arranged.
+	if err := keeper.End(b1); err != nil {
+		t.Fatal(err)
+	}
+	keeper.Reorder([]string{a2, a1})
+	if third, err := keeper.Start(StartOptions{Rows: 24, Cols: 80, Group: "a"}); err != nil || third.Number != 3 {
+		t.Errorf("after arranging, a new shell: %+v, %v", third, err)
 	}
 }
 

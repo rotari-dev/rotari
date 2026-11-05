@@ -360,6 +360,8 @@ func TestTerminalShellRoutes(t *testing.T) {
 		"here, a bad project": {http.MethodGet, terminalHerePath + "?project=a%2Fb", http.StatusBadRequest},
 		"change here":         {http.MethodPost, terminalHerePath, http.StatusMethodNotAllowed},
 		"say alive":           {http.MethodPost, terminalAlivePath, http.StatusNoContent},
+		"order, no body":      {http.MethodPut, terminalOrderPath, http.StatusBadRequest},
+		"read the order":      {http.MethodGet, terminalOrderPath, http.StatusMethodNotAllowed},
 		"rename, no body":     {http.MethodPatch, terminalShellsPath + "/" + shell.ID, http.StatusBadRequest},
 		"rename an unknown":   {http.MethodPatch, terminalShellsPath + "/7", http.StatusBadRequest},
 		"read alive":          {http.MethodGet, terminalAlivePath, http.StatusMethodNotAllowed},
@@ -429,6 +431,7 @@ func TestTerminalShellRoutesAreGuarded(t *testing.T) {
 		{http.MethodDelete, terminalShellsPath + "/" + shell.ID},
 		{http.MethodPost, terminalAlivePath},
 		{http.MethodPatch, terminalShellsPath + "/" + shell.ID},
+		{http.MethodPut, terminalOrderPath},
 	} {
 		mutates := route.method != http.MethodGet
 		for _, test := range []struct {

@@ -137,8 +137,9 @@ A tab you are not looking at is marked when it prints something, until you show 
 other projects the same way. When a shell in another tab ends, a note says so. These update every few
 seconds while the panel is open and the page is in view.
 
-Right-click a tab to rename it, close the tabs to its right, or close all of this project's tabs. A name
-lasts as long as its shell.
+Drag a tab to move it, or right-click it to move it, rename it, close the tabs to its right, or close all of
+this project's tabs. A new tab goes at the right end, and keeps the lowest number free. Names and places last
+as long as their shells.
 
 A web address in the output opens in a new tab when clicked. A program can print any address, so look
 before you click, as in any terminal.

@@ -465,6 +465,74 @@
     }
     if (!targets.some((shell) => shell.id === shown)) await refreshShells();
   };
+  // arrangeShells puts this project's shells in the order given, here at once and then on
+  // the server, so that later pages and other browser tabs see it.
+  const arrangeShells = async (arranged) => {
+    const others = shells.filter((shell) => !sameGroup(shell, here));
+    listSerial++;
+    shells = [...arranged, ...others];
+    renderTabs();
+    let response;
+    try {
+      response = await serverFetch("/_terminal/order", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: arranged.map((shell) => shell.id) }),
+      });
+    } catch {}
+    if (!response?.ok) {
+      await refusal(response, "The tabs were not rearranged", () => arrangeShells(arranged));
+      await refreshShells();
+    }
+  };
+  const moveShell = (shell, place) => {
+    const arranged = shellsHere().filter((item) => item.id !== shell.id);
+    arranged.splice(place, 0, shell);
+    arrangeShells(arranged);
+  };
+  // draggingShell is the tab being dragged. Drawing the tabs again would end the drag.
+  let draggingShell = null;
+  const clearDropMarks = () => {
+    for (const tab of tabs.children) tab.classList.remove("terminal-drop-before", "terminal-drop-after");
+  };
+  const dropsAfter = (event, tab) => {
+    const box = tab.getBoundingClientRect();
+    return event.clientX > box.left + box.width / 2;
+  };
+  const makeDraggable = (tab, shell) => {
+    tab.draggable = true;
+    tab.ondragstart = (event) => {
+      draggingShell = shell;
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        // Some browsers start no drag without data.
+        event.dataTransfer.setData("text/plain", shell.name || String(shell.number));
+      }
+    };
+    tab.ondragover = (event) => {
+      if (!draggingShell) return;
+      event.preventDefault();
+      clearDropMarks();
+      tab.classList.add(dropsAfter(event, tab) ? "terminal-drop-after" : "terminal-drop-before");
+    };
+    tab.ondrop = (event) => {
+      event.preventDefault();
+      const dragged = draggingShell;
+      if (!dragged) return;
+      const after = dropsAfter(event, tab);
+      draggingShell = null;
+      clearDropMarks();
+      if (dragged.id === shell.id) return;
+      const arranged = shellsHere().filter((item) => item.id !== dragged.id);
+      arranged.splice(arranged.findIndex((item) => item.id === shell.id) + (after ? 1 : 0), 0, dragged);
+      arrangeShells(arranged);
+    };
+    tab.ondragend = () => {
+      draggingShell = null;
+      clearDropMarks();
+      renderTabs();
+    };
+  };
   const renameShell = async (shell) => {
     const name = prompt("Name for shell " + shell.number + " (empty for its number):", shell.name || "");
     if (name === null) return;
@@ -490,13 +558,16 @@
   const openTabMenu = (event, shell) => {
     event.preventDefault();
     closeTabMenu();
-    const inGroup = shellsHere().sort((a, b) => a.number - b.number);
-    const right = inGroup.slice(inGroup.findIndex((item) => item.id === shell.id) + 1);
+    const inGroup = shellsHere();
+    const place = inGroup.findIndex((item) => item.id === shell.id);
+    const right = inGroup.slice(place + 1);
     tabMenu = document.createElement("div");
     tabMenu.className = "terminal-tab-menu";
     tabMenu.setAttribute("role", "menu");
     for (const [label, action, enabled] of [
       ["Rename...", () => renameShell(shell), true],
+      ["Move left", () => moveShell(shell, place - 1), place > 0],
+      ["Move right", () => moveShell(shell, place + 1), right.length > 0],
       ["Close tabs to the right", () => endShells(right), right.length > 0],
       ["Close all tabs", () => endShells(inGroup), true],
     ]) {
@@ -532,11 +603,11 @@
   });
   const renderTabs = () => {
     renderGroups();
-    const inGroup = shellsHere().sort((a, b) => a.number - b.number);
+    const inGroup = shellsHere();
     add.disabled = inGroup.length >= groupLimit || shells.length >= shellLimit;
     const drawn = JSON.stringify([inGroup.map((shell) => [shell.id, shell.number, shell.name, shell.dir, shell.unseen_output]), shown]);
     // Drawing them again would take focus from a tab and move nothing.
-    if (drawn === tabsDrawn) return;
+    if (drawn === tabsDrawn || draggingShell) return;
     tabsDrawn = drawn;
     tabs.replaceChildren(
       ...inGroup.map((shell) => {
@@ -567,6 +638,7 @@
         close.textContent = "\u00d7";
         close.onclick = () => endShell(shell);
         tab.oncontextmenu = (event) => openTabMenu(event, shell);
+        makeDraggable(tab, shell);
         tab.append(label, close);
         return tab;
       }),
@@ -703,7 +775,7 @@
     }
     const shell = await response.json();
     listSerial++;
-    shells = [...shells, shell].sort((a, b) => a.number - b.number);
+    shells = [...shells, shell];
     show(shell.id);
   };
   // The shown shell has ended. The screen stays if there is nothing to show instead,

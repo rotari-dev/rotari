@@ -318,6 +318,8 @@ func TestTerminalIsOfferedAndGuarded(t *testing.T) {
 		"alive, no credentials": {http.MethodPost, base + "/_terminal/alive", map[string]string{}, http.StatusForbidden},
 		"alive, another site":   {http.MethodPost, base + "/_terminal/alive", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
 		"alive":                 {http.MethodPost, base + "/_terminal/alive", map[string]string{"X-Rotari-Token": launchToken}, http.StatusNoContent},
+		"order, another site":   {http.MethodPut, base + "/_terminal/order", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
+		"order, no credentials": {http.MethodPut, base + "/_terminal/order", map[string]string{}, http.StatusForbidden},
 		"name, another site":    {http.MethodPatch, base + "/_terminal/shells/1", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
 		"name, not running":     {http.MethodPatch, base + "/_terminal/shells/7", map[string]string{"X-Rotari-Token": launchToken}, http.StatusBadRequest},
 		"end, not running":      {http.MethodDelete, base + "/_terminal/shells/7", map[string]string{"X-Rotari-Token": launchToken}, http.StatusNotFound},
@@ -401,6 +403,26 @@ func TestTerminalKeepsSeveralShells(t *testing.T) {
 	fourth.await("later-2")
 	if hasUnseen() {
 		t.Error("connecting left the output marked as unseen")
+	}
+
+	// An arrangement stays in the list, and a new shell goes after it.
+	three := startTerminalShell(t, base, token)
+	order := func() string {
+		t.Helper()
+		var ids []string
+		for _, shell := range listTerminalShells(t, base, token) {
+			ids = append(ids, shell.ID)
+		}
+		return strings.Join(ids, ",")
+	}
+	if got := e.HTTPDo(http.MethodPut, base+"/_terminal/order", map[string]string{"X-Rotari-Token": launchToken}, `{"ids":["`+three.ID+`","`+two.ID+`","gone"]}`); got.Status != http.StatusNoContent {
+		t.Errorf("arranging: status %d: %s", got.Status, got.Body)
+	}
+	if got, want := order(), three.ID+","+two.ID; got != want {
+		t.Errorf("arranged, the list is %s, want %s", got, want)
+	}
+	if status, body := terminalShellsRequest(t, http.MethodDelete, base+"/_terminal/shells/"+three.ID, token); status != http.StatusNoContent {
+		t.Fatalf("ending a shell: status %d: %s", status, body)
 	}
 
 	// A name stays with its shell in the list, on the one line a tab has room for.

@@ -32,6 +32,7 @@ const (
 	terminalShellsPath = terminalPrefix + "shells"
 	terminalHerePath   = terminalPrefix + "here"
 	terminalAlivePath  = terminalPrefix + "alive"
+	terminalOrderPath  = terminalPrefix + "order"
 )
 
 //go:embed assets/vendor/xterm.js
@@ -77,7 +78,7 @@ const (
 	// finds one that is gone.
 	terminalPingInterval = 30 * time.Second
 	// terminalNameLimit is the longest name a tab can have, and terminalNameBodyLimit
-	// holds it in any encoding.
+	// holds it in any encoding, as well as every shell's ID.
 	terminalNameLimit     = 64
 	terminalNameBodyLimit = 4096
 	// closeReasonLimit is the most a WebSocket close reason can hold.
@@ -118,6 +119,8 @@ func (s site) serveTerminal(writer http.ResponseWriter, request *http.Request) {
 		s.serveTerminalHere(writer, request)
 	case path == terminalAlivePath:
 		s.serveTerminalAlive(writer, request)
+	case path == terminalOrderPath:
+		s.serveTerminalOrder(writer, request)
 	case strings.HasPrefix(path, terminalShellsPath+"/"):
 		s.serveTerminalShell(writer, request, strings.TrimPrefix(path, terminalShellsPath+"/"))
 	default:
@@ -249,6 +252,25 @@ func (s site) terminalShellResponse(shell terminal.ShellInfo) terminalShellRespo
 		}
 	}
 	return response
+}
+
+// serveTerminalOrder arranges one project's tabs on PUT.
+func (s site) serveTerminalOrder(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPut {
+		writer.Header().Set("Allow", http.MethodPut)
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		IDs []string `json:"ids"`
+	}
+	request.Body = http.MaxBytesReader(writer, request.Body, terminalNameBodyLimit)
+	if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+		http.Error(writer, "the body must be JSON with ids", http.StatusBadRequest)
+		return
+	}
+	s.Terminal.Reorder(body.IDs)
+	writer.WriteHeader(http.StatusNoContent)
 }
 
 // serveTerminalAlive hears that a page is still open, which keeps the shells.

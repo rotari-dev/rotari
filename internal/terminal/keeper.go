@@ -125,7 +125,7 @@ type Keeper struct {
 	mu         sync.Mutex
 	closed     bool
 	lastID     int
-	shells     []*keptShell // By group and then Number.
+	shells     []*keptShell // By group, and within one in the order someone arranged.
 	idleTimer  *time.Timer
 	idleSerial int
 }
@@ -189,11 +189,15 @@ func (keeper *Keeper) Start(start StartOptions) (ShellInfo, error) {
 		return ShellInfo{}, err
 	}
 	keeper.lastID++
-	number := 1
+	used := make(map[int]bool)
 	for _, shell := range keeper.shells {
-		if shell.info.Group == start.Group && shell.info.Number == number {
-			number++
+		if shell.info.Group == start.Group {
+			used[shell.info.Number] = true
 		}
+	}
+	number := 1
+	for used[number] {
+		number++
 	}
 	shell := &keptShell{
 		info:     ShellInfo{ID: strconv.Itoa(keeper.lastID), Number: number, Group: start.Group, Dir: options.Dir},
@@ -202,10 +206,9 @@ func (keeper *Keeper) Start(start StartOptions) (ShellInfo, error) {
 		finished: make(chan struct{}),
 	}
 	shell.ring.write([]byte(start.Banner))
+	// A new shell goes after the others of its group.
 	keeper.shells = append(keeper.shells, shell)
-	slices.SortFunc(keeper.shells, func(a, b *keptShell) int {
-		return cmp.Or(cmp.Compare(a.info.Group, b.info.Group), cmp.Compare(a.info.Number, b.info.Number))
-	})
+	slices.SortStableFunc(keeper.shells, func(a, b *keptShell) int { return cmp.Compare(a.info.Group, b.info.Group) })
 	keeper.log("terminal: shell started")
 	go keeper.pump(shell)
 	keeper.stopIdleTimer()
@@ -213,7 +216,7 @@ func (keeper *Keeper) Start(start StartOptions) (ShellInfo, error) {
 	return shell.info, nil
 }
 
-// Shells lists the running shells, by group and then Number.
+// Shells lists the running shells, by group, and within one in the order arranged.
 func (keeper *Keeper) Shells() []ShellInfo {
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
@@ -452,6 +455,45 @@ func (keeper *Keeper) stopIdleTimer() {
 		keeper.idleTimer.Stop()
 		keeper.idleTimer = nil
 	}
+}
+
+// Reorder arranges the group of the first running shell it is given in the order given.
+// Shells of that group it does not name follow, as they were, and it ignores shells that
+// have ended or are of another group, since a page's list can be a moment behind.
+func (keeper *Keeper) Reorder(ids []string) {
+	keeper.mu.Lock()
+	defer keeper.mu.Unlock()
+	var group *string
+	rank := make(map[*keptShell]int, len(ids))
+	for _, id := range ids {
+		shell := keeper.find(id)
+		if shell == nil {
+			continue
+		}
+		if group == nil {
+			group = &shell.info.Group
+		}
+		if _, seen := rank[shell]; !seen && shell.info.Group == *group {
+			rank[shell] = len(rank)
+		}
+	}
+	slices.SortStableFunc(keeper.shells, func(a, b *keptShell) int {
+		if a.info.Group != b.info.Group {
+			return cmp.Compare(a.info.Group, b.info.Group)
+		}
+		aRank, aNamed := rank[a]
+		bRank, bNamed := rank[b]
+		switch {
+		case aNamed && bNamed:
+			return cmp.Compare(aRank, bRank)
+		case aNamed:
+			return -1
+		case bNamed:
+			return 1
+		default:
+			return 0
+		}
+	})
 }
 
 // Rename sets a shell's name, which means nothing to the Keeper.

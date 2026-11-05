@@ -255,6 +255,12 @@ on the page would miss what arrived between the last poll and leaving a tab. A s
 not count, or every new tab would flash a mark while connecting. A shell ending out of sight gets a note and
 its tab goes, without its exit status, which the server does not keep once the shell has gone.
 
+## Rearranging tabs
+
+Asked for by the user. The order lives on the server, like names, so later pages and other browser tabs see
+it. Tabs keep their numbers when moved, so numbers can read out of order. **Close tabs to the right** and the
+neighbor to move to follow the arranged order. The menu also moves tabs, for those not using a mouse.
+
 ## Interfaces and documents
 
 - CLI: `--allow-terminal`, in `cli_spec.go`, and the generated Python CLI metadata through its

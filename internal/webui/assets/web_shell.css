@@ -857,6 +857,13 @@ html.terminal-open.terminal-maximized .terminal-resizer {
   padding: 1px 5px 1px 0;
   color: var(--text-2);
 }
+/* Where a dragged tab would land. */
+.terminal-drop-before {
+  box-shadow: inset 2px 0 0 var(--text);
+}
+.terminal-drop-after {
+  box-shadow: inset -2px 0 0 var(--text);
+}
 /* A tab with output nobody has seen. */
 .terminal-tab-unseen {
   box-shadow: inset 0 -2px 0 var(--s-run);
