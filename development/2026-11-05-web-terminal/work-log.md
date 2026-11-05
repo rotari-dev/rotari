@@ -184,3 +184,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** `go test ./...` passed all 55 packages, and `tsc`, `go vet` on the changed packages, and `gofmt` found nothing. `-race` passed on the terminal tests before the alternate-screen change, which is JavaScript only. Removing the server's clear failed `TestTerminalShellOutlivesItsConnections`. The alternate-screen check ran against a stand-in, and the user has not tried that version in a browser.
 
 **Remaining:** Trying Clear with `vim` open in a browser.
+
+## Layers, dialogs, and sending from them
+
+**Commits:** 2026-11-05 22:03:40 `7ced0396`.
+
+**Change:** `web_shell.css` puts the panel under the top bar and sizes dialogs to the room above it. `web_template.html` and `web_app_logs.js` add a dialog send button and **Send last 100 lines**. `sendToTerminal` takes pasted text. Contract WEB-33, `docs/WEB.md`, and the plan's sending section.
+
+**Reason:** Three things the user reported: Settings and Inbox opened behind the panel, an artifact dialog ran off both ends with no way to scroll to them, and the path and log copy buttons had no send button.
+
+**Plan impact:** Reverses "logs keep only Copy". Several lines go in only with bracketed paste on. xterm.js 5.5 does not strip escapes from a bracketed paste, so a log holding its end sequence could otherwise run what follows; all control characters but line breaks and tabs are removed first.
+
+**Validation:** The user tried the build and said OK. `go test ./...` passed all 55 packages, and `tsc`, `go vet` on the changed packages, and `gofmt` found nothing. `-race` was not run; the change is CSS and JavaScript. Layout was not checked here without a browser, beyond the CSS rules a test reads, and `TestTerminalPanelInBrowser`'s new fit check was skipped for lack of Chrome.
+
+**Remaining:** That browser test's first run on CI.
