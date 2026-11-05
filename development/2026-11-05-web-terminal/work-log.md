@@ -296,3 +296,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The user said OK. With the real xterm.js in jsdom, writing a lot and resetting at once left the old output on screen, and waiting for a write callback first did not. `go test ./...` passed all 55 packages before a one-line tidy, and the terminal tests of `internal/webui` and `tsc` passed after it. Removing the check for a connection left behind failed the test. `-race` was not run; the change is JavaScript.
 
 **Remaining:** The Open item above.
+
+## Rearrange tabs
+
+**Commits:** 2026-11-06 00:51:45 `b56b20ed`.
+
+**Change:** `Keeper.Reorder`, `PUT /_terminal/order`, dragging and **Move left** and **Move right** in `web_shell.js`, and drop marks in `web_shell.css`. Contract WEB-34, `docs/WEB.md`, and the plan's [Rearranging tabs](plan.md#rearranging-tabs) section.
+
+**Reason:** The user asked for it from the remaining list.
+
+**Plan impact:** Tabs now list in the arranged order, with a new one last, rather than by number, and the menu and the move to a neighbor follow that order. Assigning a number assumed the shells were in number order, which could have repeated a number; a conformance test found it.
+
+**Validation:** The user said OK. `go test ./...` passed all 55 packages, `go vet ./...`, `tsc`, and `gofmt` found nothing, and `-race` passed on `internal/terminal` and the terminal tests of `internal/webui` and `conformance/05-web`. Dragging was tested by dispatching events in jsdom with stand-ins for xterm.js.
+
+**Remaining:** None.
