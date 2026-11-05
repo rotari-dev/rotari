@@ -1751,7 +1751,8 @@ function renderRun(q, runID) {
       "<code>" +
         esc(cwd) +
         "</code>" +
-        copyIconForValue(cwd, "working directory"),
+        copyIconForValue(cwd, "working directory") +
+        (run.cwd ? terminalHereIcon() : ""),
     ),
     ...(run.source_labels || []).map((label) =>
       fact("Source", "<code>" + esc(label) + "</code>"),
@@ -2537,6 +2538,14 @@ function copyIconForValue(value, label) {
     '" data-copy-title="Copy ' +
     label +
     '" data-action="copyIdentityValue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-4"></path><rect x="9" y="4" width="11" height="11" rx="1"></rect></svg></button>'
+  );
+}
+// terminalHereIcon starts a shell where the page's run started, on a page that has the
+// terminal. A static export has none.
+function terminalHereIcon() {
+  if (!document.getElementById("terminal-button")) return "";
+  return (
+    '<button class="command-guide-copy identity-copy" type="button" title="Open a terminal here" aria-label="Open a terminal here" data-action="openTerminalHere"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 5 4-5 4"></path><path d="M12 17h7"></path></svg></button>'
   );
 }
 async function copyIdentityValue(button) {

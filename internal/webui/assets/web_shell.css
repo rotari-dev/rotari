@@ -717,7 +717,7 @@ main {
    keeps clear of it, so nothing it shows ends up underneath, and a job's log in a dialog
    stays beside the shell. */
 html.terminal-open {
-  --terminal-height: 320px;
+  --terminal-height: var(--terminal-saved-height, 320px);
 }
 html.terminal-open body {
   min-height: calc(100vh - var(--terminal-height));
@@ -743,6 +743,14 @@ html.terminal-open .output-modal {
 }
 #terminal-panel[hidden] {
   display: none;
+}
+/* No shell to show yet: an empty terminal would read as something broken. */
+#terminal-panel.terminal-empty,
+#terminal-panel.terminal-empty .terminal-viewport {
+  background: var(--surface);
+}
+#terminal-panel.terminal-empty .xterm {
+  visibility: hidden;
 }
 .terminal-resizer {
   flex: none;
@@ -771,6 +779,12 @@ html.terminal-open .output-modal {
 .terminal-title {
   color: var(--text);
   font-weight: 600;
+}
+.terminal-groups {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 200px;
+  font-size: 12px;
 }
 .terminal-tabs {
   display: flex;

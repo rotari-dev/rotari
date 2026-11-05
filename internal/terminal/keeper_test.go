@@ -27,6 +27,7 @@ func newTestKeeperWithShell(t *testing.T, shell string, idle time.Duration, ring
 		IdleLimit:  idle,
 		RingSize:   ring,
 		ShellLimit: testShellLimit,
+		GroupLimit: testShellLimit,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -41,7 +42,7 @@ func aShell(t *testing.T, keeper *Keeper) string {
 	if shells := keeper.Shells(); len(shells) > 0 {
 		return shells[0].ID
 	}
-	shell, err := keeper.Start(24, 80)
+	shell, err := keeper.Start(StartOptions{Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,9 +130,10 @@ const (
 
 func TestNewKeeperRejectsBadOptions(t *testing.T) {
 	for name, options := range map[string]KeeperOptions{
-		"no idle limit":  {RingSize: 1, ShellLimit: 1},
-		"no ring":        {IdleLimit: time.Second, ShellLimit: 1},
-		"no shell limit": {IdleLimit: time.Second, RingSize: 1},
+		"no idle limit":  {RingSize: 1, ShellLimit: 1, GroupLimit: 1},
+		"no ring":        {IdleLimit: time.Second, ShellLimit: 1, GroupLimit: 1},
+		"no shell limit": {IdleLimit: time.Second, RingSize: 1, GroupLimit: 1},
+		"no group limit": {IdleLimit: time.Second, RingSize: 1, ShellLimit: 1},
 	} {
 		if _, err := NewKeeper(options); err == nil {
 			t.Errorf("%s: NewKeeper succeeded", name)
@@ -419,18 +421,18 @@ func TestEndAndCloseEndTheShell(t *testing.T) {
 	if _, err := keeper.Attach(id, 24, 80); !errors.Is(err, ErrKeeperClosed) {
 		t.Errorf("Attach after Close = %v, want ErrKeeperClosed", err)
 	}
-	if _, err := keeper.Start(24, 80); !errors.Is(err, ErrKeeperClosed) {
+	if _, err := keeper.Start(StartOptions{Rows: 24, Cols: 80}); !errors.Is(err, ErrKeeperClosed) {
 		t.Errorf("Start after Close = %v, want ErrKeeperClosed", err)
 	}
 }
 
 func TestStartReportsAFailureAndKeepsNoShell(t *testing.T) {
-	keeper, err := NewKeeper(KeeperOptions{Shell: Options{Shell: filepath.Join(t.TempDir(), "missing"), Dir: t.TempDir()}, IdleLimit: testIdle, RingSize: 1, ShellLimit: 1})
+	keeper, err := NewKeeper(KeeperOptions{Shell: Options{Shell: filepath.Join(t.TempDir(), "missing"), Dir: t.TempDir()}, IdleLimit: testIdle, RingSize: 1, ShellLimit: 1, GroupLimit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(keeper.Close)
-	if _, err := keeper.Start(24, 80); err == nil {
+	if _, err := keeper.Start(StartOptions{Rows: 24, Cols: 80}); err == nil {
 		t.Fatal("Start succeeded with a missing shell")
 	}
 	if shells := keeper.Shells(); len(shells) != 0 {
@@ -440,7 +442,7 @@ func TestStartReportsAFailureAndKeepsNoShell(t *testing.T) {
 
 func TestStartAndAttachRejectABadSize(t *testing.T) {
 	keeper := newTestKeeper(t, testIdle, 1<<16)
-	if _, err := keeper.Start(0, 80); err == nil {
+	if _, err := keeper.Start(StartOptions{Rows: 0, Cols: 80}); err == nil {
 		t.Error("Start accepted no rows")
 	}
 	id := aShell(t, keeper)
@@ -458,11 +460,11 @@ func TestStartAndAttachRejectABadSize(t *testing.T) {
 // Each shell has its own state, output, and take-over.
 func TestShellsAreSeparate(t *testing.T) {
 	keeper := newTestKeeper(t, testIdle, 1<<16)
-	one, err := keeper.Start(24, 80)
+	one, err := keeper.Start(StartOptions{Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatal(err)
 	}
-	two, err := keeper.Start(24, 80)
+	two, err := keeper.Start(StartOptions{Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -489,20 +491,20 @@ func TestShellsAreNumberedAndLimited(t *testing.T) {
 	keeper := newTestKeeper(t, testIdle, 1<<16)
 	var started []ShellInfo
 	for range testShellLimit {
-		shell, err := keeper.Start(24, 80)
+		shell, err := keeper.Start(StartOptions{Rows: 24, Cols: 80})
 		if err != nil {
 			t.Fatal(err)
 		}
 		started = append(started, shell)
 	}
-	if _, err := keeper.Start(24, 80); !errors.Is(err, ErrTooManyShells) {
+	if _, err := keeper.Start(StartOptions{Rows: 24, Cols: 80}); !errors.Is(err, ErrTooManyShells) {
 		t.Fatalf("Start past the limit = %v, want ErrTooManyShells", err)
 	}
 	if err := keeper.End(started[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	// The freed number comes back, under an ID that does not.
-	replacement, err := keeper.Start(24, 80)
+	replacement, err := keeper.Start(StartOptions{Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -522,16 +524,82 @@ func TestShellsAreNumberedAndLimited(t *testing.T) {
 	}
 }
 
+// Numbers and the group limit are per group, while the shell limit covers them all.
+func TestGroupsNumberAndLimitTheirShells(t *testing.T) {
+	home := t.TempDir()
+	keeper, err := NewKeeper(KeeperOptions{
+		Shell:     Options{Shell: "/bin/sh", Dir: home, Env: []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "PS1=$ "}},
+		IdleLimit: testIdle, RingSize: 1 << 16, ShellLimit: 3, GroupLimit: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(keeper.Close)
+	start := func(group string) ShellInfo {
+		t.Helper()
+		shell, err := keeper.Start(StartOptions{Rows: 24, Cols: 80, Group: group})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return shell
+	}
+	a1, a2, b1 := start("a"), start("a"), start("b")
+	if a1.Number != 1 || a2.Number != 2 || b1.Number != 1 {
+		t.Errorf("numbers: %+v %+v %+v", a1, a2, b1)
+	}
+	if _, err := keeper.Start(StartOptions{Rows: 24, Cols: 80, Group: "c"}); !errors.Is(err, ErrTooManyShells) {
+		t.Errorf("past the shell limit = %v, want ErrTooManyShells", err)
+	}
+	if err := keeper.End(b1.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := keeper.Start(StartOptions{Rows: 24, Cols: 80, Group: "a"}); !errors.Is(err, ErrTooManyInGroup) {
+		t.Errorf("past the group limit = %v, want ErrTooManyInGroup", err)
+	}
+	if b := start("b"); b.Number != 1 {
+		t.Errorf("after the group's only shell ended: %+v", b)
+	}
+	if shells := keeper.Shells(); shells[0].Group != "a" || shells[1].Group != "a" || shells[2].Group != "b" {
+		t.Errorf("shells are not by group: %+v", shells)
+	}
+}
+
+// A shell can start elsewhere, and what it is told first stays with its output.
+func TestStartPlacesTheShellAndKeepsItsBanner(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	shell, err := keeper.Start(StartOptions{Rows: 24, Cols: 80, Dir: dir, Banner: "first-word\r\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shell.Dir != dir {
+		t.Errorf("Dir = %q, want %q", shell.Dir, dir)
+	}
+	seen := watchShell(t, keeper, shell.ID)
+	seen.await(t, "first-word")
+	seen.run(t, `echo "in-$(pwd -P)"`, "in-"+dir)
+	seen.Detach()
+	seen.awaitEnd(t, DetachedByCaller)
+	again := watchShell(t, keeper, shell.ID)
+	again.await(t, "first-word")
+	if other, err := keeper.Start(StartOptions{Rows: 24, Cols: 80}); err != nil || other.Dir == dir {
+		t.Errorf("a shell told nothing: %+v, %v", other, err)
+	}
+}
+
 // A shell nobody is looking at is not idle while another one is in use, since a
 // person watches one at a time. With nothing attached to any, they all end.
 func TestIdleLimitAppliesToTheShellsTogether(t *testing.T) {
 	const idle = 200 * time.Millisecond
 	keeper := newTestKeeper(t, idle, 1<<16)
-	background, err := keeper.Start(24, 80)
+	background, err := keeper.Start(StartOptions{Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreground, err := keeper.Start(24, 80)
+	foreground, err := keeper.Start(StartOptions{Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -551,14 +619,39 @@ func TestIdleLimitAppliesToTheShellsTogether(t *testing.T) {
 	}
 }
 
+// Someone still there keeps the shells with nothing attached, until they stop saying so.
+func TestKeepAliveHoldsTheIdleLimitOff(t *testing.T) {
+	const idle = 300 * time.Millisecond
+	keeper := newTestKeeper(t, idle, 1<<16)
+	if _, err := keeper.Start(StartOptions{Rows: 24, Cols: 80}); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(3 * idle); time.Now().Before(deadline); time.Sleep(idle / 6) {
+		keeper.KeepAlive()
+	}
+	if shells := keeper.Shells(); len(shells) != 1 {
+		t.Fatalf("the shell ended with someone there: %v", shells)
+	}
+	for deadline := time.Now().Add(testWait); len(keeper.Shells()) != 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%v outlived the idle limit once no one said anything", keeper.Shells())
+		}
+	}
+	// With no shells, it starts nothing.
+	keeper.KeepAlive()
+	if keeper.idleTimer != nil {
+		t.Error("KeepAlive with no shells started the idle limit")
+	}
+}
+
 // The last attached shell ending leaves the others under the idle limit.
 func TestIdleLimitStartsWhenTheAttachedShellEnds(t *testing.T) {
 	const idle = 150 * time.Millisecond
 	keeper := newTestKeeper(t, idle, 1<<16)
-	if _, err := keeper.Start(24, 80); err != nil {
+	if _, err := keeper.Start(StartOptions{Rows: 24, Cols: 80}); err != nil {
 		t.Fatal(err)
 	}
-	attached, err := keeper.Start(24, 80)
+	attached, err := keeper.Start(StartOptions{Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatal(err)
 	}

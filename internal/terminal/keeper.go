@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"slices"
 	"strconv"
@@ -37,8 +38,10 @@ var (
 	ErrAttachedElsewhere = errors.New("terminal is attached elsewhere")
 	// ErrNoShell is returned for a shell that is not running, which may have ended.
 	ErrNoShell = errors.New("no such shell")
-	// ErrTooManyShells is returned by Start at the limit on shells.
+	// ErrTooManyShells is returned by Start at the limit on all shells.
 	ErrTooManyShells = errors.New("too many shells are running")
+	// ErrTooManyInGroup is returned by Start at the limit on a group's shells.
+	ErrTooManyInGroup = errors.New("too many shells are running in this group")
 )
 
 // DetachReason says why an Attachment ended.
@@ -69,17 +72,35 @@ type KeeperOptions struct {
 	RingSize int
 	// ShellLimit is how many shells may run at once.
 	ShellLimit int
+	// GroupLimit is how many shells of one group may run at once.
+	GroupLimit int
 	// Log, if set, is told when a shell starts and ends, and never what it shows.
 	Log func(message string)
+}
+
+// StartOptions say how to start one shell.
+type StartOptions struct {
+	Rows, Cols uint16
+	// Group is what the shell belongs to, which means nothing to the Keeper beyond
+	// its numbers and limit.
+	Group string
+	// Dir is where it starts, instead of the Keeper's Shell.Dir.
+	Dir string
+	// Banner is shown before the shell's own output, and replayed with it.
+	Banner string
 }
 
 // ShellInfo describes a running shell.
 type ShellInfo struct {
 	// ID names this shell for as long as the Keeper lasts, and is never reused, so
 	// that a stale reference cannot reach a later shell.
-	ID string `json:"id"`
-	// Number is what a person calls it: the lowest not in use when it started.
-	Number int `json:"number"`
+	ID string
+	// Number is what a person calls it within its group: the lowest not in use when
+	// it started.
+	Number int
+	Group  string
+	// Dir is where it started.
+	Dir string
 }
 
 // Keeper holds shells, which outlive the attachments that show them: callers come
@@ -89,14 +110,15 @@ type ShellInfo struct {
 //
 // A person watches one shell at a time, so a shell with nothing attached says nothing
 // about whether anyone is there. The idle limit therefore applies to them together: it
-// runs only while nothing is attached to any shell, and then ends them all.
+// runs only while nothing is attached to any shell, restarts on KeepAlive, and then ends
+// them all.
 type Keeper struct {
 	options KeeperOptions
 
 	mu         sync.Mutex
 	closed     bool
 	lastID     int
-	shells     []*keptShell // By Number.
+	shells     []*keptShell // By group and then Number.
 	idleTimer  *time.Timer
 	idleSerial int
 }
@@ -123,12 +145,15 @@ func NewKeeper(options KeeperOptions) (*Keeper, error) {
 	if options.ShellLimit <= 0 {
 		return nil, errors.New("terminal shell limit must be above zero")
 	}
+	if options.GroupLimit <= 0 {
+		return nil, errors.New("terminal group limit must be above zero")
+	}
 	return &Keeper{options: options}, nil
 }
 
 // Start starts a shell at the given size. A shell nobody attaches to falls under the
 // idle limit, which starting one restarts.
-func (keeper *Keeper) Start(rows, cols uint16) (ShellInfo, error) {
+func (keeper *Keeper) Start(start StartOptions) (ShellInfo, error) {
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
 	if keeper.closed {
@@ -137,8 +162,20 @@ func (keeper *Keeper) Start(rows, cols uint16) (ShellInfo, error) {
 	if len(keeper.shells) >= keeper.options.ShellLimit {
 		return ShellInfo{}, ErrTooManyShells
 	}
+	inGroup := 0
+	for _, shell := range keeper.shells {
+		if shell.info.Group == start.Group {
+			inGroup++
+		}
+	}
+	if inGroup >= keeper.options.GroupLimit {
+		return ShellInfo{}, ErrTooManyInGroup
+	}
 	options := keeper.options.Shell
-	options.Rows, options.Cols = rows, cols
+	options.Rows, options.Cols = start.Rows, start.Cols
+	if start.Dir != "" {
+		options.Dir = start.Dir
+	}
 	session, err := Start(options)
 	if err != nil {
 		return ShellInfo{}, err
@@ -146,19 +183,21 @@ func (keeper *Keeper) Start(rows, cols uint16) (ShellInfo, error) {
 	keeper.lastID++
 	number := 1
 	for _, shell := range keeper.shells {
-		if shell.info.Number != number {
-			break
+		if shell.info.Group == start.Group && shell.info.Number == number {
+			number++
 		}
-		number++
 	}
 	shell := &keptShell{
-		info:     ShellInfo{ID: strconv.Itoa(keeper.lastID), Number: number},
+		info:     ShellInfo{ID: strconv.Itoa(keeper.lastID), Number: number, Group: start.Group, Dir: options.Dir},
 		session:  session,
 		ring:     outputRing{limit: keeper.options.RingSize},
 		finished: make(chan struct{}),
 	}
+	shell.ring.write([]byte(start.Banner))
 	keeper.shells = append(keeper.shells, shell)
-	slices.SortFunc(keeper.shells, func(a, b *keptShell) int { return a.info.Number - b.info.Number })
+	slices.SortFunc(keeper.shells, func(a, b *keptShell) int {
+		return cmp.Or(cmp.Compare(a.info.Group, b.info.Group), cmp.Compare(a.info.Number, b.info.Number))
+	})
 	keeper.log("terminal: shell started")
 	go keeper.pump(shell)
 	keeper.stopIdleTimer()
@@ -166,7 +205,7 @@ func (keeper *Keeper) Start(rows, cols uint16) (ShellInfo, error) {
 	return shell.info, nil
 }
 
-// Shells lists the running shells, by Number.
+// Shells lists the running shells, by group and then Number.
 func (keeper *Keeper) Shells() []ShellInfo {
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
@@ -177,9 +216,14 @@ func (keeper *Keeper) Shells() []ShellInfo {
 	return infos
 }
 
-// Limit is how many shells may run at once.
-func (keeper *Keeper) Limit() int {
-	return keeper.options.ShellLimit
+// Limits are how many shells may run at once, and how many of one group.
+func (keeper *Keeper) Limits() (shells, inGroup int) {
+	return keeper.options.ShellLimit, keeper.options.GroupLimit
+}
+
+// DefaultDir is where a shell starts unless told otherwise.
+func (keeper *Keeper) DefaultDir() string {
+	return keeper.options.Shell.Dir
 }
 
 func (keeper *Keeper) find(id string) *keptShell {
@@ -397,6 +441,16 @@ func (keeper *Keeper) stopIdleTimer() {
 	if keeper.idleTimer != nil {
 		keeper.idleTimer.Stop()
 		keeper.idleTimer = nil
+	}
+}
+
+// KeepAlive says someone is still there, attached or not, and restarts the idle limit.
+func (keeper *Keeper) KeepAlive() {
+	keeper.mu.Lock()
+	defer keeper.mu.Unlock()
+	if keeper.idleTimer != nil {
+		keeper.stopIdleTimer()
+		keeper.armIdleTimer()
 	}
 }
 

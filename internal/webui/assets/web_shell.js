@@ -79,6 +79,7 @@
     toggleRunNotifications: () => toggleRunNotifications(),
     toggleSettingsMenu: () => toggleSettingsMenu(),
     toggleTerminalPanel: () => toggleTerminalPanel(),
+    openTerminalHere: () => openTerminalHere(),
     toggleSidebarAllProjects: (el) => toggleSidebarAllProjects(el),
     toggleSidebarBasedir: (el) => toggleSidebarBasedir(el),
     toggleSidebarProject: (el) => toggleSidebarProject(el),
@@ -118,12 +119,14 @@
   }
 })();
 
-// The terminal panel along the bottom of the page, with a tab for each shell. The
-// shells live on the server, and every page load lists them, attaches to the tab this
-// browser tab last showed, and replays recent output, so following a link ends none of
-// them. Only the shown tab is connected; the others carry on with no one reading, and
-// replay when shown. Nothing loads until the panel first opens; a page without the top
-// bar's Terminal button has no terminal to offer.
+// The terminal panel along the bottom of the page, with a tab for each shell of the
+// page's project, as an editor keeps a window's terminals with its folder. Shells live
+// on the server, and every page load lists them, attaches to the tab this browser tab
+// last showed for the project, and replays recent output, so following a link ends none
+// of them. Only the shown tab is connected; the others carry on with no one reading, and
+// replay when shown. Moving between projects with the panel open starts nothing: browsing
+// must not leave a shell in every project. Nothing loads until the panel first opens; a
+// page without the top bar's Terminal button has no terminal to offer.
 (() => {
   const openKey = "rotari-terminal-open";
   const heightKey = "rotari-terminal-height";
@@ -131,6 +134,10 @@
   const shellsPath = "/_terminal/shells";
   // How often a page in view picks up shells started or ended from elsewhere.
   const shellsRefresh = 5000;
+  // How often any open page says so, whether its panel is open or in view, which keeps
+  // the shells. Browsers slow a background page's timers to about this. It is far under
+  // the server's idle limit.
+  const aliveInterval = 60000;
   const minHeight = 120;
   // Colours programs ask for by name, and the tokens that hold them.
   const themeTokens = {
@@ -160,9 +167,20 @@
   const closeFailed = 4000;
   const closeNoShell = 4005;
   const scriptNonce = document.currentScript?.nonce || "";
-  let panel, status, retry, viewport, tabs, add, term, fit, socket, retryTimer;
+  // The terminal belongs to the server, not to a basedir, so its requests skip the
+  // application script's wrapper, which puts a mounted basedir's prefix on every path.
+  // This script runs first.
+  const rootFetch = window.fetch;
+  const serverFetch = (...args) => rootFetch.apply(window, args);
+  let panel, status, retry, viewport, groups, tabs, add, term, fit, socket, retryTimer;
   let shells = [];
   let shellLimit = 0;
+  let groupLimit = 0;
+  let here = { basedir: "", project: "", dir: "" }; // The page's place.
+  let tabsDrawn = "";
+  let groupsDrawn = "";
+  let startAsked = false; // Someone opened the panel: start a shell if there is none.
+  let newAsked = false; // Someone asked for a new shell here.
   let shown = null; // The ID of the shell this page shows.
   let listSerial = 0;
   let retryDelay = 1000;
@@ -188,7 +206,8 @@
     Math.max(minHeight, Math.min(height, Math.max(minHeight, innerHeight - minHeight)));
   const root = document.documentElement;
   const applyHeight = (height) => {
-    root.style.setProperty("--terminal-height", clampHeight(height) + "px");
+    // Only an open panel takes room, which web_shell.css decides from this.
+    root.style.setProperty("--terminal-saved-height", clampHeight(height) + "px");
   };
   const savedHeight = () => {
     try {
@@ -277,21 +296,83 @@
   const send = (data) => {
     if (socket?.readyState === WebSocket.OPEN) socket.send(data);
   };
+  // Each project keeps its own last tab.
+  const shownStorageKey = () => shownKey + ":" + here.basedir + ":" + here.project;
   const rememberShown = () => {
     try {
-      sessionStorage.setItem(shownKey, shown);
+      sessionStorage.setItem(shownStorageKey(), shown);
     } catch {}
   };
   const rememberedShown = () => {
     try {
-      return sessionStorage.getItem(shownKey);
+      return sessionStorage.getItem(shownStorageKey());
     } catch {
       return null;
     }
   };
+  // The page's basedir ID, project, and run, as it would ask for them in a query. The
+  // parts are still percent-encoded, so they go in as they are.
+  const pagePlace = () => {
+    const parts = location.pathname.split("/").filter(Boolean);
+    const query = [];
+    if (parts[0] === "_basedir") {
+      query.push("basedir=" + parts[1]);
+      parts.splice(0, 2);
+    }
+    if (parts[0] === "project" && parts[1]) {
+      query.push("project=" + parts[1]);
+      if (parts[2] === "run" && parts[3]) query.push("run=" + parts[3]);
+    }
+    return query.join("&");
+  };
+  const sameGroup = (shell, other) =>
+    shell.basedir === other.basedir && shell.project === other.project;
+  const shellsHere = () => shells.filter((shell) => sameGroup(shell, here));
+  const projectName = (group) => group.project || "No project";
+  const refreshHere = async () => {
+    const response = await serverFetch("/_terminal/here?" + pagePlace());
+    if (!response.ok) return response;
+    here = await response.json();
+    add.title = "New shell in " + here.dir;
+    return null;
+  };
+  // The projects with shells, this page's first. Choosing one goes to its page, so that
+  // what the panel shows always follows the page.
+  const renderGroups = () => {
+    const entries = [{ ...here, link: "", count: shellsHere().length }];
+    for (const shell of shells) {
+      if (sameGroup(shell, here)) continue;
+      const entry = entries.find((item) => sameGroup(item, shell));
+      if (entry) entry.count++;
+      else entries.push({ basedir: shell.basedir, project: shell.project, link: shell.link, count: 1 });
+    }
+    const label = (entry) => {
+      const twin = entries.some((item) => item !== entry && item.project === entry.project);
+      return projectName(entry) + (twin && entry.basedir ? " in " + entry.basedir : "") + " (" + entry.count + ")";
+    };
+    const drawn = JSON.stringify(entries.map((entry) => [label(entry), entry.link]));
+    if (drawn === groupsDrawn) return;
+    groupsDrawn = drawn;
+    groups.replaceChildren(
+      ...entries.map((entry) => {
+        const option = document.createElement("option");
+        option.value = entry.link;
+        option.textContent = label(entry);
+        return option;
+      }),
+    );
+    groups.value = "";
+  };
   const renderTabs = () => {
+    renderGroups();
+    const inGroup = shellsHere().sort((a, b) => a.number - b.number);
+    add.disabled = inGroup.length >= groupLimit || shells.length >= shellLimit;
+    const drawn = JSON.stringify([inGroup.map((shell) => [shell.id, shell.number, shell.dir]), shown]);
+    // Drawing them again would take focus from a tab and move nothing.
+    if (drawn === tabsDrawn) return;
+    tabsDrawn = drawn;
     tabs.replaceChildren(
-      ...shells.map((shell) => {
+      ...inGroup.map((shell) => {
         const tab = document.createElement("span");
         tab.className = "terminal-tab";
         tab.setAttribute("role", "presentation");
@@ -300,6 +381,7 @@
         label.setAttribute("role", "tab");
         label.setAttribute("aria-selected", String(shell.id === shown));
         label.setAttribute("aria-label", "Shell " + shell.number);
+        label.title = "Started in " + shell.dir;
         label.textContent = String(shell.number);
         label.onclick = () => {
           if (shell.id !== shown) show(shell.id);
@@ -315,7 +397,6 @@
         return tab;
       }),
     );
-    add.disabled = shells.length >= shellLimit;
   };
   // A sign-in that has gone cannot be retried away.
   const signInGone = (response) => {
@@ -334,13 +415,14 @@
     const serial = ++listSerial;
     let response;
     try {
-      response = await fetch(shellsPath);
+      response = await serverFetch(shellsPath);
     } catch {}
     if (!response?.ok) return { response };
     const listed = await response.json();
     if (serial === listSerial) {
       shells = listed.shells;
       shellLimit = listed.limit;
+      groupLimit = listed.group_limit;
       renderTabs();
     }
     return { ok: true };
@@ -351,6 +433,7 @@
   const connect = (takeOver = true) => {
     clearTimeout(retryTimer);
     whenVisible = null;
+    panel.classList.remove("terminal-empty");
     const previous = socket;
     socket = null;
     previous?.close();
@@ -400,7 +483,8 @@
     showStatus("Starting a shell...");
     let response;
     try {
-      response = await fetch(shellsPath + "?rows=" + term.rows + "&cols=" + term.cols, { method: "POST" });
+      const place = pagePlace();
+      response = await serverFetch(shellsPath + "?rows=" + term.rows + "&cols=" + term.cols + (place && "&" + place), { method: "POST" });
     } catch {}
     if (!response?.ok) {
       await refusal(response, "The shell did not start", newShell);
@@ -414,9 +498,11 @@
   // The shown shell has ended. The screen stays if there is nothing to show instead,
   // and a new shell is a choice: it may have been the last thing wanted.
   const shellGone = async (message) => {
-    const place = shells.findIndex((shell) => shell.id === shown);
+    const before = shellsHere();
+    const place = before.findIndex((shell) => shell.id === shown);
+    const gone = shown;
     shown = null;
-    shells = shells.filter((_, index) => index !== place);
+    shells = shells.filter((shell) => shell.id !== gone);
     renderTabs();
     showStatus(message, "New shell", newShell);
     const { response, ok } = await refreshShells();
@@ -425,14 +511,15 @@
       return;
     }
     if (shown !== null) return; // Someone chose meanwhile.
-    const next = shells[Math.min(Math.max(place, 0), shells.length - 1)];
+    const left = shellsHere();
+    const next = left[Math.min(Math.max(place, 0), left.length - 1)];
     if (next) show(next.id, false);
   };
   const endShell = async (shell) => {
     if (!confirm("End shell " + shell.number + ", and anything running in it?")) return;
     let response;
     try {
-      response = await fetch(shellsPath + "/" + encodeURIComponent(shell.id), { method: "DELETE" });
+      response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), { method: "DELETE" });
     } catch {}
     if (!response?.ok && response?.status !== 404) {
       await refusal(response, "The shell did not end", () => endShell(shell));
@@ -441,19 +528,49 @@
     // The shown shell's connection closes, which moves on to another.
     if (shell.id !== shown) await refreshShells();
   };
-  // begin shows what this browser tab last showed, or starts the first shell.
+  // begin shows what this browser tab last showed for this project, or the project's
+  // first shell. It starts one only if someone asked.
   const begin = async (takeOver = true) => {
     whenVisible = null;
     showStatus("Connecting...");
-    const { response, ok } = await refreshShells();
-    if (!ok) {
-      await refusal(response, "The shells could not be listed", () => begin());
+    const listFailed = (response) => refusal(response, "The shells could not be listed", () => begin());
+    let refused;
+    try {
+      refused = await refreshHere();
+    } catch {
+      await listFailed();
       return;
     }
+    if (refused) {
+      await listFailed(refused);
+      return;
+    }
+    const { response, ok } = await refreshShells();
+    if (!ok) {
+      await listFailed(response);
+      return;
+    }
+    const wantsNew = newAsked;
+    const mayStart = startAsked;
+    newAsked = startAsked = false;
+    if (wantsNew) {
+      await newShell();
+      return;
+    }
+    const inGroup = shellsHere();
     const wanted = rememberedShown();
-    const shell = shells.find((item) => item.id === wanted) || shells[0];
+    const shell = inGroup.find((item) => item.id === wanted) || inGroup[0];
     if (shell) show(shell.id, takeOver);
-    else await newShell();
+    else if (mayStart) await newShell();
+    else {
+      renderTabs();
+      panel.classList.add("terminal-empty");
+      showStatus(
+        here.project ? "No shell for " + here.project + " yet." : "No shell here yet.",
+        "Start a shell",
+        newShell,
+      );
+    }
   };
   const reconnect = () => {
     if (document.hidden) {
@@ -467,7 +584,7 @@
       // the server restarts the sign-in is gone, and retrying can never succeed.
       let response;
       try {
-        response = await fetch("/_terminal/xterm-license.txt", { method: "HEAD" });
+        response = await serverFetch("/_terminal/xterm-license.txt", { method: "HEAD" });
       } catch {}
       if (signInGone(response)) return;
       if (document.hidden) reconnect();
@@ -501,6 +618,12 @@
     retry.type = "button";
     retry.className = "terminal-action";
     retry.hidden = true;
+    groups = document.createElement("select");
+    groups.className = "terminal-groups";
+    groups.setAttribute("aria-label", "Project of these shells");
+    groups.onchange = () => {
+      if (groups.value) location.assign(groups.value);
+    };
     tabs = document.createElement("div");
     tabs.className = "terminal-tabs";
     tabs.setAttribute("role", "tablist");
@@ -511,13 +634,14 @@
     add.setAttribute("aria-label", "New shell");
     add.textContent = "+";
     add.onclick = () => newShell();
+    add.onpointerenter = () => refreshHere().catch(() => {});
     const spacer = document.createElement("span");
     spacer.className = "terminal-spacer";
     const hide = document.createElement("button");
     hide.type = "button";
     hide.textContent = "Hide";
     hide.onclick = () => window.toggleTerminalPanel();
-    bar.append(title, tabs, add, status, retry, spacer, hide);
+    bar.append(title, groups, tabs, add, status, retry, spacer, hide);
     viewport = document.createElement("div");
     viewport.className = "terminal-viewport";
     panel.append(buildResizer(), bar, viewport);
@@ -593,18 +717,38 @@
     if (open && term) {
       fit.fit();
       term.focus();
+      // Opened again with nothing to show, or asked for a new shell.
+      if (newAsked || (startAsked && shown === null)) begin();
     }
   };
-  window.toggleTerminalPanel = () =>
-    setOpen(!root.classList.contains("terminal-open"));
+  window.toggleTerminalPanel = () => {
+    const open = !root.classList.contains("terminal-open");
+    startAsked = open;
+    setOpen(open);
+  };
+  // openTerminalHere starts a new shell in this page's place, such as the run's directory.
+  window.openTerminalHere = () => {
+    newAsked = true;
+    setOpen(true);
+  };
   // Before the page is drawn, so a panel left open does not make it jump.
   if (savedHeight()) applyHeight(savedHeight());
   if (remembered()) root.classList.add("terminal-open");
   addEventListener("resize", () => {
     if (savedHeight()) applyHeight(savedHeight());
   });
+  const sayAlive = async () => {
+    try {
+      await serverFetch("/_terminal/alive", { method: "POST" });
+    } catch {}
+  };
   document.addEventListener("DOMContentLoaded", () => {
-    if (document.getElementById("terminal-button") && remembered()) setOpen(true);
+    const offered = document.getElementById("terminal-button");
+    if (offered) {
+      sayAlive();
+      setInterval(sayAlive, aliveInterval);
+    }
+    if (offered && remembered()) setOpen(true);
     else root.classList.remove("terminal-open");
   });
 })();

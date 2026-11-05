@@ -99,8 +99,25 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 
 `rotari web --allow-terminal` adds a **Terminal** button to the top bar, which opens a shell in
 a panel along the bottom of the page, so you can type while watching jobs or reading a log. Drag
-the panel's top edge to change its height. **+** opens another shell in a tab of its own, up to
-eight, and each tab's **×** ends its shell.
+the panel's top edge to change its height.
+
+Shells belong to projects, as an editor's terminals belong to its window. A project's pages show
+that project's tabs, and the list beside them goes to other projects that have shells. Other pages,
+such as Recent jobs, show the shells of no project.
+
+| Where you are | Where a new shell starts |
+|---|---|
+| A project's page | Where its latest run started |
+| A run's page | Where that run started |
+| Any other page | Your home directory |
+
+**+** opens another shell in a tab of its own, up to eight per project and 32 in all, and each tab's
+**×** ends its shell. A run's page also has **Open a terminal here** beside its working directory.
+If the directory is gone or the project has no run, the shell opens in your home directory and its
+first line says why. A shell that has started stays where it is when newer runs start.
+
+Opening the panel starts a shell if the project has none. Following a link to another project with
+the panel open starts nothing, so browsing leaves no shells behind; the panel offers to start one.
 
 ```sh
 export ROTARI_WEB_AUTH_TOKEN=...      # optional; otherwise one is generated and printed
@@ -118,10 +135,13 @@ rotari web --allow-terminal
 - **Several browser tabs:** each browser tab shows one shell and remembers which. Two can use
   different shells at once. If one opens a shell another is using, it takes it, and the other says
   so and offers to take it back.
-- **When a shell ends:** with its tab's **×** or `exit`, which moves to a neighboring tab.
-- **When all of them end:** when you sign out, when `rotari web` stops, or **after 30 minutes with
-  no browser tab connected to any shell**, which also ends what is running in their foregrounds. Use
-  `rotari run` or `tmux` for long work: a run started in the terminal carries on regardless.
+- **When a shell ends:** with its tab's **×** or `exit`, which moves to a neighboring tab of the
+  project.
+- **When all of them end:** when you sign out, when `rotari web` stops, or **30 minutes after the
+  last `rotari web` page closes**, which also ends what is running in their foregrounds. Any open page
+  keeps them, even in the background with its panel closed. A computer that sleeps counts as closing
+  its pages, and so does a sign-in that has expired. Use `rotari run` or `tmux` for long work: a run
+  started in the terminal carries on regardless.
 - **Keys:** a browser keeps some keys for itself, such as Ctrl-W, which do not reach the shell.
 - **Behind a reverse proxy:** the proxy must pass WebSocket connections to `/_terminal/ws`.
 

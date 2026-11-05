@@ -12,7 +12,8 @@ import (
 const (
 	webTerminalIdleLimit  = 30 * time.Minute
 	webTerminalRingSize   = 256 << 10
-	webTerminalShellLimit = 8
+	webTerminalShellLimit = 32
+	webTerminalGroupLimit = 8
 	// webTerminalDefaultShell runs when $SHELL is unset.
 	webTerminalDefaultShell = "/bin/sh"
 )
@@ -33,6 +34,7 @@ func newWebTerminal() (*terminal.Keeper, error) {
 		IdleLimit:  webTerminalIdleLimit,
 		RingSize:   webTerminalRingSize,
 		ShellLimit: webTerminalShellLimit,
+		GroupLimit: webTerminalGroupLimit,
 		Log:        func(message string) { fmt.Fprintln(os.Stderr, message) },
 	})
 }

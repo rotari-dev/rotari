@@ -50,8 +50,10 @@ type terminalPage struct {
 }
 
 type terminalShell struct {
-	ID     string `json:"id"`
-	Number int    `json:"number"`
+	ID      string `json:"id"`
+	Number  int    `json:"number"`
+	Project string `json:"project"`
+	Link    string `json:"link"`
 }
 
 // terminalShellsRequest makes a request as a page does, returning the status and body.
@@ -313,6 +315,9 @@ func TestTerminalIsOfferedAndGuarded(t *testing.T) {
 		"end, no credentials":   {http.MethodDelete, base + "/_terminal/shells/1", map[string]string{}, http.StatusForbidden},
 		"end, another site":     {http.MethodDelete, base + "/_terminal/shells/1", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
 		"start, no size":        {http.MethodPost, base + "/_terminal/shells", map[string]string{"X-Rotari-Token": launchToken}, http.StatusBadRequest},
+		"alive, no credentials": {http.MethodPost, base + "/_terminal/alive", map[string]string{}, http.StatusForbidden},
+		"alive, another site":   {http.MethodPost, base + "/_terminal/alive", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
+		"alive":                 {http.MethodPost, base + "/_terminal/alive", map[string]string{"X-Rotari-Token": launchToken}, http.StatusNoContent},
 		"end, not running":      {http.MethodDelete, base + "/_terminal/shells/7", map[string]string{"X-Rotari-Token": launchToken}, http.StatusNotFound},
 	} {
 		if got := e.HTTPDo(test.method, test.address, test.headers, ""); got.Status != test.want {
@@ -451,6 +456,143 @@ func TestTerminalShellOutlivesItsConnections(t *testing.T) {
 	fresh := openTerminalPage(t, base)
 	fresh.typeLine(`echo "value-[$VALUE]"`)
 	fresh.await("value-[]")
+}
+
+// A project's shells are numbered apart from other projects', and start where its latest
+// run started, or the named run. A page's place is looked up here, never taken from it.
+func TestTerminalShellsFollowTheirProject(t *testing.T) {
+	covers(t, "WEB-34")
+	e := terminalEnv(t)
+	home := filepath.Join(e.Root, "shell-home")
+	first, second := filepath.Join(e.Root, "first"), filepath.Join(e.Root, "second")
+	for _, dir := range []string{home, first, second} {
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.Setenv("HOME", home)
+	runIn := func(project, dir string) {
+		t.Helper()
+		e.MustRotari("add", "-p", project, "--", "true")
+		command := e.Command("run", "-p", project, "--quiet")
+		command.Dir = dir
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("run in %s: %v\n%s", dir, err, output)
+		}
+	}
+	runIn("p1", first)
+	var shown struct {
+		RunID string `json:"run_id"`
+	}
+	if err := json.Unmarshal([]byte(e.MustRotari("show", "-p", "p1", "--json").Stdout), &shown); err != nil || shown.RunID == "" {
+		t.Fatalf("finding the first run: %v, %+v", err, shown)
+	}
+	firstRun := shown.RunID
+	runIn("p1", second)
+
+	base := e.StartWeb("--allow-terminal")
+	token := http.Header{"X-Rotari-Token": {launchToken}}
+	start := func(query string) terminalShell {
+		t.Helper()
+		status, body := terminalShellsRequest(t, http.MethodPost, base+"/_terminal/shells?rows=24&cols=80"+query, token)
+		if status != http.StatusCreated {
+			t.Fatalf("starting a shell with %q: status %d: %s", query, status, body)
+		}
+		var shell terminalShell
+		if err := json.Unmarshal(body, &shell); err != nil {
+			t.Fatal(err)
+		}
+		return shell
+	}
+	open := func(shell terminalShell) *terminalPage {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), terminalWait)
+		defer cancel()
+		address := "ws" + strings.TrimPrefix(base, "http") + "/_terminal/ws?shell=" + shell.ID + "&rows=24&cols=80"
+		connection, _, err := websocket.Dial(ctx, address, &websocket.DialOptions{HTTPHeader: token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		connection.SetReadLimit(1 << 24)
+		t.Cleanup(func() { _ = connection.CloseNow() })
+		return &terminalPage{t: t, connection: connection}
+	}
+	real := func(dir string) string {
+		t.Helper()
+		resolved, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resolved
+	}
+	inDir := func(page *terminalPage, dir string) {
+		t.Helper()
+		page.typeLine(`echo "in-$(pwd -P)"`)
+		page.await("in-" + real(dir))
+	}
+
+	latest := start("&project=p1")
+	if latest.Number != 1 || latest.Project != "p1" || latest.Link != "/project/p1" {
+		t.Errorf("the project's shell: %+v", latest)
+	}
+	inDir(open(latest), second)
+	ofRun := start("&project=p1&run=" + firstRun)
+	if ofRun.Number != 2 {
+		t.Errorf("the project's second shell: %+v", ofRun)
+	}
+	inDir(open(ofRun), first)
+	plain := start("")
+	if plain.Number != 1 || plain.Project != "" || plain.Link != "/" {
+		t.Errorf("a shell of no project: %+v", plain)
+	}
+	inDir(open(plain), home)
+
+	// What a page would be told before starting one.
+	got := e.HTTPDo(http.MethodGet, base+"/_terminal/here?project=p1&run="+firstRun, map[string]string{"X-Rotari-Token": launchToken}, "")
+	if got.Status != http.StatusOK || !strings.Contains(got.Body, `"dir":"`+first+`"`) || !strings.Contains(got.Body, `"project":"p1"`) {
+		t.Errorf("here: status %d: %s", got.Status, got.Body)
+	}
+
+	// With nowhere to start, it opens at home and says why, safely and for good.
+	for _, test := range []struct{ query, says string }{
+		{"&project=empty", "empty"},
+		{"&project=p1&run=none", "none"},
+	} {
+		page := open(start(test.query))
+		page.await("so this shell opened in your home directory.")
+		if !strings.Contains(page.shown.String(), test.says) {
+			t.Errorf("%s: the shell was told %q", test.query, page.shown.String())
+		}
+		inDir(page, home)
+	}
+	if err := os.Remove(second); err != nil {
+		t.Fatal(err)
+	}
+	gone := start("&project=p1")
+	page := open(gone)
+	page.await("so this shell opened in your home directory.")
+	if !strings.Contains(page.shown.String(), strconv.Quote(second)) {
+		t.Errorf("the shell was not told what is missing: %q", page.shown.String())
+	}
+	inDir(page, home)
+	_ = page.connection.Close(websocket.StatusNormalClosure, "")
+	again := open(gone)
+	again.await("so this shell opened in your home directory.")
+
+	for name, test := range map[string]struct {
+		query string
+		want  int
+	}{
+		"a run alone":        {"&run=" + firstRun, http.StatusBadRequest},
+		"a bad project":      {"&project=a%2Fb", http.StatusBadRequest},
+		"a bad run":          {"&project=p1&run=..", http.StatusBadRequest},
+		"an unknown basedir": {"&project=p1&basedir=nope", http.StatusNotFound},
+	} {
+		status, body := terminalShellsRequest(t, http.MethodPost, base+"/_terminal/shells?rows=24&cols=80"+test.query, token)
+		if status != test.want {
+			t.Errorf("%s: status %d, want %d: %s", name, status, test.want, body)
+		}
+	}
 }
 
 // A run started in the terminal outlives it, as after closing any terminal.

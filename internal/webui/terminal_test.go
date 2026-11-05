@@ -34,6 +34,7 @@ func terminalServer(t *testing.T, shell string) (*httptest.Server, *terminal.Kee
 		IdleLimit:  time.Hour,
 		RingSize:   1 << 16,
 		ShellLimit: terminalTestShellLimit,
+		GroupLimit: terminalTestShellLimit,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -352,6 +353,14 @@ func TestTerminalShellRoutes(t *testing.T) {
 		"read one shell":      {http.MethodGet, terminalShellsPath + "/" + shell.ID, http.StatusMethodNotAllowed},
 		"end an unknown one":  {http.MethodDelete, terminalShellsPath + "/7", http.StatusNotFound},
 		"end a path in there": {http.MethodDelete, terminalShellsPath + "/" + shell.ID + "/more", http.StatusNotFound},
+		"a run alone":         {http.MethodPost, terminalShellsPath + "?rows=24&cols=80&run=r", http.StatusBadRequest},
+		"a bad project":       {http.MethodPost, terminalShellsPath + "?rows=24&cols=80&project=a%2Fb", http.StatusBadRequest},
+		"a bad run":           {http.MethodPost, terminalShellsPath + "?rows=24&cols=80&project=p&run=..", http.StatusBadRequest},
+		"an unknown basedir":  {http.MethodPost, terminalShellsPath + "?rows=24&cols=80&project=p&basedir=nope", http.StatusNotFound},
+		"here, a bad project": {http.MethodGet, terminalHerePath + "?project=a%2Fb", http.StatusBadRequest},
+		"change here":         {http.MethodPost, terminalHerePath, http.StatusMethodNotAllowed},
+		"say alive":           {http.MethodPost, terminalAlivePath, http.StatusNoContent},
+		"read alive":          {http.MethodGet, terminalAlivePath, http.StatusMethodNotAllowed},
 	} {
 		if status, body := terminalRequest(t, server, test.method, test.path); status != test.want {
 			t.Errorf("%s: status %d, want %d: %s", name, status, test.want, body)
@@ -370,6 +379,7 @@ func TestTerminalShellRoutesAreGuarded(t *testing.T) {
 		{http.MethodGet, terminalShellsPath},
 		{http.MethodPost, terminalShellsPath + "?rows=24&cols=80"},
 		{http.MethodDelete, terminalShellsPath + "/" + shell.ID},
+		{http.MethodPost, terminalAlivePath},
 	} {
 		mutates := route.method != http.MethodGet
 		for _, test := range []struct {
@@ -532,10 +542,10 @@ func TestTerminalSessionAndSignOut(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	if _, err := keeper.Start(24, 80); err != nil {
+	if _, err := keeper.Start(terminal.StartOptions{Rows: 24, Cols: 80}); err != nil {
 		t.Fatal(err)
 	}
-	shell, err := keeper.Start(24, 80)
+	shell, err := keeper.Start(terminal.StartOptions{Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatal(err)
 	}

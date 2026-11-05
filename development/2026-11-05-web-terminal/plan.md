@@ -187,6 +187,32 @@ one that has ended. IDs are never reused, while numbers are, so a stale page can
 shell. Each browser tab remembers its shell in `sessionStorage`. The list is read every five seconds
 while in view, so tabs started elsewhere appear.
 
+## Projects
+
+Second improvement, on the model of an editor's terminals. Decided with the user:
+
+- A project's pages show that project's tabs, and a list reaches other projects with shells.
+- A new shell starts where the project's latest run started, or the run page's run, or at home on
+  other pages. Eight per project and 32 in all, both provisional.
+
+Choices made while implementing, which the user has not reviewed one by one:
+
+- Following a link with the panel open starts nothing, because otherwise browsing would leave a
+  shell in every project visited. Pressing Terminal or **+** starts one.
+- Choosing another project in the list goes to its page, so the panel always follows the page and
+  **+** has one meaning.
+- The server looks the directory up from the project and run. If it cannot, the shell starts at home
+  and says why in a first line kept with its output, escaped because the path comes from state.
+- Existence on this host is the only check on the directory. A run's host is not compared, since a
+  compute node's directory on a shared filesystem is what is wanted.
+- The panel skips the application's `fetch` wrapper, which prefixes a mounted basedir. The first tabs
+  commit missed this, so on such a page the shells could not be listed.
+
+The user decided that any open page keeps the shells, however it is showing them: otherwise someone
+on a project page with no shell would count as idle while their shells run in another project. Every
+page offering the terminal says so each minute, so the limit now runs out only after the last page
+closes, the computer sleeps, or the sign-in expires.
+
 ## Interfaces and documents
 
 - CLI: `--allow-terminal`, in `cli_spec.go`, and the generated Python CLI metadata through its

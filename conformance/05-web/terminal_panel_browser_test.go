@@ -86,6 +86,14 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await typeLine('echo "again-$VALUE"');
   await until('the first shell to keep its state', screenHas('again-kept'));
   await collect();
+
+  // A project's page has tabs of its own, and starts none by itself.
+  await page.evaluate('location.href = "/project/p1"');
+  await until('the project page', 'location.pathname === "/project/p1" && document.querySelector(".terminal-action")?.textContent === "Start a shell"');
+  if (await page.evaluate('document.querySelectorAll(".terminal-tab").length !== 0')) throw new Error('another page\'s tabs showed on the project page');
+  await page.evaluate('document.querySelector(".terminal-action").click()');
+  await until('the project\'s shell', 'document.querySelectorAll(".terminal-tab").length === 1 && document.querySelectorAll(".terminal-groups option").length === 2');
+  await collect();
 }).catch((error) => { failure = error.stack || String(error); });
 await close();
 console.log(JSON.stringify({ failure, violations: [...violations] }));

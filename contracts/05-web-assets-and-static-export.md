@@ -1373,28 +1373,41 @@ it, and the flag is rejected with `--allow-control=false` or `--static-dir`. Wit
 `Host` and `Origin` are checked (WEB-14). The WebSocket at `/_terminal/ws` also requires HTTPS
 or a direct loopback connection, even with a token, and so do `/_terminal/shells`, which lists the
 shells on `GET` and starts one on `POST` with `rows` and `cols` (409 at the limit), and
-`/_terminal/shells/ID`, which ends one on `DELETE` (404 if it is not running). Up to eight shells
-run at once, a limit that is provisional, each in the home directory, as `$SHELL -l` or `/bin/sh`,
-with the server's environment less the Web token. A shell's `id` is never reused while the server
-runs, and its `number` is the lowest not in use when it started. A connection names its shell with
+`/_terminal/shells/ID`, which ends one on `DELETE` (404 if it is not running). `POST` and
+`/_terminal/here`, which says where a new shell would go, take a page's place: `project`, with
+`basedir` for a mounted one (404 if unknown), and `run`, read on the server and never a path from the
+page. A shell runs as `$SHELL -l` or `/bin/sh` with the server's environment less the Web token. With
+a project, it starts where `run`, or the project's latest run, started. If that cannot be found or
+does not exist on this host it starts in the home directory and says why in its first line, escaped,
+which replays with its output. With no project it starts in the home directory, and belongs to no
+project. Up to eight shells run per project of a basedir, and thirty-two in all, limits that are
+provisional. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
+use in its project when it started, and its `link` is the page that shows it. A connection names its shell with
 `shell`, and never starts one: a shell not running closes it with 4005. A shell outlives its
 connections and replays recent output to the next. A new connection to it takes it over, closing
 the last with code 4001; one with `takeover=0`, which a page reconnecting by itself sends, gets 4001
 itself when another connection has that shell. Connections to different shells do not disturb each
 other. A shell ends with its own exit or `DELETE` (4002 with how it ended). All of them end on
 signing out, the server stopping (4004) or being killed, or thirty minutes with no connection to any
-shell, a limit that is provisional and checked at the package level by
-`TestIdleLimitAppliesToTheShellsTogether`. A process that left its session or ignores the hangup,
+shell and no `POST` to `/_terminal/alive`, which every open page offering the terminal sends each
+minute, whatever its panel shows and whether or not it is in view (`TestTerminalPanel`). The limit is
+provisional and checked at the package level by `TestIdleLimitAppliesToTheShellsTogether` and
+`TestKeepAliveHoldsTheIdleLimitOff`. A process that left its session or ignores the hangup,
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
 **WEB-33** `rotari web --allow-terminal` adds a Terminal button to the top bar of the
 application and Recent jobs pages, which opens a panel along the bottom, with a tab for each
-shell. Opening it with no shell running starts one, and **+** starts another; closing a tab asks,
-then ends that shell. Shells live on the server: each page load lists them and attaches to the one
-this browser tab last showed, or the first, replaying recent output, so following a link ends none
-of them. Only the tab shown is connected. A shell ending moves to a neighboring tab without taking
-it from another browser tab; when the last one ends, the panel says how and a new shell is a choice.
+shell of the page's project, or of no project on a page of none. A list names the projects with
+shells, and choosing one goes to its page. Opening the panel with no shell there starts one, **+**
+starts another, and a run page's **Open a terminal here** button starts another, each where the page
+says (WEB-34); closing a tab asks, then ends that shell. A page loaded with the panel left open starts
+nothing, and offers to, so browsing leaves no shells behind. Shells live on the server: each page load
+lists them and attaches to the one this browser tab last showed for the project, or the first,
+replaying recent output, so following a link ends none of them. Only the tab shown is connected. A
+shell ending moves to a neighboring tab of the project without taking it from another browser tab;
+when the project's last one ends, the panel says how and a new shell is a choice. The panel's requests
+go to the server's root on a page under a basedir's mount too.
 xterm.js loads when the panel first opens, under the page's nonce. A browser tab that is not visible
 neither connects nor retries, and a page whose sign-in has gone stops retrying and says so
 (`TestTerminalPanel`). `TestTerminalPanelInBrowser` checks the panel in

@@ -5,13 +5,19 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/coder/websocket"
 
+	"github.com/rotari-dev/rotari/internal/resolve"
+	stateinternal "github.com/rotari-dev/rotari/internal/state"
 	"github.com/rotari-dev/rotari/internal/terminal"
 )
 
@@ -22,6 +28,8 @@ const terminalPrefix = "/_terminal/"
 const (
 	terminalSocketPath = terminalPrefix + "ws"
 	terminalShellsPath = terminalPrefix + "shells"
+	terminalHerePath   = terminalPrefix + "here"
+	terminalAlivePath  = terminalPrefix + "alive"
 )
 
 //go:embed assets/vendor/xterm.js
@@ -95,6 +103,10 @@ func (s site) serveTerminal(writer http.ResponseWriter, request *http.Request) {
 		s.serveTerminalSocket(writer, request)
 	case path == terminalShellsPath:
 		s.serveTerminalShells(writer, request)
+	case path == terminalHerePath:
+		s.serveTerminalHere(writer, request)
+	case path == terminalAlivePath:
+		s.serveTerminalAlive(writer, request)
 	case strings.HasPrefix(path, terminalShellsPath+"/"):
 		s.endTerminalShell(writer, request, strings.TrimPrefix(path, terminalShellsPath+"/"))
 	default:
@@ -113,27 +125,177 @@ func terminalSize(writer http.ResponseWriter, request *http.Request) (rows, cols
 	return uint16(parsedRows), uint16(parsedCols), true
 }
 
-// serveTerminalShells lists the shells on GET, and starts one on POST.
+// terminalPlace is where a page's new shell belongs and starts.
+type terminalPlace struct {
+	// BaseDir and Project are empty for a page of no project.
+	BaseDir string `json:"basedir"`
+	Project string `json:"project"`
+	Dir     string `json:"dir"`
+	// note says why the shell could not start where the page would have it.
+	note string
+}
+
+// terminalPlaceFor reads a page's place from its basedir ID, project, and run, looking
+// the directory up here rather than taking one from the page. An empty run is the
+// project's latest. It answers the request if the place is bad.
+func (s site) terminalPlaceFor(writer http.ResponseWriter, request *http.Request) (terminalPlace, bool) {
+	query := request.URL.Query()
+	id, project, run := query.Get("basedir"), query.Get("project"), query.Get("run")
+	place := terminalPlace{Dir: s.Terminal.DefaultDir()}
+	if project == "" {
+		if run != "" {
+			http.Error(writer, "a run needs its project", http.StatusBadRequest)
+			return place, false
+		}
+		return place, true
+	}
+	if !stateinternal.IsValidPathElement(project) || (run != "" && !stateinternal.IsValidPathElement(run)) {
+		http.Error(writer, "invalid project or run", http.StatusBadRequest)
+		return place, false
+	}
+	place.BaseDir = s.BaseDir
+	if id != "" {
+		baseDir, ok := s.basedirPath(id)
+		if !ok {
+			http.Error(writer, "no such basedir", http.StatusNotFound)
+			return place, false
+		}
+		place.BaseDir = baseDir
+	}
+	if absolute, err := filepath.Abs(place.BaseDir); err == nil {
+		place.BaseDir = filepath.Clean(absolute)
+	}
+	place.Project = project
+	dir, err := s.terminalRunDir(place.BaseDir, project, run)
+	if err != nil {
+		place.note = err.Error()
+		return place, true
+	}
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		place.note = fmt.Sprintf("%q does not exist on this host", dir)
+		return place, true
+	}
+	place.Dir = dir
+	return place, true
+}
+
+// terminalRunDir is where a run was started.
+func (s site) terminalRunDir(baseDir, project, run string) (string, error) {
+	paths, err := stateinternal.ResolveProjectPaths(baseDir, project)
+	if err != nil {
+		return "", fmt.Errorf("project %q was not found", project)
+	}
+	resolved, err := resolve.RunID(paths, run)
+	if err != nil {
+		if run == "" {
+			return "", fmt.Errorf("project %q has no run to start from", project)
+		}
+		return "", fmt.Errorf("run %q was not found", run)
+	}
+	context, err := stateinternal.LoadContext(s.Store, filepath.Join(paths.RunsDir, resolved))
+	if err != nil || context.CWD == "" {
+		return "", fmt.Errorf("run %q does not say where it started", resolved)
+	}
+	return context.CWD, nil
+}
+
+// terminalGroup keys the shells of one project of one basedir. A path holds no NUL.
+func terminalGroup(place terminalPlace) string {
+	if place.Project == "" {
+		return ""
+	}
+	return place.BaseDir + "\x00" + place.Project
+}
+
+// terminalShellResponse is a shell as a page sees it.
+type terminalShellResponse struct {
+	ID      string `json:"id"`
+	Number  int    `json:"number"`
+	BaseDir string `json:"basedir"`
+	Project string `json:"project"`
+	Dir     string `json:"dir"`
+	// Link is the page that shows this shell's tabs.
+	Link string `json:"link"`
+}
+
+func (s site) terminalShellResponse(shell terminal.ShellInfo) terminalShellResponse {
+	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Dir: shell.Dir, Link: "/"}
+	baseDir, project, ok := strings.Cut(shell.Group, "\x00")
+	if !ok {
+		return response
+	}
+	response.BaseDir, response.Project = baseDir, project
+	for _, entry := range s.basedirEntries() {
+		if entry.Path == baseDir {
+			prefix := ""
+			if !entry.Current {
+				prefix = basedirRoutePrefix + entry.ID
+			}
+			response.Link = prefix + "/project/" + url.PathEscape(project)
+		}
+	}
+	return response
+}
+
+// serveTerminalAlive hears that a page is still open, which keeps the shells.
+func (s site) serveTerminalAlive(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		writer.Header().Set("Allow", http.MethodPost)
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.Terminal.KeepAlive()
+	writer.WriteHeader(http.StatusNoContent)
+}
+
+func (s site) serveTerminalHere(writer http.ResponseWriter, request *http.Request) {
+	writer.Header().Set("Cache-Control", "no-store")
+	if request.Method != http.MethodGet {
+		writer.Header().Set("Allow", http.MethodGet)
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if place, ok := s.terminalPlaceFor(writer, request); ok {
+		writeTerminalJSON(writer, http.StatusOK, place)
+	}
+}
+
+// serveTerminalShells lists the shells on GET, and starts one on POST for a page's place.
 func (s site) serveTerminalShells(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("Cache-Control", "no-store")
+	shellLimit, groupLimit := s.Terminal.Limits()
 	switch request.Method {
 	case http.MethodGet:
-		writeTerminalJSON(writer, http.StatusOK, map[string]any{"shells": s.Terminal.Shells(), "limit": s.Terminal.Limit()})
+		shells := []terminalShellResponse{}
+		for _, shell := range s.Terminal.Shells() {
+			shells = append(shells, s.terminalShellResponse(shell))
+		}
+		writeTerminalJSON(writer, http.StatusOK, map[string]any{"shells": shells, "limit": shellLimit, "group_limit": groupLimit})
 	case http.MethodPost:
 		rows, cols, ok := terminalSize(writer, request)
 		if !ok {
 			return
 		}
-		shell, err := s.Terminal.Start(rows, cols)
+		place, ok := s.terminalPlaceFor(writer, request)
+		if !ok {
+			return
+		}
+		start := terminal.StartOptions{Rows: rows, Cols: cols, Group: terminalGroup(place), Dir: place.Dir}
+		if place.note != "" {
+			start.Banner = "rotari: " + place.note + ", so this shell opened in your home directory.\r\n"
+		}
+		shell, err := s.Terminal.Start(start)
 		switch {
 		case errors.Is(err, terminal.ErrTooManyShells):
-			http.Error(writer, "at most "+strconv.Itoa(s.Terminal.Limit())+" shells can run at once", http.StatusConflict)
+			http.Error(writer, "at most "+strconv.Itoa(shellLimit)+" shells can run at once", http.StatusConflict)
+		case errors.Is(err, terminal.ErrTooManyInGroup):
+			http.Error(writer, "at most "+strconv.Itoa(groupLimit)+" shells can run for one project", http.StatusConflict)
 		case errors.Is(err, terminal.ErrKeeperClosed):
 			http.Error(writer, "the server is stopping", http.StatusServiceUnavailable)
 		case err != nil:
 			http.Error(writer, err.Error(), http.StatusInternalServerError)
 		default:
-			writeTerminalJSON(writer, http.StatusCreated, shell)
+			writeTerminalJSON(writer, http.StatusCreated, s.terminalShellResponse(shell))
 		}
 	default:
 		writer.Header().Set("Allow", "GET, POST")
