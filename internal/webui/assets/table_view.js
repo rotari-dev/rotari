@@ -1172,24 +1172,42 @@ function markCurrentRow() {
 // scrollCurrentRow brings the current row and framed cell into view by scrolling
 // the table alone. The panes above it stay where they are, so the part of the
 // table in view can end above its own bottom edge, where the page cuts it off.
+// Only when that part has no room for the row does the page scroll, just enough.
 function scrollCurrentRow() {
   const row = document.querySelector("#tv-table tr.tv-row-current");
   if (!row) return;
   const scroller = document.querySelector(".tv-scroll");
-  const area = scroller.getBoundingClientRect();
-  const page = document.querySelector(".tv-main").getBoundingClientRect();
+  const main = document.querySelector(".tv-main");
   const header = document.querySelector("#tv-table thead tr");
-  const top = Math.max(area.top + (header ? header.offsetHeight : 0), page.top);
-  const bottom = Math.min(area.bottom, page.bottom);
+  const headerHeight = header ? header.offsetHeight : 0;
+  const inView = () => {
+    const area = scroller.getBoundingClientRect();
+    const page = main.getBoundingClientRect();
+    return {
+      area,
+      top: Math.max(area.top + headerHeight, page.top),
+      bottom: Math.min(area.bottom, page.bottom),
+    };
+  };
+  let view = inView();
+  const measured = row.getBoundingClientRect();
+  const rowHeight = measured.bottom - measured.top;
+  const short = rowHeight - (view.bottom - view.top);
+  if (rowHeight > 0 && short > 0) {
+    main.scrollTop += short;
+    view = inView();
+  }
   const box = row.getBoundingClientRect();
-  if (box.top < top) scroller.scrollTop -= top - box.top;
-  else if (box.bottom > bottom) scroller.scrollTop += box.bottom - bottom;
+  if (box.top < view.top) scroller.scrollTop -= view.top - box.top;
+  else if (box.bottom > view.bottom)
+    scroller.scrollTop += box.bottom - view.bottom;
   const cell = row.querySelector("td.tv-cell-current");
   if (!cell) return;
   const edges = cell.getBoundingClientRect();
-  if (edges.left < area.left) scroller.scrollLeft -= area.left - edges.left;
-  else if (edges.right > area.right)
-    scroller.scrollLeft += edges.right - area.right;
+  if (edges.left < view.area.left)
+    scroller.scrollLeft -= view.area.left - edges.left;
+  else if (edges.right > view.area.right)
+    scroller.scrollLeft += edges.right - view.area.right;
 }
 
 function setCurrentRow(row) {

@@ -1211,8 +1211,9 @@ the page to the panes; a file following a row move or opened by `Space` does not
 About 150 ms after moves stop, the active pane's current tab, if it was opened from
 a row of this table, shows its column of the new row, keeping the layout and
 resetting the file's time range, playback position, and channel. Other panes and
-hidden tabs stay as they are. Moves scroll only the table, not the page, to keep the
-row in view, and only the last row is loaded after a held key. If the new row has no file there (a blank cell, a directory row, or a
+hidden tabs stay as they are. Moves scroll only the table to keep the row in view,
+unless the part of the table in view has no room for a row, when the page scrolls just
+enough, and only the last row is loaded after a held key. If the new row has no file there (a blank cell, a directory row, or a
 file with an error), the tab says so and can go on following; it never keeps the
 previous row's file.
 

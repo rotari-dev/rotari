@@ -220,8 +220,8 @@ try {
     await until('the next file', 'document.querySelector(".tv-pane audio")?.src.includes("ref-5.wav")');
 
     // Moves scroll the table, not the page: the row ends up in view with the
-    // page where it was. The table is tall enough only with a short window.
-    await page.send('Emulation.setDeviceMetricsOverride', { width: 1000, height: 420, deviceScaleFactor: 1, mobile: false });
+    // page where it was.
+    await page.send('Emulation.setDeviceMetricsOverride', { width: 1000, height: 900, deviceScaleFactor: 1, mobile: false });
     await sleep(100);
     const pageTop = 'document.querySelector(".tv-main").scrollTop';
     if ((await value(pageTop)) !== 0) throw new Error('the page started scrolled');
@@ -229,11 +229,20 @@ try {
     await until('row 25', current + ' === "25"');
     if ((await value(pageTop)) !== 0) throw new Error('a move scrolled the page');
     if ((await value('document.querySelector(".tv-scroll").scrollTop')) <= 0) throw new Error('a move did not scroll the table');
-    const inView = await value('(() => { const box = document.querySelector("#tv-table tr.tv-row-current").getBoundingClientRect(); return box.top >= 0 && box.bottom <= document.querySelector(".tv-main").getBoundingClientRect().bottom + 1; })()');
-    if (!inView) throw new Error('the current row is out of view');
-    for (let times = 0; times < 20; times++) await press('ArrowUp');
+    const inView = '(() => { const box = document.querySelector("#tv-table tr.tv-row-current").getBoundingClientRect(); return box.top >= 0 && box.bottom <= document.querySelector(".tv-main").getBoundingClientRect().bottom + 1; })()';
+    if (!(await value(inView))) throw new Error('the current row is out of view');
+
+    // A window too short to show a row of the table scrolls the page as well.
+    await page.send('Emulation.setDeviceMetricsOverride', { width: 1000, height: 420, deviceScaleFactor: 1, mobile: false });
+    await sleep(100);
+    await press('ArrowDown');
+    await until('row 26', current + ' === "26"');
+    if (!(await value(inView))) throw new Error('the current row is out of view in a short window');
+
+    for (let times = 0; times < 21; times++) await press('ArrowUp');
     await until('row 5', current + ' === "5"');
     await page.send('Emulation.setDeviceMetricsOverride', { width: 1000, height: 700, deviceScaleFactor: 1, mobile: false });
+    await value('document.querySelector(".tv-main").scrollTop = 0');
     await sleep(100);
 
     // An input keeps its keys: the arrow stays and a space is typed.

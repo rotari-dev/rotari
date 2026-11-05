@@ -951,6 +951,18 @@ func TestTableViewMovesBetweenRowsInBrowser(t *testing.T) {
     press('ArrowUp');
     press('ArrowUp'); // 21: starts at 80px, above the table
     if (scroller.scrollTop !== 0 || page.scrollTop !== 0) fail('scrolled up', scroller.scrollTop, page.scrollTop);
+    // With no room left for a row, as in a short window, the page scrolls just
+    // enough: the table starts 195px down here, leaving 5px.
+    const stub = window.Element.prototype.getBoundingClientRect;
+    window.Element.prototype.getBoundingClientRect = function () {
+      if (this === scroller) return { top: 195 - page.scrollTop, bottom: 595 - page.scrollTop, left: 0, right: 500 };
+      return stub.call(this);
+    };
+    press('ArrowDown');
+    if (page.scrollTop !== 25) fail('short room', page.scrollTop);
+    window.Element.prototype.getBoundingClientRect = stub;
+    page.scrollTop = 0;
+    scroller.scrollTop = 0;
     window.Element.prototype.getBoundingClientRect = box;
     delete window.Element.prototype.scrollIntoView;
     await wait(200);
