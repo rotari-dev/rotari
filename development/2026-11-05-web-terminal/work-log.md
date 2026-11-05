@@ -72,3 +72,59 @@ See [plan.md](plan.md) for current scope and status.
 
 **Remaining:** Steps 3 to 5.
 
+## Fix a race in a terminal test
+
+**Commits:** 2026-11-05 17:14:37 `f78833df`.
+
+**Change:** `TestCloseLeavesProcessesThatIgnoreTheHangup` in `internal/terminal/session_test.go` waits for the process to report after `nohup` has started it, sharing `readPID` with its neighbor.
+
+**Reason:** CI failed once on `main`: the test could close the terminal before `nohup` ignored the hangup, and the process then rightly died.
+
+**Plan impact:** None.
+
+**Validation:** 400 repetitions on one CPU did not reproduce it. Delaying `nohup` by 200 ms made the old test fail exactly as on CI, and the new one passed with the same delay. The two `TestCloseLeaves` tests passed 100 repetitions, also on one CPU, and the package passed twice under `-race`.
+
+**Remaining:** None.
+
+## Show the terminal in a panel
+
+**Commits:** 2026-11-05 17:14:43 `1edafb3c`.
+
+**Change:** A Terminal button and panel in `web_shell.js` and `web_shell.css`, xterm.js 5.5.0 and its fit addon vendored after checking npm's SHA-512, served from `/_terminal/`, `livePage` carrying the nonce and the button, `TestTerminalPanel`, and `TestTerminalPanelInBrowser` with WEB-33.
+
+**Reason:** Step 3 of the plan.
+
+**Plan impact:** Step 3 is done. It stays off `main` until the browser test has run on CI.
+
+**Validation:** `go test ./...`, `go vet`, and `tsc` passed; the browser test skips without Chrome. The user tried it by hand: the shell, `vim` across a link, `less`, Japanese input, copy and paste, and macOS.
+
+**Remaining:** Steps 4 and 5; the browser test's first run.
+
+## Finish the panel
+
+**Commits:** 2026-11-05 17:17:21 `02ff9b58`.
+
+**Change:** Height by drag and arrow keys, kept by the browser; colors from new `--terminal-*` tokens; dialogs ending where the panel begins; status text for each wait and for a failed start; `AttachIfFree` and `takeover=0`; tabs not visible neither connecting nor retrying; stopping when the sign-in has gone.
+
+**Reason:** Step 4 of the plan, and what the user's trial found: with many old tabs, a new tab sat at "Connecting" for a long time, with nothing shown until status text was added.
+
+**Plan impact:** Step 4 is done. Automatic reconnection no longer takes the shell, which it could have from the tab in use. That browsers handle WebSocket handshakes one at a time is from memory and was not checked; the user reported the startup fine after the change.
+
+**Validation:** `go test ./...`, `go vet`, and `tsc` passed. Letting background tabs retry, or reconnection take over, each failed a test. Real token values through real xterm.js in jsdom showed no error. The user tried it by hand: startup, dragging, light and dark, typing with a log open, Japanese input, and take-over by a second tab.
+
+**Remaining:** Step 5; the browser test's first run.
+
+## Promise and document the terminal
+
+**Commits:** 2026-11-05 17:28:07 `d9be68b8`.
+
+**Change:** `conformance/05-web/terminal_test.go`, contract WEB-34, and `docs/WEB.md`, `docs/SECURITY.md`, `docs/ARCHITECTURE.md`, and `docs/FAQ.md`.
+
+**Reason:** Step 5 of the plan.
+
+**Plan impact:** All steps are implemented.
+
+**Validation:** `go test ./...` and `go vet ./...` passed, and the new tests passed five times on one CPU. `-race` over them was run but its result was not read. The idle limit is checked at the package level, since 30 minutes cannot be shortened through the binary.
+
+**Remaining:** Push the branch so `TestTerminalPanelInBrowser` and the policy check run on CI, then integrate into `main`. Trying it behind an HTTPS reverse proxy and in Safari, once the sign-in fix is in.
+
