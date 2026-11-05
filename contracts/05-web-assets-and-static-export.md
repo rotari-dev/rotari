@@ -1082,6 +1082,9 @@ refused as for media but of any type, as text pages the way
 `/api/artifact-text` does (`from`, `offset`, 64 KiB on line boundaries, a
 NUL byte refusing it); a directory's page opens a path cell that names no
 media or directory that way, in a pane.
+`/tableview/api/download?ref=&base=` saves any regular file a path names, resolved
+and refused the same way, as an attachment under its own name. Each pane offers it
+for the file showing, or the copy in a static snapshot.
 In either view a row's `tables` lists its path cells naming a delimited or
 JSON Lines table file (by the table-file base-name patterns), which the
 page links to a viewer of its own in a new tab: the same query with

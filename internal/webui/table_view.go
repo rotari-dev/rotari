@@ -28,7 +28,7 @@ import (
 // content request does; the page passes it through to its API requests and
 // adds its own parameters (sep and header for a file; view, pattern, expanded, group,
 // suffix_sep, and incomplete for a directory; filters, sort, desc, offset,
-// limit, base, and for a cell's media or text, ref). /api/export takes the same
+// limit, base, and for a cell's media, text, or download, ref). /api/export takes the same
 // parameters as /api/rows but for offset, limit, and base, since it writes every
 // selected row and no media.
 
@@ -181,6 +181,15 @@ func (view tableView) handler() http.Handler {
 			return
 		}
 		serveTableViewMedia(writer, request, source, query.Get("base"), query.Get("ref"))
+	})
+	mux.HandleFunc("GET /api/download", func(writer http.ResponseWriter, request *http.Request) {
+		query := request.URL.Query()
+		source, err := view.resolve(query)
+		if err != nil {
+			writeArtifactError(writer, err)
+			return
+		}
+		serveTableViewDownload(writer, request, source, query.Get("base"), query.Get("ref"))
 	})
 	mux.HandleFunc("GET /api/text", func(writer http.ResponseWriter, request *http.Request) {
 		query := request.URL.Query()
@@ -357,24 +366,53 @@ func serveTableViewMedia(writer http.ResponseWriter, request *http.Request, sour
 		writeArtifactError(writer, err)
 		return
 	}
-	file, err := source.target.Open(path)
+	file, info, err := openTableViewFile(source, path, ref)
 	if err != nil {
 		writeArtifactError(writer, err)
 		return
 	}
 	defer file.Close()
-	info, err := file.Stat()
+	noStore(writer)
+	writer.Header().Set(headerContentType, tableview.MediaTypes[strings.ToLower(filepath.Ext(path))])
+	http.ServeContent(writer, request, "", info.ModTime(), file)
+}
+
+// serveTableViewDownload saves any file a cell names, as /api/text can read one.
+func serveTableViewDownload(writer http.ResponseWriter, request *http.Request, source tableViewSource, base, ref string) {
+	path, err := source.target.ResolvePath(source.directory, base, ref)
 	if err != nil {
 		writeArtifactError(writer, err)
 		return
 	}
-	if !info.Mode().IsRegular() {
-		writeWebError(writer, fmt.Errorf("%s is not a regular file", ref))
+	file, info, err := openTableViewFile(source, path, ref)
+	if err != nil {
+		writeArtifactError(writer, err)
 		return
 	}
+	defer file.Close()
 	noStore(writer)
-	writer.Header().Set(headerContentType, tableview.MediaTypes[strings.ToLower(filepath.Ext(path))])
+	writer.Header().Set(headerContentType, "application/octet-stream")
+	writer.Header().Set("Content-Disposition", attachmentDisposition(filepath.Base(path)))
 	http.ServeContent(writer, request, "", info.ModTime(), file)
+}
+
+// openTableViewFile opens a resolved path under the source's roots, if it is a
+// regular file.
+func openTableViewFile(source tableViewSource, path, ref string) (*os.File, os.FileInfo, error) {
+	file, err := source.target.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, nil, err
+	}
+	if !info.Mode().IsRegular() {
+		file.Close()
+		return nil, nil, fmt.Errorf("%s is not a regular file", ref)
+	}
+	return file, info, nil
 }
 
 // serveTableViewText returns one page of any file a cell names as text, as
@@ -386,21 +424,12 @@ func serveTableViewText(writer http.ResponseWriter, source tableViewSource, quer
 		writeArtifactError(writer, err)
 		return
 	}
-	file, err := source.target.Open(path)
+	file, info, err := openTableViewFile(source, path, query.Get("ref"))
 	if err != nil {
 		writeArtifactError(writer, err)
 		return
 	}
 	defer file.Close()
-	info, err := file.Stat()
-	if err != nil {
-		writeArtifactError(writer, err)
-		return
-	}
-	if !info.Mode().IsRegular() {
-		writeWebError(writer, fmt.Errorf("%s is not a regular file", query.Get("ref")))
-		return
-	}
 	page, err := readTextPage(file, info.Size(), query.Get("from"), query.Get("offset"))
 	if err != nil {
 		writeWebError(writer, err)
@@ -428,8 +457,7 @@ func openTableViewSelection(source tableViewSource, query url.Values) (*tablevie
 	return table, filters, sort, nil
 }
 
-// tableViewExportDisposition names an export after its source. Names are
-// arbitrary strings, so the header encodes them.
+// tableViewExportDisposition names an export after its source.
 func tableViewExportDisposition(source tableViewSource) string {
 	name := filepath.Base(source.target.Path)
 	if source.directory {
@@ -438,6 +466,12 @@ func tableViewExportDisposition(source tableViewSource) string {
 		extension := filepath.Ext(name)
 		name = strings.TrimSuffix(name, extension) + ".export" + extension
 	}
+	return attachmentDisposition(name)
+}
+
+// attachmentDisposition saves a response as name. Names are arbitrary strings, so
+// the header encodes them.
+func attachmentDisposition(name string) string {
 	if value := mime.FormatMediaType("attachment", map[string]string{"filename": name}); value != "" {
 		return value
 	}

@@ -77,6 +77,9 @@ func TestStaticTableViewInBrowser(t *testing.T) {
   press('ArrowDown');
   await until('the copy', () => document.querySelector('.tv-tab-view audio') && new URL(document.querySelector('.tv-tab-view audio').src).pathname === '/media/0.wav');
 
+  // A pane saves a media file from its copy.
+  if (!document.querySelector('.tv-pane a[download]') || new URL(document.querySelector('.tv-pane a[download]').href).pathname !== '/media/0.wav') fail('download', document.querySelector('.tv-pane').innerHTML.slice(0, 300));
+
   // A snapshot has no server to export from.
   if (document.querySelector('.tv-export')) fail('export link', document.getElementById('tv-pager').innerHTML);
   const exportRoute = await window.fetch('api/export');

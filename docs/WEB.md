@@ -214,6 +214,8 @@ JSON Lines file as its original lines, and a directory listing as CSV of what is
 listed. Cells are written as they are, so a spreadsheet may read one starting with
 `=` as a formula, as it would in the source file. A static snapshot has no export.
 
+Each pane has a download button for the file showing.
+
 To go through a table from the keyboard, press `↓` or `↑` to move between rows, in
 the order shown and across pages, and `←` or `→` to move a frame between the row's
 cells. Moving opens nothing. `Enter` opens the framed file, `Shift+Enter` opens all of

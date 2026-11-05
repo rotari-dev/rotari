@@ -1468,6 +1468,19 @@ function mediaURL(media) {
   );
 }
 
+// downloadURL saves a tab's file, or is "" for a tab that holds no file or a file
+// a static snapshot did not copy.
+function downloadURL(media) {
+  if (media.kind === "notice" || media.kind === "histogram") return "";
+  if (media.url) return media.url;
+  if (info && info.static) return "";
+  return apiURL(
+    "api/download",
+    { ref: media.ref, base: media.base || undefined },
+    media.source,
+  );
+}
+
 // mediaCell shows a path that names an image, audio, or video file: the
 // path, which opens the file, and its properties, or why it is not shown.
 function mediaCell(row, index) {

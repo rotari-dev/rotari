@@ -307,11 +307,35 @@ function splitPane(pane, dir) {
   renderPanes();
 }
 
-function iconButton(label, path, onclick) {
+function iconImage(path) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 16 16");
   svg.setAttribute("aria-hidden", "true");
   svg.innerHTML = path;
+  return svg;
+}
+
+// downloadIconLink saves the file a tab shows, or is null if it shows none.
+function downloadIconLink(media) {
+  const href = media ? downloadURL(media) : "";
+  if (!href) return null;
+  const name = media.ref.slice(media.ref.lastIndexOf("/") + 1);
+  const label = "Download " + name;
+  return el(
+    "a",
+    {
+      className: "tv-icon",
+      href,
+      download: name,
+      title: label,
+      "aria-label": label,
+    },
+    iconImage(downloadIcon),
+  );
+}
+
+function iconButton(label, path, onclick) {
+  const svg = iconImage(path);
   return el(
     "button",
     {
@@ -330,6 +354,7 @@ const splitRightIcon =
 const splitDownIcon =
   '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 8h13"/>';
 const closeIcon = '<path d="M4 4l8 8M12 4l-8 8"/>';
+const downloadIcon = '<path d="M8 2v8.5M4.5 7L8 10.5 11.5 7M3 13.5h10"/>';
 
 function renderPanes() {
   const area = document.getElementById("tv-panes");
@@ -452,6 +477,9 @@ function renderPane(pane) {
     active
       ? el("span", { className: "tv-active-label" }, "Files open here")
       : null,
+    downloadIconLink(
+      (pane.tabs.find((tab) => tab.id === pane.current) || {}).media,
+    ),
     iconButton("Split right", splitRightIcon, () => splitPane(pane, "row")),
     iconButton("Split down", splitDownIcon, () => splitPane(pane, "column")),
     iconButton("Close pane", closeIcon, () => closePane(pane)),

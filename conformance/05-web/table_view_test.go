@@ -126,6 +126,14 @@ func TestWebTableViewerReadsArtifacts(t *testing.T) {
 	if !strings.Contains(r.Body, `"count":5,"unique":5,"numeric":5,"mean":298`) || !strings.Contains(r.Body, `"sum":1490`) || !strings.Contains(r.Body, `"matched":5,"total":300`) {
 		t.Fatalf("describe = (%d, %s)", r.Status, r.Body)
 	}
+	// A named file saves as an attachment, under the same roots.
+	saved := get("/tableview/api/download", "data.tsv", url.Values{"ref": {"a.wav"}, "base": {"wd"}})
+	if saved.Status != 200 || len(saved.Body) != 32044 {
+		t.Fatalf("download = (%d, %d bytes)", saved.Status, len(saved.Body))
+	}
+	if outsideRoots := get("/tableview/api/download", "data.tsv", url.Values{"ref": {filepath.Join(outside, "secret.tsv")}}); outsideRoots.Status != 403 {
+		t.Fatalf("download outside the roots = (%d, %s)", outsideRoots.Status, outsideRoots.Body)
+	}
 	// A regular expression searches cells, and a bad one is refused with the reason.
 	regex := `[{"column":0,"op":"regex","value":"^29[89]$"}]`
 	regexRows := get("/tableview/api/rows", "data.tsv", url.Values{"sep": {"\t"}, "filters": {regex}})

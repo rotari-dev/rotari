@@ -1310,6 +1310,80 @@ func TestTableViewDescribesDistributionsInBrowser(t *testing.T) {
 `)
 }
 
+// A pane's file saves through /api/download, whatever its type.
+func TestTableViewDownloadsAFile(t *testing.T) {
+	f := newArtifactFixture(t)
+	write(t, filepath.Join(f.work, "notes", "評価.log"), "line\n")
+	options := testOptions(f.baseDir, false)
+	recorder := f.viewerGet(t, options, "api/download", "wd", url.Values{"ref": {"notes/評価.log"}})
+	if recorder.Code != http.StatusOK || recorder.Body.String() != "line\n" {
+		t.Fatalf("download = (%d, %q)", recorder.Code, recorder.Body.String())
+	}
+	_, params, err := mime.ParseMediaType(recorder.Header().Get("Content-Disposition"))
+	if err != nil || params["filename"] != "評価.log" {
+		t.Fatalf("disposition = %q, %v", recorder.Header().Get("Content-Disposition"), err)
+	}
+	if recorder.Header().Get(headerContentType) != "application/octet-stream" || recorder.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("headers = %v", recorder.Header())
+	}
+	for name, ref := range map[string]string{
+		"nothing":       "",
+		"missing":       "notes/gone.log",
+		"directory":     "notes",
+		"above":         "../secret",
+		"outside":       filepath.Join(f.outside, "secret.txt"),
+		"out by a link": "link.csv",
+	} {
+		if recorder := f.viewerGet(t, options, "api/download", "wd", url.Values{"ref": {ref}}); recorder.Code < 400 {
+			t.Errorf("%s = (%d, %q)", name, recorder.Code, recorder.Body.String())
+		}
+	}
+}
+
+func TestTableViewPanesOfferDownloadsInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	writeRowNavigationTable(t, f.work, 3)
+	write(t, filepath.Join(f.work, "set", "notes.txt"), "text\n")
+	options := testOptions(f.baseDir, false)
+	runTableViewScript(t, options, f, "data.csv", "#base=wd", rowNavigationHelpers+`
+  await until('rows', () => cells().length === 3);
+  const download = () => document.querySelector('.tv-pane-active a[download]');
+  link('ref/u1.wav').click();
+  await untilShown('ref/u1.wav');
+  const url = new window.URL(download().href);
+  if (url.pathname !== '/tableview/api/download' || url.searchParams.get('ref') !== 'ref/u1.wav' || url.searchParams.get('base') !== 'wd') fail('url', download().href);
+  if (download().getAttribute('download') !== 'u1.wav' || download().title !== 'Download u1.wav') fail('name', download().outerHTML);
+  const response = await window.fetch(download().href);
+  if (response.status !== 200 || !(response.headers.get('content-disposition') || '').includes('u1.wav')) fail('fetch', response.status);
+
+  // It follows the file showing.
+  press('ArrowDown');
+  await untilShown('ref/u2.wav');
+  if (download().getAttribute('download') !== 'u2.wav') fail('after a move', download().outerHTML);
+
+  // A row without the file has nothing to save.
+  press('ArrowRight');
+  link('hyp/u1.wav').click();
+  press('ArrowDown');
+  press('ArrowDown');
+  await until('no file', () => document.querySelector('.tv-row-notice'));
+  if (download()) fail('download for a notice', download().outerHTML);
+
+  // Nor has a histogram.
+  document.querySelector('.tv-describe-toggle').click();
+  await until('describe', () => document.querySelector('.tv-open-histogram'));
+  document.querySelector('.tv-open-histogram').click();
+  if (!document.querySelector('.tv-pane-active .tv-histogram') || download()) fail('download for a histogram');
+`)
+	runTableViewScript(t, options, f, "wd", "#pattern=set%2F*&expanded=set", rowNavigationHelpers+`
+  await until('text file', () => link('set/notes.txt'));
+  link('set/notes.txt').click();
+  await until('pane', () => document.querySelector('.tv-pane-active a[download]'));
+  const response = await window.fetch(document.querySelector('.tv-pane-active a[download]').href);
+  if ((await response.text()) !== 'text\n') fail('text download');
+`)
+}
+
 func TestTableViewExportsRows(t *testing.T) {
 	f := newArtifactFixture(t)
 	write(t, filepath.Join(f.work, "data.csv"), "id,score\n1,3\n2,1\n3,2\n")
