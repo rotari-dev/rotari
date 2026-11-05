@@ -108,6 +108,7 @@ func GenerateStaticTableView(path, outputDir string) (StaticTableViewCopy, error
 		"index.html":              page,
 		"table_view.js":           tableViewJS,
 		"table_view_panes.js":     tableViewPanesJS,
+		"table_view_windows.js":   tableViewWindowsJS,
 		"highlight.min.js":        highlightJS,
 		"highlightjs-license.txt": highlightLicense,
 		"web_app_highlight.js":    webAppHighlightJS,

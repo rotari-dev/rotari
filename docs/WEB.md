@@ -217,6 +217,12 @@ listed. Cells are written as they are, so a spreadsheet may read one starting wi
 
 Each pane has a download button for the file showing.
 
+To use another screen, drag a tab out of the window, or press the pane's **Open in a
+new window**; if the browser blocks it, allow pop-ups for the page. Drag the tab back,
+or press **Back to the table**, to return it. Closing that window closes its files. Row
+moves change the file in the window you last clicked in, and arrow keys work from
+either window.
+
 To go through a table from the keyboard, press `↓` or `↑` to move between rows, in
 the order shown and across pages, and `←` or `→` to move a frame between the row's
 cells. Moving opens nothing. `Enter` opens the framed file, `Shift+Enter` opens all of

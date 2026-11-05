@@ -41,6 +41,9 @@ var tableViewJS string
 //go:embed assets/table_view_panes.js
 var tableViewPanesJS string
 
+//go:embed assets/table_view_windows.js
+var tableViewWindowsJS string
+
 //go:embed assets/table_view.css
 var tableViewCSS string
 
@@ -82,6 +85,10 @@ func (view tableView) handler() http.Handler {
 	mux.HandleFunc("GET /table_view_panes.js", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set(headerContentType, "text/javascript; charset=utf-8")
 		_, _ = writer.Write([]byte(tableViewPanesJS))
+	})
+	mux.HandleFunc("GET /table_view_windows.js", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set(headerContentType, "text/javascript; charset=utf-8")
+		_, _ = writer.Write([]byte(tableViewWindowsJS))
 	})
 	mux.HandleFunc("GET /web_app_highlight.js", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set(headerContentType, "text/javascript; charset=utf-8")

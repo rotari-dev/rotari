@@ -122,6 +122,57 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 	}
 }
 
+// TestTableViewerMovesTabsToWindows runs the binary's page in jsdom, which has no
+// windows or native drag: it checks what the page asks for. Real windows and drags
+// need a person, since browsers decide them.
+func TestTableViewerMovesTabsToWindows(t *testing.T) {
+	covers(t, "WEB-32")
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not installed")
+	}
+	e := support.NewEnv(t)
+	address := e.StartTableView(writeRowsTable(t, e.Root, 2))
+	script := `
+const { JSDOM, VirtualConsole } = require('jsdom');
+const errors = [];
+const virtualConsole = new VirtualConsole();
+virtualConsole.on('jsdomError', error => errors.push(error.stack || String(error)));
+const fail = (...detail) => { console.error(...detail, errors.join('\n')); process.exit(1); };
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+(async () => {
+  const dom = await JSDOM.fromURL(process.argv[1], {
+    runScripts: 'dangerously', resources: 'usable', virtualConsole,
+    beforeParse(window) {
+      window.fetch = (input, init) => fetch(new URL(String(input), window.location.href), init);
+    },
+  });
+  const window = dom.window, document = window.document;
+  for (let tries = 0; !document.querySelector('#tv-table a.tv-media-path'); tries++) {
+    if (tries > 500) fail('no rows');
+    await wait(30);
+  }
+  const opened = [];
+  let allow = false;
+  window.open = (url, name, features) => { opened.push({ url, name, features }); return allow ? {} : null; };
+  document.querySelector('#tv-table a.tv-media-path').click();
+  const button = () => document.querySelector('.tv-pane button[aria-label="Open in a new window"]');
+  button().click();
+  if (opened.length !== 1 || !document.querySelector('.tv-pane') || !document.getElementById('tv-error').textContent.includes('blocked')) fail('blocked window');
+  allow = true;
+  button().click();
+  if (opened.length !== 2 || document.querySelector('.tv-pane')) fail('moved out');
+  const fragment = new window.URLSearchParams(new window.URL(opened[1].url, window.location.href).hash.slice(1));
+  if (JSON.parse(fragment.get('popout')).ref !== 'ref-1.wav' || fragment.get('home') !== window.name) fail('address', opened[1].url);
+  if ((await fetch(new URL('table_view_windows.js', process.argv[1]))).status !== 200) fail('script');
+  if (errors.length) fail('page errors');
+  window.close();
+})().catch(error => fail(error.stack));
+`
+	if output, err := exec.Command("node", "-e", script, address).CombinedOutput(); err != nil {
+		t.Fatalf("browser check: %v\n%s", err, output)
+	}
+}
+
 // rowKeysBrowserCheck presses real keys, so the browser's own defaults apply:
 // typing in an input, activating a button, and playing audio.
 const rowKeysBrowserCheck = `

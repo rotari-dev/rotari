@@ -1660,22 +1660,126 @@ func TestTableViewPopsOutATabInBrowser(t *testing.T) {
   const media = JSON.parse(new window.URLSearchParams(url.hash.slice(1)).get('popout'));
   if (media.ref !== 'ref/u1.wav' || media.base !== 'wd' || !media.source) fail('media', media);
 
+  // A row move goes to that window, with the row's files in its origin's terms.
+  const posted = [];
+  window.eval('windowChannel = { postMessage(message) { window.__posted.push(message); } }');
+  window.__posted = posted;
+  press('ArrowDown');
+  await until('follow', () => posted.some(message => message.type === 'follow'));
+  const follow = posted.find(message => message.type === 'follow');
+  if (follow.to !== opened[1].name || follow.row !== 2 || follow.files[1].ref !== 'ref/u2.wav' || !follow.files[1].source || follow.table !== media.origin.table) fail('follow', JSON.stringify(follow));
+  // Space plays it there.
+  posted.length = 0;
+  if (!press(' ') || posted[0].type !== 'toggle' || posted[0].to !== opened[1].name) fail('toggle', JSON.stringify(posted));
+
+  // Clicking here brings row moves back, unless that window reports later.
+  posted.length = 0;
+  link('ref/u1.wav').click();
+  await untilShown('ref/u1.wav');
+  press('ArrowDown');
+  await untilShown('ref/u2.wav');
+  if (posted.some(message => message.type === 'follow')) fail('followed elsewhere', JSON.stringify(posted));
+  const receive = message => window.eval('handleWindowMessage')(Object.assign({ to: window.name, from: 'rotari-window-x' }, message));
+  receive({ type: 'active' });
+  press('ArrowUp');
+  await until('follow again', () => posted.some(message => message.type === 'follow' && message.to === 'rotari-window-x'));
+  // Messages for another window, or from this one, do nothing.
+  window.eval('handleWindowMessage')({ to: 'rotari-other', from: 'rotari-window-x', type: 'closed' });
+  window.eval('handleWindowMessage')({ to: window.name, from: window.name, type: 'closed' });
+  posted.length = 0;
+  press(' ');
+  if (posted[0].to !== 'rotari-window-x') fail('active window changed', JSON.stringify(posted));
+  // Once it closes, they come back here.
+  receive({ type: 'closed' });
+  posted.length = 0;
+  press('ArrowDown');
+  await wait(200);
+  if (posted.some(message => message.type === 'follow')) fail('followed a closed window', JSON.stringify(posted));
+
+  // Arrow keys from the window move the table.
+  const before = current();
+  receive({ type: 'key', key: 'ArrowUp' });
+  if (current() === before) fail('key from a window', current());
+  await wait(200);
+
+  // A file given back opens here and lets the other window know.
+  window.focus = () => {};
+  posted.length = 0;
+  const tabs = () => document.querySelectorAll('.tv-pane .tv-tab').length;
+  const count = tabs();
+  receive({ type: 'dock', tab: 't9', media: { kind: 'image', ref: 'back.png', path: 'back.png', base: 'wd', source: media.source } });
+  if (tabs() !== count + 1 || posted[0].type !== 'tab-moved' || posted[0].tab !== 't9' || posted[0].to !== 'rotari-window-x') fail('dock', JSON.stringify(posted));
+
+  // A tab dragged in from another window lands in the pane, split by zone.
+  const drag = (over, type, text, init) => {
+    const event = new window.MouseEvent(type, Object.assign({ bubbles: true, cancelable: true }, init));
+    Object.defineProperty(event, 'dataTransfer', { value: { types: ['application/x-rotari-tab'], getData: () => text, dropEffect: '' } });
+    over.dispatchEvent(event);
+    return event;
+  };
+  const dropped = JSON.stringify({ window: 'rotari-window-y', tab: 't5', media: { kind: 'image', ref: 'in.png', path: 'in.png', base: 'wd', source: media.source } });
+  posted.length = 0;
+  if (!drag(document.querySelector('.tv-pane .tv-tabs'), 'dragover', dropped).defaultPrevented) fail('strip dragover');
+  drag(document.querySelector('.tv-pane .tv-tabs'), 'drop', dropped);
+  if (!document.querySelector('.tv-pane-active .tv-tab-view strong').textContent.includes('in.png')) fail('dropped tab');
+  if (posted[0].type !== 'tab-moved' || posted[0].to !== 'rotari-window-y' || posted[0].tab !== 't5') fail('dropped message', JSON.stringify(posted));
+
+  // Anywhere else, it opens in the active pane; bad data, and a drag from this
+  // window, do nothing.
+  const table = document.querySelector('.tv-table-area');
+  const after = tabs();
+  posted.length = 0;
+  drag(table, 'drop', 'not json');
+  drag(table, 'drop', JSON.stringify({ window: window.name, tab: 't5', media: {} }));
+  if (tabs() !== after || posted.length) fail('bad drop', tabs(), JSON.stringify(posted));
+  drag(table, 'drop', dropped.replace('in.png', 'other.png').replace('in.png', 'other.png'));
+  if (tabs() !== after + 1) fail('drop outside panes', tabs());
+  window.eval('windowChannel = null');
+
   // So does the button, at no particular place.
+  for (const close of document.querySelectorAll('.tv-pane button[aria-label="Close pane"]')) close.click();
   link('ref/u2.wav').click();
   await untilShown('ref/u2.wav');
   document.querySelector('.tv-pane button[aria-label="Open in a new window"]').click();
   if (opened.length !== 3 || opened[2].features.includes('left=') || document.querySelector('.tv-pane')) fail('button', opened[2].features);
+  if (new window.URLSearchParams(new window.URL(opened[2].url, window.location.href).hash.slice(1)).get('home') !== window.name) fail('home', opened[2].url);
 `)
 	// The new window shows only that file, and closes with its last tab.
 	media := url.QueryEscape(fmt.Sprintf(`{"kind":"image","ref":"gone.png","path":"gone.png","base":"wd","source":"project_name=default&run_id=%s&job_id=job-1&entry=wd","time":2}`, f.runID))
-	runTableViewScript(t, options, f, "data.csv", "#popout="+media, rowNavigationHelpers+`
+	runTableViewScript(t, options, f, "data.csv", "#home=rotari-main-1&popout="+media, rowNavigationHelpers+`
   await until('pane', () => document.querySelector('.tv-pane .tv-tab-view'));
   if (!document.body.classList.contains('tv-popout') || shown()[0] !== 'gone.png' || document.title !== 'gone.png · rotari') fail('window', document.title);
   if (document.querySelector('#tv-table tbody tr')) fail('table loaded', cells());
+  const posted = [];
+  window.__posted = posted;
+  window.eval('windowChannel = { postMessage(message) { window.__posted.push(message); } }');
+
+  // Arrow keys go to the table, and the table's follow changes the file.
+  if (!press('ArrowDown') || posted[0].type !== 'active' || posted[1].type !== 'key' || posted[1].key !== 'ArrowDown' || posted[1].to !== 'rotari-main-1') fail('key', JSON.stringify(posted));
+  if (press('ArrowDown', { ctrlKey: true })) fail('modified key taken');
+  const tab = window.eval('panes').layout.tabs[0];
+  tab.media.origin = { table: 'T', row: 1, column: 2 };
+  const receive = message => window.eval('handleWindowMessage')(Object.assign({ to: window.name, from: 'rotari-main-1' }, message));
+  receive({ type: 'follow', table: 'other', row: 2, files: [] });
+  if (shown()[0] !== 'gone.png') fail('followed another table', shown());
+  receive({ type: 'follow', table: 'T', row: 2, files: [null, null, { kind: 'image', ref: 'next.png', path: 'next.png', source: 'x', origin: { table: 'T', row: 2, column: 2 } }] });
+  if (shown()[0] !== 'next.png') fail('follow', shown());
+
+  // The button gives the file back, and says so when nothing answers.
+  posted.length = 0;
+  document.querySelector('button[aria-label="Back to the table"]').click();
+  if (posted[0].type !== 'dock' || posted[0].to !== 'rotari-main-1' || posted[0].media.ref !== 'next.png') fail('dock', JSON.stringify(posted));
+  await until('no answer', () => document.getElementById('tv-error').textContent.includes('did not answer'));
+  if (shown()[0] !== 'next.png') fail('kept', shown());
+  document.getElementById('tv-error').textContent = '';
+  document.querySelector('button[aria-label="Back to the table"]').click();
+
   let closed = false;
   window.close = () => { closed = true; };
-  document.querySelector('.tv-tab-close').click();
+  receive({ type: 'tab-moved', tab: tab.id });
   if (!closed) fail('not closed');
+  await wait(600);
+  if (document.getElementById('tv-error').textContent !== '') fail('error after an answer');
 `)
 	runTableViewScript(t, options, f, "data.csv", "#popout=not-json", `
   await until('error', () => document.getElementById('tv-error').textContent.includes('could not be read'));

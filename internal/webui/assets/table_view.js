@@ -1220,6 +1220,14 @@ function finishFollow() {
   const { row, timer } = pendingFollow;
   clearTimeout(timer);
   pendingFollow = null;
+  if (followsElsewhere()) {
+    postToWindow(activeWindow, "follow", {
+      table: tableIdentity(),
+      row: row.number,
+      files: rows.columns.map((_, index) => placeMedia(rowFile(row, index))),
+    });
+    return;
+  }
   followActiveTab(tableIdentity(), row.number, (column) =>
     rowFile(row, column),
   );
@@ -1270,6 +1278,7 @@ function openRowFile(row, index) {
   finishFollow();
   currentColumn = index;
   setCurrentRow(row);
+  noteActiveWindow();
   openMedia(rowFile(row, index));
   releaseTableFocus();
   showPanes();
@@ -1279,6 +1288,7 @@ function openRowFile(row, index) {
 function openWholeRow(row, media) {
   finishFollow();
   setCurrentRow(row);
+  noteActiveWindow();
   openMediaRow(media);
   releaseTableFocus();
   showPanes();
@@ -1325,6 +1335,15 @@ function moveColumn(delta) {
   scrollCurrentRow();
 }
 
+// moveFromWindow takes an arrow key another window sent to the table.
+function moveFromWindow(key) {
+  if (!rows || !rows.rows.length) return;
+  if (key === "ArrowDown" || key === "ArrowUp")
+    moveRow(key === "ArrowDown" ? 1 : -1);
+  else if (key === "ArrowRight" || key === "ArrowLeft")
+    moveColumn(key === "ArrowRight" ? 1 : -1);
+}
+
 // rowKey handles the table's keys. Controls keep the keys they use.
 function rowKey(event) {
   if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -1364,6 +1383,12 @@ function rowKey(event) {
     return;
   }
   if (event.key !== " ") return;
+  // The file following row moves is in another window: it plays there.
+  if (followsElsewhere()) {
+    event.preventDefault();
+    if (!event.repeat) postToWindow(activeWindow, "toggle");
+    return;
+  }
   // The framed file plays; on a cell without one, Space still pauses what is
   // playing, and with no player at all it keeps scrolling the page.
   const row = currentRow();
@@ -1885,10 +1910,15 @@ function moveTo(child) {
 }
 
 async function start() {
-  const popOut = new URLSearchParams(location.hash.slice(1)).get("popout");
+  const fragment = new URLSearchParams(location.hash.slice(1));
+  const popOut = fragment.get("popout");
   document.addEventListener("keydown", (event) => {
+    if (popOut) {
+      if (!popOutKey(event)) rowKey(event);
+      return;
+    }
     const child = currentChild();
-    if (!popOut && event.altKey && event.key === "ArrowUp" && child) {
+    if (event.altKey && event.key === "ArrowUp" && child) {
       event.preventDefault();
       moveTo(child.split("/").slice(0, -1).join("/"));
       return;
@@ -1896,7 +1926,7 @@ async function start() {
     rowKey(event);
   });
   if (popOut) {
-    startPopOut(popOut);
+    startPopOut(popOut, fragment.get("home"));
     return;
   }
   readView();

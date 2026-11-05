@@ -174,6 +174,7 @@ function togglePlayer(player) {
     player.pause();
     return;
   }
+  postToWindow("*", "pause");
   // A hidden tab's player is not in the page, and would go on playing.
   tabViews.forEach((view) => {
     const other = playerOfView(view);
@@ -186,6 +187,14 @@ function togglePlayer(player) {
       if (error.name !== "AbortError")
         showError("Cannot play the file: " + error.message);
     });
+}
+
+// pauseAllPlayers pauses this window's players when another window plays one.
+function pauseAllPlayers() {
+  tabViews.forEach((view) => {
+    const player = playerOfView(view);
+    if (player && !player.paused) player.pause();
+  });
 }
 
 // toggleActivePlayer plays or pauses the active pane's file, and reports
@@ -370,68 +379,8 @@ const splitDownIcon =
   '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 8h13"/>';
 const closeIcon = '<path d="M4 4l8 8M12 4l-8 8"/>';
 const popOutIcon = '<path d="M9 2.5h4.5V7M13.5 2.5L8 8M6.5 3.5h-4v10h10v-4"/>';
+const dockIcon = '<path d="M13.5 8H4M7.5 4.5L4 8l3.5 3.5M2 2.5v11"/>';
 const downloadIcon = '<path d="M8 2v8.5M4.5 7L8 10.5 11.5 7M3 13.5h10"/>';
-
-// droppedOutsideWindow says whether a tab's drag ended on nothing, past the edge
-// of this window.
-function droppedOutsideWindow(event) {
-  if (event.dataTransfer && event.dataTransfer.dropEffect !== "none")
-    return false;
-  return (
-    event.clientX < 0 ||
-    event.clientY < 0 ||
-    event.clientX >= window.innerWidth ||
-    event.clientY >= window.innerHeight
-  );
-}
-
-// popOutTab moves a tab to a window of its own, at a place on the screen if given.
-// A blocked window leaves the tab where it is, and says so.
-function popOutTab(pane, tab, screenX, screenY) {
-  const view = tabViews.get(tab.id);
-  const player = playerOfView(view);
-  const media = Object.assign({}, tab.media, {
-    time: player ? player.currentTime : undefined,
-  });
-  const place =
-    screenX === undefined ? "" : ",left=" + screenX + ",top=" + screenY;
-  const opened = window.open(
-    location.pathname +
-      location.search +
-      "#popout=" +
-      encodeURIComponent(JSON.stringify(media)),
-    "_blank",
-    "popup,width=900,height=600" + place,
-  );
-  if (!opened) {
-    showError(
-      "The browser blocked a new window; allow pop-ups for this page to move a file out.",
-    );
-    return;
-  }
-  closeTab(pane, tab.id);
-}
-
-// startPopOut shows only the file a popped-out window was opened with.
-function startPopOut(text) {
-  document.body.classList.add("tv-popout");
-  let media;
-  try {
-    media = JSON.parse(text);
-  } catch {
-    showError("This window's file could not be read from its address.");
-    return;
-  }
-  document.title = media.ref + " · rotari";
-  openMedia(media);
-  const player = activePlayer();
-  if (player && media.time)
-    player.addEventListener(
-      "loadedmetadata",
-      () => (player.currentTime = media.time),
-      { once: true },
-    );
-}
 
 function renderPanes() {
   const area = document.getElementById("tv-panes");
@@ -519,6 +468,14 @@ function renderPane(pane) {
         draggable: true,
         ondragstart: (event) => {
           dragging = { pane: pane.id, tab: tab.id };
+          event.dataTransfer.setData(
+            tabDragType,
+            JSON.stringify({
+              media: tab.media,
+              window: windowID,
+              tab: tab.id,
+            }),
+          );
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", tab.media.ref);
         },
@@ -562,49 +519,53 @@ function renderPane(pane) {
     downloadIconLink(
       (pane.tabs.find((tab) => tab.id === pane.current) || {}).media,
     ),
-    iconButton("Open in a new window", popOutIcon, () => {
-      const tab = pane.tabs.find((tab) => tab.id === pane.current);
-      if (tab) popOutTab(pane, tab);
-    }),
+    homeWindow
+      ? iconButton("Back to the table", dockIcon, () => {
+          const tab = pane.tabs.find((tab) => tab.id === pane.current);
+          if (tab) dockTab(tab);
+        })
+      : iconButton("Open in a new window", popOutIcon, () => {
+          const tab = pane.tabs.find((tab) => tab.id === pane.current);
+          if (tab) popOutTab(pane, tab);
+        }),
     iconButton("Split right", splitRightIcon, () => splitPane(pane, "row")),
     iconButton("Split down", splitDownIcon, () => splitPane(pane, "column")),
     iconButton("Close pane", closeIcon, () => closePane(pane)),
   );
   // A tab dropped on the strip moves into this pane at that place.
   strip.addEventListener("dragover", (event) => {
-    if (!dragging) return;
+    if (!dragging && !foreignTabDrag(event)) return;
     event.preventDefault();
     clearDropMarks();
     strip.classList.add("tv-drop-strip");
   });
   strip.addEventListener("drop", (event) => {
-    if (!dragging) return;
+    if (!dragging && !foreignTabDrag(event)) return;
     event.preventDefault();
     const before = [...strip.querySelectorAll(".tv-tab")].findIndex((tab) => {
       const box = tab.getBoundingClientRect();
       return event.clientX < box.left + box.width / 2;
     });
-    dropTab(
-      dragging,
-      pane.id,
-      "center",
-      before < 0 ? pane.tabs.length : before,
-    );
+    const index = before < 0 ? pane.tabs.length : before;
+    if (dragging) dropTab(dragging, pane.id, "center", index);
+    else receiveTab(event, pane.id, "center", index);
   });
   const current = pane.tabs.find((tab) => tab.id === pane.current);
   const body = el("div", { className: "tv-pane-body" });
   // A tab dropped on the body moves here, or near an edge splits this pane
   // that way and opens in the new pane.
   body.addEventListener("dragover", (event) => {
-    if (!dragging) return;
+    if (!dragging && !foreignTabDrag(event)) return;
     event.preventDefault();
     clearDropMarks();
     body.dataset.drop = dropZone(event, body);
   });
   body.addEventListener("drop", (event) => {
-    if (!dragging) return;
+    if (!dragging && !foreignTabDrag(event)) return;
     event.preventDefault();
-    dropTab(dragging, pane.id, dropZone(event, body), pane.tabs.length);
+    const zone = dropZone(event, body);
+    if (dragging) dropTab(dragging, pane.id, zone, pane.tabs.length);
+    else receiveTab(event, pane.id, zone, pane.tabs.length);
   });
   if (current) {
     let view = tabViews.get(current.id);
@@ -628,6 +589,7 @@ function renderPane(pane) {
   );
   // Any click in a pane makes it the one files open in.
   section.addEventListener("pointerdown", () => {
+    noteActiveWindow();
     if (panes.active === pane.id) return;
     panes.active = pane.id;
     document.querySelectorAll(".tv-pane").forEach((other) => {

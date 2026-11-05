@@ -1231,6 +1231,24 @@ there are no row keys for a document preview. Implemented in
 `TestTableViewerMovesBetweenRows` and, in Chrome, `TestTableViewerRowKeysInBrowser`
 in [conformance/05-web/table_view_rows_test.go](../conformance/05-web/table_view_rows_test.go).
 
+**WEB-32** A Table viewer tab dragged past the edge of its window, or a pane's **Open
+in a new window** button, moves the file to a window of its own showing only panes,
+at the current playback position; a blocked window leaves the tab and says so. There,
+a pane's **Back to the table** button returns the file to the window with the table,
+and says so if that window does not answer. A tab dragged between windows moves to the
+pane it lands on, by the same zones as within a window, or to the active pane when
+dropped elsewhere. Row moves change the file in the window last clicked in or moved
+to, under WEB-30's rule for the active pane, and arrow keys in a window of its own move
+the table. `Space` there plays its file, and the table's `Space` plays the file in that
+window while it has the row moves. Playing with `Space` pauses other windows. Closing
+the window closes its files, and row moves return to the table's window. These need a
+`BroadcastChannel`; without one a window still opens, but does not follow or return a
+file. Implemented in
+[internal/webui/assets/table_view_windows.js](../internal/webui/assets/table_view_windows.js);
+covered by `TestTableViewerMovesTabsToWindows` in
+[conformance/05-web/table_view_rows_test.go](../conformance/05-web/table_view_rows_test.go),
+which cannot use real windows or drags.
+
 **WEB-31** `/tableview/api/export`, with the parameters of `/tableview/api/rows`
 except `offset`, `limit`, and `base`, which are refused, downloads every row the
 filters select, in the sort's order, under the same roots and refusals and limits

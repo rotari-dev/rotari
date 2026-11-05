@@ -35,7 +35,7 @@ func TestTableViewCommandServesOnePath(t *testing.T) {
 	if r := e.HTTPGet(base + "/"); r.Status != 200 || !strings.Contains(r.Body, "table_view.js") {
 		t.Fatalf("page = (%d, %.200s)", r.Status, r.Body)
 	}
-	for _, asset := range []string{"/table_view.js", "/table_view_panes.js", "/table_view.css", "/web_tokens.css", "/web_fonts.css"} {
+	for _, asset := range []string{"/table_view.js", "/table_view_panes.js", "/table_view_windows.js", "/table_view.css", "/web_tokens.css", "/web_fonts.css"} {
 		if r := e.HTTPGet(base + asset); r.Status != 200 {
 			t.Fatalf("%s = %d", asset, r.Status)
 		}
@@ -148,7 +148,7 @@ func TestTableViewCommandWritesAStaticSnapshot(t *testing.T) {
 	if strings.Contains(string(page), data) {
 		t.Errorf("page names the source directory %s", data)
 	}
-	for _, name := range []string{"table_view.js", "table_view_panes.js", "table_view_static.js", "table_view.css", "web_tokens.css", "web_fonts.css", "fonts/LICENSE.txt"} {
+	for _, name := range []string{"table_view.js", "table_view_panes.js", "table_view_windows.js", "table_view_static.js", "table_view.css", "web_tokens.css", "web_fonts.css", "fonts/LICENSE.txt"} {
 		if _, err := os.Stat(filepath.Join(output, name)); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
