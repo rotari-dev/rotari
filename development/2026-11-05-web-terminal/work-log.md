@@ -15,3 +15,18 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** Documentation only; no tests run. Relative links were checked to exist.
 
 **Remaining:** The three questions under "Before building". Not checked: the Go modules' transitive dependencies, Safari's `connect-src` handling of WebSocket, and whether the VS Code and Jupyter Lab terminals work.
+
+## Run shells on pseudo-terminals
+
+**Commits:** 2026-11-05 15:18:04 `1a7a0fa9`.
+
+**Change:** Added `internal/terminal` with its tests, its rule in `internal/archtest` and row in `docs/ARCHITECTURE.md`, and `github.com/creack/pty`, which has no dependencies. `golang.org/x/sys` became a direct dependency.
+
+**Reason:** The first small step of phase 1, chosen by the user: sessions alone, before any HTTP.
+
+**Plan impact:** The user decided to go ahead a step at a time. Found that the `pty` package's blocking file stopped `Close` from hanging up during a `Read`, which every session has, and recorded the constraint.
+
+**Validation:** `go test ./internal/terminal` passed, also five times under `-race` and five on one CPU, and the bug's fix was shown to matter by removing it: the test then took the whole grace period and saw SIGKILL. After rebasing, `go vet`, `go build ./...`, and `go test ./internal/terminal ./internal/archtest ./conformance` passed. Bash passed the basic tests; zsh exited with status 1 on hangup, and its `nohup` case was not checked. `GOOS=darwin go vet` passed, but nothing ran on macOS. Full `go test ./...` was not run, since nothing reaches this package yet.
+
+**Remaining:** The WebSocket handler and `--allow-terminal`, then phases 2 and 3; `Close` on macOS.
+

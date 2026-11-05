@@ -1,8 +1,8 @@
 # Plan: A built-in terminal in `rotari web`
 
 Created: 2026-11-05
-Status: Proposed. Whether to build it is undecided; see
-[before building](#before-building). This replaces phases 3 to 5 of
+Status: Phase 1 in progress, a small step at a time; `internal/terminal` is done and
+not yet reachable. This replaces phases 3 to 5 of
 [the hardening plan](../2026-11-04-web-terminal/plan.md), whose hardening is done.
 
 ## Goal
@@ -86,6 +86,10 @@ $SHELL -l
 - `internal/terminal` knows nothing of HTTP, jobs, or runs, with a rule in
   [internal/archtest](../../internal/archtest/boundaries_test.go).
 - Terminal output is binary frames; input and resize are explicit message types.
+- The `pty` package leaves its file blocking, where `Close` waits for a `Read` in
+  progress, so the terminal would never close while in use. `Session` uses a pollable
+  copy and must not call `Fd` on it. This relies on the poller supporting terminals,
+  which is checked only on Linux so far.
 - The shell is `$SHELL -l` in the home directory, or `/bin/sh` when `$SHELL` is unset, as
   documented. A failed start is reported in the terminal rather than retried with another
   shell.
@@ -154,7 +158,8 @@ Conformance through the binary:
 In Chrome, extending the browser checks of WEB-28 and WEB-29: the page opens a session with
 no policy violation, a typed command's output appears, and `/_terminal/` has the nonce.
 
-By hand, since CI has neither: macOS, and an HTTPS reverse proxy. Also Japanese input and
+By hand, since CI has neither: macOS, including that `Close` hangs up at once, and an
+HTTPS reverse proxy. Also Japanese input and
 wide characters, copy and paste, `vim`, `less`, `top`, and `rotari run` with Ctrl-C and
 Ctrl-D. Safari's handling of `connect-src 'self'` for WebSocket needs checking there.
 
