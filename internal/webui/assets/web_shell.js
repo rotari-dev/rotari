@@ -192,6 +192,8 @@
   let pendingSend = null; // A command waiting for this page to connect to a shell.
   let shown = null; // The ID of the shell this page shows.
   let listSerial = 0;
+  let connectSerial = 0;
+  let waitingToOpen = false;
   let endingHere = new Set(); // Shells this page asked to end, which need no telling.
   let retryDelay = 1000;
   // What to do when this tab next becomes visible: a tab nobody is looking at
@@ -627,6 +629,17 @@
     socket = null;
     previous?.close();
     showStatus("Connecting...");
+    const serial = ++connectSerial;
+    waitingToOpen = true;
+    // xterm.js parses what it has been given later, and reset leaves that waiting, so a
+    // fast program's output would land on the next shell's screen. Wait for it to finish.
+    term.write("", () => {
+      if (serial !== connectSerial) return;
+      waitingToOpen = false;
+      open(takeOver);
+    });
+  };
+  const open = (takeOver) => {
     // Replay brings the screen back, so what is here would appear twice.
     term.reset();
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
@@ -636,11 +649,14 @@
     socket = current;
     current.binaryType = "arraybuffer";
     current.onopen = () => {
+      if (socket !== current) return;
       retryDelay = 1000;
       // A login shell can take a while to read its profile.
       showStatus("Waiting for the shell...");
     };
     current.onmessage = (event) => {
+      // Closing leaves what was already on its way, which is another shell's output now.
+      if (socket !== current) return;
       showStatus("");
       // After the replay, so that it lands at the end of what is on screen.
       term.write(new Uint8Array(event.data), pendingSend ? deliverSend : undefined);
@@ -1048,11 +1064,12 @@
     const inGroup = shellsHere();
     if (!inGroup.length) return noShellMessage();
     const showing = term && inGroup.some((shell) => shell.id === shown);
-    if (showing && !socket) {
+    // Between connect and open, it is only waiting for the old output to finish.
+    if (showing && !socket && !waitingToOpen) {
       setOpen(true);
       return "This page is not connected to the shell, so nothing was sent.";
     }
-    if (showing && socket.readyState === WebSocket.OPEN) {
+    if (showing && socket?.readyState === WebSocket.OPEN) {
       setOpen(true);
       const problem = pasteProblem(text);
       if (problem) return problem;

@@ -42,6 +42,8 @@ const plain = (id, number) => ({ id, number, basedir: '', project: '', dir: home
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
 const load = (file, { stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', limit = 8, path = '/', maximized = false, fontSize = '' } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
+  // xterm.js parses what it is given later; a test can hold that back.
+  const parser = { held: false, waiting: [], release() { this.held = false; this.waiting.splice(0).forEach((parse) => parse()); } };
   const server = { shells: [...shells], lastID: 100, limit, startError: '' };
   const fakeShells = (url, method, body) => {
     requests.push(method + ' ' + url);
@@ -115,7 +117,11 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
         loadAddon(addon) { (this.addons ||= []).push(addon); } open() {} focus() {}
         reset() { written.length = 0; }
-        write(data, done) { written.push(Buffer.from(data).toString()); done?.(); }
+        write(data, done) {
+          const parse = () => { written.push(Buffer.from(data).toString()); done?.(); };
+          if (parser.held) parser.waiting.push(parse);
+          else parse();
+        }
         paste(text) { pasted.push(text); }
         clear() { this.cleared = (this.cleared || 0) + 1; }
         onData(callback) { this.data = callback; }
@@ -126,7 +132,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
       window.WebLinksAddon = { WebLinksAddon: class { constructor(handler) { this.handler = handler; } } };
     },
   });
-  return { dom, window: dom.window, document: dom.window.document, sockets, written, terminals, requests, polls, server, alive, aliveTimers, pasted, fits };
+  return { dom, window: dom.window, document: dom.window.document, sockets, written, terminals, requests, polls, server, alive, aliveTimers, pasted, fits, parser };
 };
 (async () => {
   // Any open page says so, with its panel closed and in the background too, and a page
@@ -634,6 +640,45 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   await wait(30);
   assert.deepEqual(deleted().slice(2), ['DELETE /_terminal/shells/1', 'DELETE /_terminal/shells/2']);
   assert.deepEqual(menuPage.server.shells.map((shell) => shell.id), ['9'], 'closing all reached another project');
+
+  // A fast program's output does not reach the next shell's screen, whether it is still
+  // being parsed or still arriving from the connection left behind.
+  const fast = load(process.argv[1], { stored: '1', shells: [plain('1', 1), plain('2', 2)], remembered: ['rotari-terminal-shell::', '1'] });
+  await wait(50);
+  const fastTabs = () => [...fast.document.querySelectorAll('.terminal-tab [role=tab]')];
+  const bytes = (text) => ({ data: new TextEncoder().encode(text).buffer });
+  fast.parser.held = true;
+  fast.sockets[0].onmessage(bytes('y\r\n'));
+  fastTabs()[1].click();
+  assert.equal(fast.sockets.length, 1, 'connected with the old output still being parsed');
+  assert.match(fast.document.querySelector('.terminal-status').textContent, /Connecting/);
+  assert.equal(fast.sockets[0].closed, true);
+  fast.sockets[0].onmessage(bytes('late\r\n'));
+  fast.parser.release();
+  assert.equal(fast.sockets.length, 2);
+  assert.match(fast.sockets[1].url, /shell=2&/);
+  assert.deepEqual(fast.written, [], 'the old shell\'s output stayed on screen');
+  fast.sockets[0].onmessage(bytes('later\r\n'));
+  fast.sockets[1].onmessage(bytes('second\r\n'));
+  assert.deepEqual(fast.written, ['second\r\n']);
+  assert.equal(fast.document.querySelector('.terminal-status').hidden, true);
+  // Moving on twice while waiting connects once, to the last.
+  fast.parser.held = true;
+  fastTabs()[0].click();
+  fastTabs()[1].click();
+  fast.parser.release();
+  assert.equal(fast.sockets.length, 3);
+  assert.match(fast.sockets[2].url, /shell=2&/);
+  // A command sent while waiting goes in once the shell shows something.
+  fast.parser.held = true;
+  fastTabs()[0].click();
+  const sentWhileWaiting = fast.window.sendToTerminal('echo waited');
+  await wait(20);
+  fast.parser.release();
+  await wait(20);
+  fast.sockets[3].onmessage(bytes('prompt'));
+  assert.equal(await sentWhileWaiting, null);
+  assert.deepEqual(fast.pasted, ['echo waited']);
 
   // A tab marks output nobody has seen, and the list marks a project with any. A shell
   // ending out of sight is told of, and one ended from here is not.
