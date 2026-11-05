@@ -130,6 +130,28 @@ a:hover {
   border-radius: 8px 8px 0 0;
   overflow: hidden;
 }
+.tv-popout .tv-header,
+.tv-popout .tv-panes-handle,
+.tv-popout .tv-toolbar,
+.tv-popout .tv-filterbar,
+.tv-popout .tv-pager,
+.tv-popout .tv-scroll {
+  display: none;
+}
+.tv-popout .tv-main {
+  padding: 0;
+}
+.tv-popout .tv-panes {
+  flex: 1;
+  height: auto;
+  border-radius: 0;
+}
+.tv-popout .tv-table-area {
+  flex: none;
+  height: auto;
+  min-height: 0;
+  border: none;
+}
 .tv-panes[hidden],
 .tv-panes-handle[hidden] {
   display: none;

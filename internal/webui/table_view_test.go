@@ -1619,6 +1619,69 @@ func TestTableViewOpeningScrollsToThePanesInBrowser(t *testing.T) {
 `)
 }
 
+// A tab dragged out of the window, or its pane's button, moves the file to a
+// window of its own. jsdom has no native drag or windows, so the page gets stand-ins.
+func TestTableViewPopsOutATabInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	writeRowNavigationTable(t, f.work, 2)
+	options := testOptions(f.baseDir, false)
+	runTableViewScript(t, options, f, "data.csv", "#base=wd", rowNavigationHelpers+`
+  await until('rows', () => cells().length === 2);
+  const opened = [];
+  let allow = true;
+  window.open = (url, name, features) => { opened.push({ url, name, features }); return allow ? {} : null; };
+  const tab = () => document.querySelector('.tv-pane .tv-tab');
+  const end = (clientX, clientY, dropEffect) => {
+    const event = new window.MouseEvent('dragend', { bubbles: true, clientX, clientY, screenX: 700, screenY: 300 });
+    Object.defineProperty(event, 'dataTransfer', { value: { dropEffect } });
+    tab().dispatchEvent(event);
+  };
+  link('ref/u1.wav').click();
+  await untilShown('ref/u1.wav');
+
+  // Dropped inside the window, or on something that took it: nothing happens.
+  end(10, 10, 'none');
+  end(-5, 10, 'move');
+  if (opened.length) fail('opened', opened);
+
+  // A blocked window leaves the tab, and says so.
+  allow = false;
+  end(-5, 10, 'none');
+  if (opened.length !== 1 || !tab() || !document.getElementById('tv-error').textContent.includes('blocked')) fail('blocked', opened.length);
+  allow = true;
+
+  // Past each edge, it moves out where it was dropped, keeping the file.
+  document.getElementById('tv-error').hidden = true;
+  end(window.innerWidth + 5, 10, 'none');
+  if (opened.length !== 2 || tab()) fail('moved out', opened.length);
+  if (!opened[1].features.includes('left=700') || !opened[1].features.includes('top=300') || !opened[1].features.startsWith('popup')) fail('place', opened[1].features);
+  const url = new window.URL(opened[1].url, window.location.href);
+  if (url.pathname !== window.location.pathname || url.search !== window.location.search) fail('page', url);
+  const media = JSON.parse(new window.URLSearchParams(url.hash.slice(1)).get('popout'));
+  if (media.ref !== 'ref/u1.wav' || media.base !== 'wd' || !media.source) fail('media', media);
+
+  // So does the button, at no particular place.
+  link('ref/u2.wav').click();
+  await untilShown('ref/u2.wav');
+  document.querySelector('.tv-pane button[aria-label="Open in a new window"]').click();
+  if (opened.length !== 3 || opened[2].features.includes('left=') || document.querySelector('.tv-pane')) fail('button', opened[2].features);
+`)
+	// The new window shows only that file, and closes with its last tab.
+	media := url.QueryEscape(fmt.Sprintf(`{"kind":"image","ref":"gone.png","path":"gone.png","base":"wd","source":"project_name=default&run_id=%s&job_id=job-1&entry=wd","time":2}`, f.runID))
+	runTableViewScript(t, options, f, "data.csv", "#popout="+media, rowNavigationHelpers+`
+  await until('pane', () => document.querySelector('.tv-pane .tv-tab-view'));
+  if (!document.body.classList.contains('tv-popout') || shown()[0] !== 'gone.png' || document.title !== 'gone.png · rotari') fail('window', document.title);
+  if (document.querySelector('#tv-table tbody tr')) fail('table loaded', cells());
+  let closed = false;
+  window.close = () => { closed = true; };
+  document.querySelector('.tv-tab-close').click();
+  if (!closed) fail('not closed');
+`)
+	runTableViewScript(t, options, f, "data.csv", "#popout=not-json", `
+  await until('error', () => document.getElementById('tv-error').textContent.includes('could not be read'));
+`)
+}
+
 // A document has no rows, so the keys leave the page alone.
 func TestTableViewRowKeysIgnoreDocumentsInBrowser(t *testing.T) {
 	data := t.TempDir()

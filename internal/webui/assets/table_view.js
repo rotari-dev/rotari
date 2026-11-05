@@ -1885,21 +1885,26 @@ function moveTo(child) {
 }
 
 async function start() {
+  const popOut = new URLSearchParams(location.hash.slice(1)).get("popout");
+  document.addEventListener("keydown", (event) => {
+    const child = currentChild();
+    if (!popOut && event.altKey && event.key === "ArrowUp" && child) {
+      event.preventDefault();
+      moveTo(child.split("/").slice(0, -1).join("/"));
+      return;
+    }
+    rowKey(event);
+  });
+  if (popOut) {
+    startPopOut(popOut);
+    return;
+  }
   readView();
   startPanesHandle();
   window.addEventListener("popstate", () => {
     sourceQuery = new URLSearchParams(location.search);
     readView();
     loadSource();
-  });
-  document.addEventListener("keydown", (event) => {
-    const child = currentChild();
-    if (event.altKey && event.key === "ArrowUp" && child) {
-      event.preventDefault();
-      moveTo(child.split("/").slice(0, -1).join("/"));
-      return;
-    }
-    rowKey(event);
   });
   await loadSource();
 }

@@ -369,12 +369,77 @@ const splitRightIcon =
 const splitDownIcon =
   '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 8h13"/>';
 const closeIcon = '<path d="M4 4l8 8M12 4l-8 8"/>';
+const popOutIcon = '<path d="M9 2.5h4.5V7M13.5 2.5L8 8M6.5 3.5h-4v10h10v-4"/>';
 const downloadIcon = '<path d="M8 2v8.5M4.5 7L8 10.5 11.5 7M3 13.5h10"/>';
+
+// droppedOutsideWindow says whether a tab's drag ended on nothing, past the edge
+// of this window.
+function droppedOutsideWindow(event) {
+  if (event.dataTransfer && event.dataTransfer.dropEffect !== "none")
+    return false;
+  return (
+    event.clientX < 0 ||
+    event.clientY < 0 ||
+    event.clientX >= window.innerWidth ||
+    event.clientY >= window.innerHeight
+  );
+}
+
+// popOutTab moves a tab to a window of its own, at a place on the screen if given.
+// A blocked window leaves the tab where it is, and says so.
+function popOutTab(pane, tab, screenX, screenY) {
+  const view = tabViews.get(tab.id);
+  const player = playerOfView(view);
+  const media = Object.assign({}, tab.media, {
+    time: player ? player.currentTime : undefined,
+  });
+  const place =
+    screenX === undefined ? "" : ",left=" + screenX + ",top=" + screenY;
+  const opened = window.open(
+    location.pathname +
+      location.search +
+      "#popout=" +
+      encodeURIComponent(JSON.stringify(media)),
+    "_blank",
+    "popup,width=900,height=600" + place,
+  );
+  if (!opened) {
+    showError(
+      "The browser blocked a new window; allow pop-ups for this page to move a file out.",
+    );
+    return;
+  }
+  closeTab(pane, tab.id);
+}
+
+// startPopOut shows only the file a popped-out window was opened with.
+function startPopOut(text) {
+  document.body.classList.add("tv-popout");
+  let media;
+  try {
+    media = JSON.parse(text);
+  } catch {
+    showError("This window's file could not be read from its address.");
+    return;
+  }
+  document.title = media.ref + " · rotari";
+  openMedia(media);
+  const player = activePlayer();
+  if (player && media.time)
+    player.addEventListener(
+      "loadedmetadata",
+      () => (player.currentTime = media.time),
+      { once: true },
+    );
+}
 
 function renderPanes() {
   const area = document.getElementById("tv-panes");
   const handle = document.getElementById("tv-panes-handle");
   area.hidden = handle.hidden = !panes.layout;
+  // Its last file gone, a popped-out window has nothing left to show.
+  if (!panes.layout && document.body.classList.contains("tv-popout"))
+    window.close();
   if (typeof renderPaneToolbar === "function") renderPaneToolbar();
   if (!panes.layout) {
     setChildren(document.getElementById("tv-pane-root"));
@@ -457,9 +522,11 @@ function renderPane(pane) {
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", tab.media.ref);
         },
-        ondragend: () => {
+        ondragend: (event) => {
           dragging = null;
           clearDropMarks();
+          if (droppedOutsideWindow(event))
+            popOutTab(pane, tab, event.screenX, event.screenY);
         },
       },
       el(
@@ -495,6 +562,10 @@ function renderPane(pane) {
     downloadIconLink(
       (pane.tabs.find((tab) => tab.id === pane.current) || {}).media,
     ),
+    iconButton("Open in a new window", popOutIcon, () => {
+      const tab = pane.tabs.find((tab) => tab.id === pane.current);
+      if (tab) popOutTab(pane, tab);
+    }),
     iconButton("Split right", splitRightIcon, () => splitPane(pane, "row")),
     iconButton("Split down", splitDownIcon, () => splitPane(pane, "column")),
     iconButton("Close pane", closeIcon, () => closePane(pane)),
