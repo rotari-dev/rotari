@@ -2207,6 +2207,26 @@
           "name": "allow-terminal"
         },
         {
+          "name": "terminal-idle-timeout",
+          "value_name": "DURATION"
+        },
+        {
+          "name": "terminal-max-shells",
+          "value_name": "COUNT"
+        },
+        {
+          "name": "terminal-max-shells-per-project",
+          "value_name": "COUNT"
+        },
+        {
+          "name": "terminal-replay-size",
+          "value_name": "SIZE"
+        },
+        {
+          "name": "terminal-shell",
+          "value_name": "PATH"
+        },
+        {
           "name": "allowed-host",
           "value_name": "NAME"
         }

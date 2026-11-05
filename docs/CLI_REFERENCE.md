@@ -786,6 +786,11 @@ serve the web status UI
 | `--artifact-root` | `DIR (repeatable)` | `CLI only` | also serve recorded artifact files under this directory, besides each job's working directory (live server only; may be repeated; cannot be combined with --static-dir) |
 | `--allow-exec` | `` | `CLI only` | let the Web UI run the commands registered in the global launchers.toml against artifacts; requires job control and a token (generated and printed when none is set); cannot be combined with --static-dir |
 | `--allow-terminal` | `` | `CLI only` | let the Web UI open a shell on this host, as you, for anyone who can sign in; requires job control and a token (generated and printed when none is set), and a direct localhost connection or HTTPS; cannot be combined with --static-dir |
+| `--terminal-idle-timeout` | `DURATION` | `CLI only` | with --allow-terminal, end the shells this long after the last Web page closes (at least 2m; default 30m) |
+| `--terminal-max-shells` | `COUNT` | `CLI only` | with --allow-terminal, how many shells may run at once (default 32) |
+| `--terminal-max-shells-per-project` | `COUNT` | `CLI only` | with --allow-terminal, how many shells of one project may run at once (default 8) |
+| `--terminal-replay-size` | `SIZE` | `CLI only` | with --allow-terminal, how much of each shell's recent output to show again after switching tabs or following a link, in bytes, KiB, or MiB, from 1KiB to 64MiB (default 256KiB) |
+| `--terminal-shell` | `PATH` | `CLI only` | with --allow-terminal, the shell to run (default: $SHELL, or /bin/sh) |
 | `--allowed-host` | `NAME (repeatable)` | `CLI only` | with --allow-exec or --allow-terminal, also accept this Host name besides localhost, 127.0.0.1, ::1, and a specific --host (may be repeated) |
 
 ### `rotari tableview`

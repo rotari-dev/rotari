@@ -180,7 +180,8 @@ and a launched service's own pages, which that policy does not cover, can reach 
 call the API. Treat them as trusted code either way.
 
 Shells outlive their connections, like a launched VS Code server, so ones left open stay reachable
-to anyone with your session while any page stays open and for up to 30 minutes after, and recent
+to anyone with your session while any page stays open and for up to 30 minutes after, or what
+`--terminal-idle-timeout` says, and recent
 output is replayed to them. A page left open keeps them for as long as its sign-in lasts, up to 12
 hours. Signing out ends them all.
 

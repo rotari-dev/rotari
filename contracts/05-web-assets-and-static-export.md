@@ -1384,8 +1384,10 @@ page. A shell runs as `$SHELL -l` or `/bin/sh` with the server's environment les
 a project, it starts where `run`, or the project's latest run, started. If that cannot be found or
 does not exist on this host it starts in the home directory and says why in its first line, escaped,
 which replays with its output. With no project it starts in the home directory, and belongs to no
-project. A project's shell has `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME` set to its basedir and project. Up to eight shells run per project of a basedir, and thirty-two in all, limits that are
-provisional. A shell's `unseen_output` says it has printed something since a connection last showed it, and starts false
+project. A project's shell has `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME` set to its basedir and project. Up to eight shells run per project of a basedir, and thirty-two in all, or what
+`--terminal-max-shells-per-project` and `--terminal-max-shells` say. `--terminal-shell` replaces `$SHELL`, and
+`--terminal-replay-size` the 256 KiB of output kept per shell. These flags and `--terminal-idle-timeout` are
+rejected without `--allow-terminal`, or with a bad value, before the server starts. A shell's `unseen_output` says it has printed something since a connection last showed it, and starts false
 until one has. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
 use in its project when it started, and its `link` is the page that shows it. A connection names its shell with
 `shell`, and never starts one: a shell not running closes it with 4005. A shell outlives its
@@ -1395,8 +1397,9 @@ itself when another connection has that shell. Connections to different shells d
 other. A shell ends with its own exit or `DELETE` (4002 with how it ended). All of them end on
 signing out, the server stopping (4004) or being killed, or thirty minutes with no connection to any
 shell and no `POST` to `/_terminal/alive`, which every open page offering the terminal sends each
-minute, whatever its panel shows and whether or not it is in view (`TestTerminalPanel`). The limit is
-provisional and checked at the package level by `TestIdleLimitAppliesToTheShellsTogether` and
+minute, whatever its panel shows and whether or not it is in view (`TestTerminalPanel`).
+`--terminal-idle-timeout` changes those minutes, to no fewer than two. The limit is checked at the package
+level by `TestIdleLimitAppliesToTheShellsTogether` and
 `TestKeepAliveHoldsTheIdleLimitOff`. A process that left its session or ignores the hangup,
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).

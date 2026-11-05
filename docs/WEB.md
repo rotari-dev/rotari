@@ -47,6 +47,7 @@ environment variables are in
 | `--allow-control` | Job control on (default) or `=false` for read-only. |
 | `--allow-exec` | Let the UI launch registered commands; see below. |
 | `--allow-terminal` | Add a terminal panel; see below. |
+| `--terminal-idle-timeout`, `--terminal-max-shells`, `--terminal-max-shells-per-project`, `--terminal-replay-size`, `--terminal-shell` | With `--allow-terminal`, change its limits; see below. |
 | `--allowed-host NAME` | With `--allow-exec` or `--allow-terminal`, accept one more `Host` header name (repeatable). |
 | `--artifact-root DIR` | Also serve recorded artifact files under `DIR` (repeatable). |
 | `--static-dir DIR` | Write a static export instead of serving. |
@@ -175,6 +176,16 @@ rotari web --allow-terminal
   keeps them, even in the background with its panel closed. A computer that sleeps counts as closing
   its pages, and so does a sign-in that has expired. Use `rotari run` or `tmux` for long work: a run
   started in the terminal carries on regardless.
+- **Changing the limits:**
+
+  | Flag | Default | |
+  | --- | --- | --- |
+  | `--terminal-idle-timeout` | `30m` | How long the shells last after the last page closes. At least `2m`. |
+  | `--terminal-max-shells` | `32` | Shells at once. |
+  | `--terminal-max-shells-per-project` | `8` | Shells of one project at once. |
+  | `--terminal-replay-size` | `256KiB` | Recent output kept per shell, up to `64MiB`. More uses more memory. |
+  | `--terminal-shell` | `$SHELL`, or `/bin/sh` | The shell to run. |
+
 - **Keys:** a browser keeps some keys for itself, such as Ctrl-W, which do not reach the shell.
 - **Behind a reverse proxy:** the proxy must pass WebSocket connections to `/_terminal/ws`.
 

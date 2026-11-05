@@ -261,6 +261,14 @@ Asked for by the user. The order lives on the server, like names, so later pages
 it. Tabs keep their numbers when moved, so numbers can read out of order. **Close tabs to the right** and the
 neighbor to move to follow the arranged order. The menu also moves tabs, for those not using a mouse.
 
+## Flags
+
+The provisional limits became flags, as the plan had expected: the idle timeout, both shell limits, the replay
+size, and the shell. No unlimited timeout, by the user's choice, and a minimum of two minutes so an open page
+cannot lose its shells. Like `--allow-terminal`, they are command-line only: no config file or environment
+variable, whose bad values the existing helpers would ignore. The stall limit, pending output, the alive
+interval, and the paste limit stay internal.
+
 ## Interfaces and documents
 
 - CLI: `--allow-terminal`, in `cli_spec.go`, and the generated Python CLI metadata through its

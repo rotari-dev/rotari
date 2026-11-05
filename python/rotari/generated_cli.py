@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+
 CLI_SCHEMA: dict[str, Any] = {
     "commands": [
         {
@@ -3525,6 +3526,45 @@ CLI_SCHEMA: dict[str, Any] = {
                     "localhost connection or HTTPS; cannot be "
                     "combined with --static-dir",
                     "name": "allow-terminal",
+                },
+                {
+                    "command_line_only": True,
+                    "description": "with --allow-terminal, end the shells this "
+                    "long after the last Web page closes (at "
+                    "least 2m; default 30m)",
+                    "name": "terminal-idle-timeout",
+                    "value_name": "DURATION",
+                },
+                {
+                    "command_line_only": True,
+                    "description": "with --allow-terminal, how many shells may "
+                    "run at once (default 32)",
+                    "name": "terminal-max-shells",
+                    "value_name": "COUNT",
+                },
+                {
+                    "command_line_only": True,
+                    "description": "with --allow-terminal, how many shells of "
+                    "one project may run at once (default 8)",
+                    "name": "terminal-max-shells-per-project",
+                    "value_name": "COUNT",
+                },
+                {
+                    "command_line_only": True,
+                    "description": "with --allow-terminal, how much of each "
+                    "shell's recent output to show again after "
+                    "switching tabs or following a link, in "
+                    "bytes, KiB, or MiB, from 1KiB to 64MiB "
+                    "(default 256KiB)",
+                    "name": "terminal-replay-size",
+                    "value_name": "SIZE",
+                },
+                {
+                    "command_line_only": True,
+                    "description": "with --allow-terminal, the shell to run "
+                    "(default: $SHELL, or /bin/sh)",
+                    "name": "terminal-shell",
+                    "value_name": "PATH",
                 },
                 {
                     "command_line_only": True,

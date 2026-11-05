@@ -215,6 +215,16 @@ func TestTerminalNeedsItsFlag(t *testing.T) {
 		want string
 	}{
 		{[]string{"--allow-terminal", "--allow-control=false"}, "--allow-terminal requires job control"},
+		{[]string{"--terminal-max-shells", "2"}, "--terminal-max-shells only applies with --allow-terminal"},
+		{[]string{"--terminal-idle-timeout", "1h"}, "--terminal-idle-timeout only applies with --allow-terminal"},
+		{[]string{"--terminal-shell", "/bin/sh"}, "--terminal-shell only applies with --allow-terminal"},
+		{[]string{"--allow-terminal", "--terminal-idle-timeout", "1m"}, "must be at least 2m"},
+		{[]string{"--allow-terminal", "--terminal-idle-timeout", "0"}, "must be at least 2m"},
+		{[]string{"--allow-terminal", "--terminal-max-shells", "0"}, "must be at least 1"},
+		{[]string{"--allow-terminal", "--terminal-max-shells-per-project", "0"}, "must be at least 1"},
+		{[]string{"--allow-terminal", "--terminal-replay-size", "1GiB"}, "--terminal-replay-size"},
+		{[]string{"--allow-terminal", "--terminal-replay-size", "99MiB"}, "from 1KiB to 64MiB"},
+		{[]string{"--allow-terminal", "--terminal-shell", filepath.Join(e.Root, "missing")}, "--terminal-shell"},
 		{[]string{"--allow-terminal", "--static-dir", filepath.Join(e.Root, "export")}, "--allow-terminal cannot be combined with --static-dir"},
 	} {
 		if r := e.Rotari(append([]string{"web"}, test.args...)...); r.Code == 0 || !strings.Contains(r.Stderr, test.want) {
@@ -671,6 +681,45 @@ func TestTerminalShellsFollowTheirProject(t *testing.T) {
 		if status != test.want {
 			t.Errorf("%s: status %d, want %d: %s", name, status, test.want, body)
 		}
+	}
+}
+
+// The flags set the limits, the replay, and the shell.
+func TestTerminalFollowsItsFlags(t *testing.T) {
+	covers(t, "WEB-34")
+	e := terminalEnv(t)
+	marker := filepath.Join(e.Root, "my-shell")
+	if err := os.WriteFile(marker, []byte("#!/bin/sh\nMY_SHELL=marked exec /bin/sh \"$@\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	base := e.StartWeb("--allow-terminal", "--terminal-max-shells", "3", "--terminal-max-shells-per-project", "2", "--terminal-replay-size", "1KiB", "--terminal-idle-timeout", "5m", "--terminal-shell", marker)
+	token := http.Header{"X-Rotari-Token": {launchToken}}
+	start := func(query string, want int) {
+		t.Helper()
+		status, body := terminalShellsRequest(t, http.MethodPost, base+"/_terminal/shells?rows=24&cols=80"+query, token)
+		if status != want {
+			t.Errorf("starting with %q: status %d, want %d: %s", query, status, want, body)
+		}
+	}
+	start("", http.StatusCreated)
+	start("", http.StatusCreated)
+	start("", http.StatusConflict) // The project-less group's limit.
+	start("&project=a", http.StatusCreated)
+	start("&project=b", http.StatusConflict) // The limit on all of them.
+	if status, body := terminalShellsRequest(t, http.MethodGet, base+"/_terminal/shells", token); status != http.StatusOK || !strings.Contains(string(body), `"limit":3`) || !strings.Contains(string(body), `"group_limit":2`) {
+		t.Errorf("the list's limits: status %d: %s", status, body)
+	}
+
+	page := openTerminalPage(t, base)
+	page.typeLine(`echo "shell-$MY_SHELL"; yes old | head -c 8192; echo; echo "end-$((1+1))"`)
+	page.await("shell-marked")
+	page.await("end-2")
+	replayed := openTerminalPage(t, base)
+	page.awaitClose(terminalTakenOver)
+	replayed.await("end-2")
+	// Two limits' worth at most, since the ring keeps up to twice before cutting.
+	if size := replayed.shown.Len(); size > 2<<10+512 {
+		t.Errorf("replayed %d bytes with a 1 KiB replay", size)
 	}
 }
 

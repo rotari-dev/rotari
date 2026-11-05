@@ -62,8 +62,9 @@ type webCommandFlags struct {
 	// extra Host names accepted while it is on.
 	allowExec    bool
 	allowedHosts []string
-	// allowTerminal enables the Web UI's shells.
+	// allowTerminal enables the Web UI's shells, as terminal says.
 	allowTerminal bool
+	terminal      webTerminalSettings
 	// artifactRoots are absolute --artifact-root directories.
 	artifactRoots []string
 	// staticArtifactContents copies artifact files into a static export.
@@ -84,6 +85,11 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 	staticArtifactContents := cliBool(fs, "static-artifact-contents", false)
 	allowExec := cliBool(fs, "allow-exec", false)
 	allowTerminal := cliBool(fs, "allow-terminal", false)
+	terminalIdleTimeout := cliDuration(fs, "terminal-idle-timeout", webTerminalIdleLimit)
+	terminalMaxShells := cliInt(fs, "terminal-max-shells", webTerminalShellLimit)
+	terminalMaxPerProject := cliInt(fs, "terminal-max-shells-per-project", webTerminalGroupLimit)
+	terminalReplaySize := cliString(fs, "terminal-replay-size", webTerminalRingSize)
+	terminalShell := cliString(fs, "terminal-shell", "")
 	var allowedHosts stringSliceFlag
 	cliValue(fs, &allowedHosts, "allowed-host")
 	if err := cliParse(fs, args); err != nil {
@@ -112,6 +118,17 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 		printError("--allow-terminal requires job control; remove --allow-control=false")
 		return webCommandFlags{}, 1
 	}
+	for _, name := range webTerminalOptions {
+		if cliOptionSet(fs, name) && !*allowTerminal {
+			printErrorf("--%s only applies with --allow-terminal", name)
+			return webCommandFlags{}, 1
+		}
+	}
+	terminalSettings, err := newWebTerminalSettings(*terminalIdleTimeout, *terminalMaxShells, *terminalMaxPerProject, *terminalReplaySize, *terminalShell)
+	if err != nil {
+		printError(err)
+		return webCommandFlags{}, 1
+	}
 	if len(allowedHosts) > 0 && !*allowExec && !*allowTerminal {
 		printError("--allowed-host only applies with --allow-exec or --allow-terminal")
 		return webCommandFlags{}, 1
@@ -123,7 +140,7 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 		}
 	}
 	flags := webCommandFlags{basedir: *basedir, host: *host, port: *port, staticDir: *staticDir, authToken: *authToken, allowControl: *allowControl, notifications: *notifications, staticArtifactContents: *staticArtifactContents,
-		allowExec: *allowExec, allowedHosts: allowedHosts, allowTerminal: *allowTerminal}
+		allowExec: *allowExec, allowedHosts: allowedHosts, allowTerminal: *allowTerminal, terminal: terminalSettings}
 	for _, root := range artifactRoots {
 		absolute, err := filepath.Abs(root)
 		if info, statErr := os.Stat(absolute); err != nil || statErr != nil || !info.IsDir() {
@@ -205,7 +222,7 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 		options.Launches = launches
 	}
 	if flags.allowTerminal {
-		keeper, err := newWebTerminal()
+		keeper, err := newWebTerminal(flags.terminal)
 		if err != nil {
 			printErrorf("cannot enable the terminal: %v", err)
 			return 1
@@ -280,7 +297,7 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 }
 
 func webStaticServerOptions(fs *flag.FlagSet) []string {
-	return staticServerOptions(fs, "web", []string{"allow-control", "allow-exec", "allow-terminal", "allowed-host", "artifact-root", "auth-token", "host", "port"})
+	return staticServerOptions(fs, "web", append([]string{"allow-control", "allow-exec", "allow-terminal", "allowed-host", "artifact-root", "auth-token", "host", "port"}, webTerminalOptions...))
 }
 
 // staticServerOptions lists the names, options of command that only a live
