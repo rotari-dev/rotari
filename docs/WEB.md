@@ -196,6 +196,12 @@ Alt+↑) goes up one level, and the browser's Back returns. Files open in panes
 stay open while you move, so `ref/u1.wav` and `hyp/u1.wav` can be compared
 from their own directories. The URL keeps the view, so a link can be shared.
 
+Filters include **matches regex** and **does not match regex**, which search a cell
+with [Go's syntax](https://pkg.go.dev/regexp/syntax): `^(alpha|beta)$` selects either
+value of a column, and `(?i)` ignores case. Lookaround and backreferences are not
+available. They see the stored value rather than the formatted one, so a duration
+shown as `1:30` is matched as `90`. All conditions must match.
+
 **Describe** also shows each column's quartiles, a small histogram, and its most
 frequent values. Numbers beyond 10,000,000 in the selected rows leave out quartiles
 and histograms, and past 10,000 distinct values a column lists no top values; a filter

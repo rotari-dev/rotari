@@ -1198,6 +1198,60 @@ func TestTableViewDescribeShowsItsRowsInBrowser(t *testing.T) {
 `)
 }
 
+// A refused filter must leave a way out, and a typo's text to correct.
+func TestTableViewRecoversFromARefusedFilterInBrowser(t *testing.T) {
+	f := newArtifactFixture(t)
+	write(t, filepath.Join(f.work, "data.csv"), "id,name\n1,alpha\n2,beta\n3,Gamma\n")
+	options := testOptions(f.baseDir, false)
+	runTableViewScript(t, options, f, "data.csv", "", `
+  await until('rows', () => cells().length === 3);
+  const errorText = () => document.getElementById('tv-error').textContent;
+  const add = (column, op, text) => {
+    const columns = document.querySelector('select[aria-label="Column"]');
+    columns.value = String(column);
+    columns.dispatchEvent(new window.Event('change'));
+    const operator = document.querySelector('select[aria-label="Operator"]');
+    operator.value = op;
+    operator.dispatchEvent(new window.Event('change'));
+    const value = document.querySelector('.tv-filter-value');
+    value.value = text;
+    value.dispatchEvent(new window.Event('input'));
+    [...document.querySelectorAll('.tv-filter-form button')].find(button => button.textContent === '+ Add').click();
+  };
+  // A bad pattern says why, keeps the rows, and puts it back to correct.
+  add(1, 'regex', '(unclosed');
+  await until('refusal', () => errorText().includes('regex'));
+  if (cells().length !== 3 || document.querySelector('.tv-chip')) fail('rows after a refusal', cells());
+  if (document.querySelector('.tv-filter-value').value !== '(unclosed' || document.querySelector('select[aria-label="Operator"]').value !== 'regex') fail('form after a refusal');
+  if (fragment().has('filters')) fail('filter kept in the URL', window.location.hash);
+  // The same goes for other operators.
+  add(1, '>', 'high');
+  await until('text ordering refused', () => errorText().includes('needs a number'));
+  if (cells().length !== 3 || document.querySelector('.tv-filter-value').value !== 'high') fail('form after an ordering', cells());
+  // The options list offers both, and they filter.
+  add(1, 'regex', '^(alpha|beta)$');
+  await until('alternation', () => cells().length === 2);
+  if (errorText() !== '') fail('error stayed', errorText());
+  if (!document.querySelector('.tv-chip').textContent.includes('matches regex')) fail('chip', document.querySelector('.tv-chip').textContent);
+  document.querySelector('.tv-chip button').click();
+  await until('removed', () => cells().length === 3);
+  add(1, 'not_regex', '(?i)gamma');
+  await until('negative', () => cells().length === 2);
+  if (cells().some(row => row[2] === 'Gamma')) fail('negative', cells());
+  // Reloading gives the same view.
+  if (JSON.parse(fragment().get('filters'))[0].value !== '(?i)gamma') fail('fragment', window.location.hash);
+`)
+	// A bad filter in the URL has no earlier rows: its chip can still be removed.
+	bad := url.QueryEscape(`[{"column":1,"op":"regex","value":"(unclosed"}]`)
+	runTableViewScript(t, options, f, "data.csv", "#filters="+bad, `
+  await until('refusal', () => document.getElementById('tv-error').textContent.includes('regex'));
+  if (document.querySelector('.tv-chip code').textContent !== '(unclosed') fail('chip', document.getElementById('tv-filterbar').innerHTML);
+  document.querySelector('.tv-chip button').click();
+  await until('rows', () => cells().length === 3);
+  if (document.getElementById('tv-error').textContent !== '' || fragment().has('filters')) fail('after removing', window.location.hash);
+`)
+}
+
 func TestTableViewDescribesDistributionsInBrowser(t *testing.T) {
 	f := newArtifactFixture(t)
 	write(t, filepath.Join(f.work, "data.csv"), "n,label\n1,<b data-x>\n2,<b data-x>\n3,other\n4,<b data-x>\n")

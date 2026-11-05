@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -20,7 +21,9 @@ type Condition struct {
 
 // The operators a Condition takes. Equality compares numbers when the cell
 // and the value both read as one, and text otherwise; the orderings match
-// only cells that read as numbers. Contains compares text, case-sensitive.
+// only cells that read as numbers. Contains compares text, case-sensitive. Regex
+// searches the cell's text with Go's regexp syntax, in which matching takes time
+// linear in the cell, so a pattern from a shared link cannot hang the server.
 const (
 	OpEqual        = "="
 	OpNotEqual     = "!="
@@ -32,6 +35,8 @@ const (
 	OpNotContains  = "not_contains"
 	OpEmpty        = "empty"
 	OpNotEmpty     = "not_empty"
+	OpRegex        = "regex"
+	OpNotRegex     = "not_regex"
 )
 
 // ParseConditions reads conditions from their JSON list.
@@ -53,6 +58,9 @@ type condition struct {
 	numeric bool
 	// text orders by text: a time column's RFC 3339 cells.
 	text bool
+	// pattern is a regex condition's. Conditions are encoded for cache keys, in
+	// which Value already identifies it.
+	pattern *regexp.Regexp
 }
 
 func compileConditions(conditions []Condition, columns []Column) ([]condition, error) {
@@ -75,6 +83,12 @@ func compileConditions(conditions []Condition, columns []Column) ([]condition, e
 			}
 		case OpEmpty, OpNotEmpty:
 			check.Value = ""
+		case OpRegex, OpNotRegex:
+			pattern, err := regexp.Compile(given.Value)
+			if err != nil {
+				return nil, fmt.Errorf("%s %s: %w", columns[given.Column].Name, given.Op, err)
+			}
+			check.pattern = pattern
 		default:
 			return nil, fmt.Errorf("unknown filter operator %q", given.Op)
 		}
@@ -136,6 +150,10 @@ func (check condition) matches(cells []string) bool {
 		return strings.Contains(cell, check.Value)
 	case OpNotContains:
 		return !strings.Contains(cell, check.Value)
+	case OpRegex:
+		return check.pattern.MatchString(cell)
+	case OpNotRegex:
+		return !check.pattern.MatchString(cell)
 	}
 	if check.text {
 		order := strings.Compare(cell, check.Value)

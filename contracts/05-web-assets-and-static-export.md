@@ -1014,10 +1014,14 @@ list of `{column, op, value}` with columns counted from 0, keeps the rows
 every condition matches: `=` and `!=` compare numbers when the cell and the
 value both read as finite numbers and text otherwise, `<`, `<=`, `>`, `>=`
 need a number and match only cells that read as one, `contains` and
-`not_contains` compare text case-sensitively, and `empty` and `not_empty`
+`not_contains` compare text case-sensitively, `regex` and `not_regex` search a
+cell's stored text (not its formatted display) with Go's `regexp` syntax,
+case-sensitively unless the pattern says `(?i)`, and `empty` and `not_empty`
 test for a blank cell (a short row's missing cells are blank); a column out
-of range, an unknown operator, or an ordering against a non-number is
-refused. `sort` (a column) and `desc=1` order the selected rows, numbers by
+of range, an unknown operator, an ordering against a non-number, or an invalid
+pattern is refused. In the page, a refused new condition comes off again with the
+rows as they were, the error shown, and the condition back in the form; a refused
+condition from the URL stays as a chip that can be removed. `sort` (a column) and `desc=1` order the selected rows, numbers by
 value before other cells by text, keeping the file's order among equal
 cells, for up to 1,000,000 rows. Rows keep their numbers in the file.
 `/tableview/api/describe` summarizes each column over the rows the filters

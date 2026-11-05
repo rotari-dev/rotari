@@ -27,6 +27,8 @@ const filterOperators = [
   { op: ">=", label: "≥" },
   { op: "contains", label: "contains" },
   { op: "not_contains", label: "does not contain" },
+  { op: "regex", label: "matches regex" },
+  { op: "not_regex", label: "does not match regex" },
   { op: "empty", label: "is empty", noValue: true },
   { op: "not_empty", label: "is not empty", noValue: true },
 ];
@@ -771,7 +773,7 @@ async function loadRows() {
 function changeFilters(filters) {
   view.filters = filters;
   view.page = 1;
-  loadRows();
+  return loadRows();
 }
 
 function operatorOf(op) {
@@ -780,12 +782,15 @@ function operatorOf(op) {
 
 function renderFilterBar() {
   const bar = document.getElementById("tv-filterbar");
-  if (!rows) {
+  // A refused filter from a URL leaves no rows; its chip is the way out of it.
+  if (!rows && !view.filters.length) {
     bar.replaceChildren();
     return;
   }
   const columnName = (index) =>
-    rows.columns[index] ? rows.columns[index].name : "column " + (index + 1);
+    rows && rows.columns[index]
+      ? rows.columns[index].name
+      : "column " + (index + 1);
   const chips = view.filters.map((filter, index) =>
     el(
       "span",
@@ -807,6 +812,14 @@ function renderFilterBar() {
       ),
     ),
   );
+  if (!rows) {
+    setChildren(
+      bar,
+      el("span", { className: "tv-filter-label" }, "Filter"),
+      chips,
+    );
+    return;
+  }
   if (info.static) {
     // A static snapshot (table_view_static.js) cannot filter.
     setChildren(
@@ -888,11 +901,21 @@ function renderFilterBar() {
   );
 }
 
-function addFilter() {
+// addFilter adds the condition being written. A refused one comes off again,
+// back in the form to be corrected, with the rows as they were.
+async function addFilter() {
+  const previous = view.filters;
+  const typed = draft.value;
   const filter = { column: draft.column, op: draft.op };
   if (!operatorOf(draft.op).noValue) filter.value = draft.value;
   draft.value = "";
-  changeFilters(view.filters.concat(filter));
+  const error = await changeFilters(view.filters.concat(filter));
+  if (error) {
+    view.filters = previous;
+    draft.value = typed;
+    await loadRows();
+    showError(error);
+  }
 }
 
 // toggleSort orders by a column, ascending, then descending, then not.

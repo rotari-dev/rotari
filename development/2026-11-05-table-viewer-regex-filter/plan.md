@@ -1,7 +1,7 @@
 # Plan: Regular Expression Filters in the Table Viewer
 
 Created: 2026-11-05
-Status: Proposed. Nothing is implemented.
+Status: Implemented; not yet tried in a browser or committed to `main`.
 Related: [row export](../2026-11-05-table-viewer-export-rows/plan.md), which will
 export whatever these filters select, and
 [Describe distributions](../2026-11-05-table-viewer-describe-distributions/plan.md).

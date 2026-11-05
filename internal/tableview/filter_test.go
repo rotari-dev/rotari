@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -111,9 +112,58 @@ func TestSortOrdersNumbersThenText(t *testing.T) {
 	}
 }
 
+func TestRegexFiltersSearchCellText(t *testing.T) {
+	content := "id,name,duration\n1,alpha,90\n2,beta,\n3,Gamma\n4,日本語,120\n5,\"a\nb\",1\n"
+	table, err := OpenFile(fileTarget(t, "regex.csv", content), Format{Separator: ',', Header: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name    string
+		filters []Condition
+		want    []int
+	}{
+		{"searches anywhere", []Condition{{Column: 1, Op: OpRegex, Value: "et"}}, []int{2}},
+		{"anchors", []Condition{{Column: 1, Op: OpRegex, Value: "^a"}}, []int{1, 5}},
+		{"whole cell", []Condition{{Column: 1, Op: OpRegex, Value: "^a$"}}, nil},
+		{"line mode", []Condition{{Column: 1, Op: OpRegex, Value: "(?m)^b$"}}, []int{5}},
+		{"alternation", []Condition{{Column: 1, Op: OpRegex, Value: "^(alpha|beta)$"}}, []int{1, 2}},
+		{"case-sensitive", []Condition{{Column: 1, Op: OpRegex, Value: "gamma"}}, nil},
+		{"ignoring case", []Condition{{Column: 1, Op: OpRegex, Value: "(?i)gamma"}}, []int{3}},
+		{"multi-byte", []Condition{{Column: 1, Op: OpRegex, Value: "^日.語$"}}, []int{4}},
+		{"negated", []Condition{{Column: 1, Op: OpNotRegex, Value: "a"}}, []int{4}},
+		{"a blank cell reads as empty", []Condition{{Column: 2, Op: OpNotRegex, Value: "."}}, []int{2, 3}},
+		{"a pattern matching empty keeps blanks", []Condition{{Column: 2, Op: OpRegex, Value: "^$"}}, []int{2, 3}},
+		{"an empty pattern matches everything", []Condition{{Column: 1, Op: OpRegex, Value: ""}}, []int{1, 2, 3, 4, 5}},
+		{"all conditions must match", []Condition{{Column: 1, Op: OpRegex, Value: "a"}, {Column: 2, Op: OpRegex, Value: "^9"}}, []int{1}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			page, err := table.Page(Query{Filters: test.filters})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []int
+			for _, row := range page.Rows {
+				got = append(got, row.Number)
+			}
+			if !slices.Equal(got, test.want) {
+				t.Fatalf("rows = %v, want %v", got, test.want)
+			}
+			// Describe covers the same rows.
+			description, err := table.Describe(test.filters)
+			if err != nil || description.Matched != len(test.want) {
+				t.Fatalf("describe = %+v, %v", description, err)
+			}
+		})
+	}
+}
+
 func TestBadFiltersAreRefused(t *testing.T) {
 	table := openScores(t)
 	for _, filters := range [][]Condition{
+		{{Column: 1, Op: OpRegex, Value: "(unclosed"}},
+		{{Column: 1, Op: OpNotRegex, Value: "(?=lookahead)"}},
+		{{Column: 1, Op: OpRegex, Value: strings.Repeat("(a{1000}){1000}", 10)}},
 		{{Column: 3, Op: OpEqual, Value: "x"}},
 		{{Column: -1, Op: OpEqual, Value: "x"}},
 		{{Column: 1, Op: "~", Value: "x"}},
