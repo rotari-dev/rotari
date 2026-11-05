@@ -128,3 +128,17 @@ See [plan.md](plan.md) for current scope and status.
 
 **Remaining:** Push the branch so `TestTerminalPanelInBrowser` and the policy check run on CI, then integrate into `main`. Trying it behind an HTTPS reverse proxy and in Safari, once the sign-in fix is in.
 
+
+## Open several shells in tabs
+
+**Commits:** 2026-11-05 20:26:14 `02a5a3ad`.
+
+**Change:** `internal/terminal/keeper.go` holds the shells itself, up to a limit, with `Start`, `Shells`, `End`, and `EndAll`; `Attach` names a shell and never starts one. `internal/webui/terminal.go` adds `/_terminal/shells` and `/_terminal/shells/ID`, close code 4005, and drops the `end` control message. `web_shell.js` and `web_shell.css` add the tabs. `cmd/rotari` sets a provisional limit of eight and ends all shells on signing out. Contracts WEB-33 and WEB-34, `docs/WEB.md`, `docs/SECURITY.md`, `docs/ARCHITECTURE.md`, and the plan's [Tabs](plan.md#tabs) section.
+
+**Reason:** The first of several small improvements the user asked for after trying the panel.
+
+**Plan impact:** Removes "several shells" from the non-goals. The idle limit now covers the shells together, by the user's choice: per shell, a tab nobody is looking at would end after 30 minutes while another is in use. A server restart now leaves a **New shell** button rather than starting a shell by itself, until the page reloads.
+
+**Validation:** The user tried it in a browser and it worked. `tsc`, `go vet ./...`, and `gofmt` found nothing. In `go test ./...`, 54 of 55 packages passed; `internal/terminal` failed once in `TestCloseHangsUpTheShellAndIsRepeatable`, which this change did not touch, and that package then passed five repetitions; see [ISSUES.md](../ISSUES.md). `-race` passed on `internal/terminal` and on the terminal tests of `internal/webui` and `conformance/05-web`; the whole suite was not run with it. Moving to a neighbor with take-over, and leaving the idle timer unstarted when an attached shell ends, each failed a test. `TestTerminalPanelInBrowser`, extended with a second tab, was skipped here for lack of Chrome.
+
+**Remaining:** The browser test's first run on CI; this change has not been on CI. Further panel improvements.
