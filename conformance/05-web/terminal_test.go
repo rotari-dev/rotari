@@ -385,6 +385,24 @@ func TestTerminalKeepsSeveralShells(t *testing.T) {
 	third.await("alive-2")
 	dial(one.ID, "").awaitClose(terminalNoShell)
 
+	// Output with nothing connected is marked until something connects.
+	hasUnseen := func() bool {
+		t.Helper()
+		_, listed := terminalShellsRequest(t, http.MethodGet, base+"/_terminal/shells", token)
+		return strings.Contains(string(listed), `"unseen_output":true`)
+	}
+	if hasUnseen() {
+		t.Error("output on screen was marked as unseen")
+	}
+	third.typeLine(`(sleep 1; echo "later-$((1+1))") &`)
+	_ = third.connection.Close(websocket.StatusNormalClosure, "")
+	support.WaitUntil(t, terminalWait, func() (bool, string) { return hasUnseen(), "no shell has unseen output" })
+	fourth := dial(two.ID, "")
+	fourth.await("later-2")
+	if hasUnseen() {
+		t.Error("connecting left the output marked as unseen")
+	}
+
 	// A name stays with its shell in the list, on the one line a tab has room for.
 	got := e.HTTPDo(http.MethodPatch, base+"/_terminal/shells/"+two.ID, map[string]string{"X-Rotari-Token": launchToken}, `{"name":"build"}`)
 	if got.Status != http.StatusOK || !strings.Contains(got.Body, `"name":"build"`) {

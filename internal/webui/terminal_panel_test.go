@@ -635,6 +635,43 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.deepEqual(deleted().slice(2), ['DELETE /_terminal/shells/1', 'DELETE /_terminal/shells/2']);
   assert.deepEqual(menuPage.server.shells.map((shell) => shell.id), ['9'], 'closing all reached another project');
 
+  // A tab marks output nobody has seen, and the list marks a project with any. A shell
+  // ending out of sight is told of, and one ended from here is not.
+  const noticed = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [
+    inProject('1', 1, 'p1'), inProject('2', 2, 'p1'), inProject('3', 3, 'p1'), inProject('7', 1, 'p2'),
+  ], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const nd = noticed.document;
+  const unseenTabs = () => [...nd.querySelectorAll('.terminal-tab-unseen [role=tab]')].map((tab) => tab.textContent);
+  const shellOf = (id) => noticed.server.shells.find((shell) => shell.id === id);
+  assert.deepEqual(unseenTabs(), []);
+  shellOf('2').unseen_output = true;
+  shellOf('1').unseen_output = true; // The shown tab, whose flag is a moment behind.
+  noticed.polls[0]();
+  await wait(20);
+  assert.deepEqual(unseenTabs(), ['2']);
+  assert.match(nd.querySelectorAll('.terminal-tab [role=tab]')[1].getAttribute('aria-label'), /new output/);
+  shellOf('2').unseen_output = false;
+  noticed.polls[0]();
+  await wait(20);
+  assert.deepEqual(unseenTabs(), []);
+  assert.deepEqual([...nd.querySelectorAll('.terminal-groups option')].map((option) => option.textContent), ['p1 (3)', 'p2 (1)']);
+  shellOf('7').unseen_output = true;
+  noticed.polls[0]();
+  await wait(20);
+  assert.equal(nd.querySelectorAll('.terminal-groups option')[1].textContent, '\u2022 p2 (1)');
+  noticed.server.shells = noticed.server.shells.filter((shell) => shell.id !== '3');
+  noticed.polls[0]();
+  await wait(20);
+  assert.match(nd.querySelector('.terminal-send-note').textContent, /Shell 3 of p1 ended/);
+  nd.querySelector('.terminal-send-note').textContent = '';
+  nd.querySelectorAll('.terminal-tab-close')[1].click();
+  await wait(20);
+  noticed.polls[0]();
+  await wait(20);
+  assert.equal(nd.querySelector('.terminal-send-note').textContent, '', 'ending a shell from here told of it');
+  assert.equal(noticed.sockets.length, 1, 'noticing output moved to another tab');
+
   // A guide's send button types into the project's shown shell, as one line and with no
   // Enter. With no shell it says so, and starts none.
   const output = (page, socket) => page.sockets[socket].onmessage({ data: new TextEncoder().encode('prompt').buffer });

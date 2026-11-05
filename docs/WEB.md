@@ -133,6 +133,10 @@ editor; elsewhere each line would run, so the button says so and sends nothing.
 link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing
 while a full-screen program such as `vim` runs, and says so.
 
+A tab you are not looking at is marked when it prints something, until you show it, and the list marks
+other projects the same way. When a shell in another tab ends, a note says so. These update every few
+seconds while the panel is open and the page is in view.
+
 Right-click a tab to rename it, close the tabs to its right, or close all of this project's tabs. A name
 lasts as long as its shell.
 

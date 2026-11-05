@@ -1382,7 +1382,8 @@ a project, it starts where `run`, or the project's latest run, started. If that 
 does not exist on this host it starts in the home directory and says why in its first line, escaped,
 which replays with its output. With no project it starts in the home directory, and belongs to no
 project. A project's shell has `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME` set to its basedir and project. Up to eight shells run per project of a basedir, and thirty-two in all, limits that are
-provisional. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
+provisional. A shell's `unseen_output` says it has printed something since a connection last showed it, and starts false
+until one has. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
 use in its project when it started, and its `link` is the page that shows it. A connection names its shell with
 `shell`, and never starts one: a shell not running closes it with 4005. A shell outlives its
 connections and replays recent output to the next, except what came before a `clear` message. A new connection to it takes it over, closing

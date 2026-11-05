@@ -192,6 +192,7 @@
   let pendingSend = null; // A command waiting for this page to connect to a shell.
   let shown = null; // The ID of the shell this page shows.
   let listSerial = 0;
+  let endingHere = new Set(); // Shells this page asked to end, which need no telling.
   let retryDelay = 1000;
   // What to do when this tab next becomes visible: a tab nobody is looking at
   // neither connects nor retries. Browsers make connections to a server wait for
@@ -403,12 +404,29 @@
     for (const shell of shells) {
       if (sameGroup(shell, here)) continue;
       const entry = entries.find((item) => sameGroup(item, shell));
-      if (entry) entry.count++;
-      else entries.push({ basedir: shell.basedir, project: shell.project, link: shell.link, count: 1 });
+      if (entry) {
+        entry.count++;
+        entry.unseen ||= shell.unseen_output;
+      } else {
+        entries.push({
+          basedir: shell.basedir,
+          project: shell.project,
+          link: shell.link,
+          count: 1,
+          unseen: shell.unseen_output,
+        });
+      }
     }
     const label = (entry) => {
       const twin = entries.some((item) => item !== entry && item.project === entry.project);
-      return projectName(entry) + (twin && entry.basedir ? " in " + entry.basedir : "") + " (" + entry.count + ")";
+      return (
+        (entry.unseen ? "\u2022 " : "") +
+        projectName(entry) +
+        (twin && entry.basedir ? " in " + entry.basedir : "") +
+        " (" +
+        entry.count +
+        ")"
+      );
     };
     const drawn = JSON.stringify(entries.map((entry) => [label(entry), entry.link]));
     if (drawn === groupsDrawn) return;
@@ -431,6 +449,7 @@
     const running = targets.length === 1 ? "it" : "them";
     if (!confirm("End " + noun + ", and anything running in " + running + "?")) return;
     const ordered = [...targets].sort((a, b) => (a.id === shown) - (b.id === shown));
+    for (const shell of targets) endingHere.add(shell.id);
     for (const shell of ordered) {
       if (shell.id === shown) await refreshShells();
       let response;
@@ -513,7 +532,7 @@
     renderGroups();
     const inGroup = shellsHere().sort((a, b) => a.number - b.number);
     add.disabled = inGroup.length >= groupLimit || shells.length >= shellLimit;
-    const drawn = JSON.stringify([inGroup.map((shell) => [shell.id, shell.number, shell.name, shell.dir]), shown]);
+    const drawn = JSON.stringify([inGroup.map((shell) => [shell.id, shell.number, shell.name, shell.dir, shell.unseen_output]), shown]);
     // Drawing them again would take focus from a tab and move nothing.
     if (drawn === tabsDrawn) return;
     tabsDrawn = drawn;
@@ -522,12 +541,18 @@
         const tab = document.createElement("span");
         tab.className = "terminal-tab";
         tab.setAttribute("role", "presentation");
+        // The shown tab is connected, whatever the list said a moment ago.
+        const unseen = Boolean(shell.unseen_output) && shell.id !== shown;
+        tab.classList.toggle("terminal-tab-unseen", unseen);
         const label = document.createElement("button");
         label.type = "button";
         label.setAttribute("role", "tab");
         label.setAttribute("aria-selected", String(shell.id === shown));
-        label.setAttribute("aria-label", "Shell " + shell.number + (shell.name ? ", " + shell.name : ""));
-        label.title = "Started in " + shell.dir;
+        label.setAttribute(
+          "aria-label",
+          "Shell " + shell.number + (shell.name ? ", " + shell.name : "") + (unseen ? ", new output" : ""),
+        );
+        label.title = (unseen ? "New output. " : "") + "Started in " + shell.dir;
         label.textContent = shell.name || String(shell.number);
         label.onclick = () => {
           if (shell.id !== shown) show(shell.id);
@@ -556,6 +581,22 @@
     const reason = response ? (await response.text()).trim() : "the server did not answer";
     showStatus(what + ": " + reason, "Try again", handler);
   };
+  const shellName = (shell) => {
+    const name = shell.name || "Shell " + shell.number;
+    return shell.project ? name + " of " + shell.project : name;
+  };
+  // noteEndedShells tells of shells that ended out of sight: the shown one's connection
+  // says so itself, and a shell someone ended from this page is no news.
+  const noteEndedShells = (now) => {
+    const ended = shells.filter(
+      (shell) =>
+        shell.id !== shown &&
+        !endingHere.has(shell.id) &&
+        !now.some((other) => other.id === shell.id),
+    );
+    if (!ended.length) return;
+    showNote((ended.length === 1 ? shellName(ended[0]) : ended.length + " shells") + " ended.", 6000);
+  };
   // refreshShells updates the tabs, and returns whether it could. A newer change here
   // wins over an older answer, which may not have heard of it.
   const refreshShells = async () => {
@@ -567,6 +608,7 @@
     if (!response?.ok) return { response };
     const listed = await response.json();
     if (serial === listSerial) {
+      noteEndedShells(listed.shells);
       shells = listed.shells;
       shellLimit = listed.limit;
       groupLimit = listed.group_limit;
@@ -670,6 +712,7 @@
   };
   const endShell = async (shell) => {
     if (!confirm("End shell " + shell.number + ", and anything running in it?")) return;
+    endingHere.add(shell.id);
     let response;
     try {
       response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), { method: "DELETE" });
@@ -1033,18 +1076,21 @@
   const asWord = (value) =>
     /^[A-Za-z0-9_\/.:=@%+,-]+$/.test(value) ? value : "'" + value.replace(/'/g, "'\\''") + "'";
   let sendNote, sendNoteTimer;
-  window.sendToTerminalAndSay = async (text, { word = false, pasted = false } = {}) => {
-    const problem = await window.sendToTerminal(word ? asWord(text) : text, { pasted });
+  const showNote = (message, duration) => {
     if (!sendNote) {
       sendNote = document.createElement("div");
       sendNote.className = "terminal-send-note";
       sendNote.setAttribute("role", "status");
       document.body.append(sendNote);
     }
-    sendNote.textContent = problem || "Sent. Nothing runs until you press Enter in the terminal.";
+    sendNote.textContent = message;
     sendNote.hidden = false;
     clearTimeout(sendNoteTimer);
-    sendNoteTimer = setTimeout(() => (sendNote.hidden = true), problem ? 6000 : 2500);
+    sendNoteTimer = setTimeout(() => (sendNote.hidden = true), duration);
+  };
+  window.sendToTerminalAndSay = async (text, { word = false, pasted = false } = {}) => {
+    const problem = await window.sendToTerminal(word ? asWord(text) : text, { pasted });
+    showNote(problem || "Sent. Nothing runs until you press Enter in the terminal.", problem ? 6000 : 2500);
   };
   window.sendButtonPressed = (button) => {
     const { sendText, sendValue } = button.dataset;

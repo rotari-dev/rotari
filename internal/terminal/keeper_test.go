@@ -564,6 +564,40 @@ func TestGroupsNumberAndLimitTheirShells(t *testing.T) {
 	}
 }
 
+// Output only counts as unseen once something has shown the shell and then let go of it.
+func TestUnseenOutputIsWhatNoAttachmentShowed(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	unseen := func() bool {
+		t.Helper()
+		return keeper.Shells()[0].UnseenOutput
+	}
+	shell, err := keeper.Start(StartOptions{Rows: 24, Cols: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond) // A prompt arrives with nothing attached.
+	if unseen() {
+		t.Error("a shell starting counted as unseen output")
+	}
+	first := watchShell(t, keeper, shell.ID)
+	first.run(t, `(sleep 1; echo "later-$((1+1))") & echo "bg-$((1+1))"`, "bg-2")
+	if unseen() {
+		t.Error("output shown to an attachment counted as unseen")
+	}
+	first.Detach()
+	first.awaitEnd(t, DetachedByCaller)
+	for deadline := time.Now().Add(testWait); !unseen(); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("output with nothing attached never counted as unseen")
+		}
+	}
+	second := watchShell(t, keeper, shell.ID)
+	second.await(t, "later-2")
+	if unseen() {
+		t.Error("attaching left the output unseen")
+	}
+}
+
 func TestRenameNamesOneShell(t *testing.T) {
 	keeper := newTestKeeper(t, testIdle, 1<<16)
 	one, err := keeper.Start(StartOptions{Rows: 24, Cols: 80})

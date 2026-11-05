@@ -248,6 +248,13 @@ the shell, so that other browser tabs and later pages see them, and never come b
 Closing asks once for all of them, covers only this project, and ends the shown shell last, so that moving on
 from it does not land on one about to end.
 
+## Marks on background tabs
+
+Output a tab has not seen comes from the server, which alone knows what reached a connection: counting bytes
+on the page would miss what arrived between the last poll and leaving a tab. A shell nothing has shown does
+not count, or every new tab would flash a mark while connecting. A shell ending out of sight gets a note and
+its tab goes, without its exit status, which the server does not keep once the shell has gone.
+
 ## Interfaces and documents
 
 - CLI: `--allow-terminal`, in `cli_spec.go`, and the generated Python CLI metadata through its

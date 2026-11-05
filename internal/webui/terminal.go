@@ -226,12 +226,14 @@ type terminalShellResponse struct {
 	BaseDir string `json:"basedir"`
 	Project string `json:"project"`
 	Dir     string `json:"dir"`
+	// UnseenOutput is what a tab marks.
+	UnseenOutput bool `json:"unseen_output"`
 	// Link is the page that shows this shell's tabs.
 	Link string `json:"link"`
 }
 
 func (s site) terminalShellResponse(shell terminal.ShellInfo) terminalShellResponse {
-	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Name: shell.Name, Dir: shell.Dir, Link: "/"}
+	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Name: shell.Name, Dir: shell.Dir, UnseenOutput: shell.UnseenOutput, Link: "/"}
 	baseDir, project, ok := strings.Cut(shell.Group, "\x00")
 	if !ok {
 		return response

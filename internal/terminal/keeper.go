@@ -105,6 +105,9 @@ type ShellInfo struct {
 	Group string
 	// Dir is where it started.
 	Dir string
+	// UnseenOutput says it has printed something that no attachment has shown since one
+	// last did. A shell nothing has ever shown does not count: it is only starting.
+	UnseenOutput bool
 }
 
 // Keeper holds shells, which outlive the attachments that show them: callers come
@@ -277,6 +280,7 @@ func (keeper *Keeper) attach(id string, rows, cols uint16, takeOver bool) (*Atta
 		return nil, err
 	}
 	shell.shown = true
+	shell.info.UnseenOutput = false
 	keeper.stopIdleTimer()
 	if shell.attached != nil {
 		shell.detach(TakenOver)
@@ -345,6 +349,7 @@ func (keeper *Keeper) deliver(shell *keptShell, output []byte) {
 	shell.ring.write(output)
 	attachment := shell.attached
 	if attachment == nil {
+		shell.info.UnseenOutput = shell.info.UnseenOutput || shell.shown
 		return
 	}
 	attachment.pending = append(attachment.pending, output...)
