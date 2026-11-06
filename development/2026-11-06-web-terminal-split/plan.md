@@ -4,6 +4,47 @@ Created: 2026-11-06
 Status: Not started. [Step 1](#step-1-one-pane-object-no-change-in-behavior) changes no behavior, and its diff is to be
 looked at before step 2. Follows [the Web terminal plan](../2026-11-05-web-terminal/plan.md).
 
+## Terms
+
+Panes are planned; everything else exists.
+
+```text
+On the server (lasts after a page closes)
+rotari web
+└─ basedir
+   └─ project
+      └─ shell: a running process
+
+In the browser (what one page shows)
+browser tab: one page
+└─ panel: the terminal area along the bottom of the page
+   ├─ bar: the row of controls along the panel's top
+   │   ├─ project list
+   │   ├─ tab row, and +
+   │   └─ buttons: A-, A+, Clear, Split, Maximize, Hide
+   └─ pane: a window onto a shell (one today, two when split)
+```
+
+| Term | Meaning | How many |
+|---|---|---|
+| **project** | What groups shells; a page's panel shows its project's shells | |
+| **shell** | The process itself, on the server | Up to 8 per project and 32 in all, by default |
+| **browser tab** | A tab of the browser, holding one page | Any number |
+| **panel** | The terminal area at the bottom of a page | One per page |
+| **bar** | The row along the panel's top | One per panel |
+| **tab** | A shell's label in the bar. One tab is one shell | One per shell |
+| **pane** | Where a shell is shown, with one terminal screen (xterm.js) and one connection | One today, two when split |
+
+**"Tab" alone always means a panel's tab,** and the browser's is always "browser tab". A tab says which shell, and a
+pane says where it shows: with five tabs, only the shells shown in panes are connected. **Closing a tab ends its
+shell, while closing a pane does not.** The Table viewer's panes each have their own tabs; these share one row.
+
+| What | Kept by | Why |
+|---|---|---|
+| Shells, and tabs' names and order | The server | So that every browser tab sees the same |
+| Which tab shows where, and the split | The browser tab | So that browser tabs can differ |
+| The panel's being open, height, maximizing, and text size | The browser | Preferences of how it looks |
+
 ## Goal
 
 See two of a project's shells side by side, such as `rotari wait` beside an editor, and keep what the panel already
