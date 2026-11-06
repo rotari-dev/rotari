@@ -722,12 +722,16 @@ html.terminal-open {
 html.terminal-open body {
   min-height: calc(100vh - var(--terminal-height));
   padding-bottom: var(--terminal-height);
+  padding-left: var(--terminal-left, 0px);
+  padding-right: var(--terminal-right, 0px);
 }
 html.terminal-open main {
   min-height: calc(100vh - var(--terminal-height));
 }
 html.terminal-open .output-modal {
+  right: var(--terminal-right, 0px);
   bottom: var(--terminal-height);
+  left: var(--terminal-left, 0px);
 }
 /* A dialog fits the room left above the panel, so none of it is out of reach. */
 html.terminal-open .output-panel {
@@ -786,7 +790,7 @@ html.terminal-open.terminal-maximized .terminal-resizer {
 /* What a send button did, which outlives the page redrawing the button. */
 .terminal-send-note {
   position: fixed;
-  right: 16px;
+  right: calc(var(--terminal-right, 0px) + 16px);
   bottom: calc(var(--terminal-height, 0px) + 12px);
   /* Over a maximized panel too. */
   z-index: 60;

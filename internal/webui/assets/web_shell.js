@@ -134,6 +134,7 @@
 (() => {
   const openKey = "rotari-terminal-open";
   const heightKey = "rotari-terminal-height";
+  const widthKey = "rotari-terminal-width";
   const shownKey = "rotari-terminal-shell";
   const layoutKey = "rotari-terminal-layout";
   const maximizedKey = "rotari-terminal-maximized";
@@ -150,6 +151,8 @@
   // the server's idle limit.
   const aliveInterval = 60000;
   const minHeight = 120;
+  const minWidth = 320;
+  const minPageWidth = 480;
   const maxPanes = 4;
   const minPaneWidth = 200;
   const minPaneHeight = 100;
@@ -250,6 +253,8 @@
   // The page cannot lose all its room to the panel, nor the panel all of its own.
   const clampHeight = (height) =>
     Math.max(minHeight, Math.min(height, Math.max(minHeight, innerHeight - minHeight)));
+  const clampWidth = (width) =>
+    Math.max(minWidth, Math.min(width, Math.max(minWidth, innerWidth - minPageWidth)));
   const root = document.documentElement;
   const rememberedMaximized = () => {
     try {
@@ -302,22 +307,35 @@
     button.onclick = () => changeFontSize(step);
     return button;
   };
-  const applyHeight = (height) => {
-    // Only an open panel takes room, which web_shell.css decides from this.
-    root.style.setProperty("--terminal-saved-height", clampHeight(height) + "px");
+  // Where the panel sits. Its height at the bottom and its width at a side are kept apart,
+  // so that moving it and back finds each as it was.
+  const panelPlace = () => "bottom";
+  const panelSizes = {
+    height: { key: heightKey, variable: "--terminal-saved-height", clamp: clampHeight },
+    width: { key: widthKey, variable: "--terminal-saved-width", clamp: clampWidth },
   };
-  const savedHeight = () => {
+  const panelAxis = () => (panelPlace() === "bottom" ? "height" : "width");
+  const applySize = (axis, size) => {
+    // Only an open panel takes room, which web_shell.css decides from this.
+    root.style.setProperty(panelSizes[axis].variable, panelSizes[axis].clamp(size) + "px");
+  };
+  const savedSize = (axis) => {
     try {
-      return Number(localStorage.getItem(heightKey)) || 0;
+      return Number(localStorage.getItem(panelSizes[axis].key)) || 0;
     } catch {
       return 0;
     }
   };
-  const currentHeight = () => panel?.getBoundingClientRect().height || savedHeight();
-  const saveHeight = () => {
+  const currentSize = (axis) => panel?.getBoundingClientRect()[axis] || savedSize(axis);
+  const saveSize = (axis) => {
     try {
-      localStorage.setItem(heightKey, String(Math.round(currentHeight())));
+      localStorage.setItem(panelSizes[axis].key, String(Math.round(currentSize(axis))));
     } catch {}
+  };
+  const applySavedSizes = () => {
+    for (const axis of Object.keys(panelSizes)) {
+      if (savedSize(axis)) applySize(axis, savedSize(axis));
+    }
   };
   const theme = () => {
     const style = getComputedStyle(root);
@@ -343,21 +361,31 @@
     resizer.onpointerdown = (event) => {
       event.preventDefault();
       resizer.setPointerCapture?.(event.pointerId);
-      const startY = event.clientY;
-      const startHeight = currentHeight();
-      resizer.onpointermove = (move) =>
-        applyHeight(startHeight + startY - move.clientY);
+      const place = panelPlace();
+      const axis = panelAxis();
+      const start = currentSize(axis);
+      const { clientX: startX, clientY: startY } = event;
+      resizer.onpointermove = ({ clientX: x, clientY: y }) => {
+        const moved = { bottom: () => startY - y, left: () => x - startX, right: () => startX - x }[place]();
+        applySize(axis, start + moved);
+      };
       resizer.onpointerup = resizer.onpointercancel = () => {
         resizer.onpointermove = resizer.onpointerup = resizer.onpointercancel = null;
-        saveHeight();
+        saveSize(axis);
       };
     };
     resizer.onkeydown = (event) => {
-      const step = { ArrowUp: 24, ArrowDown: -24 }[event.key];
+      const steps = {
+        bottom: { ArrowUp: 24, ArrowDown: -24 },
+        left: { ArrowRight: 24, ArrowLeft: -24 },
+        right: { ArrowLeft: 24, ArrowRight: -24 },
+      };
+      const step = steps[panelPlace()][event.key];
       if (!step) return;
       event.preventDefault();
-      applyHeight(currentHeight() + step);
-      saveHeight();
+      const axis = panelAxis();
+      applySize(axis, currentSize(axis) + step);
+      saveSize(axis);
     };
     return resizer;
   };
@@ -1590,12 +1618,10 @@
     setOpen(true);
   };
   // Before the page is drawn, so a panel left open does not make it jump.
-  if (savedHeight()) applyHeight(savedHeight());
+  applySavedSizes();
   if (remembered()) root.classList.add("terminal-open");
   if (rememberedMaximized()) root.classList.add("terminal-maximized");
-  addEventListener("resize", () => {
-    if (savedHeight()) applyHeight(savedHeight());
-  });
+  addEventListener("resize", applySavedSizes);
   // pastableText is text with only its lines and tabs left. A log's colours mean nothing
   // at a prompt, and an escape could end a bracketed paste and run what followed it.
   const pastableText = (text) =>
