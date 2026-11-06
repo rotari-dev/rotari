@@ -125,7 +125,8 @@ Contract WEB-33, `docs/WEB.md`, and the Web terminal plan. WEB-34 should not cha
 
 ### Later, if wanted
 
-Stacked panes, more than two, and a tree of splits.
+Stacked panes, more than two, and a tree of splits. Up to four panes, in columns of rows, are planned in
+[the columns plan](../2026-11-06-web-terminal-columns/plan.md).
 
 ## Non-goals
 
