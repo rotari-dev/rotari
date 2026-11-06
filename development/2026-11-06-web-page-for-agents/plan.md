@@ -1,8 +1,9 @@
 # Plan: Let a code agent read the page someone is looking at
 
 Created: 2026-11-06
-Status: Not started. The user will choose between [the two designs](#two-designs). Implementation may be in
-another thread.
+Status: Not started. [An experiment](#experiment-first) comes before any implementation, since it decides what
+an agent should be given. The user will then choose between [the two designs](#two-designs), and is asking other
+agents for their views on this plan.
 
 ## Goal
 
@@ -11,6 +12,19 @@ features read the page they are shown on. An agent should be able to read what t
 its address, what is selected, an open dialog such as a log, and the page's text.
 
 The agent only reads. It does not press buttons or move between pages; see [Non-goals](#non-goals).
+
+## The question this raised
+
+The user pointed out that what the Web UI shows is mostly what the CLI already gives. An agent can already run
+`rotari show`. What it cannot know is that the person is looking at this job. So the page's value may be little
+more than:
+
+- **What it points at:** the project, run, job, and attempt.
+- **What only the screen has:** the selection, the table's filters, which attempt is chosen, what dialog is open.
+
+If so, sending the page's text, as [What a page sends](#what-a-page-sends) assumes, costs more than it gives, and a
+few hundred bytes of address and state would do. An agent reading stale text could even be misled where the CLI
+would tell it the truth. That is why the experiment comes first.
 
 ## Existing implementation
 
@@ -30,7 +44,8 @@ The agent only reads. It does not press buttons or move between pages; see [Non-
 
 ## What a page sends
 
-Text, not HTML: most of a page's HTML is markup and scripts. Both designs send:
+This is the largest form, which [the experiment](#experiment-first) may well reduce. Text, not HTML: most of a page's
+HTML is markup and scripts. Both designs would send:
 
 ```markdown
 URL: /project/p1/run/20261106-010203-abcd1234
@@ -126,10 +141,87 @@ seconds during a run is the real cost, since it would send and write with nobody
 
 Measure these on a run with many jobs before settling the numbers.
 
-An alternative for either design is to send only the address and selection, and have the reader build the text from
-state, as `rotari show` does. It costs almost nothing and is never stale, but needs work for each kind of page, does
-not match what is on screen (filters, for one), and loses dialogs other than logs. Keep it in reserve if measuring
-shows a problem.
+An alternative for either design is to send only the address and state, and leave the rest to the CLI, or have the
+reader build the text as `rotari show` does. It costs almost nothing and is never stale, but building text needs work
+for each kind of page. [The experiment](#experiment-first) decides between this and sending text.
+
+## Experiment first
+
+### What to learn
+
+1. Is pointing enough? Does an address alone do as well as the page's text?
+2. Which of what only the screen has makes a difference?
+3. Does an agent read what it is given, and how must it be told?
+
+The experiment needs no product code: what a page would send is written by hand or copied from the browser.
+
+### Conditions
+
+| Condition | The agent gets |
+|---|---|
+| 0: nothing | Only the request, as today |
+| 1: pointer | The page's address |
+| 2: pointer and state | The address, selection, filters, chosen attempt, and open dialog's name |
+| 3: everything | Condition 2 and the page's text, including an open log |
+
+### Tasks
+
+Requests are deliberately vague, as someone looking at the page would phrase them, so that an answer depends on
+knowing what they point at. Each has an answer fixed in advance.
+
+| Request | State prepared | What should matter |
+|---|---|---|
+| "Why did this job fail?" | Two or more failed jobs with different causes, one viewed | Pointer |
+| "What does this line mean?" | One line of a log selected | Selection |
+| "What changed from the previous attempt?" | A retried job with an older attempt chosen | Chosen attempt |
+| "Fix only the ones shown in the table" | A filtered table | Filters |
+| "Is this run slower than usual?" | Several runs of the project, an older one viewed | Pointer |
+| "Is it making progress?" | A run in progress, whose page text then goes stale | Freshness, where text may mislead |
+
+### Measures
+
+- **Found the right target.** The main measure, scored against the fixed answer.
+- **Right answer.**
+- **Clarifying questions asked.** Asking is better than guessing wrong, so report these with the wrong answers.
+- **Commands run and tokens used**, since text also costs an agent to read.
+- **Read it unprompted**, in a separate comparison of how it is told: the variable alone, the variable with a line
+  in the agent's instructions, and a command named in those instructions. Scoring conditions 1 to 3 only makes sense
+  where the agent read the context, so hand it over directly in those.
+
+### Method
+
+1. A script builds one fixture project with these states, and keeps it for every run, so that all conditions see the
+   same history. Runs must not change what later ones see; the fix request needs its own copy per run.
+2. Context files are made per task and condition. Page text comes from the browser's developer tools on the fixture.
+3. Each run is a new session of a CLI agent, with no memory of others, started in the fixture's directory. `rotari
+   mcp` is not used, since the user's environment cannot connect MCP servers.
+4. Scoring is done against the fixed answers, without knowing the condition where a person or another agent scores.
+5. Start small: 3 tasks, conditions 1 to 3, twice each, 18 runs. One run per cell says little, since agents vary, so
+   repeat only what comes out split, and add condition 0 once there is a baseline worth comparing.
+6. Try more than one agent if possible, since the result may hold for only one. Record each agent's version.
+
+### What the result decides
+
+| Result | Implementation |
+|---|---|
+| Condition 1 is enough | Write the address only. Very small, and costs almost nothing |
+| Condition 2 clearly improves on it | Add only the state that helped |
+| Only condition 3 helps | Send text, but first find out why the CLI did not give it, and improve the CLI if that is the real gap |
+| Agents do not read it | Fix how they are told before anything else |
+| Text misleads when stale | Do not send it, whatever else it helps |
+
+The expectation before running is that condition 2 is enough. It is only an expectation, and the experiment can
+overturn it.
+
+Limits of what this can show: a small sample, fixture tasks chosen by the people who expect a result, and agents that
+change. A clear gap is worth acting on, and a small one should be read as no difference.
+
+## Questions for reviewers
+
+- Does the argument above hold, or is there something the page gives that the CLI cannot, beyond these?
+- Are these tasks what people ask? What is missing?
+- Is this the right order, or would a small version of design A or B teach more than an experiment on fixtures?
+- Is reading enough, or is an agent acting on the page where the value lies?
 
 ## Risks
 
@@ -154,6 +246,7 @@ shows a problem.
 
 ## Open questions
 
+- What to send, which [the experiment](#experiment-first) decides.
 - A or B, or both over time.
 - The command's name, if B: `rotari web page`, given that `rotari web` takes no arguments today, or something else.
 - Whether the opening note should be followed by the page's text as it stands, or with lines marked as quoted.
