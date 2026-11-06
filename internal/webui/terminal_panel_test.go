@@ -40,7 +40,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const home = '/home/u';
 const plain = (id, number) => ({ id, number, basedir: '', project: '', dir: home, link: '/' });
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
-const load = (file, { stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', limit = 8, path = '/', maximized = false, fontSize = '' } = {}) => {
+const load = (file, { stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', limit = 8, path = '/', maximized = false, fontSize = '' } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
   // xterm.js parses what it is given later; a test can hold that back.
   const parser = { held: false, waiting: [], release() { this.held = false; this.waiting.splice(0).forEach((parse) => parse()); } };
@@ -80,9 +80,13 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
       if (maximized) window.localStorage.setItem('rotari-terminal-maximized', '1');
       if (fontSize) window.localStorage.setItem('rotari-terminal-font-size', fontSize);
       if (remembered) window.sessionStorage.setItem(remembered[0], remembered[1]);
+      if (split) window.sessionStorage.setItem(split[0], split[1]);
       window.fetch = (url, init = {}) => {
         const address = String(url);
-        if (address.includes('xterm-license')) return Promise.resolve({ ok: status() === 200, status: status() });
+        if (address.includes('xterm-license')) {
+          const answer = { ok: status() === 200, status: status() };
+          return server.licenseHeld ? new Promise((resolve) => server.licenseHeld.push(() => resolve(answer))) : Promise.resolve(answer);
+        }
         if (address === '/_terminal/alive') {
           alive.push(init.method);
           return Promise.resolve({ ok: true, status: 204 });
@@ -106,7 +110,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
       };
       window.setInterval = (callback, delay) => { if (delay === 5000) polls.push(callback); if (delay === 60000) aliveTimers.push(callback); return 1; };
       window.confirm = () => true;
-      window.ResizeObserver = class { observe() {} };
+      window.ResizeObserver = class { observe() {} disconnect() {} };
       window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener() {} }));
       if (hidden) Object.defineProperty(window.Document.prototype, 'hidden', { configurable: true, get: () => window.__hidden !== false });
       if (height) window.localStorage.setItem('rotari-terminal-height', height);
@@ -123,14 +127,15 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
         modes = { bracketedPasteMode: false };
         options = {};
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
-        loadAddon(addon) { (this.addons ||= []).push(addon); } open() {} focus() {}
-        reset() { written.length = 0; }
+        loadAddon(addon) { (this.addons ||= []).push(addon); } open() {} focus() { this.focuses = (this.focuses || 0) + 1; }
+        reset() { written.length = 0; this.writes = []; }
+        dispose() { this.disposed = true; }
         write(data, done) {
-          const parse = () => { written.push(Buffer.from(data).toString()); done?.(); };
+          const parse = () => { written.push(Buffer.from(data).toString()); (this.writes ||= []).push(Buffer.from(data).toString()); done?.(); };
           if (parser.held) parser.waiting.push(parse);
           else parse();
         }
-        paste(text) { pasted.push(text); }
+        paste(text) { pasted.push(text); (this.pastes ||= []).push(text); }
         clear() { this.cleared = (this.cleared || 0) + 1; }
         onData(callback) { this.data = callback; }
         onBinary() {}
@@ -979,6 +984,448 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   await wait(20);
   assert.match(broken.document.querySelector('.terminal-status').textContent, /could not start: xterm broke/);
   assert.equal(broken.document.querySelector('.terminal-status').hidden, false);
+
+  // Two panes. Each row of what happens is checked with two or three shells of a project.
+  const splitShells = (...ids) => ids.map((id, index) => inProject(String(id), index + 1, 'p1'));
+  const shownKey = 'rotari-terminal-shell:/b:p1', splitKey = 'rotari-terminal-split:/b:p1';
+  const openSplit = async (ids, options = {}) => {
+    const page = load(process.argv[1], { stored: '1', path: '/project/p1', shells: splitShells(...ids), remembered: [shownKey, String(ids[0])], ...options });
+    await wait(50);
+    return page;
+  };
+  const sp = (page) => {
+    const bar = (text) => [...page.document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === text);
+    const panes = () => [...page.document.querySelectorAll('.terminal-pane')];
+    const tabEl = (name) => [...page.document.querySelectorAll('.terminal-tab')].find((tab) => tab.querySelector('[role=tab]').textContent === name);
+    return {
+      bar, panes,
+      split: () => bar('Split').click(),
+      tab: (name) => tabEl(name).querySelector('[role=tab]').click(),
+      selected: () => page.document.querySelector('.terminal-tab [aria-selected=true]')?.textContent,
+      otherPane: () => [...page.document.querySelectorAll('.terminal-tab-other-pane [role=tab]')].map((tab) => tab.textContent),
+      live: () => page.sockets.filter((socket) => !socket.closed).map((socket) => /shell=(\d+)/.exec(socket.url)[1]),
+      focus: (index) => panes()[index].dispatchEvent(new page.window.Event('focusin', { bubbles: true })),
+      statusOf: (index) => panes()[index].querySelector('.terminal-status'),
+      saved: () => JSON.parse(page.window.sessionStorage.getItem(splitKey)),
+      inOrder: () => panes().sort((a, b) => Number(a.style.order) - Number(b.style.order)),
+    };
+  };
+  // The server closing a connection, which the stand-in does not record by itself.
+  const hangUp = (socket, code, reason) => { socket.closed = true; socket.onclose({ code, reason }); };
+  const out = (text) => ({ data: new TextEncoder().encode(text).buffer });
+
+  // Split shows the next shell in a new pane, which takes focus, and leaves the first alone.
+  const splitting = await openSplit([1, 2, 3]);
+  let ui = sp(splitting);
+  assert.equal(ui.panes().length, 1);
+  assert.equal(ui.bar('Split').getAttribute('aria-pressed'), 'false');
+  assert.equal(splitting.document.querySelector('.terminal-bar .terminal-status'), null, 'a status stayed in the bar');
+  ui.split();
+  await wait(20);
+  assert.equal(ui.panes().length, 2);
+  assert.equal(splitting.terminals.length, 2);
+  assert.deepEqual(ui.live(), ['1', '2']);
+  assert.equal(ui.selected(), '2');
+  assert.deepEqual(ui.otherPane(), ['1']);
+  assert.equal(ui.bar('Unsplit').getAttribute('aria-pressed'), 'true');
+  assert.deepEqual(ui.saved(), { shell: '2', focused: true, share: 0.5 });
+  assert.equal(ui.panes()[1].classList.contains('terminal-pane-focused'), true);
+  assert.equal(ui.panes()[0].classList.contains('terminal-pane-focused'), false);
+  assert.equal(splitting.requests.some((request) => request.startsWith('POST')), false, 'split started a shell with one to spare');
+
+  // Each pane's output, input, and size go to its own shell.
+  splitting.sockets[0].onmessage(out('first'));
+  splitting.sockets[1].onmessage(out('second'));
+  assert.deepEqual(splitting.terminals[0].writes, ['first']);
+  assert.deepEqual(splitting.terminals[1].writes, ['second']);
+  assert.equal(ui.statusOf(0).hidden, true);
+  splitting.terminals[0].data('a');
+  splitting.terminals[1].data('b');
+  assert.equal(Buffer.from(splitting.sockets[0].sent.at(-1)).toString(), 'a');
+  assert.equal(Buffer.from(splitting.sockets[1].sent.at(-1)).toString(), 'b');
+  splitting.terminals[1].resize({ rows: 9, cols: 9 });
+  assert.deepEqual(JSON.parse(splitting.sockets[1].sent.at(-1)), { type: 'resize', rows: 9, cols: 9 });
+  assert.equal(splitting.sockets[0].sent.length, 1, 'a resize reached the other shell');
+
+  // Choosing a tab that is not shown changes the focused pane; choosing the other pane's swaps, connecting nothing.
+  ui.tab('3');
+  assert.deepEqual(ui.live(), ['1', '3']);
+  assert.equal(ui.selected(), '3');
+  assert.deepEqual(ui.otherPane(), ['1']);
+  const socketsBeforeSwap = splitting.sockets.length;
+  const [leftBefore, rightBefore] = ui.inOrder();
+  ui.tab('1');
+  assert.equal(splitting.sockets.length, socketsBeforeSwap, 'swapping reconnected');
+  assert.equal(ui.selected(), '1');
+  assert.deepEqual(ui.otherPane(), ['3']);
+  assert.deepEqual(ui.inOrder(), [rightBefore, leftBefore], 'the panes did not change places');
+  assert.equal(ui.inOrder()[1].classList.contains('terminal-pane-focused'), true, 'focus left the place it was in');
+  assert.equal(splitting.window.sessionStorage.getItem(shownKey), '3');
+  assert.deepEqual(ui.saved(), { shell: '1', focused: true, share: 0.5 });
+  // Choosing the focused pane's own tab changes nothing.
+  ui.tab('1');
+  assert.equal(splitting.sockets.length, socketsBeforeSwap);
+  // A shell in a pane is never marked unseen, and one in neither can be.
+  const unseenShell = (id) => splitting.server.shells.find((shell) => shell.id === id);
+  unseenShell('1').unseen_output = unseenShell('3').unseen_output = unseenShell('2').unseen_output = true;
+  splitting.polls[0]();
+  await wait(20);
+  assert.deepEqual([...splitting.document.querySelectorAll('.terminal-tab-unseen [role=tab]')].map((tab) => tab.textContent), ['2']);
+  // + starts a shell in the focused pane.
+  splitting.document.querySelector('.terminal-add').click();
+  await wait(20);
+  assert.equal(ui.selected(), '4');
+  assert.deepEqual(ui.live(), ['3', '101']);
+
+  // Following focus: clicking into a pane moves it, without connecting, and the bar follows.
+  ui.focus(0);
+  assert.equal(ui.panes()[0].classList.contains('terminal-pane-focused'), true);
+  assert.equal(ui.panes()[1].classList.contains('terminal-pane-focused'), false);
+  assert.equal(ui.saved().focused, ui.inOrder()[1] === ui.panes()[0]);
+
+  // Sending and Clear act on the focused pane, and Clear skips a full-screen program there alone.
+  const focusing = await openSplit([1, 2]);
+  ui = sp(focusing);
+  ui.split();
+  await wait(20);
+  assert.equal(await focusing.window.sendToTerminal('to second'), null);
+  assert.deepEqual(focusing.terminals[1].pastes, ['to second']);
+  assert.equal(focusing.terminals[0].pastes, undefined, 'sent to the pane without focus');
+  ui.focus(0);
+  assert.equal(await focusing.window.sendToTerminal('to first'), null);
+  assert.deepEqual(focusing.terminals[0].pastes, ['to first']);
+  assert.deepEqual(focusing.terminals[1].pastes, ['to second']);
+  ui.bar('Clear').click();
+  assert.equal(focusing.terminals[0].cleared, 1);
+  assert.equal(focusing.terminals[1].cleared, undefined);
+  ui.focus(1);
+  focusing.terminals[1].buffer.active.type = 'alternate';
+  const clearsBefore = focusing.sockets[1].sent.length;
+  ui.bar('Clear').click();
+  assert.equal(focusing.terminals[1].cleared, undefined, 'cleared a full-screen program');
+  assert.equal(focusing.sockets[1].sent.length, clearsBefore);
+  assert.match(ui.statusOf(1).textContent, /full-screen/);
+  assert.doesNotMatch(ui.statusOf(0).textContent, /full-screen/, 'the message reached the other pane');
+  // Text size and theme reach both terminals, and both fit.
+  const fitsAtSplit = focusing.fits.length;
+  ui.bar('A+').click();
+  assert.deepEqual(focusing.terminals.map((term) => term.options.fontSize), [14, 14]);
+  assert.equal(focusing.fits.length, fitsAtSplit + 2, 'a pane did not fit its new text size');
+  focusing.document.documentElement.style.setProperty('--terminal-background', '#444444');
+  focusing.document.documentElement.dataset.theme = 'dark';
+  await wait(20);
+  assert.deepEqual(focusing.terminals.map((term) => term.options.theme.background), ['#444444', '#444444']);
+  // Maximize changes no connection.
+  const socketsAtMaximize = focusing.sockets.length;
+  ui.bar('Maximize').click();
+  assert.equal(focusing.sockets.length, socketsAtMaximize);
+  ui.bar('Restore').click();
+
+  // A pane's connection problem is its own: the other keeps its state, its retry, and a waiting command.
+  const trouble = await openSplit([1, 2]);
+  ui = sp(trouble);
+  ui.split();
+  await wait(20);
+  trouble.sockets[0].onmessage(out('x'));
+  hangUp(trouble.sockets[0], 4001, '');
+  assert.match(ui.statusOf(0).textContent, /Another tab/);
+  assert.equal(ui.statusOf(1).textContent.includes('Another tab'), false, 'the other pane said it was taken');
+  assert.equal(trouble.sockets[1].closed, undefined);
+  const waitingCommand = trouble.window.sendToTerminal('waits');
+  await wait(20);
+  trouble.sockets[1].readyState = 0;
+  const secondWaits = trouble.window.sendToTerminal('second');
+  await wait(20);
+  assert.equal(await waitingCommand, null, 'an open connection did not take the command');
+  ui.panes()[0].querySelector('.terminal-action').click();
+  await wait(20);
+  assert.equal(trouble.sockets.length, 3, 'taking it back did not connect');
+  assert.match(trouble.sockets[2].url, /shell=1&/);
+  // That connection opening leaves the second pane's command waiting, and its own output delivers it.
+  trouble.sockets[2].onmessage(out('prompt'));
+  assert.deepEqual(trouble.terminals[1].pastes, ['waits']);
+  trouble.sockets[1].readyState = 1;
+  trouble.sockets[1].onmessage(out('prompt'));
+  assert.equal(await secondWaits, null);
+  assert.deepEqual(trouble.terminals[1].pastes, ['waits', 'second']);
+  // A lost connection reconnects by itself, to its own shell, and leaves the other.
+  hangUp(trouble.sockets[1], 1006, '');
+  assert.match(ui.statusOf(1).textContent, /Reconnecting/);
+  assert.equal(ui.statusOf(0).hidden, true);
+  await wait(1200);
+  assert.equal(trouble.sockets.length, 4);
+  assert.match(trouble.sockets[3].url, /shell=2&.*takeover=0/);
+  assert.notEqual(trouble.sockets[2].closed, true);
+
+  // A pane's shell ends: it moves to one not shown, without taking it, and focus stays.
+  const ending = await openSplit([1, 2, 3]);
+  ui = sp(ending);
+  ui.split();
+  await wait(20);
+  ui.focus(1);
+  const focusesBefore = ending.terminals[0].focuses;
+  ending.server.shells = ending.server.shells.filter((shell) => shell.id !== '1');
+  hangUp(ending.sockets[0], 4002, 'exit status 3');
+  await wait(30);
+  assert.deepEqual(ui.live(), ['2', '3']);
+  assert.match(ending.sockets[2].url, /shell=3&.*takeover=0/);
+  assert.equal(ui.panes().length, 2);
+  assert.equal(ui.selected(), '2', 'the pane that moved on took focus');
+  assert.equal(ending.terminals[0].focuses, focusesBefore, 'the pane that moved on took the keys');
+  assert.deepEqual(ui.otherPane(), ['3']);
+  // With every other shell in the other pane, the split closes and the other pane stays connected.
+  ending.server.shells = ending.server.shells.filter((shell) => shell.id !== '3');
+  hangUp(ending.sockets[2], 4002, 'exit status 4');
+  await wait(30);
+  assert.equal(ui.panes().length, 1);
+  assert.equal(ending.document.querySelector('.terminal-split-handle'), null);
+  assert.equal(ending.terminals[0].disposed, true);
+  assert.equal(ending.terminals[1].disposed, undefined);
+  assert.deepEqual(ui.live(), ['2']);
+  assert.equal(ending.sockets[1].closed, undefined, 'the split closing disturbed the other pane');
+  assert.equal(ui.selected(), '2');
+  assert.equal(ui.saved(), null);
+  assert.equal(ui.bar('Split').disabled, false);
+  // The focused pane's shell ending with the other holding the rest gives focus to the other.
+  const focusedEnds = await openSplit([1, 2]);
+  ui = sp(focusedEnds);
+  ui.split();
+  await wait(20);
+  focusedEnds.server.shells = focusedEnds.server.shells.filter((shell) => shell.id !== '2');
+  hangUp(focusedEnds.sockets[1], 4002, 'done');
+  await wait(30);
+  assert.equal(ui.panes().length, 1);
+  assert.equal(ui.selected(), '1');
+  assert.equal(await focusedEnds.window.sendToTerminal('still here'), null);
+  assert.deepEqual(focusedEnds.terminals[0].pastes, ['still here']);
+  // The last shell ending is as it always was.
+  focusedEnds.server.shells = [];
+  hangUp(focusedEnds.sockets[0], 4002, 'exit status 5');
+  await wait(30);
+  assert.match(ui.statusOf(0).textContent, /exit status 5/);
+  assert.equal(ui.panes()[0].querySelector('.terminal-action').textContent, 'New shell');
+  assert.equal(ui.bar('Split').disabled, true, 'offered to split nothing');
+
+  // Both ending at once leaves one pane that says how, and no error.
+  const bothEnd = await openSplit([1, 2]);
+  ui = sp(bothEnd);
+  ui.split();
+  await wait(20);
+  bothEnd.server.shells = [];
+  hangUp(bothEnd.sockets[0], 4002, 'one');
+  hangUp(bothEnd.sockets[1], 4002, 'two');
+  await wait(30);
+  assert.equal(ui.panes().length, 1);
+  assert.match(ui.statusOf(0).textContent, /one|two/);
+  assert.equal(ui.panes()[0].querySelector('.terminal-action').textContent, 'New shell');
+
+  // Close all ends those not shown, then the other pane's, then the focused pane's.
+  const closingAll = await openSplit([1, 2, 3, 4]);
+  ui = sp(closingAll);
+  ui.split();
+  await wait(20);
+  ui.focus(0);
+  closingAll.document.querySelectorAll('.terminal-tab')[0].dispatchEvent(new closingAll.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+  [...closingAll.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Close all tabs').click();
+  await wait(40);
+  assert.deepEqual(closingAll.requests.filter((request) => request.startsWith('DELETE')), ['DELETE /_terminal/shells/3', 'DELETE /_terminal/shells/4', 'DELETE /_terminal/shells/2', 'DELETE /_terminal/shells/1']);
+  // Closing a tab shown in a pane waits for its connection to say so.
+  const closingOne = await openSplit([1, 2, 3]);
+  ui = sp(closingOne);
+  ui.split();
+  await wait(20);
+  closingOne.document.querySelectorAll('.terminal-tab-close')[0].click();
+  await wait(20);
+  assert.equal(closingOne.sockets[0].closed, undefined);
+  hangUp(closingOne.sockets[0], 4002, 'hangup');
+  await wait(30);
+  assert.deepEqual(ui.live(), ['2', '3']);
+
+  // Unsplit closes the other pane and leaves its shell running, with a waiting command told.
+  const unsplitting = await openSplit([1, 2]);
+  ui = sp(unsplitting);
+  ui.split();
+  await wait(20);
+  unsplitting.sockets[1].readyState = 0;
+  const orphan = unsplitting.window.sendToTerminal('orphan');
+  await wait(20);
+  ui.focus(0);
+  ui.bar('Unsplit').click();
+  assert.match(await orphan, /closed/);
+  assert.equal(ui.panes().length, 1);
+  assert.equal(unsplitting.sockets[1].closed, true);
+  assert.equal(unsplitting.terminals[1].disposed, true);
+  assert.equal(unsplitting.requests.some((request) => request.startsWith('DELETE')), false, 'closing a pane ended its shell');
+  assert.deepEqual(ui.live(), ['1']);
+  assert.equal(ui.saved(), null);
+  assert.deepEqual([...unsplitting.document.querySelectorAll('.terminal-tab [role=tab]')].map((tab) => tab.textContent), ['1', '2']);
+  // A retry under way does not come back to life in a closed pane.
+  const closedRetry = await openSplit([1, 2]);
+  ui = sp(closedRetry);
+  ui.split();
+  await wait(20);
+  // Asking whether the server is back takes a while, and the pane closes meanwhile.
+  closedRetry.server.licenseHeld = [];
+  hangUp(closedRetry.sockets[1], 1006, '');
+  await wait(1100);
+  assert.equal(closedRetry.server.licenseHeld.length, 1, 'the retry did not ask the server');
+  ui.focus(0);
+  ui.bar('Unsplit').click();
+  closedRetry.server.licenseHeld[0]();
+  await wait(30);
+  assert.equal(closedRetry.sockets.length, 2, 'a closed pane reconnected');
+  // Output and parsing left over from a closed pane go nowhere.
+  const closedParse = await openSplit([1, 2, 3]);
+  ui = sp(closedParse);
+  ui.split();
+  await wait(20);
+  closedParse.parser.held = true;
+  closedParse.sockets[1].onmessage(out('late'));
+  ui.tab('3');
+  ui.focus(0);
+  ui.bar('Unsplit').click();
+  closedParse.parser.release();
+  assert.equal(closedParse.sockets.length, 2, 'a closed pane connected once its output was parsed');
+  // Fast output in one pane stays there when the other changes tab.
+  const fastSplit = await openSplit([1, 2, 3]);
+  ui = sp(fastSplit);
+  ui.split();
+  await wait(20);
+  ui.focus(0);
+  fastSplit.sockets[0].onmessage(out('y'));
+  fastSplit.sockets[1].onmessage(out('z'));
+  ui.tab('3');
+  fastSplit.sockets[0].onmessage(out('late'));
+  assert.deepEqual(fastSplit.terminals[0].writes, []);
+  assert.deepEqual(fastSplit.terminals[1].writes, ['z']);
+
+  // Split with no other shell starts one, in the project.
+  const alone = await openSplit([1]);
+  ui = sp(alone);
+  ui.split();
+  await wait(20);
+  assert.match(alone.requests.at(-1), /^POST .*project=p1$/);
+  assert.equal(ui.panes().length, 2);
+  assert.deepEqual(ui.live(), ['1', '101']);
+  assert.equal(ui.statusOf(0).hidden, true, 'the first pane kept saying it was starting a shell');
+  // At the limit it starts nothing and says so, and a refusal leaves one pane and can be retried.
+  const full = await openSplit([1], { limit: 1 });
+  ui = sp(full);
+  ui.split();
+  await wait(20);
+  assert.equal(ui.panes().length, 1);
+  assert.equal(full.requests.some((request) => request.startsWith('POST')), false, 'split started a shell past the limit');
+  assert.match(ui.statusOf(0).textContent, /No more shells/);
+  const failing = await openSplit([1]);
+  ui = sp(failing);
+  failing.server.startError = 'no such shell';
+  ui.split();
+  await wait(20);
+  assert.equal(ui.panes().length, 1);
+  assert.match(ui.statusOf(0).textContent, /did not start: no such shell/);
+  failing.server.startError = '';
+  ui.panes()[0].querySelector('.terminal-action').click();
+  await wait(20);
+  assert.equal(ui.panes().length, 2);
+  // Pressing twice while it starts makes one pane and one shell.
+  const twice = await openSplit([1]);
+  ui = sp(twice);
+  ui.split();
+  ui.split();
+  await wait(20);
+  assert.equal(ui.panes().length, 2);
+  assert.equal(twice.requests.filter((request) => request.startsWith('POST')).length, 1);
+
+  // The handle moves the share by pointer and keyboard, within limits, and it is kept.
+  const handled = await openSplit([1, 2]);
+  ui = sp(handled);
+  ui.split();
+  await wait(20);
+  const handle = handled.document.querySelector('.terminal-split-handle');
+  assert.equal(handle.getAttribute('role'), 'separator');
+  handled.document.querySelector('.terminal-panes').getBoundingClientRect = () => ({ left: 100, width: 1000, top: 0, height: 300 });
+  handle.onpointerdown({ preventDefault() {}, pointerId: 1 });
+  handle.onpointermove({ clientX: 400, clientY: 0 });
+  assert.equal(ui.panes()[0].style.flexGrow, '0.3');
+  assert.equal(ui.panes()[1].style.flexGrow, '0.7');
+  handle.onpointerup();
+  assert.equal(handle.onpointermove, null, 'the drag went on after the button came up');
+  assert.equal(ui.saved().share, 0.3);
+  handle.onpointerdown({ preventDefault() {}, pointerId: 1 });
+  handle.onpointermove({ clientX: 100, clientY: 0 });
+  assert.equal(ui.panes()[0].style.flexGrow, '0.2', 'a pane went under its least');
+  handle.onpointerup();
+  handle.onkeydown({ key: 'ArrowRight', preventDefault() {} });
+  assert.equal(Number(ui.panes()[0].style.flexGrow).toFixed(2), '0.25');
+  assert.equal(ui.saved().share.toFixed(2), '0.25');
+  assert.match(webShellCSS, /@media \(max-width: 720px\) \{\s*\.terminal-panes-split \{\s*flex-direction: column;/);
+
+  // The next page restores both panes, with focus and share, and takes neither by sending.
+  const layout = JSON.stringify({ shell: '3', focused: true, share: 0.3 });
+  const restored = await openSplit([1, 2, 3], { split: [splitKey, layout] });
+  ui = sp(restored);
+  assert.equal(ui.panes().length, 2);
+  assert.deepEqual(ui.live(), ['1', '3']);
+  assert.equal(ui.selected(), '3');
+  assert.equal(ui.panes()[0].style.flexGrow, '0.3');
+  assert.deepEqual(ui.saved(), { shell: '3', focused: true, share: 0.3 });
+  // Sizes were settled first: each connected after both had fitted, so neither connects at the whole width.
+  assert.ok(restored.fits.length >= 3, 'the panes did not fit before connecting');
+  // A shell that has gone leaves one pane, and what is saved says so.
+  const lost = await openSplit([1, 2], { split: [splitKey, JSON.stringify({ shell: '9', focused: true, share: 0.3 })] });
+  ui = sp(lost);
+  assert.equal(ui.panes().length, 1);
+  assert.deepEqual(ui.live(), ['1']);
+  assert.equal(ui.saved(), null);
+  // So does the same shell in both.
+  const same = await openSplit([1, 2], { split: [splitKey, JSON.stringify({ shell: '1', focused: false, share: 0.5 })] });
+  ui = sp(same);
+  assert.equal(ui.panes().length, 1);
+  // What someone edited does not break the page, or a pane's size.
+  for (const bad of ['{', 'null', '[]', '"3"', JSON.stringify({ shell: '2', share: 'wide' }), JSON.stringify({ shell: '2', share: 40 })]) {
+    const edited = await openSplit([1, 2], { split: [splitKey, bad] });
+    ui = sp(edited);
+    assert.equal(edited.sockets.length >= 1, true, 'saved layout ' + bad);
+    const grown = Number(ui.panes()[0].style.flexGrow || 0.5);
+    assert.ok(grown >= 0.2 && grown <= 0.8, 'saved layout ' + bad + ' made a share of ' + grown);
+  }
+  // Another project has its own layout: here, one pane offering to start a shell.
+  const otherProject = load(process.argv[1], { stored: '1', path: '/project/p3', shells: splitShells(1, 2), split: [splitKey, layout] });
+  await wait(50);
+  ui = sp(otherProject);
+  assert.equal(ui.panes().length, 1);
+  assert.equal(otherProject.sockets.length, 0);
+  assert.match(ui.statusOf(0).textContent, /No shell for p3 yet/);
+  assert.equal(ui.bar('Split').disabled, true);
+  // A browser tab out of sight connects neither, until it is looked at.
+  const hiddenSplit = await openSplit([1, 2, 3], { hidden: true, split: [splitKey, layout] });
+  assert.equal(hiddenSplit.sockets.length, 0, 'a background tab connected a pane');
+  hiddenSplit.window.__hidden = false;
+  hiddenSplit.document.dispatchEvent(new hiddenSplit.window.Event('visibilitychange'));
+  await wait(30);
+  assert.equal(hiddenSplit.sockets.length, 2);
+  // A pane's lost connection waits for a hidden tab too, and each comes back when it is shown.
+  hiddenSplit.window.__hidden = true;
+  hangUp(hiddenSplit.sockets[0], 1006, '');
+  hangUp(hiddenSplit.sockets[1], 1006, '');
+  await wait(1200);
+  assert.equal(hiddenSplit.sockets.length, 2, 'a hidden pane kept retrying');
+  hiddenSplit.window.__hidden = false;
+  hiddenSplit.document.dispatchEvent(new hiddenSplit.window.Event('visibilitychange'));
+  await wait(1200);
+  assert.equal(hiddenSplit.sockets.length, 4, 'a pane did not reconnect when shown');
+  // Sending with a closed panel waits for the pane that had focus, and takes nothing.
+  const sentLater = load(process.argv[1], { path: '/project/p1', shells: splitShells(1, 2, 3), remembered: [shownKey, '1'], split: [splitKey, layout] });
+  await wait(30);
+  const sendingToSplit = sentLater.window.sendToTerminal('for the focused');
+  await wait(40);
+  assert.equal(sentLater.sockets.length, 2);
+  for (const socket of sentLater.sockets) assert.match(socket.url, /takeover=0/, 'sending took a shell');
+  sentLater.sockets[0].onmessage(out('prompt'));
+  assert.equal(sentLater.terminals[0].pastes, undefined, 'went to the pane without focus');
+  sentLater.sockets[1].onmessage(out('prompt'));
+  assert.equal(await sendingToSplit, null);
+  assert.deepEqual(sentLater.terminals[1].pastes, ['for the focused']);
 
   // xterm.js loads only on opening, under the page's nonce.
   const real = load(process.argv[1], { stubs: false });

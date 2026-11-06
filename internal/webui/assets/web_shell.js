@@ -126,14 +126,16 @@
 // page's project, as an editor keeps a window's terminals with its folder. Shells live
 // on the server, and every page load lists them, attaches to the tab this browser tab
 // last showed for the project, and replays recent output, so following a link ends none
-// of them. Only the shown tab is connected; the others carry on with no one reading, and
-// replay when shown. Moving between projects with the panel open starts nothing: browsing
+// of them. A tab says which shell, and a pane says where it shows, side by side when
+// split. Only shells shown in a pane are connected; the others carry on with no one
+// reading, and replay when shown. Moving between projects with the panel open starts nothing: browsing
 // must not leave a shell in every project. Nothing loads until the panel first opens; a
 // page without the top bar's Terminal button has no terminal to offer.
 (() => {
   const openKey = "rotari-terminal-open";
   const heightKey = "rotari-terminal-height";
   const shownKey = "rotari-terminal-shell";
+  const splitKey = "rotari-terminal-split";
   const maximizedKey = "rotari-terminal-maximized";
   const fontSizeKey = "rotari-terminal-font-size";
   const defaultFontSize = 13;
@@ -147,6 +149,7 @@
   // the server's idle limit.
   const aliveInterval = 60000;
   const minHeight = 120;
+  const minShare = 0.2;
   // Colours programs ask for by name, and the tokens that hold them.
   const themeTokens = {
     background: "background",
@@ -180,7 +183,7 @@
   // This script runs first.
   const rootFetch = window.fetch;
   const serverFetch = (...args) => rootFetch.apply(window, args);
-  let panel, panesBox, groups, tabs, add, maximize;
+  let panel, panesBox, groups, tabs, add, splitButton, maximize;
   let shells = [];
   let shellLimit = 0;
   let groupLimit = 0;
@@ -199,6 +202,7 @@
     action: null,
     term: null,
     fit: null,
+    observer: null,
     viewport: null,
     socket: null,
     shown: null, // The ID of the shell this pane shows.
@@ -213,8 +217,14 @@
     whenVisible: null,
   });
   // What the bar's buttons and sending from the page act on. It exists before the panel
-  // does, since a command can wait for the panel to open. The panel has only this pane.
+  // does, since a command can wait for the panel to open.
   let focused = newPane();
+  // The panes in the order they appear. A shell is never in two of them: a second
+  // connection would take it from the first.
+  let panes = [focused];
+  let splitHandle = null;
+  let splitShare = 0.5; // How much of the panel the first pane has.
+  const paneShowing = (id) => panes.find((pane) => pane.shown === id);
 
   const remember = (open) => {
     try {
@@ -262,14 +272,14 @@
     return defaultFontSize;
   };
   const changeFontSize = (step) => {
-    const { term, fit } = focused;
+    const { term } = focused;
     term?.focus();
     if (!term) return;
     const size = term.options.fontSize + step;
     if (size < minFontSize || size > maxFontSize) return;
-    term.options.fontSize = size;
-    // Fewer or more cells fit now, and the shell hears of it through the resize.
-    fit.fit();
+    for (const pane of panes) pane.term.options.fontSize = size;
+    // Fewer or more cells fit now, and the shells hear of it through the resize.
+    fitPanes();
     try {
       localStorage.setItem(fontSizeKey, String(size));
     } catch {}
@@ -310,7 +320,7 @@
     return colours;
   };
   const applyTheme = () => {
-    if (focused.term) focused.term.options.theme = theme();
+    for (const pane of panes) if (pane.term) pane.term.options.theme = theme();
   };
   const fontFamily = () =>
     getComputedStyle(root).getPropertyValue("--font-mono").trim() || "monospace";
@@ -377,15 +387,36 @@
     button.onclick = handler || null;
     pane.element.querySelector(".terminal-pane-status").hidden = !message && !action;
   };
+  const fitPanes = () => {
+    for (const pane of panes) pane.fit.fit();
+  };
   const send = (pane, data) => {
     if (pane.socket?.readyState === WebSocket.OPEN) pane.socket.send(data);
   };
-  // Each project keeps its own last tab.
+  // Each project keeps its own last tab and split, for this browser tab alone.
   const shownStorageKey = () => shownKey + ":" + here.basedir + ":" + here.project;
-  const rememberShown = (pane) => {
+  const splitStorageKey = () => splitKey + ":" + here.basedir + ":" + here.project;
+  const rememberLayout = () => {
     try {
-      sessionStorage.setItem(shownStorageKey(), pane.shown);
+      if (panes[0].shown !== null) sessionStorage.setItem(shownStorageKey(), panes[0].shown);
+      if (panes.length > 1) {
+        sessionStorage.setItem(
+          splitStorageKey(),
+          JSON.stringify({ shell: panes[1].shown, focused: focused === panes[1], share: splitShare }),
+        );
+      } else {
+        sessionStorage.removeItem(splitStorageKey());
+      }
     } catch {}
+  };
+  const clampShare = (share) =>
+    Number.isFinite(share) ? Math.max(minShare, Math.min(share, 1 - minShare)) : 0.5;
+  const rememberedSplit = () => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(splitStorageKey()));
+      if (saved?.shell) return { shell: saved.shell, focused: saved.focused === true, share: clampShare(saved.share) };
+    } catch {}
+    return null;
   };
   const rememberedShown = () => {
     try {
@@ -464,17 +495,18 @@
     );
     groups.value = "";
   };
-  // endShells ends several shells after asking once. The shown one goes last, so that
-  // moving on from it does not land on one about to end.
+  // endShells ends several shells after asking once. Those shown go last and the focused
+  // pane's last of all, so that moving on from one does not land on one about to end.
   const endShells = async (targets) => {
     if (!targets.length) return;
     const noun = targets.length === 1 ? "shell" : targets.length + " shells";
     const running = targets.length === 1 ? "it" : "them";
     if (!confirm("End " + noun + ", and anything running in " + running + "?")) return;
-    const ordered = [...targets].sort((a, b) => (a.id === focused.shown) - (b.id === focused.shown));
+    const rank = (shell) => (shell.id === focused.shown ? 2 : paneShowing(shell.id) ? 1 : 0);
+    const ordered = [...targets].sort((a, b) => rank(a) - rank(b));
     for (const shell of targets) endingHere.add(shell.id);
     for (const shell of ordered) {
-      if (shell.id === focused.shown) await refreshShells();
+      if (paneShowing(shell.id)) await refreshShells();
       let response;
       try {
         response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), { method: "DELETE" });
@@ -484,7 +516,7 @@
         return;
       }
     }
-    if (!targets.some((shell) => shell.id === focused.shown)) await refreshShells();
+    if (!targets.some((shell) => paneShowing(shell.id))) await refreshShells();
   };
   // arrangeShells puts this project's shells in the order given, here at once and then on
   // the server, so that later pages and other browser tabs see it.
@@ -622,11 +654,31 @@
       focused.term?.focus();
     }
   });
+  // A tab shows in the focused pane. One already in the other pane changes places with
+  // what is here, since a shell cannot be in both.
+  const chooseTab = (id) => {
+    const showing = paneShowing(id);
+    if (!showing) show(focused, id);
+    else if (showing === focused) focused.term.focus();
+    else swapInto(showing);
+  };
+  // swapInto puts a pane where the focused one is. Only their places change: connecting
+  // again would replay both, and moving a screen in the page would lose its scrolling.
+  const swapInto = (pane) => {
+    panes.reverse();
+    focusPane(pane);
+    pane.term.focus();
+  };
   const renderTabs = () => {
     renderGroups();
     const inGroup = shellsHere();
     add.disabled = inGroup.length >= groupLimit || shells.length >= shellLimit;
-    const drawn = JSON.stringify([inGroup.map((shell) => [shell.id, shell.number, shell.name, shell.dir, shell.unseen_output]), focused.shown]);
+    splitButton.disabled = panes.length === 1 && focused.shown === null;
+    const drawn = JSON.stringify([
+      inGroup.map((shell) => [shell.id, shell.number, shell.name, shell.dir, shell.unseen_output]),
+      panes.map((pane) => pane.shown),
+      panes.indexOf(focused),
+    ]);
     // Drawing them again would take focus from a tab and move nothing.
     if (drawn === tabsDrawn || draggingShell) return;
     tabsDrawn = drawn;
@@ -635,23 +687,23 @@
         const tab = document.createElement("span");
         tab.className = "terminal-tab";
         tab.setAttribute("role", "presentation");
-        // The shown tab is connected, whatever the list said a moment ago.
-        const unseen = Boolean(shell.unseen_output) && shell.id !== focused.shown;
+        // A shown tab is connected, whatever the list said a moment ago.
+        const showing = paneShowing(shell.id);
+        const elsewhere = Boolean(showing) && showing !== focused;
+        const unseen = Boolean(shell.unseen_output) && !showing;
         tab.classList.toggle("terminal-tab-unseen", unseen);
+        tab.classList.toggle("terminal-tab-other-pane", elsewhere);
         const label = document.createElement("button");
         label.type = "button";
         label.setAttribute("role", "tab");
         label.setAttribute("aria-selected", String(shell.id === focused.shown));
         label.setAttribute(
           "aria-label",
-          "Shell " + shell.number + (shell.name ? ", " + shell.name : "") + (unseen ? ", new output" : ""),
+          "Shell " + shell.number + (shell.name ? ", " + shell.name : "") + (unseen ? ", new output" : "") + (elsewhere ? ", in the other pane" : ""),
         );
-        label.title = (unseen ? "New output. " : "") + "Started in " + shell.dir;
+        label.title = (unseen ? "New output. " : "") + (elsewhere ? "In the other pane. " : "") + "Started in " + shell.dir;
         label.textContent = shell.name || String(shell.number);
-        label.onclick = () => {
-          if (shell.id !== focused.shown) show(focused, shell.id);
-          else focused.term.focus();
-        };
+        label.onclick = () => chooseTab(shell.id);
         const close = document.createElement("button");
         close.type = "button";
         close.className = "terminal-tab-close";
@@ -685,7 +737,7 @@
   const noteEndedShells = (now) => {
     const ended = shells.filter(
       (shell) =>
-        shell.id !== focused.shown &&
+        !paneShowing(shell.id) &&
         !endingHere.has(shell.id) &&
         !now.some((other) => other.id === shell.id),
     );
@@ -779,13 +831,13 @@
   };
   const show = (pane, id, takeOver = true) => {
     pane.shown = id;
-    rememberShown(pane);
+    rememberLayout();
     renderTabs();
     connect(pane, takeOver);
-    pane.term.focus();
+    if (pane === focused) pane.term.focus();
   };
-  const newShell = async (pane) => {
-    clearTimeout(pane.retryTimer);
+  // startShell starts a shell at a pane's size, and returns it, or says why not there.
+  const startShell = async (pane, again) => {
     showStatus(pane, "Starting a shell...");
     let response;
     try {
@@ -793,13 +845,81 @@
       response = await serverFetch(shellsPath + "?rows=" + pane.term.rows + "&cols=" + pane.term.cols + (place && "&" + place), { method: "POST" });
     } catch {}
     if (!response?.ok) {
-      await refusal(pane, response, "The shell did not start", () => newShell(pane));
-      return;
+      await refusal(pane, response, "The shell did not start", again);
+      return null;
     }
     const shell = await response.json();
     listSerial++;
     shells = [...shells, shell];
-    show(pane, shell.id);
+    return shell;
+  };
+  const newShell = async (pane) => {
+    clearTimeout(pane.retryTimer);
+    const shell = await startShell(pane, () => newShell(pane));
+    if (shell) show(pane, shell.id);
+  };
+  // openPane adds the second pane, fitting both now so that each connects at its size.
+  const openPane = () => {
+    const pane = newPane();
+    buildPane(pane);
+    panes.push(pane);
+    applyLayout();
+    openTerminal(pane);
+    fitPanes();
+    return pane;
+  };
+  // closePane takes a pane away and leaves its shell running, or gone if it has ended.
+  const closePane = (pane) => {
+    if (panes.length < 2 || !panes.includes(pane)) return;
+    clearTimeout(pane.retryTimer);
+    pane.whenVisible = null;
+    pane.connectSerial++;
+    const { socket } = pane;
+    pane.socket = null;
+    socket?.close();
+    settleSend(pane, "That pane closed, so nothing was sent.");
+    pane.observer.disconnect();
+    pane.term.dispose();
+    pane.element.remove();
+    panes = panes.filter((item) => item !== pane);
+    if (focused === pane) {
+      focused = panes[0];
+      focused.term.focus();
+    }
+    applyLayout();
+    rememberLayout();
+    renderTabs();
+  };
+  let splitting = false;
+  // toggleSplit shows another shell beside this one, starting one if there is no other,
+  // or closes the other pane. Nothing is started past the limit, and a pane appears only
+  // once it has something to show.
+  const toggleSplit = async () => {
+    if (splitting) return;
+    if (panes.length > 1) {
+      closePane(panes.find((pane) => pane !== focused));
+      focused.term.focus();
+      return;
+    }
+    const pane = focused;
+    const inGroup = shellsHere();
+    const place = inGroup.findIndex((shell) => shell.id === pane.shown);
+    const free = inGroup.filter((shell) => shell.id !== pane.shown);
+    let shell = free[place] || free[0];
+    if (!shell) {
+      if (inGroup.length >= groupLimit || shells.length >= shellLimit) {
+        showBriefly(pane, "No more shells can start here, so there is nothing to split with.");
+        return;
+      }
+      splitting = true;
+      shell = await startShell(pane, toggleSplit);
+      splitting = false;
+      if (!shell) return;
+      showStatus(pane, "");
+    }
+    const opened = openPane();
+    focusPane(opened);
+    show(opened, shell.id);
   };
   // A pane's shell has ended. The screen stays if there is nothing to show instead,
   // and a new shell is a choice: it may have been the last thing wanted.
@@ -816,10 +936,11 @@
       signInGone(pane, response);
       return;
     }
-    if (pane.shown !== null) return; // Someone chose meanwhile.
-    const left = shellsHere();
+    if (pane.shown !== null || !panes.includes(pane)) return; // Someone chose meanwhile.
+    const left = shellsHere().filter((shell) => !paneShowing(shell.id));
     const next = left[Math.min(Math.max(place, 0), left.length - 1)];
     if (next) show(pane, next.id, false);
+    else closePane(pane); // The other pane has all there is. With no other, this stays.
   };
   const endShell = async (shell) => {
     if (!confirm("End shell " + shell.number + ", and anything running in it?")) return;
@@ -832,8 +953,8 @@
       await refusal(focused, response, "The shell did not end", () => endShell(shell));
       return;
     }
-    // The shown shell's connection closes, which moves on to another.
-    if (shell.id !== focused.shown) await refreshShells();
+    // A shown shell's connection closes, which moves on to another.
+    if (!paneShowing(shell.id)) await refreshShells();
   };
   const noShellMessage = () =>
     (here.project ? "No shell for " + here.project + "." : "No shell here.") +
@@ -861,8 +982,22 @@
     }
     settleSend(pane, problem);
   };
-  // begin shows what this browser tab last showed for this project, or the project's
-  // first shell. It starts one only if someone asked.
+  const awaitSend = (pane, text, resolve) => {
+    pane.pendingSend = {
+      text,
+      resolve,
+      timer: setTimeout(() => settleSend(pane, "The terminal did not connect, so nothing was sent."), 15000),
+    };
+  };
+  const moveSend = (from, to) => {
+    if (!from.pendingSend) return;
+    const { text, resolve, timer } = from.pendingSend;
+    clearTimeout(timer);
+    from.pendingSend = null;
+    awaitSend(to, text, resolve);
+  };
+  // begin shows what this browser tab last showed for this project, in the same panes, or
+  // the project's first shell. It starts one only if someone asked.
   const begin = async (takeOver = true) => {
     const pane = focused;
     pane.whenVisible = null;
@@ -896,10 +1031,24 @@
       await newShell(pane);
       return;
     }
-    const inGroup = shellsHere();
+    // Another pane is there only when this runs again on a panel in use.
+    const other = panes.find((item) => item !== pane);
+    const inGroup = shellsHere().filter((item) => item.id !== other?.shown);
     const wanted = rememberedShown();
     const shell = inGroup.find((item) => item.id === wanted) || inGroup[0];
-    if (shell) show(pane, shell.id, takeOver);
+    const saved = other ? null : rememberedSplit();
+    const beside = saved && inGroup.find((item) => item.id === saved.shell && item.id !== shell?.id);
+    if (beside) {
+      splitShare = saved.share;
+      const opened = openPane();
+      if (saved.focused) {
+        moveSend(pane, opened);
+        focusPane(opened);
+      }
+      show(pane, shell.id, takeOver);
+      show(opened, beside.id, takeOver);
+    } else if (shell) show(pane, shell.id, takeOver);
+    else if (other) closePane(pane);
     else if (mayStart) await newShell(pane);
     else {
       settleSend(pane, noShellMessage());
@@ -927,7 +1076,7 @@
       try {
         response = await serverFetch("/_terminal/xterm-license.txt", { method: "HEAD" });
       } catch {}
-      if (signInGone(pane, response)) return;
+      if (!panes.includes(pane) || signInGone(pane, response)) return;
       if (document.hidden) reconnect(pane);
       else if (response?.ok) connect(pane, false);
       else {
@@ -939,17 +1088,88 @@
   };
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
-    if (focused.whenVisible) focused.whenVisible();
+    const waiting = panes.filter((pane) => pane.whenVisible);
+    if (waiting.length) waiting.forEach((pane) => pane.whenVisible());
     else if (focused.term && !panel.hidden) refreshShells();
   });
+  // applyLayout places the panes. By order and share, not by moving them in the page, which
+  // would make browsers forget a screen's scrolling.
+  const applyLayout = () => {
+    const split = panes.length > 1;
+    panesBox.classList.toggle("terminal-panes-split", split);
+    panes.forEach((pane, place) => {
+      pane.element.style.order = String(place * 2);
+      pane.element.style.flexGrow = split ? String(place ? 1 - splitShare : splitShare) : "";
+      pane.element.classList.toggle("terminal-pane-focused", pane === focused);
+    });
+    if (split && !splitHandle) {
+      splitHandle = buildSplitHandle();
+      panesBox.append(splitHandle);
+    } else if (!split && splitHandle) {
+      splitHandle.remove();
+      splitHandle = null;
+    }
+    splitHandle?.setAttribute("aria-valuenow", String(Math.round(splitShare * 100)));
+    splitButton.textContent = split ? "Unsplit" : "Split";
+    splitButton.title = split ? "Close the other pane; its shell keeps running" : "Show another shell beside this one";
+    splitButton.setAttribute("aria-pressed", String(split));
+  };
   // focusPane makes a pane the one the bar and sending act on, following where the keys go.
   const focusPane = (pane) => {
     focused = pane;
+    applyLayout();
+    rememberLayout();
+    renderTabs();
+  };
+  const setShare = (share) => {
+    splitShare = clampShare(share);
+    applyLayout();
+  };
+  const buildSplitHandle = () => {
+    const handle = document.createElement("div");
+    handle.className = "terminal-split-handle";
+    handle.tabIndex = 0;
+    handle.style.order = "1";
+    handle.setAttribute("role", "separator");
+    handle.setAttribute("aria-orientation", "vertical");
+    handle.setAttribute("aria-label", "Resize the panes");
+    // Narrow windows stack the panes, which web_shell.css decides.
+    const stacked = () => getComputedStyle(panesBox).flexDirection === "column";
+    handle.onpointerdown = (event) => {
+      event.preventDefault();
+      handle.setPointerCapture?.(event.pointerId);
+      handle.onpointermove = (move) => {
+        const box = panesBox.getBoundingClientRect();
+        const share = stacked() ? (move.clientY - box.top) / box.height : (move.clientX - box.left) / box.width;
+        setShare(share);
+      };
+      handle.onpointerup = handle.onpointercancel = () => {
+        handle.onpointermove = handle.onpointerup = handle.onpointercancel = null;
+        rememberLayout();
+        focused.term.focus();
+      };
+    };
+    handle.onkeydown = (event) => {
+      const step = { ArrowLeft: -0.05, ArrowUp: -0.05, ArrowRight: 0.05, ArrowDown: 0.05 }[event.key];
+      if (!step) return;
+      event.preventDefault();
+      setShare(splitShare + step);
+      rememberLayout();
+    };
+    return handle;
+  };
+  const showBriefly = (pane, message) => {
+    showStatus(pane, message);
+    setTimeout(() => {
+      if (pane.status.textContent === message) showStatus(pane, "");
+    }, 4000);
   };
   const buildPane = (pane) => {
     pane.element = document.createElement("div");
     pane.element.className = "terminal-pane";
-    pane.element.addEventListener("focusin", () => focusPane(pane));
+    pane.element.addEventListener("focusin", () => {
+      if (focused !== pane) focusPane(pane);
+    });
     const notice = document.createElement("div");
     notice.className = "terminal-pane-status";
     notice.hidden = true;
@@ -1007,16 +1227,16 @@
       if (socket?.readyState !== WebSocket.OPEN) return;
       // A full-screen program draws its own screen, and would not know it had gone.
       if (term.buffer.active.type === "alternate") {
-        const message = "Clear is off while a full-screen program runs.";
-        showStatus(pane, message);
-        setTimeout(() => {
-          if (pane.status.textContent === message) showStatus(pane, "");
-        }, 4000);
+        showBriefly(pane, "Clear is off while a full-screen program runs.");
         return;
       }
       term.clear();
       send(pane, JSON.stringify({ type: "clear" }));
     };
+    splitButton = document.createElement("button");
+    splitButton.type = "button";
+    splitButton.disabled = true;
+    splitButton.onclick = toggleSplit;
     maximize = document.createElement("button");
     maximize.type = "button";
     maximize.onclick = toggleMaximized;
@@ -1034,6 +1254,7 @@
       fontButton("A-", "Smaller text", -1),
       fontButton("A+", "Larger text", 1),
       clear,
+      splitButton,
       maximize,
       hide,
     );
@@ -1042,6 +1263,7 @@
     buildPane(focused);
     panel.append(buildResizer(), bar, panesBox);
     document.body.append(panel);
+    applyLayout();
   };
   // openTerminal gives a pane its screen, inside its viewport.
   const openTerminal = (pane) => {
@@ -1069,9 +1291,11 @@
     term.onResize(({ rows, cols }) =>
       send(pane, JSON.stringify({ type: "resize", rows, cols })),
     );
-    new ResizeObserver(() => {
-      if (!panel.hidden) fit.fit();
-    }).observe(viewport);
+    // A pane just removed or out of sight measures as nothing.
+    pane.observer = new ResizeObserver(() => {
+      if (!panel.hidden && viewport.clientWidth) fit.fit();
+    });
+    pane.observer.observe(viewport);
   };
   const start = async () => {
     build();
@@ -1092,8 +1316,8 @@
     matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", applyTheme);
     // A font that arrives late changes the size of every cell.
     document.fonts?.ready.then(() => {
-      focused.term.options.fontFamily = fontFamily();
-      focused.fit.fit();
+      for (const pane of panes) pane.term.options.fontFamily = fontFamily();
+      fitPanes();
     });
     // A page opened in the background waits to be looked at before taking a shell.
     if (document.hidden) {
@@ -1104,7 +1328,7 @@
     }
     focused.term.focus();
     setInterval(() => {
-      if (!document.hidden && !panel.hidden && !focused.whenVisible) refreshShells();
+      if (!document.hidden && !panel.hidden && !panes.some((pane) => pane.whenVisible)) refreshShells();
     }, shellsRefresh);
   };
   const setOpen = (open) => {
@@ -1124,7 +1348,7 @@
     }
     panel.hidden = !open;
     if (open && focused.term) {
-      focused.fit.fit();
+      fitPanes();
       focused.term.focus();
       // Opened again with nothing to show, or asked for a new shell.
       if (newAsked || (startAsked && focused.shown === null)) begin();
@@ -1158,7 +1382,7 @@
       .replace(/\n+$/, "");
   // Well under what the server takes in one message, in any encoding.
   const pasteLimit = 256 * 1024;
-  // sendToTerminal types a command into this project's shown shell, without running it,
+  // sendToTerminal types a command into the focused pane's shell, without running it,
   // and returns what stopped it, if anything. It starts no shell and takes none from
   // another browser tab: having a command to hand is no reason for either.
   window.sendToTerminal = async (text, { pasted = false } = {}) => {
@@ -1203,11 +1427,7 @@
       return null;
     }
     const waiting = new Promise((resolve) => {
-      pane.pendingSend = {
-        text,
-        resolve,
-        timer: setTimeout(() => settleSend(pane, "The terminal did not connect, so nothing was sent."), 15000),
-      };
+      awaitSend(pane, text, resolve);
     });
     setOpen(true);
     // A panel already showing nothing has no shell to wait for until it looks again.

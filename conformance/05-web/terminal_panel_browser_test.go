@@ -41,8 +41,8 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   const collect = async () => {
     (await page.evaluate('window.__violations')).forEach((item) => violations.add(item));
   };
-  const typeLine = async (line) => {
-    await page.evaluate('document.querySelector(".xterm-helper-textarea").focus()');
+  const typeLine = async (line, pane = 0) => {
+    await page.evaluate('document.querySelectorAll(".xterm-helper-textarea")[' + pane + '].focus()');
     await page.send('Input.insertText', { text: line });
     const enter = { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, text: '\r', unmodifiedText: '\r' };
     await page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...enter });
@@ -148,6 +148,56 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await page.evaluate('[...document.querySelectorAll(".terminal-bar button")].find((item) => item.textContent === "Restore").click()');
   await until('the panel to give the window back', '!' + covers);
   await collect();
+
+  // Split shows two shells side by side, each typed into and sized on its own.
+  const barButton = (text) => '[...document.querySelectorAll(".terminal-bar button")].find((item) => item.textContent === ' + JSON.stringify(text) + ')';
+  const paneHas = (index, text) => 'document.querySelectorAll(".terminal-pane")[' + index + ']?.querySelector(".xterm-rows")?.textContent.includes(' + JSON.stringify(text) + ')';
+  const bothSettled = '[...document.querySelectorAll(".terminal-status")].every((item) => item.hidden)';
+  await page.evaluate(barButton('Split') + '.click()');
+  await until('a second pane', 'document.querySelectorAll(".xterm-helper-textarea").length === 2 && document.querySelectorAll(".terminal-tab").length === 2');
+  await until('both panes to settle', bothSettled);
+  await typeLine('echo "left-$((1+1))"', 0);
+  await until('the first pane to run a command', paneHas(0, 'left-2'));
+  await typeLine('echo "right-$((2+2))"', 1);
+  await until('the second pane to run a command', paneHas(1, 'right-4'));
+  if (await page.evaluate(paneHas(0, 'right-4'))) throw new Error('the second pane\'s output reached the first');
+  // Measured, since the layout is what this is for. Says what it found, as nothing but CI runs this.
+  const layout = 'JSON.stringify((() => {' +
+    'const box = document.querySelector(".terminal-panes").getBoundingClientRect();' +
+    'const [first, second] = [...document.querySelectorAll(".terminal-pane")].map((pane) => pane.getBoundingClientRect());' +
+    'const [left, right] = [...document.querySelectorAll(".terminal-pane .xterm-screen")].map((item) => item.getBoundingClientRect().width);' +
+    'return { box: [box.left, box.right, box.width], first: [first.left, first.right, first.width], second: [second.left, second.right, second.width], left, right };' +
+    '})())';
+  const sides = 'document.querySelectorAll(".terminal-pane .xterm-screen").length === 2 && (() => {' +
+    'const box = document.querySelector(".terminal-panes").getBoundingClientRect();' +
+    'const [first, second] = [...document.querySelectorAll(".terminal-pane")].map((pane) => pane.getBoundingClientRect());' +
+    'const [left, right] = [...document.querySelectorAll(".terminal-pane .xterm-screen")].map((item) => item.getBoundingClientRect().width);' +
+    'return first.left === box.left && second.right === box.right && first.right <= second.left && second.left - first.right <= 8 &&' +
+    ' Math.abs(first.width - second.width) <= 2 &&' +
+    ' left <= first.width && right <= second.width && left > first.width - 60 && right > second.width - 60;' +
+    '})()';
+  await until('the panes to share the panel', sides).catch(async (error) => {
+    throw new Error(error.message + '; measured ' + (await page.evaluate(layout)));
+  });
+  // The handle moves the share, and each terminal fits it.
+  const narrower = await page.evaluate('document.querySelectorAll(".terminal-pane .xterm-screen")[0].getBoundingClientRect().width');
+  await page.evaluate('for (let press = 0; press < 3; press++) document.querySelector(".terminal-split-handle").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }))');
+  await until('the first terminal to take its larger share', 'document.querySelectorAll(".terminal-pane .xterm-screen")[0].getBoundingClientRect().width > ' + (narrower + 60));
+  await collect();
+
+  // Following a link finds both, each with its own shell.
+  await page.evaluate('location.href = "/project/p1"');
+  await until('both panes on the next page', 'document.querySelectorAll(".xterm-helper-textarea").length === 2');
+  await until('the first pane replayed', paneHas(0, 'left-2'));
+  await until('the second pane replayed', paneHas(1, 'right-4'));
+  await until('both panes to settle again', bothSettled);
+  await collect();
+
+  // Closing a pane leaves its shell, with its tab.
+  await page.evaluate(barButton('Unsplit') + '.click()');
+  await until('one pane again', 'document.querySelectorAll(".terminal-pane").length === 1 && document.querySelectorAll(".xterm-helper-textarea").length === 1');
+  if (await page.evaluate('document.querySelectorAll(".terminal-tab").length !== 2')) throw new Error('closing a pane ended its shell');
+  await collect();
 }).catch((error) => { failure = error.stack || String(error); });
 await close();
 console.log(JSON.stringify({ failure, violations: [...violations] }));
@@ -155,8 +205,8 @@ process.exit(0);
 `
 
 // TestTerminalPanelInBrowser uses the real xterm.js in Chrome, signed in as a browser
-// is: opening the panel, typing, following a link with the shell still there, and a
-// second tab.
+// is: opening the panel, typing, following a link with the shell still there, a second
+// tab, and two panes.
 func TestTerminalPanelInBrowser(t *testing.T) {
 	covers(t, "WEB-33")
 	chrome := browserForTests(t)

@@ -853,6 +853,11 @@ html.terminal-open.terminal-maximized .terminal-resizer {
   background: var(--terminal-background);
   color: var(--text);
 }
+/* Shown too, in the pane the keys are not going to. */
+.terminal-tab-other-pane {
+  border-color: var(--line);
+  border-style: dashed;
+}
 .terminal-bar .terminal-tab button {
   padding: 1px 6px;
   border: 0;
@@ -962,6 +967,34 @@ html.terminal-open.terminal-maximized .terminal-resizer {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+}
+/* Which pane the keys go to, in the theme's own focus colour. */
+.terminal-panes-split .terminal-pane {
+  border-top: 2px solid transparent;
+}
+.terminal-panes-split .terminal-pane-focused {
+  border-top-color: var(--focus);
+}
+.terminal-split-handle {
+  flex: 0 0 6px;
+  background: var(--line-soft);
+  cursor: col-resize;
+  touch-action: none;
+}
+.terminal-split-handle:hover,
+.terminal-split-handle:focus-visible {
+  background: var(--line);
+  outline: none;
+}
+/* Too narrow for two screens side by side. */
+@media (max-width: 720px) {
+  .terminal-panes-split {
+    flex-direction: column;
+  }
+  .terminal-split-handle {
+    cursor: row-resize;
+  }
 }
 .terminal-viewport {
   flex: 1;
