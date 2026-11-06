@@ -40,11 +40,11 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const home = '/home/u';
 const plain = (id, number) => ({ id, number, basedir: '', project: '', dir: home, link: '/' });
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
-const load = (file, { stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', limit = 8, path = '/', maximized = false, fontSize = '' } = {}) => {
+const load = (file, { stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/', maximized = false, fontSize = '' } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
   // xterm.js parses what it is given later; a test can hold that back.
   const parser = { held: false, waiting: [], release() { this.held = false; this.waiting.splice(0).forEach((parse) => parse()); } };
-  const server = { shells: [...shells], lastID: 100, limit, startError: '' };
+  const server = { shells: [...shells], lastID: 100, limit, startError: '', tight, observers: [] };
   const fakeShells = (url, method, body) => {
     requests.push(method + ' ' + url);
     const refused = (code, text) => Promise.resolve({ ok: false, status: code, text: async () => text });
@@ -110,10 +110,12 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
       };
       window.setInterval = (callback, delay) => { if (delay === 5000) polls.push(callback); if (delay === 60000) aliveTimers.push(callback); return 1; };
       window.confirm = () => true;
-      window.ResizeObserver = class { observe() {} disconnect() {} };
-      window.matchMedia = (query) => ({ get matches() { return Boolean(server.narrow) && query.includes('max-width'); }, addEventListener(type, listener) { (server.mediaListeners ||= []).push(listener); } });
+      window.ResizeObserver = class { constructor(callback) { server.observers.push(callback); } observe() {} disconnect() {} };
+      window.matchMedia = (query) => ({ get matches() { return query.includes('min-width: 1000px') ? !server.tight : false; }, addEventListener(type, listener) { if (query.includes('min-width')) (server.mediaListeners ||= []).push(listener); } });
       if (hidden) Object.defineProperty(window.Document.prototype, 'hidden', { configurable: true, get: () => window.__hidden !== false });
       if (height) window.localStorage.setItem('rotari-terminal-height', height);
+      if (place) window.localStorage.setItem('rotari-terminal-place', place);
+      if (width) window.localStorage.setItem('rotari-terminal-width', width);
       window.WebSocket = class {
         static OPEN = 1;
         constructor(url) { this.url = url; this.sent = []; this.readyState = 1; sockets.push(this); }
@@ -1432,9 +1434,9 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   handle.onkeydown({ key: 'ArrowRight', preventDefault() {} });
   assert.equal(partOf(ui.panes()[0].style.width).toFixed(2), '0.25');
   assert.equal(ui.saved().columns[0].share.toFixed(2), '0.25');
-  // A narrow window stacks them, moves the handle along the other axis, and keeps the share.
-  handled.server.narrow = true;
-  handled.server.mediaListeners.forEach((listener) => listener());
+  // A narrow panel stacks them, moves the handle along the other axis, and keeps the share.
+  handled.document.querySelector('.terminal-panes').getBoundingClientRect = () => ({ left: 100, width: 600, top: 0, height: 300 });
+  handled.server.observers.forEach((observer) => observer());
   assert.equal(ui.panes()[1].style.width, '100%');
   assert.equal(partOf(ui.panes()[1].style.top), 0.25);
   assert.equal(handle.getAttribute('aria-orientation'), 'horizontal');
@@ -1442,8 +1444,8 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   handle.onpointermove({ clientX: 0, clientY: 150 });
   handle.onpointerup();
   assert.equal(ui.saved().columns[0].share, 0.5);
-  handled.server.narrow = false;
-  handled.server.mediaListeners.forEach((listener) => listener());
+  handled.document.querySelector('.terminal-panes').getBoundingClientRect = () => ({ left: 100, width: 1000, top: 0, height: 300 });
+  handled.server.observers.forEach((observer) => observer());
   assert.equal(partOf(ui.panes()[1].style.left), 0.5);
   assert.equal(handle.getAttribute('aria-orientation'), 'vertical');
   // One pane fills the panel, and leaves no handle.
@@ -1665,16 +1667,15 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   rowHandle.onpointerup();
   assertFills(rowHandles, 'after dragging a row');
   assert.equal(ui.saved().columns[1].rows[0].share, 0.75);
-  // A narrow window stacks every pane in reading order, and keeps the columns for a wider one.
+  // A narrow panel stacks every pane in reading order, and keeps the columns for a wider one.
   const stackedThree = await buildShape([1, 2]);
-  stackedThree.server.narrow = true;
-  stackedThree.server.mediaListeners.forEach((listener) => listener());
+  stackedThree.document.querySelector('.terminal-panes').getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 800 });
+  stackedThree.server.observers.forEach((observer) => observer());
   assert.deepEqual(boxesOf(stackedThree).map((box) => [box.x, box.w, box.y, box.h]), [[0, 1, 0, 0.5], [0, 1, 0.5, 0.25], [0, 1, 0.75, 0.25]]);
   assertFills(stackedThree, 'stacked');
   assert.deepEqual(shapeOf(stackedThree), [1, 2]);
   // A boundary inside a stacked column counts within that column's room.
   const stackedBox = stackedThree.document.querySelector('.terminal-panes');
-  stackedBox.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 800 });
   const stackedHandle = [...stackedThree.document.querySelectorAll('.terminal-split-handle')].find((item) => partOf(item.style.top) === 0.75);
   stackedHandle.onpointerdown({ preventDefault() {}, pointerId: 1 });
   stackedHandle.onpointermove({ clientX: 0, clientY: 700 });
@@ -1682,8 +1683,8 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(sp(stackedThree).saved().columns[1].rows[0].share, 0.75);
   assert.ok(near(boxesOf(stackedThree)[1].h, 0.375));
   assertFills(stackedThree, 'stacked, after dragging');
-  stackedThree.server.narrow = false;
-  stackedThree.server.mediaListeners.forEach((listener) => listener());
+  stackedBox.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 800 });
+  stackedThree.server.observers.forEach((observer) => observer());
   assert.equal(boxesOf(stackedThree)[0].w, 0.5);
   // Exchanging places works across columns and rows, connects nothing, and leaves the other two.
   const exchanging = await buildShape([1, 2, 1]);
@@ -1800,6 +1801,78 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   const paneOf1 = sentToFour.sockets.findIndex((socket) => /shell=1&/.test(socket.url));
   assert.deepEqual(sentToFour.terminals[paneOf1].pastes, ['for the focused']);
   assert.equal(sentToFour.terminals.filter((term) => term.pastes).length, 1, 'went to more than one pane');
+
+  // The panel at a side has its own size, and comes back there with the next page. The
+  // page's room is a rule of web_shell.css, which only an open panel follows.
+  const placeOf = (page) => page.document.documentElement.dataset.terminalPlace;
+  const sideRoom = (page) => page.document.documentElement.style.getPropertyValue('--terminal-saved-width');
+  const heightSaved = (page) => page.window.localStorage.getItem('rotari-terminal-height');
+  for (const [where, growing, shrinking, drag] of [['right', 'ArrowLeft', 'ArrowRight', { clientX: 980 }], ['left', 'ArrowRight', 'ArrowLeft', { clientX: 1020 }]]) {
+    const side = load(process.argv[1], { stored: '1', place: where, width: '500', height: '300', shells: [plain('1', 1)] });
+    await wait(50);
+    assert.equal(placeOf(side), where);
+    assert.equal(sideRoom(side), '500px');
+    const edge = side.document.querySelector('.terminal-resizer');
+    assert.equal(edge.getAttribute('aria-orientation'), 'vertical');
+    side.document.getElementById('terminal-panel').getBoundingClientRect = () => ({ width: 500, height: 900 });
+    // Dragging the edge away from its side makes it wider, and the height is left alone.
+    edge.onpointerdown({ preventDefault() {}, clientX: 1000, clientY: 100, pointerId: 1 });
+    edge.onpointermove({ ...drag, clientY: 400 });
+    assert.equal(sideRoom(side), '520px');
+    side.document.getElementById('terminal-panel').getBoundingClientRect = () => ({ width: 520, height: 900 });
+    edge.onpointerup();
+    assert.equal(side.window.localStorage.getItem('rotari-terminal-width'), '520');
+    assert.equal(heightSaved(side), '300', 'moving a side changed the height');
+    assert.equal(edge.onpointermove, null);
+    // Keys go the way the edge moves, and the page keeps its room.
+    side.document.getElementById('terminal-panel').getBoundingClientRect = () => ({ width: 400, height: 900 });
+    edge.onkeydown({ key: growing, preventDefault() {} });
+    assert.equal(sideRoom(side), '424px');
+    edge.onkeydown({ key: shrinking, preventDefault() {} });
+    assert.equal(sideRoom(side), '376px');
+    edge.onkeydown({ key: 'ArrowUp', preventDefault() {} });
+    assert.equal(sideRoom(side), '376px', 'a key across the edge moved it');
+    side.document.getElementById('terminal-panel').getBoundingClientRect = () => ({ width: 330, height: 900 });
+    edge.onkeydown({ key: shrinking, preventDefault() {} });
+    assert.equal(sideRoom(side), '320px', 'the panel went under its least');
+    assert.equal(side.sockets.length, 1);
+    assert.match(webShellCSS, new RegExp('html\\.terminal-open\\[data-terminal-place="' + where + '"\\] \\{\\s*--terminal-' + where + ': var\\(--terminal-saved-width, 480px\\);'));
+  }
+  // The page clears the panel on every side, and a maximized one still covers it all.
+  assert.match(webShellCSS, /html\.terminal-open body \{[^}]*padding-left: var\(--terminal-left, 0px\);\s*padding-right: var\(--terminal-right, 0px\);/);
+  assert.match(webShellCSS, /html\.terminal-open \.output-modal \{\s*right: var\(--terminal-right, 0px\);\s*bottom: var\(--terminal-height\);\s*left: var\(--terminal-left, 0px\);/);
+  assert.match(webShellCSS, /\.terminal-send-note \{[^}]*right: calc\(var\(--terminal-right, 0px\) \+ 16px\);/);
+  assert.match(webShellCSS, /terminal-maximized #terminal-panel \{[^}]*right: 0;\s*left: 0;\s*width: auto;/);
+  assert.ok(webShellCSS.indexOf('[data-terminal-place="right"] #terminal-panel') < webShellCSS.indexOf('.terminal-maximized #terminal-panel'), 'a side would win over maximizing');
+  // Anything else saved is the bottom, and a width stays within what leaves the page room.
+  const badPlace = load(process.argv[1], { stored: '1', place: 'top', shells: [plain('1', 1)] });
+  await wait(30);
+  assert.equal(placeOf(badPlace), undefined);
+  assert.equal(badPlace.document.querySelector('.terminal-resizer').getAttribute('aria-orientation'), 'horizontal');
+  const wideSaved = load(process.argv[1], { place: 'right', width: '99999' });
+  assert.equal(sideRoom(wideSaved), (wideSaved.window.innerWidth - 480) + 'px');
+  assert.equal(sideRoom(load(process.argv[1], { place: 'left', width: '5' })), '320px');
+  // A closed panel still knows its place, before the page is drawn, and takes no room.
+  const closedSide = load(process.argv[1], { place: 'left' });
+  assert.equal(placeOf(closedSide), 'left');
+  assert.equal(closedSide.document.documentElement.classList.contains('terminal-open'), false);
+  assert.equal(closedSide.document.documentElement.style.getPropertyValue('--terminal-left'), '', 'a closed panel took room');
+  // Under 1000 pixels it is at the bottom, and the choice comes back with the room, keeping every connection.
+  const tightSide = load(process.argv[1], { stored: '1', place: 'right', tight: true, path: '/project/p1', shells: splitShells(1, 2), split: [splitKey, layout] });
+  await wait(50);
+  assert.equal(placeOf(tightSide), undefined, 'at a side in a narrow window');
+  assert.equal(tightSide.document.querySelector('.terminal-resizer').getAttribute('aria-orientation'), 'horizontal');
+  assert.equal(tightSide.window.localStorage.getItem('rotari-terminal-place'), 'right', 'a narrow window lost the choice');
+  const tightSockets = tightSide.sockets.length;
+  tightSide.server.tight = false;
+  tightSide.server.mediaListeners.forEach((listener) => listener());
+  assert.equal(placeOf(tightSide), 'right');
+  assert.equal(tightSide.document.querySelector('.terminal-resizer').getAttribute('aria-orientation'), 'vertical');
+  tightSide.server.tight = true;
+  tightSide.server.mediaListeners.forEach((listener) => listener());
+  assert.equal(placeOf(tightSide), undefined);
+  assert.equal(tightSide.sockets.length, tightSockets, 'moving the panel reconnected');
+  assert.equal(tightSide.sockets.some((socket) => socket.closed), false, 'moving the panel closed a connection');
 
   // xterm.js loads only on opening, under the page's nonce.
   const real = load(process.argv[1], { stubs: false });

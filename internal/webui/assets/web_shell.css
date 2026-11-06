@@ -719,6 +719,16 @@ main {
 html.terminal-open {
   --terminal-height: var(--terminal-saved-height, 320px);
 }
+/* At a side, it has the window's height, and the whole page takes the rest of the width. */
+html.terminal-open[data-terminal-place] {
+  --terminal-height: 0px;
+}
+html.terminal-open[data-terminal-place="left"] {
+  --terminal-left: var(--terminal-saved-width, 480px);
+}
+html.terminal-open[data-terminal-place="right"] {
+  --terminal-right: var(--terminal-saved-width, 480px);
+}
 html.terminal-open body {
   min-height: calc(100vh - var(--terminal-height));
   padding-bottom: var(--terminal-height);
@@ -763,6 +773,21 @@ html.terminal-open .artifact-view {
   box-shadow: none;
   background: var(--terminal-background);
 }
+html.terminal-open[data-terminal-place] #terminal-panel {
+  top: 0;
+  height: auto;
+  border-top: 0;
+}
+html.terminal-open[data-terminal-place="left"] #terminal-panel {
+  right: auto;
+  width: var(--terminal-left);
+  border-right: 1px solid var(--line);
+}
+html.terminal-open[data-terminal-place="right"] #terminal-panel {
+  left: auto;
+  width: var(--terminal-right);
+  border-left: 1px solid var(--line);
+}
 #terminal-panel[hidden] {
   display: none;
 }
@@ -774,6 +799,9 @@ html.terminal-open.terminal-maximized {
 html.terminal-open.terminal-maximized #terminal-panel {
   top: 0;
   z-index: 50;
+  right: 0;
+  left: 0;
+  width: auto;
   height: auto;
 }
 html.terminal-open.terminal-maximized .terminal-resizer {
@@ -811,6 +839,22 @@ html.terminal-open.terminal-maximized .terminal-resizer {
   margin-top: -3px;
   cursor: row-resize;
   touch-action: none;
+}
+html.terminal-open[data-terminal-place] .terminal-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 12;
+  width: 6px;
+  height: auto;
+  margin: 0;
+  cursor: col-resize;
+}
+html.terminal-open[data-terminal-place="left"] .terminal-resizer {
+  right: -3px;
+}
+html.terminal-open[data-terminal-place="right"] .terminal-resizer {
+  left: -3px;
 }
 .terminal-resizer:hover,
 .terminal-resizer:focus-visible {

@@ -135,6 +135,7 @@
   const openKey = "rotari-terminal-open";
   const heightKey = "rotari-terminal-height";
   const widthKey = "rotari-terminal-width";
+  const placeKey = "rotari-terminal-place";
   const shownKey = "rotari-terminal-shell";
   const layoutKey = "rotari-terminal-layout";
   const maximizedKey = "rotari-terminal-maximized";
@@ -233,9 +234,10 @@
   let columns = [{ share: 1, rows: [{ share: 1, pane: focused }] }];
   const readingOrder = () => columns.flatMap((column) => column.rows.map((row) => row.pane));
   const handles = [];
-  // Too narrow for screens side by side: everything stacks, and the columns stay as they
-  // are for a wider window.
-  const narrowWindow = window.matchMedia?.("(max-width: 720px)");
+  // A panel too narrow for screens side by side stacks everything, and the columns stay as
+  // they are for when it has room. At the bottom, its width is the window's.
+  const stackedUnder = 720;
+  let laidStacked = false;
   const paneShowing = (id) => panes.find((pane) => pane.shown === id);
 
   const remember = (open) => {
@@ -309,7 +311,18 @@
   };
   // Where the panel sits. Its height at the bottom and its width at a side are kept apart,
   // so that moving it and back finds each as it was.
-  const panelPlace = () => "bottom";
+  const chosenPlace = () => {
+    try {
+      const place = localStorage.getItem(placeKey);
+      if (place === "left" || place === "right") return place;
+    } catch {}
+    return "bottom";
+  };
+  let chosen = chosenPlace();
+  // A page narrower than its layouts expect is the danger of a panel at a side, and the
+  // sidebar of a narrow window needs the left edge. The choice stays for a wider window.
+  const wideWindow = window.matchMedia?.("(min-width: 1000px)");
+  const panelPlace = () => (wideWindow?.matches === false ? "bottom" : chosen);
   const panelSizes = {
     height: { key: heightKey, variable: "--terminal-saved-height", clamp: clampHeight },
     width: { key: widthKey, variable: "--terminal-saved-width", clamp: clampWidth },
@@ -331,6 +344,16 @@
     try {
       localStorage.setItem(panelSizes[axis].key, String(Math.round(currentSize(axis))));
     } catch {}
+  };
+  // applyPlace puts the panel where it goes, which web_shell.css decides from this. Every
+  // screen fits itself to its new room, and no connection changes.
+  const applyPlace = () => {
+    const place = panelPlace();
+    if (place === "bottom") delete root.dataset.terminalPlace;
+    else root.dataset.terminalPlace = place;
+    if (!panel) return;
+    panel.querySelector(".terminal-resizer").setAttribute("aria-orientation", place === "bottom" ? "horizontal" : "vertical");
+    applyLayout();
   };
   const applySavedSizes = () => {
     for (const axis of Object.keys(panelSizes)) {
@@ -1247,7 +1270,10 @@
     element.style.width = span(box.w, before.x + after.x);
     element.style.height = span(box.h, before.y + after.y);
   };
-  const isStacked = () => Boolean(narrowWindow?.matches);
+  const isStacked = () => {
+    const { width } = panesBox.getBoundingClientRect();
+    return width > 0 && width < stackedUnder;
+  };
   // layoutGeometry works out where everything in a layout goes, as parts of the panes' box.
   const layoutGeometry = (layout, stacked) => {
     const places = [];
@@ -1307,7 +1333,8 @@
   // a screen in the page, as columns of their own elements would need, would make
   // browsers forget its scrolling.
   const applyLayout = () => {
-    const { places, boundaries } = layoutGeometry(columns, isStacked());
+    laidStacked = isStacked();
+    const { places, boundaries } = layoutGeometry(columns, laidStacked);
     for (const { row, box, before, after } of places) {
       place(row.pane.element, box, before, after);
       row.pane.element.classList.toggle("terminal-pane-focused", row.pane === focused);
@@ -1518,8 +1545,10 @@
     buildPane(focused);
     panel.append(buildResizer(), bar, panesBox);
     document.body.append(panel);
-    applyLayout();
-    narrowWindow?.addEventListener?.("change", applyLayout);
+    applyPlace();
+    new ResizeObserver(() => {
+      if (isStacked() !== laidStacked) applyLayout();
+    }).observe(panesBox);
   };
   // openTerminal gives a pane its screen, inside its viewport.
   const openTerminal = (pane) => {
@@ -1619,6 +1648,8 @@
   };
   // Before the page is drawn, so a panel left open does not make it jump.
   applySavedSizes();
+  applyPlace();
+  wideWindow?.addEventListener?.("change", applyPlace);
   if (remembered()) root.classList.add("terminal-open");
   if (rememberedMaximized()) root.classList.add("terminal-maximized");
   addEventListener("resize", applySavedSizes);
