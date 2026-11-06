@@ -64,8 +64,8 @@
 
 **Reason:** `main` was held back for the user's trial in a browser, since layout, focus, and dragging could not be seen here.
 
-**Plan impact:** All steps are done. Which of the hand checks the user went through was not stated; they reported only that the split worked.
+**Plan impact:** All steps are done.
 
-**Validation:** The user tried the build and said the split worked. `TestTerminalPanelInBrowser`'s split checks have still not run anywhere, since nothing here has Chrome and nothing has been pushed.
+**Validation:** The user tried the build and said the split worked. Asked whether that covered the hand checks, such as `vim` beside `yes` and changing the theme, they said OK. `TestTerminalPanelInBrowser`'s split checks have still not run anywhere, since nothing here has Chrome and nothing has been pushed.
 
 **Remaining:** Those checks' first run on CI.
