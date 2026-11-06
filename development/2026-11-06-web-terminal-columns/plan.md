@@ -1,8 +1,11 @@
 # Plan: Up to four panes in the Web terminal panel
 
 Created: 2026-11-06
-Status: Not started. Follows [the split plan](../2026-11-06-web-terminal-split/plan.md), whose terms this uses. The limit
-of four and the single level of nesting are the user's choices; the rest are proposals until reviewed.
+Status: Not started; [step 0](#step-0-the-first-run-on-ci) needs a push. Follows
+[the split plan](../2026-11-06-web-terminal-split/plan.md), whose terms this uses. The limit of four, the single level of
+nesting, and closing the focused pane are the user's choices. They accepted decisions 3, 6, and 7 as proposed, decision 3
+tentatively: it is an implementation choice to judge by what step 1 does to the panel. Decisions 5 and 8 were not raised
+separately.
 
 ## Goal
 
@@ -34,7 +37,7 @@ tabs, and following links.
    `flexGrow`, and carries the reason for them further.
 4. **Bar: Split right, Split down, and Close pane,** replacing Split and Unsplit. Both splits are off at four panes.
    **Close pane** closes the focused one, where Unsplit closed the other, since with more than two "the other" means
-   nothing. Its shell keeps running, as before.
+   nothing, and the user preferred it from the start. Its shell keeps running, as before.
 5. **Tabs stay one row.** A dashed tab is in another pane, and choosing it exchanges that pane's place with the focused
    one's, connecting nothing, as now. Tabs do not say which pane; the screens do.
 6. **Saved under a new key,** `rotari-terminal-layout`, per browser tab and project. A browser tab open across the upgrade
