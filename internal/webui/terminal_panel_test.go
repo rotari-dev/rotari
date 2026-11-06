@@ -987,7 +987,8 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
 
   // Two panes. Each row of what happens is checked with two or three shells of a project.
   const splitShells = (...ids) => ids.map((id, index) => inProject(String(id), index + 1, 'p1'));
-  const shownKey = 'rotari-terminal-shell:/b:p1', splitKey = 'rotari-terminal-split:/b:p1';
+  const shownKey = 'rotari-terminal-shell:/b:p1', splitKey = 'rotari-terminal-layout:/b:p1';
+  const twoColumns = (first, second, share, focused) => ({ columns: [{ share, rows: [{ share: 1, shell: first }] }, { share: 1 - share, rows: [{ share: 1, shell: second }] }], focused });
   const openSplit = async (ids, options = {}) => {
     const page = load(process.argv[1], { stored: '1', path: '/project/p1', shells: splitShells(...ids), remembered: [shownKey, String(ids[0])], ...options });
     await wait(50);
@@ -1000,7 +1001,9 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
     const tabEl = (name) => [...page.document.querySelectorAll('.terminal-tab')].find((tab) => tab.querySelector('[role=tab]').textContent === name);
     return {
       bar, panes,
-      split: () => bar('Split').click(),
+      split: () => bar('Split right').click(),
+      splitDown: () => bar('Split down').click(),
+      closePane: () => bar('Close pane').click(),
       tab: (name) => tabEl(name).querySelector('[role=tab]').click(),
       selected: () => page.document.querySelector('.terminal-tab [aria-selected=true]')?.textContent,
       otherPane: () => [...page.document.querySelectorAll('.terminal-tab-other-pane [role=tab]')].map((tab) => tab.textContent),
@@ -1019,7 +1022,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   const splitting = await openSplit([1, 2, 3]);
   let ui = sp(splitting);
   assert.equal(ui.panes().length, 1);
-  assert.equal(ui.bar('Split').getAttribute('aria-pressed'), 'false');
+  assert.equal(ui.bar('Close pane').disabled, true, 'offered to close the only pane');
   assert.equal(splitting.document.querySelector('.terminal-bar .terminal-status'), null, 'a status stayed in the bar');
   ui.split();
   await wait(20);
@@ -1028,8 +1031,8 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.deepEqual(ui.live(), ['1', '2']);
   assert.equal(ui.selected(), '2');
   assert.deepEqual(ui.otherPane(), ['1']);
-  assert.equal(ui.bar('Unsplit').getAttribute('aria-pressed'), 'true');
-  assert.deepEqual(ui.saved(), { shell: '2', focused: true, share: 0.5 });
+  assert.equal(ui.bar('Close pane').disabled, false);
+  assert.deepEqual(ui.saved(), twoColumns('1', '2', 0.5, '2'));
   assert.equal(ui.panes()[1].classList.contains('terminal-pane-focused'), true);
   assert.equal(ui.panes()[0].classList.contains('terminal-pane-focused'), false);
   assert.equal(splitting.requests.some((request) => request.startsWith('POST')), false, 'split started a shell with one to spare');
@@ -1062,7 +1065,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.deepEqual(ui.inOrder(), [rightBefore, leftBefore], 'the panes did not change places');
   assert.equal(ui.inOrder()[1].classList.contains('terminal-pane-focused'), true, 'focus left the place it was in');
   assert.equal(splitting.window.sessionStorage.getItem(shownKey), '3');
-  assert.deepEqual(ui.saved(), { shell: '1', focused: true, share: 0.5 });
+  assert.deepEqual(ui.saved(), twoColumns('3', '1', 0.5, '1'));
   // Choosing the focused pane's own tab changes nothing.
   ui.tab('1');
   assert.equal(splitting.sockets.length, socketsBeforeSwap);
@@ -1079,10 +1082,11 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.deepEqual(ui.live(), ['3', '101']);
 
   // Following focus: clicking into a pane moves it, without connecting, and the bar follows.
-  ui.focus(0);
-  assert.equal(ui.panes()[0].classList.contains('terminal-pane-focused'), true);
-  assert.equal(ui.panes()[1].classList.contains('terminal-pane-focused'), false);
-  assert.equal(ui.saved().focused, ui.inOrder()[1] === ui.panes()[0]);
+  ui.focus(1);
+  assert.equal(ui.panes()[1].classList.contains('terminal-pane-focused'), true);
+  assert.equal(ui.panes()[0].classList.contains('terminal-pane-focused'), false);
+  assert.equal(ui.saved().focused, '3');
+  assert.equal(ui.selected(), '3');
 
   // Sending and Clear act on the focused pane, and Clear skips a full-screen program there alone.
   const focusing = await openSplit([1, 2]);
@@ -1186,7 +1190,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(ending.sockets[1].closed, undefined, 'the split closing disturbed the other pane');
   assert.equal(ui.selected(), '2');
   assert.equal(ui.saved(), null);
-  assert.equal(ui.bar('Split').disabled, false);
+  assert.equal(ui.bar('Split right').disabled, false);
   // The focused pane's shell ending with the other holding the rest gives focus to the other.
   const focusedEnds = await openSplit([1, 2]);
   ui = sp(focusedEnds);
@@ -1205,7 +1209,8 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   await wait(30);
   assert.match(ui.statusOf(0).textContent, /exit status 5/);
   assert.equal(ui.panes()[0].querySelector('.terminal-action').textContent, 'New shell');
-  assert.equal(ui.bar('Split').disabled, true, 'offered to split nothing');
+  assert.equal(ui.bar('Split right').disabled, true, 'offered to split nothing');
+  assert.equal(ui.bar('Split down').disabled, true, 'offered to split nothing');
 
   // Both ending at once leaves one pane that says how, and no error.
   const bothEnd = await openSplit([1, 2]);
@@ -1242,7 +1247,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   await wait(30);
   assert.deepEqual(ui.live(), ['2', '3']);
 
-  // Unsplit closes the other pane and leaves its shell running, with a waiting command told.
+  // Closing a pane closes the focused one and leaves its shell running, with a waiting command told.
   const unsplitting = await openSplit([1, 2]);
   ui = sp(unsplitting);
   ui.split();
@@ -1250,8 +1255,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   unsplitting.sockets[1].readyState = 0;
   const orphan = unsplitting.window.sendToTerminal('orphan');
   await wait(20);
-  ui.focus(0);
-  ui.bar('Unsplit').click();
+  ui.closePane();
   assert.match(await orphan, /closed/);
   assert.equal(ui.panes().length, 1);
   assert.equal(unsplitting.sockets[1].closed, true);
@@ -1270,8 +1274,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   hangUp(closedRetry.sockets[1], 1006, '');
   await wait(1100);
   assert.equal(closedRetry.server.licenseHeld.length, 1, 'the retry did not ask the server');
-  ui.focus(0);
-  ui.bar('Unsplit').click();
+  ui.closePane();
   closedRetry.server.licenseHeld[0]();
   await wait(30);
   assert.equal(closedRetry.sockets.length, 2, 'a closed pane reconnected');
@@ -1283,8 +1286,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   closedParse.parser.held = true;
   closedParse.sockets[1].onmessage(out('late'));
   ui.tab('3');
-  ui.focus(0);
-  ui.bar('Unsplit').click();
+  ui.closePane();
   closedParse.parser.release();
   assert.equal(closedParse.sockets.length, 2, 'a closed pane connected once its output was parsed');
   // Fast output in one pane stays there when the other changes tab.
@@ -1353,14 +1355,14 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(partOf(handle.style.left), 0.3);
   handle.onpointerup();
   assert.equal(handle.onpointermove, null, 'the drag went on after the button came up');
-  assert.equal(ui.saved().share, 0.3);
+  assert.equal(ui.saved().columns[0].share, 0.3);
   handle.onpointerdown({ preventDefault() {}, pointerId: 1 });
   handle.onpointermove({ clientX: 100, clientY: 0 });
   assert.equal(partOf(ui.panes()[0].style.width), 0.2, 'a pane went under its least');
   handle.onpointerup();
   handle.onkeydown({ key: 'ArrowRight', preventDefault() {} });
   assert.equal(partOf(ui.panes()[0].style.width).toFixed(2), '0.25');
-  assert.equal(ui.saved().share.toFixed(2), '0.25');
+  assert.equal(ui.saved().columns[0].share.toFixed(2), '0.25');
   // A narrow window stacks them, moves the handle along the other axis, and keeps the share.
   handled.server.narrow = true;
   handled.server.mediaListeners.forEach((listener) => listener());
@@ -1370,44 +1372,49 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   handle.onpointerdown({ preventDefault() {}, pointerId: 1 });
   handle.onpointermove({ clientX: 0, clientY: 150 });
   handle.onpointerup();
-  assert.equal(ui.saved().share, 0.5);
+  assert.equal(ui.saved().columns[0].share, 0.5);
   handled.server.narrow = false;
   handled.server.mediaListeners.forEach((listener) => listener());
   assert.equal(partOf(ui.panes()[1].style.left), 0.5);
   assert.equal(handle.getAttribute('aria-orientation'), 'vertical');
   // One pane fills the panel, and leaves no handle.
-  ui.bar('Unsplit').click();
+  ui.closePane();
   assert.equal(ui.inOrder().at(-1).style.width, '100%');
   assert.equal(handled.document.querySelector('.terminal-split-handle'), null);
 
   // The next page restores both panes, with focus and share, and takes neither by sending.
-  const layout = JSON.stringify({ shell: '3', focused: true, share: 0.3 });
+  const layout = JSON.stringify(twoColumns('1', '3', 0.3, '3'));
   const restored = await openSplit([1, 2, 3], { split: [splitKey, layout] });
   ui = sp(restored);
   assert.equal(ui.panes().length, 2);
   assert.deepEqual(ui.live(), ['1', '3']);
   assert.equal(ui.selected(), '3');
   assert.equal(partOf(ui.panes()[0].style.width), 0.3);
-  assert.deepEqual(ui.saved(), { shell: '3', focused: true, share: 0.3 });
+  assert.deepEqual(ui.saved(), JSON.parse(layout));
   // Sizes were settled first: each connected after both had fitted, so neither connects at the whole width.
   assert.ok(restored.fits.length >= 3, 'the panes did not fit before connecting');
   // A shell that has gone leaves one pane, and what is saved says so.
-  const lost = await openSplit([1, 2], { split: [splitKey, JSON.stringify({ shell: '9', focused: true, share: 0.3 })] });
+  const lost = await openSplit([1, 2], { split: [splitKey, JSON.stringify(twoColumns('1', '9', 0.3, '9'))] });
   ui = sp(lost);
   assert.equal(ui.panes().length, 1);
   assert.deepEqual(ui.live(), ['1']);
   assert.equal(ui.saved(), null);
+  // With the first gone too, the one left shows, not the project's first.
+  const firstLost = await openSplit([1, 2], { split: [splitKey, JSON.stringify(twoColumns('9', '2', 0.3, '2'))] });
+  assert.deepEqual(sp(firstLost).live(), ['2']);
   // So does the same shell in both.
-  const same = await openSplit([1, 2], { split: [splitKey, JSON.stringify({ shell: '1', focused: false, share: 0.5 })] });
+  const same = await openSplit([1, 2], { split: [splitKey, JSON.stringify(twoColumns('1', '1', 0.5, '1'))] });
   ui = sp(same);
   assert.equal(ui.panes().length, 1);
   // What someone edited does not break the page, or a pane's size.
-  for (const bad of ['{', 'null', '[]', '"3"', JSON.stringify({ shell: '2', share: 'wide' }), JSON.stringify({ shell: '2', share: 40 })]) {
+  for (const bad of ['{', 'null', '[]', '"3"', '{"shell":"2","share":0.5}', '{"columns":"x"}', '{"columns":[null,{"rows":"x"},{"rows":[null]}]}', JSON.stringify(twoColumns('1', '2', 'wide', '1')), JSON.stringify(twoColumns('1', '2', 40, '1')), JSON.stringify(twoColumns('1', '2', -1, 'nobody'))]) {
     const edited = await openSplit([1, 2], { split: [splitKey, bad] });
     ui = sp(edited);
     assert.equal(edited.sockets.length >= 1, true, 'saved layout ' + bad);
     const grown = ui.panes().length > 1 ? partOf(ui.panes()[0].style.width) : 0.5;
-    assert.ok(grown >= 0.2 && grown <= 0.8, 'saved layout ' + bad + ' made a share of ' + grown);
+    assert.ok(grown >= 0.05 && grown <= 0.95, 'saved layout ' + bad + ' made a share of ' + grown);
+    assert.equal(new Set(ui.live()).size, ui.live().length);
+    assert.equal(edited.document.querySelectorAll('.terminal-pane-focused').length, 1, 'saved layout ' + bad + ' left no focus');
   }
   // Another project has its own layout: here, one pane offering to start a shell.
   const otherProject = load(process.argv[1], { stored: '1', path: '/project/p3', shells: splitShells(1, 2), split: [splitKey, layout] });
@@ -1416,7 +1423,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(ui.panes().length, 1);
   assert.equal(otherProject.sockets.length, 0);
   assert.match(ui.statusOf(0).textContent, /No shell for p3 yet/);
-  assert.equal(ui.bar('Split').disabled, true);
+  assert.equal(ui.bar('Split right').disabled, true);
   // A browser tab out of sight connects neither, until it is looked at.
   const hiddenSplit = await openSplit([1, 2, 3], { hidden: true, split: [splitKey, layout] });
   assert.equal(hiddenSplit.sockets.length, 0, 'a background tab connected a pane');
@@ -1446,6 +1453,284 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   sentLater.sockets[1].onmessage(out('prompt'));
   assert.equal(await sendingToSplit, null);
   assert.deepEqual(sentLater.terminals[1].pastes, ['for the focused']);
+
+  // Up to four panes, in columns of rows. Every shape fills the panel without overlapping,
+  // and closing any pane of any shape leaves a shape that does.
+  const boxesOf = (page) => [...page.document.querySelectorAll('.terminal-pane')].map((pane) => {
+    const [x, y, w, h] = [pane.style.left, pane.style.top, pane.style.width, pane.style.height].map(partOf);
+    return { x, y, w, h };
+  });
+  const near = (a, b) => Math.abs(a - b) < 1e-3;
+  const assertFills = (page, what) => {
+    const boxes = boxesOf(page);
+    assert.ok(near(boxes.reduce((sum, box) => sum + box.w * box.h, 0), 1), what + ': the panes do not fill the panel: ' + JSON.stringify(boxes));
+    boxes.forEach((one, i) => boxes.slice(i + 1).forEach((other) => {
+      const apart = one.x + one.w <= other.x + 1e-3 || other.x + other.w <= one.x + 1e-3 || one.y + one.h <= other.y + 1e-3 || other.y + other.h <= one.y + 1e-3;
+      assert.ok(apart, what + ': panes overlap: ' + JSON.stringify(boxes));
+    }));
+    assert.equal(page.document.querySelectorAll('.terminal-pane-focused').length, 1, what + ': focus is not on one pane');
+  };
+  const shapeOf = (page) => {
+    const saved = JSON.parse(page.window.sessionStorage.getItem(splitKey));
+    return saved ? saved.columns.map((column) => column.rows.length) : [1];
+  };
+  const buildShape = async (shape) => {
+    const page = await openSplit([1, 2, 3, 4, 5, 6]);
+    const shapeUI = sp(page);
+    for (const [c, size] of shape.entries()) {
+      if (c) { shapeUI.split(); await wait(2); }
+      for (let row = 1; row < size; row++) { shapeUI.splitDown(); await wait(2); }
+    }
+    return page;
+  };
+  const shapes = [[2], [1, 1], [3], [2, 1], [1, 2], [1, 1, 1], [4], [3, 1], [1, 3], [2, 2], [2, 1, 1], [1, 2, 1], [1, 1, 2], [1, 1, 1, 1]];
+  for (const shape of shapes) {
+    const count = shape.reduce((sum, size) => sum + size, 0);
+    for (let closing = 0; closing < count; closing++) {
+      const page = await buildShape(shape);
+      const shapeUI = sp(page);
+      const what = 'shape ' + JSON.stringify(shape) + ' closing ' + closing;
+      assert.equal(shapeUI.panes().length, count, what);
+      assert.deepEqual(shapeOf(page), shape, what);
+      assertFills(page, what);
+      assert.equal(new Set(shapeUI.live()).size, count, what + ': a shell is in two panes');
+      assert.equal(page.document.querySelectorAll('.terminal-split-handle').length, count - 1, what + ': one handle per boundary');
+      shapeUI.focus(closing);
+      shapeUI.closePane();
+      await wait(2);
+      assert.equal(shapeUI.panes().length, count - 1, what);
+      assertFills(page, what + ', after');
+      assert.equal(shapeUI.live().length, count - 1, what);
+      assert.equal(page.document.querySelectorAll('.terminal-split-handle').length, count - 2, what);
+      assert.equal(page.requests.some((request) => request.startsWith('DELETE')), false, what + ': closing a pane ended a shell');
+    }
+  }
+  // Four is the limit, and the buttons say so. A split takes half of what it splits.
+  const fullLayout = await buildShape([2, 2]);
+  ui = sp(fullLayout);
+  assert.equal(ui.bar('Split right').disabled, true);
+  assert.equal(ui.bar('Split down').disabled, true);
+  ui.closePane();
+  assert.equal(ui.bar('Split right').disabled, false);
+  const halves = await buildShape([1]);
+  ui = sp(halves);
+  ui.split();
+  await wait(5);
+  ui.splitDown();
+  await wait(5);
+  assert.deepEqual(boxesOf(halves)[0], { x: 0, y: 0, w: 0.5, h: 1 });
+  assert.deepEqual(boxesOf(halves)[1], { x: 0.5, y: 0, w: 0.5, h: 0.5 });
+  assert.deepEqual(boxesOf(halves)[2], { x: 0.5, y: 0.5, w: 0.5, h: 0.5 });
+  // Split right from a row makes a column of the whole height, so that this goes no deeper.
+  ui.split();
+  await wait(5);
+  assert.deepEqual(shapeOf(halves), [1, 2, 1]);
+  assert.deepEqual(boxesOf(halves)[3], { x: 0.75, y: 0, w: 0.25, h: 1 });
+  // A closed pane's room goes to its neighbor in the column, then to the next column to it, and so does focus.
+  const inColumn = await buildShape([3]);
+  ui = sp(inColumn);
+  ui.focus(1);
+  const shellAbove = ui.saved().columns[0].rows[0].shell;
+  ui.closePane();
+  assert.equal(ui.saved().focused, shellAbove);
+  assert.deepEqual(ui.saved().columns[0].rows.map((row) => row.share.toFixed(2)), ['0.75', '0.25']);
+  const lastInColumn = await buildShape([3]);
+  ui = sp(lastInColumn);
+  ui.focus(2);
+  const shellJustAbove = ui.saved().columns[0].rows[1].shell;
+  ui.closePane();
+  assert.equal(ui.saved().focused, shellJustAbove, 'focus did not go to the neighbor');
+  const inColumns = await buildShape([1, 1, 1]);
+  ui = sp(inColumns);
+  ui.focus(1);
+  const widths = ui.saved().columns.map((column) => column.share);
+  ui.closePane();
+  assert.deepEqual(ui.saved().columns.map((column) => column.share), [widths[0] + widths[1], widths[2]]);
+  const firstGoes = await buildShape([1, 1]);
+  ui = sp(firstGoes);
+  ui.focus(0);
+  const secondShell = ui.saved().columns[1].rows[0].shell;
+  ui.closePane();
+  assert.deepEqual(ui.live().includes(secondShell), true);
+  assert.equal(firstGoes.document.querySelector('.terminal-tab [aria-selected=true]').textContent, String(Number(secondShell)));
+  // A split shows a shell not in any pane, not just the next tab along.
+  const nextShown = await buildShape([1, 1]);
+  ui = sp(nextShown);
+  ui.focus(0);
+  ui.splitDown();
+  await wait(5);
+  assert.equal(new Set(ui.live()).size, 3, 'a shell is in two panes');
+  assert.deepEqual(ui.live().sort(), ['1', '2', '3']);
+  // Too little room says so, and starts and opens nothing.
+  const cramped = await openSplit([1, 2, 3]);
+  ui = sp(cramped);
+  const crampedBox = cramped.document.querySelector('.terminal-panes');
+  crampedBox.getBoundingClientRect = () => ({ left: 0, top: 0, width: 300, height: 150 });
+  ui.split();
+  await wait(5);
+  assert.equal(ui.panes().length, 1, 'split under the smallest width');
+  assert.match(ui.statusOf(0).textContent, /too little room/);
+  ui.splitDown();
+  await wait(5);
+  assert.equal(ui.panes().length, 1, 'split under the smallest height');
+  crampedBox.getBoundingClientRect = () => ({ left: 0, top: 0, width: 300, height: 400 });
+  ui.splitDown();
+  await wait(5);
+  assert.equal(ui.panes().length, 2);
+  // A row's handle moves along the column, leaves the other column alone, and stops at the smallest.
+  const rowHandles = await buildShape([1, 2]);
+  ui = sp(rowHandles);
+  const rowBox = rowHandles.document.querySelector('.terminal-panes');
+  rowBox.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 400 });
+  const rowHandle = [...rowHandles.document.querySelectorAll('.terminal-split-handle')].find((item) => item.getAttribute('aria-orientation') === 'horizontal');
+  assert.equal(partOf(rowHandle.style.left), 0.5);
+  assert.equal(partOf(rowHandle.style.width), 0.5);
+  const leftColumnBefore = boxesOf(rowHandles)[0];
+  rowHandle.onpointerdown({ preventDefault() {}, pointerId: 1 });
+  rowHandle.onpointermove({ clientX: 0, clientY: 300 });
+  assert.equal(boxesOf(rowHandles)[1].h, 0.75);
+  assert.equal(boxesOf(rowHandles)[2].y, 0.75);
+  assert.deepEqual(boxesOf(rowHandles)[0], leftColumnBefore);
+  rowHandle.onpointermove({ clientX: 0, clientY: 390 });
+  assert.equal(boxesOf(rowHandles)[2].h, 0.25, 'a row went under its least');
+  rowHandle.onpointerup();
+  assertFills(rowHandles, 'after dragging a row');
+  assert.equal(ui.saved().columns[1].rows[0].share, 0.75);
+  // A narrow window stacks every pane in reading order, and keeps the columns for a wider one.
+  const stackedThree = await buildShape([1, 2]);
+  stackedThree.server.narrow = true;
+  stackedThree.server.mediaListeners.forEach((listener) => listener());
+  assert.deepEqual(boxesOf(stackedThree).map((box) => [box.x, box.w, box.y, box.h]), [[0, 1, 0, 0.5], [0, 1, 0.5, 0.25], [0, 1, 0.75, 0.25]]);
+  assertFills(stackedThree, 'stacked');
+  assert.deepEqual(shapeOf(stackedThree), [1, 2]);
+  // A boundary inside a stacked column counts within that column's room.
+  const stackedBox = stackedThree.document.querySelector('.terminal-panes');
+  stackedBox.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 800 });
+  const stackedHandle = [...stackedThree.document.querySelectorAll('.terminal-split-handle')].find((item) => partOf(item.style.top) === 0.75);
+  stackedHandle.onpointerdown({ preventDefault() {}, pointerId: 1 });
+  stackedHandle.onpointermove({ clientX: 0, clientY: 700 });
+  stackedHandle.onpointerup();
+  assert.equal(sp(stackedThree).saved().columns[1].rows[0].share, 0.75);
+  assert.ok(near(boxesOf(stackedThree)[1].h, 0.375));
+  assertFills(stackedThree, 'stacked, after dragging');
+  stackedThree.server.narrow = false;
+  stackedThree.server.mediaListeners.forEach((listener) => listener());
+  assert.equal(boxesOf(stackedThree)[0].w, 0.5);
+  // Exchanging places works across columns and rows, connects nothing, and leaves the other two.
+  const exchanging = await buildShape([1, 2, 1]);
+  ui = sp(exchanging);
+  ui.focus(0);
+  const inFirst = ui.saved().columns[0].rows[0].shell;
+  const inRow = ui.saved().columns[1].rows[1].shell;
+  const untouched = [ui.saved().columns[1].rows[0].shell, ui.saved().columns[2].rows[0].shell];
+  const boxesBefore = boxesOf(exchanging);
+  const socketsBefore = exchanging.sockets.length;
+  ui.tab(inRow);
+  assert.equal(exchanging.sockets.length, socketsBefore, 'exchanging places reconnected');
+  assert.equal(ui.saved().columns[0].rows[0].shell, inRow);
+  assert.equal(ui.saved().columns[1].rows[1].shell, inFirst);
+  assert.deepEqual([ui.saved().columns[1].rows[0].shell, ui.saved().columns[2].rows[0].shell], untouched);
+  assert.equal(ui.saved().focused, inRow);
+  assert.deepEqual(boxesOf(exchanging)[0], boxesBefore[2], 'the first pane did not go to the row');
+  assert.deepEqual(boxesOf(exchanging)[2], boxesBefore[0], 'the row\'s pane did not come to the first place');
+  assert.equal(exchanging.terminals.length, 4);
+  // One of four being taken over, reconnecting, or moving on leaves the other three.
+  const fourTrouble = await buildShape([2, 2]);
+  ui = sp(fourTrouble);
+  const quiet4 = () => fourTrouble.sockets.slice(1, 4).map((socket) => socket.closed);
+  hangUp(fourTrouble.sockets[0], 4001, '');
+  assert.match(ui.statusOf(0).textContent, /Another tab/);
+  for (const index of [1, 2, 3]) assert.doesNotMatch(ui.statusOf(index).textContent, /Another tab/);
+  assert.deepEqual(quiet4(), [undefined, undefined, undefined]);
+  // With all of them shown, one ending closes its pane, and with one to spare it moves on.
+  const fourEnd = await buildShape([2, 2]);
+  ui = sp(fourEnd);
+  fourEnd.server.shells = fourEnd.server.shells.filter((shell) => ['1', '2', '3', '4', '5'].includes(shell.id));
+  const shellOfSocket = (socket) => /shell=(\d+)/.exec(socket.url)[1];
+  const endedHere = fourEnd.sockets[1];
+  fourEnd.server.shells = fourEnd.server.shells.filter((shell) => shell.id !== shellOfSocket(endedHere));
+  hangUp(endedHere, 4002, 'done');
+  await wait(20);
+  assert.equal(ui.panes().length, 4, 'closed a pane with a shell to spare');
+  assert.match(fourEnd.sockets[4].url, /shell=5&.*takeover=0/);
+  const endsLast = fourEnd.sockets[4];
+  fourEnd.server.shells = fourEnd.server.shells.filter((shell) => shell.id !== '5');
+  hangUp(endsLast, 4002, 'done');
+  await wait(20);
+  assert.equal(ui.panes().length, 3, 'kept a pane with nothing to show');
+  assertFills(fourEnd, 'after a shell ended');
+  // Close all ends those not shown, then the panes', the focused one's last.
+  const fourClosing = await buildShape([2, 2]);
+  ui = sp(fourClosing);
+  ui.focus(1);
+  const focusedShell = ui.saved().focused;
+  fourClosing.document.querySelectorAll('.terminal-tab')[0].dispatchEvent(new fourClosing.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+  [...fourClosing.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Close all tabs').click();
+  await wait(40);
+  const closedOrder = fourClosing.requests.filter((request) => request.startsWith('DELETE')).map((request) => request.split('/').at(-1));
+  const shownFour = ui.saved().columns.flatMap((column) => column.rows.map((row) => row.shell));
+  assert.equal(closedOrder.length, 6);
+  assert.deepEqual(closedOrder.slice(0, 2).sort(), ['1', '2', '3', '4', '5', '6'].filter((id) => !shownFour.includes(id)));
+  assert.equal(closedOrder.at(-1), focusedShell);
+  // Text size and theme reach all four, each fits, and a hidden browser tab connects none.
+  const fourSized = await buildShape([2, 2]);
+  ui = sp(fourSized);
+  const fitsAtFour = fourSized.fits.length;
+  ui.bar('A+').click();
+  assert.deepEqual(fourSized.terminals.map((term) => term.options.fontSize), [14, 14, 14, 14]);
+  assert.equal(fourSized.fits.length, fitsAtFour + 4);
+  // The next page restores every shape, with focus and shares, each pane fitted before connecting.
+  const saved22 = { columns: [
+    { share: 0.6, rows: [{ share: 0.3, shell: '4' }, { share: 0.7, shell: '2' }] },
+    { share: 0.4, rows: [{ share: 0.5, shell: '1' }, { share: 0.5, shell: '3' }] },
+  ], focused: '1' };
+  const restored22 = load(process.argv[1], { stored: '1', path: '/project/p1', shells: splitShells(1, 2, 3, 4, 5), split: [splitKey, JSON.stringify(saved22)] });
+  await wait(50);
+  ui = sp(restored22);
+  assert.equal(ui.panes().length, 4);
+  assert.deepEqual(ui.live().sort(), ['1', '2', '3', '4']);
+  assert.deepEqual(ui.saved(), saved22);
+  assert.equal(ui.selected(), '1');
+  assertFills(restored22, 'restored');
+  assert.deepEqual(boxesOf(restored22)[1], { x: 0, y: 0.3, w: 0.6, h: 0.7 });
+  assert.equal(restored22.window.sessionStorage.getItem(shownKey), '4');
+  // A shell gone gives its room to its neighbor, as closing its pane would.
+  const oneGone = load(process.argv[1], { stored: '1', path: '/project/p1', shells: splitShells(1, 2, 3), split: [splitKey, JSON.stringify(saved22)] });
+  await wait(50);
+  ui = sp(oneGone);
+  assert.deepEqual(ui.saved().columns.map((column) => column.rows.map((row) => row.shell)), [['2'], ['1', '3']]);
+  assert.ok(near(ui.saved().columns[0].rows[0].share, 1));
+  assertFills(oneGone, 'restored with one gone');
+  // More than four, and a shell named twice, come back within the rules.
+  const tooMany = { columns: [{ share: 1, rows: ['1', '2', '1', '3', '4', '5'].map((shell) => ({ share: 1, shell })) }], focused: '5' };
+  const overfull = load(process.argv[1], { stored: '1', path: '/project/p1', shells: splitShells(1, 2, 3, 4, 5), split: [splitKey, JSON.stringify(tooMany)] });
+  await wait(50);
+  ui = sp(overfull);
+  assert.equal(ui.panes().length, 4);
+  assert.deepEqual(ui.live().sort(), ['1', '2', '3', '4']);
+  assertFills(overfull, 'restored past the limit');
+  // A hidden browser tab connects none of them, until it is looked at.
+  const hiddenFour = load(process.argv[1], { stored: '1', hidden: true, path: '/project/p1', shells: splitShells(1, 2, 3, 4), split: [splitKey, JSON.stringify(saved22)] });
+  await wait(50);
+  assert.equal(hiddenFour.sockets.length, 0, 'a background tab connected a pane');
+  hiddenFour.window.__hidden = false;
+  hiddenFour.document.dispatchEvent(new hiddenFour.window.Event('visibilitychange'));
+  await wait(30);
+  assert.equal(hiddenFour.sockets.length, 4);
+  // A command sent with a closed panel waits for the pane that had focus, and takes nothing.
+  const sentToFour = load(process.argv[1], { path: '/project/p1', shells: splitShells(1, 2, 3, 4), split: [splitKey, JSON.stringify(saved22)] });
+  await wait(30);
+  const toFour = sentToFour.window.sendToTerminal('for the focused');
+  await wait(40);
+  assert.equal(sentToFour.sockets.length, 4);
+  for (const socket of sentToFour.sockets) {
+    assert.match(socket.url, /takeover=0/, 'sending took a shell');
+    socket.onmessage(out('prompt'));
+  }
+  assert.equal(await toFour, null);
+  const paneOf1 = sentToFour.sockets.findIndex((socket) => /shell=1&/.test(socket.url));
+  assert.deepEqual(sentToFour.terminals[paneOf1].pastes, ['for the focused']);
+  assert.equal(sentToFour.terminals.filter((term) => term.pastes).length, 1, 'went to more than one pane');
 
   // xterm.js loads only on opening, under the page's nonce.
   const real = load(process.argv[1], { stubs: false });

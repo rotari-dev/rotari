@@ -126,8 +126,8 @@
 // page's project, as an editor keeps a window's terminals with its folder. Shells live
 // on the server, and every page load lists them, attaches to the tab this browser tab
 // last showed for the project, and replays recent output, so following a link ends none
-// of them. A tab says which shell, and a pane says where it shows, side by side when
-// split. Only shells shown in a pane are connected; the others carry on with no one
+// of them. A tab says which shell, and a pane says where it shows, in up to four panes
+// as columns of rows. Only shells shown in a pane are connected; the others carry on with no one
 // reading, and replay when shown. Moving between projects with the panel open starts nothing: browsing
 // must not leave a shell in every project. Nothing loads until the panel first opens; a
 // page without the top bar's Terminal button has no terminal to offer.
@@ -135,7 +135,7 @@
   const openKey = "rotari-terminal-open";
   const heightKey = "rotari-terminal-height";
   const shownKey = "rotari-terminal-shell";
-  const splitKey = "rotari-terminal-split";
+  const layoutKey = "rotari-terminal-layout";
   const maximizedKey = "rotari-terminal-maximized";
   const fontSizeKey = "rotari-terminal-font-size";
   const defaultFontSize = 13;
@@ -149,7 +149,9 @@
   // the server's idle limit.
   const aliveInterval = 60000;
   const minHeight = 120;
-  const minShare = 0.2;
+  const maxPanes = 4;
+  const minPaneWidth = 200;
+  const minPaneHeight = 100;
   // Colours programs ask for by name, and the tokens that hold them.
   const themeTokens = {
     background: "background",
@@ -183,7 +185,7 @@
   // This script runs first.
   const rootFetch = window.fetch;
   const serverFetch = (...args) => rootFetch.apply(window, args);
-  let panel, panesBox, groups, tabs, add, splitButton, maximize;
+  let panel, panesBox, groups, tabs, add, splitRightButton, splitDownButton, closePaneButton, maximize;
   let shells = [];
   let shellLimit = 0;
   let groupLimit = 0;
@@ -399,30 +401,27 @@
   const send = (pane, data) => {
     if (pane.socket?.readyState === WebSocket.OPEN) pane.socket.send(data);
   };
-  // Each project keeps its own last tab and split, for this browser tab alone.
+  // Each project keeps its own last tab and panes, for this browser tab alone.
   const shownStorageKey = () => shownKey + ":" + here.basedir + ":" + here.project;
-  const splitStorageKey = () => splitKey + ":" + here.basedir + ":" + here.project;
+  const layoutStorageKey = () => layoutKey + ":" + here.basedir + ":" + here.project;
   const rememberLayout = () => {
     try {
       if (panes[0].shown !== null) sessionStorage.setItem(shownStorageKey(), panes[0].shown);
       if (panes.length > 1) {
         sessionStorage.setItem(
-          splitStorageKey(),
-          JSON.stringify({ shell: panes[1].shown, focused: focused === panes[1], share: columns[0].share }),
+          layoutStorageKey(),
+          JSON.stringify({
+            columns: columns.map((column) => ({
+              share: column.share,
+              rows: column.rows.map((row) => ({ share: row.share, shell: row.pane.shown })),
+            })),
+            focused: focused.shown,
+          }),
         );
       } else {
-        sessionStorage.removeItem(splitStorageKey());
+        sessionStorage.removeItem(layoutStorageKey());
       }
     } catch {}
-  };
-  const clampShare = (share) =>
-    Number.isFinite(share) ? Math.max(minShare, Math.min(share, 1 - minShare)) : 0.5;
-  const rememberedSplit = () => {
-    try {
-      const saved = JSON.parse(sessionStorage.getItem(splitStorageKey()));
-      if (saved?.shell) return { shell: saved.shell, focused: saved.focused === true, share: clampShare(saved.share) };
-    } catch {}
-    return null;
   };
   const rememberedShown = () => {
     try {
@@ -430,6 +429,59 @@
     } catch {
       return null;
     }
+  };
+  // A list's shares as parts of one. A value someone edited or an older version left must
+  // not make a pane vanish.
+  const evenShares = (items) => {
+    const shares = items.map(({ share }) =>
+      Number.isFinite(share) && share > 0 ? Math.max(0.1, Math.min(share, 1)) : 1 / items.length,
+    );
+    const whole = shares.reduce((sum, share) => sum + share, 0);
+    items.forEach((item, index) => (item.share = shares[index] / whole));
+  };
+  // removeRow takes a row out of a layout and returns who got its room: its neighbor in
+  // the column, or the first of the next column to it if it was alone.
+  const removeRow = (layout, row) => {
+    const column = layout.find((item) => item.rows.includes(row));
+    const place = column.rows.indexOf(row);
+    if (column.rows.length > 1) {
+      column.rows.splice(place, 1);
+      const neighbor = column.rows[Math.max(place - 1, 0)];
+      neighbor.share += row.share;
+      return neighbor;
+    }
+    const at = layout.indexOf(column);
+    layout.splice(at, 1);
+    const neighbor = layout[Math.max(at - 1, 0)];
+    if (neighbor) neighbor.share += column.share;
+    return neighbor?.rows[0];
+  };
+  // rememberedLayout reads what this project last had, as far as it still makes sense: only
+  // shells there are, each once, up to the limit, as if the panes of the rest had closed.
+  const rememberedLayout = (available) => {
+    let saved;
+    try {
+      saved = JSON.parse(sessionStorage.getItem(layoutStorageKey()));
+    } catch {}
+    if (!Array.isArray(saved?.columns)) return null;
+    const layout = saved.columns
+      .filter((column) => Array.isArray(column?.rows) && column.rows.length)
+      .map((column) => ({
+        share: column.share,
+        rows: column.rows.filter(Boolean).map((row) => ({ share: row.share, shell: row.shell })),
+      }))
+      .filter((column) => column.rows.length);
+    evenShares(layout);
+    layout.forEach((column) => evenShares(column.rows));
+    const seen = new Set();
+    for (const row of layout.flatMap((column) => column.rows)) {
+      if (available.some((shell) => shell.id === row.shell) && !seen.has(row.shell) && seen.size < maxPanes) {
+        seen.add(row.shell);
+      } else {
+        removeRow(layout, row);
+      }
+    }
+    return layout.length ? { layout, focused: saved.focused } : null;
   };
   // The page's basedir ID, project, and run, as it would ask for them in a query. The
   // parts are still percent-encoded, so they go in as they are.
@@ -660,8 +712,8 @@
       focused.term?.focus();
     }
   });
-  // A tab shows in the focused pane. One already in the other pane changes places with
-  // what is here, since a shell cannot be in both.
+  // A tab shows in the focused pane. One already in another pane changes places with
+  // what is here, since a shell cannot be in two.
   const chooseTab = (id) => {
     const showing = paneShowing(id);
     if (!showing) show(focused, id);
@@ -684,7 +736,7 @@
     renderGroups();
     const inGroup = shellsHere();
     add.disabled = inGroup.length >= groupLimit || shells.length >= shellLimit;
-    splitButton.disabled = panes.length === 1 && focused.shown === null;
+    updatePaneButtons();
     const drawn = JSON.stringify([
       inGroup.map((shell) => [shell.id, shell.number, shell.name, shell.dir, shell.unseen_output]),
       panes.map((pane) => pane.shown),
@@ -710,9 +762,9 @@
         label.setAttribute("aria-selected", String(shell.id === focused.shown));
         label.setAttribute(
           "aria-label",
-          "Shell " + shell.number + (shell.name ? ", " + shell.name : "") + (unseen ? ", new output" : "") + (elsewhere ? ", in the other pane" : ""),
+          "Shell " + shell.number + (shell.name ? ", " + shell.name : "") + (unseen ? ", new output" : "") + (elsewhere ? ", in another pane" : ""),
         );
-        label.title = (unseen ? "New output. " : "") + (elsewhere ? "In the other pane. " : "") + "Started in " + shell.dir;
+        label.title = (unseen ? "New output. " : "") + (elsewhere ? "In another pane. " : "") + "Started in " + shell.dir;
         label.textContent = shell.name || String(shell.number);
         label.onclick = () => chooseTab(shell.id);
         const close = document.createElement("button");
@@ -869,19 +921,11 @@
     const shell = await startShell(pane, () => newShell(pane));
     if (shell) show(pane, shell.id);
   };
-  // openPane adds the second pane, fitting both now so that each connects at its size.
-  const openPane = (share = 0.5) => {
-    const pane = newPane();
-    buildPane(pane);
-    columns = [
-      { share, rows: columns[0].rows },
-      { share: 1 - share, rows: [{ share: 1, pane }] },
-    ];
-    panes = readingOrder();
-    applyLayout();
-    openTerminal(pane);
-    fitPanes();
-    return pane;
+  // addPane gives a new row in the layout its pane, which gets its screen once placed.
+  const addPane = (row) => {
+    row.pane = newPane();
+    buildPane(row.pane);
+    return row.pane;
   };
   // closePane takes a pane away and leaves its shell running, or gone if it has ended.
   const closePane = (pane) => {
@@ -896,48 +940,77 @@
     pane.observer.disconnect();
     pane.term.dispose();
     pane.element.remove();
-    columns = columns
-      .map((column) => ({ ...column, rows: column.rows.filter((row) => row.pane !== pane) }))
-      .filter((column) => column.rows.length);
-    columns[0].share = 1;
+    const row = columns.flatMap((column) => column.rows).find((item) => item.pane === pane);
+    const neighbor = removeRow(columns, row);
     panes = readingOrder();
     if (focused === pane) {
-      focused = panes[0];
+      focused = neighbor.pane;
       focused.term.focus();
     }
     applyLayout();
     rememberLayout();
     renderTabs();
   };
+  // withSplit is the layout after splitting a pane, with a row for the new one. Right makes
+  // a column of the whole height, beside the pane's column; this goes no deeper.
+  const withSplit = (pane, right) => {
+    const layout = columns.map((column) => ({ ...column, rows: column.rows.map((row) => ({ ...row })) }));
+    const column = layout.find((item) => item.rows.some((row) => row.pane === pane));
+    const row = column.rows.find((item) => item.pane === pane);
+    if (right) {
+      const added = { share: 1, pane: null };
+      column.share /= 2;
+      layout.splice(layout.indexOf(column) + 1, 0, { share: column.share, rows: [added] });
+      return { layout, added };
+    }
+    const added = { share: row.share / 2, pane: null };
+    row.share /= 2;
+    column.rows.splice(column.rows.indexOf(row) + 1, 0, added);
+    return { layout, added };
+  };
+  // A box of no size has not been laid out, which says nothing about the room.
+  const hasRoom = (layout) => {
+    const { width, height } = panesBox.getBoundingClientRect();
+    if (!width || !height) return true;
+    return layoutGeometry(layout, isStacked()).places.every(
+      ({ box }) => box.w * width >= minPaneWidth && box.h * height >= minPaneHeight,
+    );
+  };
   let splitting = false;
-  // toggleSplit shows another shell beside this one, starting one if there is no other,
-  // or closes the other pane. Nothing is started past the limit, and a pane appears only
-  // once it has something to show.
-  const toggleSplit = async () => {
-    if (splitting) return;
-    if (panes.length > 1) {
-      closePane(panes.find((pane) => pane !== focused));
-      focused.term.focus();
+  // splitPane shows another shell beside this one, starting one if there is no other. Nothing
+  // is started past the limit, and a pane appears only once it has something to show.
+  const splitPane = async (right) => {
+    if (splitting || panes.length >= maxPanes) return;
+    const pane = focused;
+    if (!hasRoom(withSplit(pane, right).layout)) {
+      showBriefly(pane, "There is too little room to split this pane.");
       return;
     }
-    const pane = focused;
     const inGroup = shellsHere();
     const place = inGroup.findIndex((shell) => shell.id === pane.shown);
-    const free = inGroup.filter((shell) => shell.id !== pane.shown);
-    let shell = free[place] || free[0];
+    const free = inGroup.filter((shell) => !paneShowing(shell.id));
+    let shell = inGroup.slice(place + 1).find((item) => !paneShowing(item.id)) || free[0];
     if (!shell) {
       if (inGroup.length >= groupLimit || shells.length >= shellLimit) {
         showBriefly(pane, "No more shells can start here, so there is nothing to split with.");
         return;
       }
       splitting = true;
-      shell = await startShell(pane, toggleSplit);
+      shell = await startShell(pane, () => splitPane(right));
       splitting = false;
       if (!shell) return;
       showStatus(pane, "");
     }
-    const opened = openPane();
-    focusPane(opened);
+    // The panes may have changed while the shell started, so this splits what is there now.
+    if (!panes.includes(pane) || panes.length >= maxPanes) return;
+    const { layout, added } = withSplit(pane, right);
+    columns = layout;
+    const opened = addPane(added);
+    panes = readingOrder();
+    focused = opened;
+    applyLayout();
+    // It fits itself on opening, and the others follow through their observers.
+    openTerminal(opened);
     show(opened, shell.id);
   };
   // A pane's shell has ended. The screen stays if there is nothing to show instead,
@@ -959,7 +1032,7 @@
     const left = shellsHere().filter((shell) => !paneShowing(shell.id));
     const next = left[Math.min(Math.max(place, 0), left.length - 1)];
     if (next) show(pane, next.id, false);
-    else closePane(pane); // The other pane has all there is. With no other, this stays.
+    else closePane(pane); // The other panes have all there is. With none, this stays.
   };
   const endShell = async (shell) => {
     if (!confirm("End shell " + shell.number + ", and anything running in it?")) return;
@@ -1015,6 +1088,26 @@
     from.pendingSend = null;
     awaitSend(to, text, resolve);
   };
+  // restoreLayout brings back the panes this browser tab last had here, with a waiting
+  // command going to the one that had focus, fitted before any of them connects.
+  const restoreLayout = (pane, { layout, focused: wanted }, takeOver) => {
+    const rows = layout.flatMap((column) => column.rows);
+    const shellOf = new Map(rows.map((row) => [row, row.shell]));
+    rows.forEach((row, place) => {
+      if (place === 0) row.pane = pane;
+      else addPane(row);
+      delete row.shell;
+    });
+    columns = layout;
+    panes = readingOrder();
+    const chosen = rows.find((row) => shellOf.get(row) === wanted)?.pane || pane;
+    if (chosen !== pane) moveSend(pane, chosen);
+    focused = chosen;
+    applyLayout();
+    for (const opened of panes) if (!opened.term) openTerminal(opened);
+    fitPanes();
+    for (const row of rows) show(row.pane, shellOf.get(row), takeOver);
+  };
   // begin shows what this browser tab last showed for this project, in the same panes, or
   // the project's first shell. It starts one only if someone asked.
   const begin = async (takeOver = true) => {
@@ -1050,23 +1143,16 @@
       await newShell(pane);
       return;
     }
-    // Another pane is there only when this runs again on a panel in use.
-    const other = panes.find((item) => item !== pane);
-    const inGroup = shellsHere().filter((item) => item.id !== other?.shown);
-    const wanted = rememberedShown();
+    // Other panes are there only when this runs again on a panel in use.
+    const others = panes.length > 1;
+    const inGroup = shellsHere().filter((item) => item.id === pane.shown || !paneShowing(item.id));
+    const saved = others ? null : rememberedLayout(inGroup);
+    const wanted = saved?.layout[0].rows[0].shell ?? rememberedShown();
     const shell = inGroup.find((item) => item.id === wanted) || inGroup[0];
-    const saved = other ? null : rememberedSplit();
-    const beside = saved && inGroup.find((item) => item.id === saved.shell && item.id !== shell?.id);
-    if (beside) {
-      const opened = openPane(saved.share);
-      if (saved.focused) {
-        moveSend(pane, opened);
-        focusPane(opened);
-      }
-      show(pane, shell.id, takeOver);
-      show(opened, beside.id, takeOver);
+    if (saved && saved.layout.flatMap((column) => column.rows).length > 1) {
+      restoreLayout(pane, saved, takeOver);
     } else if (shell) show(pane, shell.id, takeOver);
-    else if (other) closePane(pane);
+    else if (others) closePane(pane);
     else if (mayStart) await newShell(pane);
     else {
       settleSend(pane, noShellMessage());
@@ -1121,25 +1207,25 @@
     element.style.width = span(box.w, before.x + after.x);
     element.style.height = span(box.h, before.y + after.y);
   };
-  // applyLayout places the panes and the handles between them, by position alone: moving
-  // a screen in the page, as columns of their own elements would need, would make
-  // browsers forget its scrolling.
-  const applyLayout = () => {
-    const stacked = Boolean(narrowWindow?.matches);
+  const isStacked = () => Boolean(narrowWindow?.matches);
+  // layoutGeometry works out where everything in a layout goes, as parts of the panes' box.
+  const layoutGeometry = (layout, stacked) => {
+    const places = [];
     const boundaries = [];
     let across = 0;
-    columns.forEach((column, c) => {
-      const lastColumn = c === columns.length - 1;
+    layout.forEach((column, c) => {
+      const lastColumn = c === layout.length - 1;
       let down = 0;
       column.rows.forEach((row, r) => {
         const lastRow = r === column.rows.length - 1;
-        const box = stacked
-          ? { x: 0, y: across + down * column.share, w: 1, h: row.share * column.share }
-          : { x: across, y: down, w: column.share, h: row.share };
-        const before = stacked ? { x: 0, y: Number(c > 0 || r > 0) } : { x: Number(c > 0), y: Number(r > 0) };
-        const after = stacked ? { x: 0, y: Number(!lastColumn || !lastRow) } : { x: Number(!lastColumn), y: Number(!lastRow) };
-        place(row.pane.element, box, before, after);
-        row.pane.element.classList.toggle("terminal-pane-focused", row.pane === focused);
+        places.push({
+          row,
+          box: stacked
+            ? { x: 0, y: across + down * column.share, w: 1, h: row.share * column.share }
+            : { x: across, y: down, w: column.share, h: row.share },
+          before: stacked ? { x: 0, y: Number(c > 0 || r > 0) } : { x: Number(c > 0), y: Number(r > 0) },
+          after: stacked ? { x: 0, y: Number(!lastColumn || !lastRow) } : { x: Number(!lastColumn), y: Number(!lastRow) },
+        });
         if (!lastRow) {
           const scale = stacked ? column.share : 1;
           const start = (stacked ? across : 0) + down * scale;
@@ -1159,7 +1245,7 @@
       if (!lastColumn) {
         boundaries.push({
           a: column,
-          b: columns[c + 1],
+          b: layout[c + 1],
           horizontal: stacked,
           start: across,
           scale: 1,
@@ -1170,6 +1256,22 @@
       }
       across += column.share;
     });
+    return { places, boundaries };
+  };
+  const updatePaneButtons = () => {
+    const canSplit = panes.length < maxPanes && focused.shown !== null;
+    splitRightButton.disabled = splitDownButton.disabled = !canSplit;
+    closePaneButton.disabled = panes.length < 2;
+  };
+  // applyLayout places the panes and the handles between them, by position alone: moving
+  // a screen in the page, as columns of their own elements would need, would make
+  // browsers forget its scrolling.
+  const applyLayout = () => {
+    const { places, boundaries } = layoutGeometry(columns, isStacked());
+    for (const { row, box, before, after } of places) {
+      place(row.pane.element, box, before, after);
+      row.pane.element.classList.toggle("terminal-pane-focused", row.pane === focused);
+    }
     panesBox.classList.toggle("terminal-panes-split", panes.length > 1);
     while (handles.length > boundaries.length) handles.pop().remove();
     boundaries.forEach((boundary, index) => {
@@ -1188,10 +1290,7 @@
       handle.style.width = boundary.horizontal ? percent(boundary.size) : "6px";
       handle.style.height = boundary.horizontal ? "6px" : percent(boundary.size);
     });
-    const split = panes.length > 1;
-    splitButton.textContent = split ? "Unsplit" : "Split";
-    splitButton.title = split ? "Close the other pane; its shell keeps running" : "Show another shell beside this one";
-    splitButton.setAttribute("aria-pressed", String(split));
+    updatePaneButtons();
   };
   // focusPane makes a pane the one the bar and sending act on, following where the keys go.
   const focusPane = (pane) => {
@@ -1200,10 +1299,15 @@
     rememberLayout();
     renderTabs();
   };
-  // moveBoundary gives one neighbor a share, and the other what is left of the two.
-  const moveBoundary = ({ a, b }, share) => {
+  // moveBoundary gives one neighbor a share, and the other what is left of the two, leaving
+  // neither under the smallest pane, unless the two have less room than that between them.
+  const moveBoundary = ({ a, b, horizontal, scale }, share) => {
     const both = a.share + b.share;
-    a.share = Math.max(minShare, Math.min(share, both - minShare));
+    const { width, height } = panesBox.getBoundingClientRect();
+    const room = (horizontal ? height : width) * scale;
+    const smallest = room ? (horizontal ? minPaneHeight : minPaneWidth) / room : 0.05;
+    const least = Math.min(smallest, both / 2);
+    a.share = Math.max(least, Math.min(share, both - least));
     b.share = both - a.share;
     applyLayout();
   };
@@ -1312,10 +1416,21 @@
       term.clear();
       send(pane, JSON.stringify({ type: "clear" }));
     };
-    splitButton = document.createElement("button");
-    splitButton.type = "button";
-    splitButton.disabled = true;
-    splitButton.onclick = toggleSplit;
+    const barButton = (text, title, onclick) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = text;
+      button.title = title;
+      button.disabled = true;
+      button.onclick = onclick;
+      return button;
+    };
+    splitRightButton = barButton("Split right", "Show another shell in a new column", () => splitPane(true));
+    splitDownButton = barButton("Split down", "Show another shell under this one", () => splitPane(false));
+    closePaneButton = barButton("Close pane", "Close this pane; its shell keeps running", () => {
+      closePane(focused);
+      focused.term?.focus();
+    });
     maximize = document.createElement("button");
     maximize.type = "button";
     maximize.onclick = toggleMaximized;
@@ -1333,7 +1448,9 @@
       fontButton("A-", "Smaller text", -1),
       fontButton("A+", "Larger text", 1),
       clear,
-      splitButton,
+      splitRightButton,
+      splitDownButton,
+      closePaneButton,
       maximize,
       hide,
     );

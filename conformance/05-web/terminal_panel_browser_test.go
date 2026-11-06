@@ -153,7 +153,7 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   const barButton = (text) => '[...document.querySelectorAll(".terminal-bar button")].find((item) => item.textContent === ' + JSON.stringify(text) + ')';
   const paneHas = (index, text) => 'document.querySelectorAll(".terminal-pane")[' + index + ']?.querySelector(".xterm-rows")?.textContent.includes(' + JSON.stringify(text) + ')';
   const bothSettled = '[...document.querySelectorAll(".terminal-status")].every((item) => item.hidden)';
-  await page.evaluate(barButton('Split') + '.click()');
+  await page.evaluate(barButton('Split right') + '.click()');
   await until('a second pane', 'document.querySelectorAll(".xterm-helper-textarea").length === 2 && document.querySelectorAll(".terminal-tab").length === 2');
   await until('both panes to settle', bothSettled);
   await typeLine('echo "left-$((1+1))"', 0);
@@ -193,10 +193,61 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('both panes to settle again', bothSettled);
   await collect();
 
-  // Closing a pane leaves its shell, with its tab.
-  await page.evaluate(barButton('Unsplit') + '.click()');
-  await until('one pane again', 'document.querySelectorAll(".terminal-pane").length === 1 && document.querySelectorAll(".xterm-helper-textarea").length === 1');
-  if (await page.evaluate('document.querySelectorAll(".terminal-tab").length !== 2')) throw new Error('closing a pane ended its shell');
+  // A row under the right-hand pane, then a column beside it: four panes, as columns of rows.
+  const paneCount = (count) => 'document.querySelectorAll(".xterm-helper-textarea").length === ' + count;
+  await page.evaluate('document.querySelectorAll(".xterm-helper-textarea")[1].focus()');
+  await page.evaluate(barButton('Split down') + '.click()');
+  await until('a third pane', paneCount(3));
+  await until('three panes to settle', bothSettled);
+  await page.evaluate(barButton('Split right') + '.click()');
+  await until('a fourth pane', paneCount(4));
+  await until('four panes to settle', bothSettled);
+  await typeLine('echo "third-$((3+3))"', 2);
+  await until('the third pane to run a command', paneHas(2, 'third-6'));
+  await typeLine('echo "fourth-$((4+4))"', 3);
+  await until('the fourth pane to run a command', paneHas(3, 'fourth-8'));
+  const fourBoxes = 'JSON.stringify((() => {' +
+    'const box = document.querySelector(".terminal-panes").getBoundingClientRect();' +
+    'return { box: [box.left, box.top, box.width, box.height], panes: [...document.querySelectorAll(".terminal-pane")].map((pane) => {' +
+    'const item = pane.getBoundingClientRect();' +
+    'const screen = pane.querySelector(".xterm-screen").getBoundingClientRect();' +
+    'return { left: item.left, top: item.top, right: item.right, bottom: item.bottom, screen: [screen.width, screen.height] };' +
+    '}) };' +
+    '})())';
+  const checkFour = async () => {
+    const { box, panes } = JSON.parse(await page.evaluate(fourBoxes));
+    const area = panes.reduce((sum, item) => sum + (item.right - item.left) * (item.bottom - item.top), 0);
+    // Handles take the rest, so most of the room is in the panes.
+    if (area > box[2] * box[3] + 1 || area < box[2] * box[3] * 0.9) throw new Error('four panes take the wrong room: ' + JSON.stringify({ box, panes }));
+    panes.forEach((one, i) => panes.slice(i + 1).forEach((other) => {
+      const apart = one.right <= other.left + 1 || other.right <= one.left + 1 || one.bottom <= other.top + 1 || other.bottom <= one.top + 1;
+      if (!apart) throw new Error('panes overlap: ' + JSON.stringify({ box, panes }));
+    }));
+    for (const item of panes) {
+      if (item.screen[0] > item.right - item.left || item.screen[1] > item.bottom - item.top || item.screen[0] < (item.right - item.left) - 60) throw new Error('a terminal does not fit its pane: ' + JSON.stringify({ box, panes }));
+    }
+  };
+  await sleep(300);
+  await checkFour();
+  await collect();
+
+  // Following a link finds all four.
+  await page.evaluate('location.href = "/project/p1"');
+  await until('four panes on the next page', paneCount(4));
+  await until('the fourth pane replayed', paneHas(3, 'fourth-8'));
+  await until('the third pane replayed', paneHas(2, 'third-6'));
+  await until('four panes to settle again', bothSettled);
+  await sleep(300);
+  await checkFour();
+  await collect();
+
+  // Closing panes leaves their shells, with their tabs.
+  const tabCount = await page.evaluate('document.querySelectorAll(".terminal-tab").length');
+  for (const left of [3, 2, 1]) {
+    await page.evaluate(barButton('Close pane') + '.click()');
+    await until(left + ' panes', 'document.querySelectorAll(".terminal-pane").length === ' + left + ' && ' + paneCount(left));
+  }
+  if (await page.evaluate('document.querySelectorAll(".terminal-tab").length !== ' + tabCount)) throw new Error('closing a pane ended its shell');
   await collect();
 }).catch((error) => { failure = error.stack || String(error); });
 await close();
@@ -206,7 +257,7 @@ process.exit(0);
 
 // TestTerminalPanelInBrowser uses the real xterm.js in Chrome, signed in as a browser
 // is: opening the panel, typing, following a link with the shell still there, a second
-// tab, and two panes.
+// tab, and up to four panes.
 func TestTerminalPanelInBrowser(t *testing.T) {
 	covers(t, "WEB-33")
 	chrome := browserForTests(t)
