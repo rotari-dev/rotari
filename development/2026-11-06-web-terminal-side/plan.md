@@ -1,8 +1,10 @@
 # Plan: The Web terminal panel on the left or right
 
 Created: 2026-11-06
-Status: Not started. Follows [the columns plan](../2026-11-06-web-terminal-columns/plan.md), whose terms and panes this uses.
-Offering left and right, and leaving out the top, are the user's choices; the rest are proposals until reviewed.
+Status: Steps 1 to 4 are implemented, and wait for the user's look. Follows
+[the columns plan](../2026-11-06-web-terminal-columns/plan.md), whose terms and panes this uses. Offering left and right,
+and leaving out the top, are the user's choices, and they said to go ahead with the rest as proposed. See the
+[work log](work-log.md).
 
 ## Goal
 
@@ -71,6 +73,7 @@ CSS custom properties for the room taken on each side, used by the page, dialogs
 written for either direction. The panel behaves as it does now.
 
 **The check is `TestTerminalPanel` and the browser test,** with changes only where they read the CSS rules this renames.
+`--terminal-height` kept its name as the room at the bottom, so none needed to change.
 
 ### Step 2: left and right
 
@@ -97,8 +100,8 @@ Contract WEB-33, `docs/WEB.md`, and the earlier plans. WEB-34 should not change;
 
 - **The page in less room.** Media queries go by the window, so with a 1280-pixel window and a 480-pixel panel, a page laid
   out for 1280 has 800 and a sidebar. Wide tables, the Recent jobs page, and dialogs are the places to look.
-- **The sidebar on the left.** It is sticky, with its own resizer, and its drag reads the pointer's place in the window,
-  which a panel to its left would offset.
+- **The sidebar on the left.** It is sticky, with its own resizer. That resizer goes by how far the pointer moved, so a panel
+  to its left does not offset it, as was feared when this was written.
 - **Anything else positioned against the window,** such as the inbox panel and the tab menu. These need a look in each place.
 - **The bar in 320 pixels.** Even wrapped, it holds many buttons, and the minimum may need to rise.
 - **A resize when moving.** Moving changes every screen's size at once, which each shell hears of. Full-screen programs

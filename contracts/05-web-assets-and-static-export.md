@@ -1407,7 +1407,8 @@ including a run started in a shell, goes on. Covered by the tests in
 **WEB-33** `rotari web --allow-terminal` adds a Terminal button to the top bar of the
 application and Recent jobs pages, which shows how many shells there are in all projects, as `Terminal (3)`,
 with the panel open or not and without connecting to any, on a page in view; with no answer from the server it
-shows no number. It opens a panel along the bottom, with a tab for each
+shows no number. It opens a panel along the bottom, or down the left or right of the window as the browser
+keeps from a menu in the panel's bar, with a tab for each
 shell of the page's project, or of no project on a page of none. A list names the projects with
 shells, and choosing one goes to its page. Opening the panel with no shell there starts one, **+**
 starts another, and a run page's **Open a terminal here** button starts another, each where the page
@@ -1435,6 +1436,9 @@ line breaks and tabs, up to 256 KiB; with several lines, only where the program 
 paste, since elsewhere each line would run. It starts no shell, takes none from another browser tab, and refuses text with
 control characters, saying why in each case; a page with no terminal has no such button. The panel's requests
 go to the server's root on a page under a basedir's mount too.
+At a side the panel has the window's height and a width of its own, between 320 pixels and what leaves the page 480, and the page, its
+top bar, and its dialogs take the rest; under 1000 pixels wide it is at the bottom, and the choice stays for a wider window. Moving it changes no
+connection, and panes stack when the panel is under 720 pixels wide, keeping their columns for when it has room.
 xterm.js loads when the panel first opens, under the page's nonce. A browser tab that is not visible
 neither connects nor retries, and a page whose sign-in has gone stops retrying and says so
 (`TestTerminalPanel`). `TestTerminalPanelInBrowser` checks the panel in

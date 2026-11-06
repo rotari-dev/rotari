@@ -82,4 +82,4 @@
 
 **Validation:** The user looked at the build and said OK. The `Terminal` tests of `internal/webui` and `conformance/05-web`, `go vet` on them, and `gofmt` passed. The browser test's new measurement was skipped here, and first runs on CI with this push. CI on `0c52f894` passed in every workflow, including the `go` job that requires the browser tests, which covers four panes and the count.
 
-**Remaining:** The result of CI on this push.
+**Remaining:** None. CI on `7078e316`, which holds this, passed in every workflow, read from GitHub's API, including the `go` job that requires the browser tests, so the new measurement passed in Chrome.

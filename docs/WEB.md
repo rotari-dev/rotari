@@ -100,7 +100,10 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 
 `rotari web --allow-terminal` adds a **Terminal** button to the top bar, which opens a shell in
 a panel along the bottom of the page, so you can type while watching jobs or reading a log. Drag
-the panel's top edge to change its height. The button shows how many shells are running in all
+the panel's top edge to change its height. The **Panel position** icon in its bar moves it down the left or
+right of the window, for a tall shell beside the jobs; the browser remembers the choice, and in a window
+under 1000 pixels wide the panel stays at the bottom. Panes stack when the panel is too narrow for columns.
+The button shows how many shells are running in all
 projects, as **Terminal (3)**, so you can see what is left running with the panel closed.
 
 Shells belong to projects, as an editor's terminals belong to its window. A project's pages show
@@ -138,7 +141,7 @@ while a full-screen program such as `vim` runs, and says so.
 The panel shows up to four shells at once, such as an editor beside `rotari wait` and a prompt.
 In the bar, the **Split right** icon adds a column of the whole height beside the focused pane's, and the
 **Split down** icon a pane under it. Each shows a shell not yet in a pane, or a new one if there is none, and refuses if the panes
-would get too small. Drag the handles between the panes to change their shares; in a narrow window they all stack. The
+would get too small. Drag the handles between the panes to change their shares; in a narrow panel they all stack. The
 pane with a colored top edge has the keys, and **Clear** and the send buttons act on it, while **A-**, **A+**, and
 **Maximize** apply to the whole panel.
 
