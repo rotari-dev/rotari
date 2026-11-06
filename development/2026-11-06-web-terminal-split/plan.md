@@ -1,12 +1,11 @@
 # Plan: Split the Web terminal panel
 
 Created: 2026-11-06
-Status: [Step 1](#step-1-one-pane-object-no-change-in-behavior) is done; it changes no behavior, and its diff is to be
-looked at before step 2. See the [work log](work-log.md). Follows [the Web terminal plan](../2026-11-05-web-terminal/plan.md).
+Status: Steps 1 to 4 are implemented, and no one has yet looked at the panes in a browser: layout and focus need the
+checks by hand under [Tests and validation](#tests-and-validation). See the [work log](work-log.md). Follows [the Web terminal plan](../2026-11-05-web-terminal/plan.md).
 
 ## Terms
 
-Panes are planned; everything else exists.
 
 ```text
 On the server (lasts after a page closes)
@@ -22,7 +21,7 @@ browser tab: one page
    │   ├─ project list
    │   ├─ tab row, and +
    │   └─ buttons: A-, A+, Clear, Split, Maximize, Hide
-   └─ pane: a window onto a shell (one today, two when split)
+   └─ pane: a window onto a shell (one, or two when split)
 ```
 
 | Term | Meaning | How many |
@@ -33,7 +32,7 @@ browser tab: one page
 | **panel** | The terminal area at the bottom of a page | One per page |
 | **bar** | The row along the panel's top | One per panel |
 | **tab** | A shell's label in the bar. One tab is one shell | One per shell |
-| **pane** | Where a shell is shown, with one terminal screen (xterm.js) and one connection | One today, two when split |
+| **pane** | Where a shell is shown, with one terminal screen (xterm.js) and one connection | One, or two when split |
 
 **"Tab" alone always means a panel's tab,** and the browser's is always "browser tab". A tab says which shell, and a
 pane says where it shows: with five tabs, only the shells shown in panes are connected. **Closing a tab ends its
@@ -64,12 +63,10 @@ but cannot do those across its panes from the page.
   loses its screen, so the layout code cannot be reused as it is. Its ideas and styles (`.tv-split`, `.tv-split-handle`)
   can.
 - **`TestTerminalPanel`** counts one list of sockets by index, so splitting changes many of its expectations.
-- `TestTerminalPanelInBrowser` currently fails on CI at its Maximize check, for a reason not yet known. See that plan's
-  work log. It is best understood before this work changes the same test.
 
 ## Decisions
 
-These are proposals until the user has reviewed them.
+The user was asked to review these and said to go on. How each looks is still to be tried.
 
 1. **Two panes, side by side, at first.** No nesting. A tree of splits, as in the Table viewer, can follow once panes
    are objects, if anyone wants it.
@@ -96,7 +93,8 @@ These are proposals until the user has reviewed them.
 | **Close tabs to the right** or **all** | As today, each pane then following the rows above. Focused pane's shell ends last |
 | A pane's shell is taken over by another browser tab | That pane says so and offers to take it back; the other is unaffected |
 | Following a link to another project | That project's layout, or one pane offering to start a shell |
-| A narrow window | Panes stack, or the split is refused; decide when it can be seen |
+| **Unsplit** | The other pane closes and its shell keeps running. A command waiting for that pane is told |
+| A narrow window | Panes stack, under 720 pixels wide; to be looked at |
 
 ## Steps
 
@@ -111,14 +109,16 @@ change to them in this step means behavior changed. Look at the diff before goin
 
 ### Step 2: focus and status per pane
 
-A focused pane, following xterm.js's input element. The status and action move from the bar into each pane, or the bar
-shows the focused pane's and a pane with a problem is marked. Decide which from how it looks; two panes can need
-different messages, such as one taken over and one reconnecting.
+A focused pane, following xterm.js's input element. The status and action move from the bar into each pane, over the
+screen so that a message coming and going does not resize the shell, since two panes can need different messages, such
+as one taken over and one reconnecting. This was chosen without seeing it; the bar showing the focused pane's, with a
+mark on the other, remains the alternative if it looks wrong.
 
 ### Step 3: two panes
 
 **Split** in the bar, a handle between the panes with its share kept in `sessionStorage`, a fit per pane on resize, and
-the swap and the table above. Theme and text size changes reach both terminals. Tabs mark their pane.
+the swap and the table above. Theme and text size changes reach both terminals. Tabs mark their pane. The swap changes
+only the panes' `order`: connecting again would replay both, and moving an element in the page would lose its scrolling.
 
 ### Step 4: promise and document
 

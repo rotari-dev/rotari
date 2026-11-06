@@ -121,8 +121,8 @@ like need no `-p`, wherever you `cd`. Give `-p` to reach another project. Other 
 If the directory is gone or the project has no run, the shell opens in your home directory and its
 first line says why. A shell that has started stays where it is when newer runs start.
 
-Copy buttons have a send button beside them that types the same thing into the tab being shown, without
-running it: press Enter in the terminal to run it. A suggested command, such as how to run the queue,
+Copy buttons have a send button beside them that types the same thing into the tab being shown, in the
+focused pane if the panel is split, without running it: press Enter in the terminal to run it. A suggested command, such as how to run the queue,
 goes in as one line with its comments and alternatives left out. A value such as a run ID or a path
 goes in as one word, quoted if it needs to be, so it can finish a command you have started typing. It
 goes to whatever is running there, such as `vim`. If the project has no shell, the button says so and
@@ -133,6 +133,18 @@ editor; elsewhere each line would run, so the button says so and sends nothing.
 **Clear** empties the tab's screen and scrollback, and what would be shown again after following a
 link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing
 while a full-screen program such as `vim` runs, and says so.
+
+**Split** shows a second shell beside the first, such as `rotari wait` beside an editor: another of the
+project's shells, or a new one if there is no other. Drag the handle between the panes to change their
+shares; in a narrow window they stack. The pane with a colored top edge has the keys, and **Clear**
+and the send buttons act on it, while **A-**, **A+**, and **Maximize** apply to the whole panel.
+
+There is one row of tabs. Clicking a tab shows it in the focused pane, and a dashed tab is in the other
+pane: clicking it makes the two panes change places, since a shell cannot be in both. **+** starts a
+shell in the focused pane. **Unsplit** closes the other pane, and its shell keeps running in its tab;
+closing a tab ends its shell, wherever it shows. When a pane's shell ends, the pane moves to a tab not
+being shown, or the split closes if there is none. Each browser tab keeps its own panes for each
+project, and gets them back after following a link.
 
 A tab you are not looking at is marked when it prints something, until you show it, and the list marks
 other projects the same way. When a shell in another tab ends, a note says so. These update every few

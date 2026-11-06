@@ -2,7 +2,8 @@
 
 Created: 2026-11-05
 Status: Steps 1 to 5 are implemented, and the user has tried the panel by hand. Tabs for several
-shells followed; see [Tabs](#tabs). What remains is the first run of the browser tests on CI; see
+shells followed; see [Tabs](#tabs). Two panes side by side are in
+[the split plan](../2026-11-06-web-terminal-split/plan.md). What remains is the first run of the browser tests on CI; see
 [the tests](#tests-and-validation). This replaces
 phases 3 to 5 of [the hardening plan](../2026-11-04-web-terminal/plan.md), whose hardening is done.
 
