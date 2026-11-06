@@ -180,7 +180,7 @@
   // This script runs first.
   const rootFetch = window.fetch;
   const serverFetch = (...args) => rootFetch.apply(window, args);
-  let panel, status, retry, groups, tabs, add, maximize;
+  let panel, panesBox, groups, tabs, add, maximize;
   let shells = [];
   let shellLimit = 0;
   let groupLimit = 0;
@@ -194,6 +194,9 @@
   // newPane makes a place to show a shell: one terminal screen, and one connection to
   // the shell it shows. All of a connection's state is its pane's own.
   const newPane = () => ({
+    element: null,
+    status: null,
+    action: null,
     term: null,
     fit: null,
     viewport: null,
@@ -211,7 +214,7 @@
   });
   // What the bar's buttons and sending from the page act on. It exists before the panel
   // does, since a command can wait for the panel to open. The panel has only this pane.
-  const focused = newPane();
+  let focused = newPane();
 
   const remember = (open) => {
     try {
@@ -362,12 +365,17 @@
     })();
     return loaded;
   };
-  const showStatus = (message, action, handler) => {
+  // A pane says what it is waiting for or what went wrong, and two panes can differ. It
+  // sits over the screen rather than taking room from it: a message coming and going must
+  // not resize the shell.
+  const showStatus = (pane, message, action, handler) => {
+    const { status, action: button } = pane;
     status.textContent = message;
     status.hidden = !message;
-    retry.textContent = action || "";
-    retry.hidden = !action;
-    retry.onclick = handler || null;
+    button.textContent = action || "";
+    button.hidden = !action;
+    button.onclick = handler || null;
+    pane.element.querySelector(".terminal-pane-status").hidden = !message && !action;
   };
   const send = (pane, data) => {
     if (pane.socket?.readyState === WebSocket.OPEN) pane.socket.send(data);
@@ -472,7 +480,7 @@
         response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), { method: "DELETE" });
       } catch {}
       if (!response?.ok && response?.status !== 404) {
-        await refusal(response, "The shell did not end", () => endShells(targets));
+        await refusal(focused, response, "The shell did not end", () => endShells(targets));
         return;
       }
     }
@@ -494,7 +502,7 @@
       });
     } catch {}
     if (!response?.ok) {
-      await refusal(response, "The tabs were not rearranged", () => arrangeShells(arranged));
+      await refusal(focused, response, "The tabs were not rearranged", () => arrangeShells(arranged));
       await refreshShells();
     }
   };
@@ -558,7 +566,7 @@
       });
     } catch {}
     if (!response?.ok) {
-      await refusal(response, "The tab was not renamed", () => renameShell(shell));
+      await refusal(focused, response, "The tab was not renamed", () => renameShell(shell));
       return;
     }
     await refreshShells();
@@ -658,15 +666,15 @@
     );
   };
   // A sign-in that has gone cannot be retried away.
-  const signInGone = (response) => {
+  const signInGone = (pane, response) => {
     if (response?.status !== 401 && response?.status !== 403) return false;
-    showStatus("Sign in again to use the terminal.", "Reload", () => location.reload());
+    showStatus(pane, "Sign in again to use the terminal.", "Reload", () => location.reload());
     return true;
   };
-  const refusal = async (response, what, handler) => {
-    if (signInGone(response)) return;
+  const refusal = async (pane, response, what, handler) => {
+    if (signInGone(pane, response)) return;
     const reason = response ? (await response.text()).trim() : "the server did not answer";
-    showStatus(what + ": " + reason, "Try again", handler);
+    showStatus(pane, what + ": " + reason, "Try again", handler);
   };
   const shellName = (shell) => {
     const name = shell.name || "Shell " + shell.number;
@@ -713,7 +721,7 @@
     const previous = pane.socket;
     pane.socket = null;
     previous?.close();
-    showStatus("Connecting...");
+    showStatus(pane, "Connecting...");
     const serial = ++pane.connectSerial;
     pane.waitingToOpen = true;
     // xterm.js parses what it has been given later, and reset leaves that waiting, so a
@@ -738,12 +746,12 @@
       if (pane.socket !== current) return;
       pane.retryDelay = 1000;
       // A login shell can take a while to read its profile.
-      showStatus("Waiting for the shell...");
+      showStatus(pane, "Waiting for the shell...");
     };
     current.onmessage = (event) => {
       // Closing leaves what was already on its way, which is another shell's output now.
       if (pane.socket !== current) return;
-      showStatus("");
+      showStatus(pane, "");
       // After the replay, so that it lands at the end of what is on screen.
       term.write(new Uint8Array(event.data), pane.pendingSend ? () => deliverSend(pane) : undefined);
     };
@@ -757,13 +765,13 @@
           : "The terminal lost its connection, so nothing was sent.",
       );
       if (event.code === closeTakenOver) {
-        showStatus("Another tab has this terminal.", "Use it here", () => connect(pane));
+        showStatus(pane, "Another tab has this terminal.", "Use it here", () => connect(pane));
       } else if (event.code === closeExited) {
         shellGone(pane, "The shell ended: " + event.reason + ".");
       } else if (event.code === closeNoShell) {
         shellGone(pane, "The shell has ended.");
       } else if (event.code === closeFailed) {
-        showStatus("The shell could not be shown: " + event.reason, "Try again", () => connect(pane));
+        showStatus(pane, "The shell could not be shown: " + event.reason, "Try again", () => connect(pane));
       } else {
         reconnect(pane);
       }
@@ -778,14 +786,14 @@
   };
   const newShell = async (pane) => {
     clearTimeout(pane.retryTimer);
-    showStatus("Starting a shell...");
+    showStatus(pane, "Starting a shell...");
     let response;
     try {
       const place = pagePlace();
       response = await serverFetch(shellsPath + "?rows=" + pane.term.rows + "&cols=" + pane.term.cols + (place && "&" + place), { method: "POST" });
     } catch {}
     if (!response?.ok) {
-      await refusal(response, "The shell did not start", () => newShell(pane));
+      await refusal(pane, response, "The shell did not start", () => newShell(pane));
       return;
     }
     const shell = await response.json();
@@ -802,10 +810,10 @@
     pane.shown = null;
     shells = shells.filter((shell) => shell.id !== gone);
     renderTabs();
-    showStatus(message, "New shell", () => newShell(pane));
+    showStatus(pane, message, "New shell", () => newShell(pane));
     const { response, ok } = await refreshShells();
     if (!ok) {
-      signInGone(response);
+      signInGone(pane, response);
       return;
     }
     if (pane.shown !== null) return; // Someone chose meanwhile.
@@ -821,7 +829,7 @@
       response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), { method: "DELETE" });
     } catch {}
     if (!response?.ok && response?.status !== 404) {
-      await refusal(response, "The shell did not end", () => endShell(shell));
+      await refusal(focused, response, "The shell did not end", () => endShell(shell));
       return;
     }
     // The shown shell's connection closes, which moves on to another.
@@ -858,12 +866,12 @@
   const begin = async (takeOver = true) => {
     const pane = focused;
     pane.whenVisible = null;
-    showStatus("Connecting...");
+    showStatus(pane, "Connecting...");
     // Someone sending a command has not asked to take a shell from another browser tab.
     if (pane.pendingSend) takeOver = false;
     const listFailed = (response) => {
       settleSend(pane, "The shells could not be listed, so nothing was sent.");
-      return refusal(response, "The shells could not be listed", () => begin());
+      return refusal(pane, response, "The shells could not be listed", () => begin());
     };
     let refused;
     try {
@@ -898,6 +906,7 @@
       renderTabs();
       panel.classList.add("terminal-empty");
       showStatus(
+        pane,
         here.project ? "No shell for " + here.project + " yet." : "No shell here yet.",
         "Start a shell",
         () => newShell(pane),
@@ -906,11 +915,11 @@
   };
   const reconnect = (pane) => {
     if (document.hidden) {
-      showStatus("Disconnected.");
+      showStatus(pane, "Disconnected.");
       pane.whenVisible = () => reconnect(pane);
       return;
     }
-    showStatus("Reconnecting...");
+    showStatus(pane, "Reconnecting...");
     pane.retryTimer = setTimeout(async () => {
       // A refused WebSocket does not say why, so ask with a plain request. After
       // the server restarts the sign-in is gone, and retrying can never succeed.
@@ -918,7 +927,7 @@
       try {
         response = await serverFetch("/_terminal/xterm-license.txt", { method: "HEAD" });
       } catch {}
-      if (signInGone(response)) return;
+      if (signInGone(pane, response)) return;
       if (document.hidden) reconnect(pane);
       else if (response?.ok) connect(pane, false);
       else {
@@ -933,6 +942,31 @@
     if (focused.whenVisible) focused.whenVisible();
     else if (focused.term && !panel.hidden) refreshShells();
   });
+  // focusPane makes a pane the one the bar and sending act on, following where the keys go.
+  const focusPane = (pane) => {
+    focused = pane;
+  };
+  const buildPane = (pane) => {
+    pane.element = document.createElement("div");
+    pane.element.className = "terminal-pane";
+    pane.element.addEventListener("focusin", () => focusPane(pane));
+    const notice = document.createElement("div");
+    notice.className = "terminal-pane-status";
+    notice.hidden = true;
+    pane.status = document.createElement("span");
+    pane.status.className = "terminal-status";
+    pane.status.setAttribute("role", "status");
+    pane.status.hidden = true;
+    pane.action = document.createElement("button");
+    pane.action.type = "button";
+    pane.action.className = "terminal-action";
+    pane.action.hidden = true;
+    notice.append(pane.status, pane.action);
+    pane.viewport = document.createElement("div");
+    pane.viewport.className = "terminal-viewport";
+    pane.element.append(notice, pane.viewport);
+    panesBox.append(pane.element);
+  };
   const build = () => {
     panel = document.createElement("section");
     panel.id = "terminal-panel";
@@ -942,14 +976,6 @@
     const title = document.createElement("span");
     title.className = "terminal-title";
     title.textContent = "Terminal";
-    status = document.createElement("span");
-    status.className = "terminal-status";
-    status.setAttribute("role", "status");
-    status.hidden = true;
-    retry = document.createElement("button");
-    retry.type = "button";
-    retry.className = "terminal-action";
-    retry.hidden = true;
     groups = document.createElement("select");
     groups.className = "terminal-groups";
     groups.setAttribute("aria-label", "Project of these shells");
@@ -974,21 +1000,22 @@
     clear.textContent = "Clear";
     clear.title = "Clear this shell's screen and scrollback, here and on the server";
     clear.onclick = () => {
-      const { term, socket } = focused;
+      const pane = focused;
+      const { term, socket } = pane;
       term?.focus();
       // Not connected, the server would bring it all back.
       if (socket?.readyState !== WebSocket.OPEN) return;
       // A full-screen program draws its own screen, and would not know it had gone.
       if (term.buffer.active.type === "alternate") {
         const message = "Clear is off while a full-screen program runs.";
-        showStatus(message);
+        showStatus(pane, message);
         setTimeout(() => {
-          if (status.textContent === message) showStatus("");
+          if (pane.status.textContent === message) showStatus(pane, "");
         }, 4000);
         return;
       }
       term.clear();
-      send(focused, JSON.stringify({ type: "clear" }));
+      send(pane, JSON.stringify({ type: "clear" }));
     };
     maximize = document.createElement("button");
     maximize.type = "button";
@@ -1003,8 +1030,6 @@
       groups,
       tabs,
       add,
-      status,
-      retry,
       spacer,
       fontButton("A-", "Smaller text", -1),
       fontButton("A+", "Larger text", 1),
@@ -1012,9 +1037,10 @@
       maximize,
       hide,
     );
-    focused.viewport = document.createElement("div");
-    focused.viewport.className = "terminal-viewport";
-    panel.append(buildResizer(), bar, focused.viewport);
+    panesBox = document.createElement("div");
+    panesBox.className = "terminal-panes";
+    buildPane(focused);
+    panel.append(buildResizer(), bar, panesBox);
     document.body.append(panel);
   };
   // openTerminal gives a pane its screen, inside its viewport.
@@ -1049,11 +1075,11 @@
   };
   const start = async () => {
     build();
-    showStatus("Loading the terminal...");
+    showStatus(focused, "Loading the terminal...");
     try {
       await loadAssets();
     } catch (error) {
-      showStatus(error.message);
+      showStatus(focused, error.message);
       settleSend(focused, error.message);
       return;
     }
@@ -1071,7 +1097,7 @@
     });
     // A page opened in the background waits to be looked at before taking a shell.
     if (document.hidden) {
-      showStatus("Waiting for this tab to be shown.");
+      showStatus(focused, "Waiting for this tab to be shown.");
       focused.whenVisible = () => begin();
     } else {
       await begin();
@@ -1091,7 +1117,7 @@
       if (open)
         start().catch((error) => {
           console.error(error);
-          showStatus("The terminal could not start: " + error.message);
+          showStatus(focused, "The terminal could not start: " + error.message);
           settleSend(focused, "The terminal could not start: " + error.message);
         });
       return;
