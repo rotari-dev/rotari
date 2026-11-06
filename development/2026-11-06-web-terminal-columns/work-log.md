@@ -69,3 +69,17 @@
 **Validation:** The user tried a build of `0c52f894`. For the icons, the `Terminal` tests of `internal/webui` and `conformance/05-web`, `go vet` on them, and `gofmt` passed. `go test ./...` was not run, since only these changed. No one has seen the icons, and `TestTerminalPanelInBrowser` was skipped here. CI on `0c52f894` had not finished when this was written.
 
 **Remaining:** The user's look at the icons, then integrating and pushing them, and the result of CI on `0c52f894`.
+
+## The icons' frame and place
+
+**Commits:** 2026-11-06 13:34:46 `4402a413`.
+
+**Change:** In `web_shell.css`, the split icons have no border or background and are centered, with a subtle hover and a faded disabled state. `TestTerminalPanel` reads those rules, and `TestTerminalPanelInBrowser` measures the border and the icons' place in their buttons and the bar.
+
+**Reason:** The user saw a frame around each icon, and the icon sitting toward the frame's top. Both came from the page's shared button styles, including a height of 36 pixels.
+
+**Plan impact:** The hover and disabled states are additions the Table viewer's icons do not have.
+
+**Validation:** The user looked at the build and said OK. The `Terminal` tests of `internal/webui` and `conformance/05-web`, `go vet` on them, and `gofmt` passed. The browser test's new measurement was skipped here, and first runs on CI with this push. CI on `0c52f894` passed in every workflow, including the `go` job that requires the browser tests, which covers four panes and the count.
+
+**Remaining:** The result of CI on this push.
