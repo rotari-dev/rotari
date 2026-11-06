@@ -69,3 +69,17 @@
 **Validation:** The cause was read from the CSS, not reproduced, for lack of a browser here. The `Terminal` tests of `internal/webui` and `conformance/05-web` and `gofmt` passed. The browser test's measurement has not run, and the page's own sideways scroll check may find something else on CI.
 
 **Remaining:** The user's look.
+
+## Tried and integrated
+
+**Commits:** The entries above, moved onto `main` together with this one.
+
+**Change:** This plan's status and this log. No code.
+
+**Reason:** `main` was held back for the user's look, since no one had seen a panel at a side.
+
+**Plan impact:** All steps are done.
+
+**Validation:** The user tried the build with the top bar's fix and said it looks good. Which of the checks by hand they went through was not stated. `TestTerminalPanelInBrowser`'s checks at a side had still not run when this was pushed.
+
+**Remaining:** The result of CI on this push.

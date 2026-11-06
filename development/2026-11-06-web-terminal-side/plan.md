@@ -1,7 +1,8 @@
 # Plan: The Web terminal panel on the left or right
 
 Created: 2026-11-06
-Status: Steps 1 to 4 are implemented, and wait for the user's look. Follows
+Status: Steps 1 to 4 are implemented, and the user tried the panel at a side and said it looks good. What remains is the
+browser test's first run with it on CI. Follows
 [the columns plan](../2026-11-06-web-terminal-columns/plan.md), whose terms and panes this uses. Offering left and right,
 and leaving out the top, are the user's choices, and they said to go ahead with the rest as proposed. See the
 [work log](work-log.md).
