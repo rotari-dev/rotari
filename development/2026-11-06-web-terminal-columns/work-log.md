@@ -55,3 +55,17 @@
 **Validation:** `go test ./...` passed with these documents and the code above, and `go vet ./...`, `gofmt`, `tsc`, and `-race` on the terminal tests of `internal/webui` found nothing. `scripts/check.sh` and pre-commit could not be run here, so their parts were run by hand.
 
 **Remaining:** Integrating into `main`, once the user has tried it.
+
+## Tried, integrated, and icons for the splits
+
+**Commits:** Integrated and pushed through `0c52f894`. Icons: 2026-11-06 12:56:24 `4fd7998c`.
+
+**Change:** **Split right** and **Split down** in `web_shell.js` are icons drawn as the Table viewer's are, with `web_shell.css` styling them from the text color so that a disabled one follows. Their names stay as the tooltip and `aria-label`. `TestTerminalPanel` checks that each has a picture and no words, and that its line appears in `table_view_panes.js`, as the two files share no code. The helpers that find a bar button in both terminal tests also go by `aria-label`. `docs/WEB.md` and this plan.
+
+**Reason:** The user tried four panes and the count and said they look good, and asked for the splits as icons like the Table viewer's. **Close pane** was not part of the request, so it stays in words.
+
+**Plan impact:** Step 3's open question on icons is settled for the splits.
+
+**Validation:** The user tried a build of `0c52f894`. For the icons, the `Terminal` tests of `internal/webui` and `conformance/05-web`, `go vet` on them, and `gofmt` passed. `go test ./...` was not run, since only these changed. No one has seen the icons, and `TestTerminalPanelInBrowser` was skipped here. CI on `0c52f894` had not finished when this was written.
+
+**Remaining:** The user's look at the icons, then integrating and pushing them, and the result of CI on `0c52f894`.
