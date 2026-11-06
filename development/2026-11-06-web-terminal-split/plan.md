@@ -1,8 +1,8 @@
 # Plan: Split the Web terminal panel
 
 Created: 2026-11-06
-Status: Not started. [Step 1](#step-1-one-pane-object-no-change-in-behavior) changes no behavior, and its diff is to be
-looked at before step 2. Follows [the Web terminal plan](../2026-11-05-web-terminal/plan.md).
+Status: [Step 1](#step-1-one-pane-object-no-change-in-behavior) is done; it changes no behavior, and its diff is to be
+looked at before step 2. See the [work log](work-log.md). Follows [the Web terminal plan](../2026-11-05-web-terminal/plan.md).
 
 ## Terms
 
