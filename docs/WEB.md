@@ -134,16 +134,18 @@ editor; elsewhere each line would run, so the button says so and sends nothing.
 link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing
 while a full-screen program such as `vim` runs, and says so.
 
-**Split** shows a second shell beside the first, such as `rotari wait` beside an editor: another of the
-project's shells, or a new one if there is no other. Drag the handle between the panes to change their
-shares; in a narrow window they stack. The pane with a colored top edge has the keys, and **Clear**
-and the send buttons act on it, while **A-**, **A+**, and **Maximize** apply to the whole panel.
+The panel shows up to four shells at once, such as an editor beside `rotari wait` and a prompt.
+**Split right** adds a column of the whole height beside the focused pane's, and **Split down** a pane
+under it. Each shows a shell not yet in a pane, or a new one if there is none, and refuses if the panes
+would get too small. Drag the handles between the panes to change their shares; in a narrow window they all stack. The
+pane with a colored top edge has the keys, and **Clear** and the send buttons act on it, while **A-**, **A+**, and
+**Maximize** apply to the whole panel.
 
-There is one row of tabs. Clicking a tab shows it in the focused pane, and a dashed tab is in the other
-pane: clicking it makes the two panes change places, since a shell cannot be in both. **+** starts a
-shell in the focused pane. **Unsplit** closes the other pane, and its shell keeps running in its tab;
+There is one row of tabs. Clicking a tab shows it in the focused pane, and a dashed tab is in another
+pane: clicking it makes the two panes change places, since a shell cannot be in two. **+** starts a
+shell in the focused pane. **Close pane** closes the focused pane, and its shell keeps running in its tab;
 closing a tab ends its shell, wherever it shows. When a pane's shell ends, the pane moves to a tab not
-being shown, or the split closes if there is none. Each browser tab keeps its own panes for each
+in a pane, or closes if there is none. Each browser tab keeps its own panes for each
 project, and gets them back after following a link.
 
 A tab you are not looking at is marked when it prints something, until you show it, and the list marks

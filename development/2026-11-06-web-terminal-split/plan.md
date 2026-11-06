@@ -1,8 +1,9 @@
 # Plan: Split the Web terminal panel
 
 Created: 2026-11-06
-Status: Steps 1 to 4 are implemented, and the user tried the panes in a browser and said they work. What remains is the
-first run of `TestTerminalPanelInBrowser`'s split checks on CI. See the [work log](work-log.md). Follows [the Web terminal plan](../2026-11-05-web-terminal/plan.md).
+Status: Done: the user tried the panes in a browser, and `TestTerminalPanelInBrowser`'s split checks passed on CI. **Split**
+and **Unsplit** have since become **Split right**, **Split down**, and **Close pane**, under
+[the columns plan](../2026-11-06-web-terminal-columns/plan.md). See the [work log](work-log.md). Follows [the Web terminal plan](../2026-11-05-web-terminal/plan.md).
 
 ## Terms
 

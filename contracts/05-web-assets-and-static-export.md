@@ -1412,15 +1412,17 @@ starts another, and a run page's **Open a terminal here** button starts another,
 says (WEB-34); closing a tab asks, then ends that shell. A page loaded with the panel left open starts
 nothing, and offers to, so browsing leaves no shells behind. Shells live on the server: each page load
 lists them and attaches to the one this browser tab last showed for the project, or the first,
-replaying recent output, so following a link ends none of them. **Split** shows another of the project's
-shells in a second pane beside the first, which takes the keys, or a new shell if there is no other, and
-starts none past the limit; **Unsplit** closes the other pane and leaves its shell running. There is one row of tabs, and a tab
-shows in the pane with the keys; a shell is never in both, so choosing the other pane's tab changes the
+replaying recent output, so following a link ends none of them. Up to four panes show the project's shells, as columns each holding rows. **Split right** adds a column of
+the whole height beside the pane with the keys, and **Split down** a row under it, showing a shell in no pane,
+or a new one if there is none, in the new pane, which takes the keys. Neither starts a shell past the limit, and a
+split that would leave a pane under 200 by 100 pixels is refused, saying so. **Close pane** closes the pane with the
+keys and leaves its shell running, its room and the keys going to its neighbor. There is one row of tabs, and a tab
+shows in the pane with the keys; a shell is never in two panes, so choosing another pane's tab exchanges the
 panes' places without connecting again. Each pane says what its own connection is doing, and one taken
-over or reconnecting does not disturb the other. The panes and their shares belong to the browser tab and
-project, and come back with the next page. Only shells shown in a pane are connected. A
-shell ending moves its pane to a tab of the project not shown, without taking it from another browser tab;
-with none, the split closes, and when the project's last one ends, the panel says how and a new shell is a choice. **Maximize** gives the
+over or reconnecting does not disturb the others. The panes and their shares belong to the browser tab and
+project, and come back with the next page, without any shell that has gone. Only shells shown in a pane are connected. A
+shell ending moves its pane to a tab of the project in no pane, without taking it from another browser tab;
+with none, the pane closes, and when the project's last one ends, the panel says how and a new shell is a choice. **Maximize** gives the
 panel the whole window until **Restore**, and **A-** and **A+** set the text size between 8 and 32; the
 browser keeps both from page to page. An `http` or `https` address in the output opens in a new tab on a
 click, with no access to the page. Each one-line copy

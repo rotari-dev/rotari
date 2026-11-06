@@ -69,3 +69,17 @@
 **Validation:** The user tried the build and said the split worked. Asked whether that covered the hand checks, such as `vim` beside `yes` and changing the theme, they said OK. `TestTerminalPanelInBrowser`'s split checks have still not run anywhere, since nothing here has Chrome and nothing has been pushed.
 
 **Remaining:** Those checks' first run on CI.
+
+## First run on CI
+
+**Commits:** None; this is a result. `a7b14295` was pushed to `origin/main` on 2026-11-06.
+
+**Change:** None.
+
+**Reason:** The user asked to push, as step 0 of [the columns plan](../2026-11-06-web-terminal-columns/plan.md#step-0-the-first-run-on-ci).
+
+**Plan impact:** The last thing this plan had remaining is done.
+
+**Validation:** Every workflow run for that commit succeeded, read from GitHub's API. That includes the `go` job of Go CI, which sets `ROTARI_REQUIRE_BROWSER_TESTS`, so `TestTerminalPanelInBrowser` could not have skipped; its log itself was not read.
+
+**Remaining:** None.
