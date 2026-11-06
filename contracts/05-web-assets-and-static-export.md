@@ -1405,7 +1405,9 @@ including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
 **WEB-33** `rotari web --allow-terminal` adds a Terminal button to the top bar of the
-application and Recent jobs pages, which opens a panel along the bottom, with a tab for each
+application and Recent jobs pages, which shows how many shells there are in all projects, as `Terminal (3)`,
+with the panel open or not and without connecting to any, on a page in view; with no answer from the server it
+shows no number. It opens a panel along the bottom, with a tab for each
 shell of the page's project, or of no project on a page of none. A list names the projects with
 shells, and choosing one goes to its page. Opening the panel with no shell there starts one, **+**
 starts another, and a run page's **Open a terminal here** button starts another, each where the page

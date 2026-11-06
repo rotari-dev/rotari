@@ -142,7 +142,8 @@
   const minFontSize = 8;
   const maxFontSize = 32;
   const shellsPath = "/_terminal/shells";
-  // How often a page in view picks up shells started or ended from elsewhere.
+  // How often a page in view picks up shells started or ended from elsewhere, for its tabs
+  // and the count on the Terminal button, with the panel open or not.
   const shellsRefresh = 5000;
   // How often any open page says so, whether its panel is open or in view, which keeps
   // the shells. Browsers slow a background page's timers to about this. It is far under
@@ -732,7 +733,14 @@
     focusPane(pane);
     pane.term.focus();
   };
+  // showShellCount puts the number of shells, of every project, on the Terminal button. With
+  // no answer from the server it shows none, rather than one that may be out of date.
+  const showShellCount = (known = true) => {
+    const button = document.getElementById("terminal-button");
+    if (button) button.textContent = known ? "Terminal (" + shells.length + ")" : "Terminal";
+  };
   const renderTabs = () => {
+    showShellCount();
     renderGroups();
     const inGroup = shellsHere();
     add.disabled = inGroup.length >= groupLimit || shells.length >= shellLimit;
@@ -815,13 +823,17 @@
     try {
       response = await serverFetch(shellsPath);
     } catch {}
-    if (!response?.ok) return { response };
+    if (!response?.ok) {
+      showShellCount(false);
+      return { response };
+    }
     const listed = await response.json();
     if (serial === listSerial) {
-      noteEndedShells(listed.shells);
+      if (panel) noteEndedShells(listed.shells);
       shells = listed.shells;
       shellLimit = listed.limit;
       groupLimit = listed.group_limit;
+      showShellCount();
       if (panel) renderTabs();
     }
     return { ok: true };
@@ -1194,7 +1206,7 @@
     if (document.hidden) return;
     const waiting = panes.filter((pane) => pane.whenVisible);
     if (waiting.length) waiting.forEach((pane) => pane.whenVisible());
-    else if (focused.term && !panel.hidden) refreshShells();
+    else refreshShells();
   });
   // percent writes a part of the panel for a style, and place sets where an element goes,
   // keeping half a handle clear of each edge that has a neighbor.
@@ -1524,9 +1536,6 @@
       await begin();
     }
     focused.term.focus();
-    setInterval(() => {
-      if (!document.hidden && !panel.hidden && !panes.some((pane) => pane.whenVisible)) refreshShells();
-    }, shellsRefresh);
   };
   const setOpen = (open) => {
     root.classList.toggle("terminal-open", open);
@@ -1689,9 +1698,16 @@
       addJobsSendButtons();
       sayAlive();
       setInterval(sayAlive, aliveInterval);
+      setInterval(() => {
+        if (!document.hidden && !panes.some((pane) => pane.whenVisible)) refreshShells();
+      }, shellsRefresh);
     }
     if (offered && remembered()) setOpen(true);
-    else root.classList.remove("terminal-open");
+    else {
+      root.classList.remove("terminal-open");
+      // A page out of sight asks nothing until it is looked at.
+      if (offered && !document.hidden) refreshShells();
+    }
   });
 })();
 

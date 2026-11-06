@@ -178,7 +178,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(window.localStorage.getItem('rotari-terminal-open'), '1');
   assert.equal(sockets.length, 1);
   assert.equal(sockets[0].url, 'ws://127.0.0.1:9/_terminal/ws?shell=101&rows=24&cols=80');
-  assert.deepEqual(requests, ['GET /_terminal/here?', 'GET /_terminal/shells', 'POST /_terminal/shells?rows=24&cols=80'], 'the first shell was not started on opening');
+  assert.deepEqual(requests, ['GET /_terminal/shells', 'GET /_terminal/here?', 'GET /_terminal/shells', 'POST /_terminal/shells?rows=24&cols=80'], 'the first shell was not started on opening');
 
   // Each wait says what it is waiting for, until output arrives.
   assert.match(document.querySelector('.terminal-status').textContent, /Connecting/);
@@ -569,7 +569,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   await wait(50);
   runPage.document.getElementById('terminal-button').click();
   await wait(60);
-  assert.equal(runPage.requests[0], 'GET /_terminal/here?basedir=abc&project=p1&run=r%201');
+  assert.equal(runPage.requests.find((request) => request.includes('/here')), 'GET /_terminal/here?basedir=abc&project=p1&run=r%201');
   assert.equal(runPage.requests.some((request) => request.startsWith('POST')), false, 'opening the panel started a shell with some running');
   assert.equal(runPage.sockets.length, 1);
   const here = runPage.window.terminalHereIcon();
@@ -984,6 +984,65 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   await wait(20);
   assert.match(broken.document.querySelector('.terminal-status').textContent, /could not start: xterm broke/);
   assert.equal(broken.document.querySelector('.terminal-status').hidden, false);
+
+  // The Terminal button counts the shells of every project, with the panel closed or open,
+  // and asks nothing of the server from a page out of sight.
+  const counted = load(process.argv[1], { path: '/project/p1', shells: mixed() });
+  const countLabel = (page) => page.document.getElementById('terminal-button').textContent;
+  await wait(30);
+  assert.equal(countLabel(counted), 'Terminal (5)');
+  assert.equal(counted.sockets.length, 0, 'counting connected to a shell');
+  assert.equal(counted.document.getElementById('terminal-panel'), null, 'counting opened the panel');
+  assert.deepEqual(counted.requests, ['GET /_terminal/shells'], 'counting asked for more than the list');
+  // Others starting and ending shells show on the next look, and no note for a panel never opened.
+  counted.server.shells = [...counted.server.shells, plain('20', 2)];
+  counted.polls[0]();
+  await wait(10);
+  assert.equal(countLabel(counted), 'Terminal (6)');
+  counted.server.shells = counted.server.shells.filter((shell) => shell.id !== '20');
+  counted.polls[0]();
+  await wait(10);
+  assert.equal(countLabel(counted), 'Terminal (5)');
+  assert.equal(counted.document.querySelector('.terminal-send-note'), null, 'a closed panel told of a shell ending');
+  // Starting one here counts at once, and so does one ending in view, over every project.
+  counted.document.getElementById('terminal-button').click();
+  await wait(30);
+  assert.equal(countLabel(counted), 'Terminal (5)');
+  counted.document.querySelector('.terminal-add').click();
+  await wait(20);
+  assert.equal(countLabel(counted), 'Terminal (6)');
+  // The panel hidden still counts, and an answer that does not come shows no number.
+  counted.document.getElementById('terminal-button').click();
+  counted.server.shells = counted.server.shells.slice(1);
+  counted.polls[0]();
+  await wait(10);
+  assert.equal(countLabel(counted), 'Terminal (5)', 'a hidden panel stopped counting');
+  let countAnswer = 200;
+  const unanswered = load(process.argv[1], { status: () => countAnswer, shells: [plain('1', 1)] });
+  await wait(30);
+  assert.equal(countLabel(unanswered), 'Terminal (1)');
+  countAnswer = 500;
+  unanswered.polls[0]();
+  await wait(10);
+  assert.equal(countLabel(unanswered), 'Terminal', 'kept a number it could not check');
+  countAnswer = 200;
+  unanswered.polls[0]();
+  await wait(10);
+  assert.equal(countLabel(unanswered), 'Terminal (1)');
+  // No shells is a count too, and a page out of sight waits to be looked at.
+  const noneYet = load(process.argv[1]);
+  await wait(30);
+  assert.equal(countLabel(noneYet), 'Terminal (0)');
+  const unseenPage = load(process.argv[1], { hidden: true, shells: [plain('1', 1)] });
+  await wait(30);
+  assert.deepEqual(unseenPage.requests, [], 'a page out of sight asked for the list');
+  unseenPage.polls[0]();
+  await wait(10);
+  assert.deepEqual(unseenPage.requests, [], 'a page out of sight went on asking');
+  unseenPage.window.__hidden = false;
+  unseenPage.document.dispatchEvent(new unseenPage.window.Event('visibilitychange'));
+  await wait(10);
+  assert.equal(countLabel(unseenPage), 'Terminal (1)');
 
   // Two panes. Each row of what happens is checked with two or three shells of a project.
   const splitShells = (...ids) => ids.map((id, index) => inProject(String(id), index + 1, 'p1'));

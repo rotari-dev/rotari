@@ -77,6 +77,7 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   const settled = 'document.querySelector(".terminal-status")?.hidden === true';
   await page.evaluate('document.querySelector(".terminal-add").click()');
   await until('a second tab', 'document.querySelectorAll(".terminal-tab [role=tab]")[1]?.getAttribute("aria-selected") === "true"');
+  await until('the Terminal button to count two', 'document.getElementById("terminal-button").textContent === "Terminal (2)"');
   await until('the second shell', settled);
   await typeLine('echo "second-[$VALUE]"');
   await until('the second shell to run a command', screenHas('second-[]'));

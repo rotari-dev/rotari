@@ -100,7 +100,8 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 
 `rotari web --allow-terminal` adds a **Terminal** button to the top bar, which opens a shell in
 a panel along the bottom of the page, so you can type while watching jobs or reading a log. Drag
-the panel's top edge to change its height.
+the panel's top edge to change its height. The button shows how many shells are running in all
+projects, as **Terminal (3)**, so you can see what is left running with the panel closed.
 
 Shells belong to projects, as an editor's terminals belong to its window. A project's pages show
 that project's tabs, and the list beside them goes to other projects that have shells. Other pages,
