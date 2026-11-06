@@ -87,3 +87,5 @@ Load the matching skill for detailed procedures:
   regression tests.
 * `.claude/skills/jj-workflow/SKILL.md` — workspaces, commits,
   bookmarks, and pushing.
+* `.claude/skills/watch-ci/SKILL.md` — waiting for CI after a push, and what
+  its result can say.
