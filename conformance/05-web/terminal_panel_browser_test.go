@@ -172,7 +172,7 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
     'const box = document.querySelector(".terminal-panes").getBoundingClientRect();' +
     'const [first, second] = [...document.querySelectorAll(".terminal-pane")].map((pane) => pane.getBoundingClientRect());' +
     'const [left, right] = [...document.querySelectorAll(".terminal-pane .xterm-screen")].map((item) => item.getBoundingClientRect().width);' +
-    'return first.left === box.left && second.right === box.right && first.right <= second.left && second.left - first.right <= 8 &&' +
+    'return Math.abs(first.left - box.left) <= 1 && Math.abs(second.right - box.right) <= 1 && first.right <= second.left + 1 && second.left - first.right <= 8 &&' +
     ' Math.abs(first.width - second.width) <= 2 &&' +
     ' left <= first.width && right <= second.width && left > first.width - 60 && right > second.width - 60;' +
     '})()';

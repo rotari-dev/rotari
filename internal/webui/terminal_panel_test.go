@@ -111,7 +111,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
       window.setInterval = (callback, delay) => { if (delay === 5000) polls.push(callback); if (delay === 60000) aliveTimers.push(callback); return 1; };
       window.confirm = () => true;
       window.ResizeObserver = class { observe() {} disconnect() {} };
-      window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener() {} }));
+      window.matchMedia = (query) => ({ get matches() { return Boolean(server.narrow) && query.includes('max-width'); }, addEventListener(type, listener) { (server.mediaListeners ||= []).push(listener); } });
       if (hidden) Object.defineProperty(window.Document.prototype, 'hidden', { configurable: true, get: () => window.__hidden !== false });
       if (height) window.localStorage.setItem('rotari-terminal-height', height);
       window.WebSocket = class {
@@ -993,6 +993,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
     await wait(50);
     return page;
   };
+  const partOf = (length) => Number(/([\d.]+)%/.exec(length)[1]) / 100;
   const sp = (page) => {
     const bar = (text) => [...page.document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === text);
     const panes = () => [...page.document.querySelectorAll('.terminal-pane')];
@@ -1007,7 +1008,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
       focus: (index) => panes()[index].dispatchEvent(new page.window.Event('focusin', { bubbles: true })),
       statusOf: (index) => panes()[index].querySelector('.terminal-status'),
       saved: () => JSON.parse(page.window.sessionStorage.getItem(splitKey)),
-      inOrder: () => panes().sort((a, b) => Number(a.style.order) - Number(b.style.order)),
+      inOrder: () => panes().sort((a, b) => partOf(a.style.left) - partOf(b.style.left)),
     };
   };
   // The server closing a connection, which the stand-in does not record by itself.
@@ -1346,19 +1347,38 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   handled.document.querySelector('.terminal-panes').getBoundingClientRect = () => ({ left: 100, width: 1000, top: 0, height: 300 });
   handle.onpointerdown({ preventDefault() {}, pointerId: 1 });
   handle.onpointermove({ clientX: 400, clientY: 0 });
-  assert.equal(ui.panes()[0].style.flexGrow, '0.3');
-  assert.equal(ui.panes()[1].style.flexGrow, '0.7');
+  assert.equal(partOf(ui.panes()[0].style.width), 0.3);
+  assert.equal(partOf(ui.panes()[1].style.width), 0.7);
+  assert.equal(partOf(ui.panes()[1].style.left), 0.3);
+  assert.equal(partOf(handle.style.left), 0.3);
   handle.onpointerup();
   assert.equal(handle.onpointermove, null, 'the drag went on after the button came up');
   assert.equal(ui.saved().share, 0.3);
   handle.onpointerdown({ preventDefault() {}, pointerId: 1 });
   handle.onpointermove({ clientX: 100, clientY: 0 });
-  assert.equal(ui.panes()[0].style.flexGrow, '0.2', 'a pane went under its least');
+  assert.equal(partOf(ui.panes()[0].style.width), 0.2, 'a pane went under its least');
   handle.onpointerup();
   handle.onkeydown({ key: 'ArrowRight', preventDefault() {} });
-  assert.equal(Number(ui.panes()[0].style.flexGrow).toFixed(2), '0.25');
+  assert.equal(partOf(ui.panes()[0].style.width).toFixed(2), '0.25');
   assert.equal(ui.saved().share.toFixed(2), '0.25');
-  assert.match(webShellCSS, /@media \(max-width: 720px\) \{\s*\.terminal-panes-split \{\s*flex-direction: column;/);
+  // A narrow window stacks them, moves the handle along the other axis, and keeps the share.
+  handled.server.narrow = true;
+  handled.server.mediaListeners.forEach((listener) => listener());
+  assert.equal(ui.panes()[1].style.width, '100%');
+  assert.equal(partOf(ui.panes()[1].style.top), 0.25);
+  assert.equal(handle.getAttribute('aria-orientation'), 'horizontal');
+  handle.onpointerdown({ preventDefault() {}, pointerId: 1 });
+  handle.onpointermove({ clientX: 0, clientY: 150 });
+  handle.onpointerup();
+  assert.equal(ui.saved().share, 0.5);
+  handled.server.narrow = false;
+  handled.server.mediaListeners.forEach((listener) => listener());
+  assert.equal(partOf(ui.panes()[1].style.left), 0.5);
+  assert.equal(handle.getAttribute('aria-orientation'), 'vertical');
+  // One pane fills the panel, and leaves no handle.
+  ui.bar('Unsplit').click();
+  assert.equal(ui.inOrder().at(-1).style.width, '100%');
+  assert.equal(handled.document.querySelector('.terminal-split-handle'), null);
 
   // The next page restores both panes, with focus and share, and takes neither by sending.
   const layout = JSON.stringify({ shell: '3', focused: true, share: 0.3 });
@@ -1367,7 +1387,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(ui.panes().length, 2);
   assert.deepEqual(ui.live(), ['1', '3']);
   assert.equal(ui.selected(), '3');
-  assert.equal(ui.panes()[0].style.flexGrow, '0.3');
+  assert.equal(partOf(ui.panes()[0].style.width), 0.3);
   assert.deepEqual(ui.saved(), { shell: '3', focused: true, share: 0.3 });
   // Sizes were settled first: each connected after both had fitted, so neither connects at the whole width.
   assert.ok(restored.fits.length >= 3, 'the panes did not fit before connecting');
@@ -1386,7 +1406,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
     const edited = await openSplit([1, 2], { split: [splitKey, bad] });
     ui = sp(edited);
     assert.equal(edited.sockets.length >= 1, true, 'saved layout ' + bad);
-    const grown = Number(ui.panes()[0].style.flexGrow || 0.5);
+    const grown = ui.panes().length > 1 ? partOf(ui.panes()[0].style.width) : 0.5;
     assert.ok(grown >= 0.2 && grown <= 0.8, 'saved layout ' + bad + ' made a share of ' + grown);
   }
   // Another project has its own layout: here, one pane offering to start a shell.

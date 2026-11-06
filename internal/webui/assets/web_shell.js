@@ -222,8 +222,14 @@
   // The panes in the order they appear. A shell is never in two of them: a second
   // connection would take it from the first.
   let panes = [focused];
-  let splitHandle = null;
-  let splitShare = 0.5; // How much of the panel the first pane has.
+  // Where they are: columns side by side, each holding panes one above another. A share
+  // is a part of what holds it, and the shares of its neighbors add up to one.
+  let columns = [{ share: 1, rows: [{ share: 1, pane: focused }] }];
+  const readingOrder = () => columns.flatMap((column) => column.rows.map((row) => row.pane));
+  const handles = [];
+  // Too narrow for screens side by side: everything stacks, and the columns stay as they
+  // are for a wider window.
+  const narrowWindow = window.matchMedia?.("(max-width: 720px)");
   const paneShowing = (id) => panes.find((pane) => pane.shown === id);
 
   const remember = (open) => {
@@ -402,7 +408,7 @@
       if (panes.length > 1) {
         sessionStorage.setItem(
           splitStorageKey(),
-          JSON.stringify({ shell: panes[1].shown, focused: focused === panes[1], share: splitShare }),
+          JSON.stringify({ shell: panes[1].shown, focused: focused === panes[1], share: columns[0].share }),
         );
       } else {
         sessionStorage.removeItem(splitStorageKey());
@@ -663,9 +669,14 @@
     else swapInto(showing);
   };
   // swapInto puts a pane where the focused one is. Only their places change: connecting
-  // again would replay both, and moving a screen in the page would lose its scrolling.
+  // again would replay both.
   const swapInto = (pane) => {
-    panes.reverse();
+    const slots = columns.flatMap((column) => column.rows);
+    const here = slots.find((slot) => slot.pane === focused);
+    const there = slots.find((slot) => slot.pane === pane);
+    here.pane = pane;
+    there.pane = focused;
+    panes = readingOrder();
     focusPane(pane);
     pane.term.focus();
   };
@@ -859,10 +870,14 @@
     if (shell) show(pane, shell.id);
   };
   // openPane adds the second pane, fitting both now so that each connects at its size.
-  const openPane = () => {
+  const openPane = (share = 0.5) => {
     const pane = newPane();
     buildPane(pane);
-    panes.push(pane);
+    columns = [
+      { share, rows: columns[0].rows },
+      { share: 1 - share, rows: [{ share: 1, pane }] },
+    ];
+    panes = readingOrder();
     applyLayout();
     openTerminal(pane);
     fitPanes();
@@ -881,7 +896,11 @@
     pane.observer.disconnect();
     pane.term.dispose();
     pane.element.remove();
-    panes = panes.filter((item) => item !== pane);
+    columns = columns
+      .map((column) => ({ ...column, rows: column.rows.filter((row) => row.pane !== pane) }))
+      .filter((column) => column.rows.length);
+    columns[0].share = 1;
+    panes = readingOrder();
     if (focused === pane) {
       focused = panes[0];
       focused.term.focus();
@@ -1039,8 +1058,7 @@
     const saved = other ? null : rememberedSplit();
     const beside = saved && inGroup.find((item) => item.id === saved.shell && item.id !== shell?.id);
     if (beside) {
-      splitShare = saved.share;
-      const opened = openPane();
+      const opened = openPane(saved.share);
       if (saved.focused) {
         moveSend(pane, opened);
         focusPane(opened);
@@ -1092,24 +1110,85 @@
     if (waiting.length) waiting.forEach((pane) => pane.whenVisible());
     else if (focused.term && !panel.hidden) refreshShells();
   });
-  // applyLayout places the panes. By order and share, not by moving them in the page, which
-  // would make browsers forget a screen's scrolling.
+  // percent writes a part of the panel for a style, and place sets where an element goes,
+  // keeping half a handle clear of each edge that has a neighbor.
+  const percent = (part) => Math.round(part * 1e6) / 1e4 + "%";
+  const inset = (start, hasBefore) => (hasBefore ? "calc(" + percent(start) + " + 3px)" : percent(start));
+  const span = (size, edges) => (edges ? "calc(" + percent(size) + " - " + edges * 3 + "px)" : percent(size));
+  const place = (element, box, before, after) => {
+    element.style.left = inset(box.x, before.x);
+    element.style.top = inset(box.y, before.y);
+    element.style.width = span(box.w, before.x + after.x);
+    element.style.height = span(box.h, before.y + after.y);
+  };
+  // applyLayout places the panes and the handles between them, by position alone: moving
+  // a screen in the page, as columns of their own elements would need, would make
+  // browsers forget its scrolling.
   const applyLayout = () => {
-    const split = panes.length > 1;
-    panesBox.classList.toggle("terminal-panes-split", split);
-    panes.forEach((pane, place) => {
-      pane.element.style.order = String(place * 2);
-      pane.element.style.flexGrow = split ? String(place ? 1 - splitShare : splitShare) : "";
-      pane.element.classList.toggle("terminal-pane-focused", pane === focused);
+    const stacked = Boolean(narrowWindow?.matches);
+    const boundaries = [];
+    let across = 0;
+    columns.forEach((column, c) => {
+      const lastColumn = c === columns.length - 1;
+      let down = 0;
+      column.rows.forEach((row, r) => {
+        const lastRow = r === column.rows.length - 1;
+        const box = stacked
+          ? { x: 0, y: across + down * column.share, w: 1, h: row.share * column.share }
+          : { x: across, y: down, w: column.share, h: row.share };
+        const before = stacked ? { x: 0, y: Number(c > 0 || r > 0) } : { x: Number(c > 0), y: Number(r > 0) };
+        const after = stacked ? { x: 0, y: Number(!lastColumn || !lastRow) } : { x: Number(!lastColumn), y: Number(!lastRow) };
+        place(row.pane.element, box, before, after);
+        row.pane.element.classList.toggle("terminal-pane-focused", row.pane === focused);
+        if (!lastRow) {
+          const scale = stacked ? column.share : 1;
+          const start = (stacked ? across : 0) + down * scale;
+          boundaries.push({
+            a: row,
+            b: column.rows[r + 1],
+            horizontal: true,
+            start,
+            scale,
+            at: start + row.share * scale,
+            from: stacked ? 0 : across,
+            size: stacked ? 1 : column.share,
+          });
+        }
+        down += row.share;
+      });
+      if (!lastColumn) {
+        boundaries.push({
+          a: column,
+          b: columns[c + 1],
+          horizontal: stacked,
+          start: across,
+          scale: 1,
+          at: across + column.share,
+          from: 0,
+          size: 1,
+        });
+      }
+      across += column.share;
     });
-    if (split && !splitHandle) {
-      splitHandle = buildSplitHandle();
-      panesBox.append(splitHandle);
-    } else if (!split && splitHandle) {
-      splitHandle.remove();
-      splitHandle = null;
-    }
-    splitHandle?.setAttribute("aria-valuenow", String(Math.round(splitShare * 100)));
+    panesBox.classList.toggle("terminal-panes-split", panes.length > 1);
+    while (handles.length > boundaries.length) handles.pop().remove();
+    boundaries.forEach((boundary, index) => {
+      if (!handles[index]) {
+        handles[index] = buildSplitHandle();
+        panesBox.append(handles[index]);
+      }
+      const handle = handles[index];
+      handle.boundary = boundary;
+      handle.classList.toggle("terminal-split-handle-rows", boundary.horizontal);
+      handle.setAttribute("aria-orientation", boundary.horizontal ? "horizontal" : "vertical");
+      handle.setAttribute("aria-valuenow", String(Math.round((boundary.a.share / (boundary.a.share + boundary.b.share)) * 100)));
+      const line = "calc(" + percent(boundary.at) + " - 3px)";
+      handle.style.left = boundary.horizontal ? percent(boundary.from) : line;
+      handle.style.top = boundary.horizontal ? line : percent(boundary.from);
+      handle.style.width = boundary.horizontal ? percent(boundary.size) : "6px";
+      handle.style.height = boundary.horizontal ? "6px" : percent(boundary.size);
+    });
+    const split = panes.length > 1;
     splitButton.textContent = split ? "Unsplit" : "Split";
     splitButton.title = split ? "Close the other pane; its shell keeps running" : "Show another shell beside this one";
     splitButton.setAttribute("aria-pressed", String(split));
@@ -1121,27 +1200,27 @@
     rememberLayout();
     renderTabs();
   };
-  const setShare = (share) => {
-    splitShare = clampShare(share);
+  // moveBoundary gives one neighbor a share, and the other what is left of the two.
+  const moveBoundary = ({ a, b }, share) => {
+    const both = a.share + b.share;
+    a.share = Math.max(minShare, Math.min(share, both - minShare));
+    b.share = both - a.share;
     applyLayout();
   };
   const buildSplitHandle = () => {
     const handle = document.createElement("div");
     handle.className = "terminal-split-handle";
     handle.tabIndex = 0;
-    handle.style.order = "1";
     handle.setAttribute("role", "separator");
-    handle.setAttribute("aria-orientation", "vertical");
     handle.setAttribute("aria-label", "Resize the panes");
-    // Narrow windows stack the panes, which web_shell.css decides.
-    const stacked = () => getComputedStyle(panesBox).flexDirection === "column";
     handle.onpointerdown = (event) => {
       event.preventDefault();
       handle.setPointerCapture?.(event.pointerId);
       handle.onpointermove = (move) => {
         const box = panesBox.getBoundingClientRect();
-        const share = stacked() ? (move.clientY - box.top) / box.height : (move.clientX - box.left) / box.width;
-        setShare(share);
+        const { boundary } = handle;
+        const part = boundary.horizontal ? (move.clientY - box.top) / box.height : (move.clientX - box.left) / box.width;
+        if (Number.isFinite(part)) moveBoundary(boundary, (part - boundary.start) / boundary.scale);
       };
       handle.onpointerup = handle.onpointercancel = () => {
         handle.onpointermove = handle.onpointerup = handle.onpointercancel = null;
@@ -1153,7 +1232,7 @@
       const step = { ArrowLeft: -0.05, ArrowUp: -0.05, ArrowRight: 0.05, ArrowDown: 0.05 }[event.key];
       if (!step) return;
       event.preventDefault();
-      setShare(splitShare + step);
+      moveBoundary(handle.boundary, handle.boundary.a.share + step);
       rememberLayout();
     };
     return handle;
@@ -1264,6 +1343,7 @@
     panel.append(buildResizer(), bar, panesBox);
     document.body.append(panel);
     applyLayout();
+    narrowWindow?.addEventListener?.("change", applyLayout);
   };
   // openTerminal gives a pane its screen, inside its viewport.
   const openTerminal = (pane) => {

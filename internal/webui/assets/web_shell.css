@@ -955,15 +955,15 @@ html.terminal-open.terminal-maximized .terminal-resizer {
 .terminal-spacer {
   flex: 1;
 }
+/* web_shell.js places what is inside by position, so that no screen moves in the page. */
 .terminal-panes {
-  display: flex;
+  position: relative;
   flex: 1;
   min-height: 0;
 }
 .terminal-pane {
-  position: relative;
+  position: absolute;
   display: flex;
-  flex: 1 1 0;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
@@ -977,7 +977,7 @@ html.terminal-open.terminal-maximized .terminal-resizer {
   border-top-color: var(--focus);
 }
 .terminal-split-handle {
-  flex: 0 0 6px;
+  position: absolute;
   background: var(--line-soft);
   cursor: col-resize;
   touch-action: none;
@@ -987,14 +987,8 @@ html.terminal-open.terminal-maximized .terminal-resizer {
   background: var(--line);
   outline: none;
 }
-/* Too narrow for two screens side by side. */
-@media (max-width: 720px) {
-  .terminal-panes-split {
-    flex-direction: column;
-  }
-  .terminal-split-handle {
-    cursor: row-resize;
-  }
+.terminal-split-handle-rows {
+  cursor: row-resize;
 }
 .terminal-viewport {
   flex: 1;
