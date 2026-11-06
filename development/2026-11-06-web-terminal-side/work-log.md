@@ -83,3 +83,17 @@
 **Validation:** The user tried the build with the top bar's fix and said it looks good. Which of the checks by hand they went through was not stated. `TestTerminalPanelInBrowser`'s checks at a side had still not run when this was pushed.
 
 **Remaining:** The result of CI on this push.
+
+## A panel at the bottom going back to its height
+
+**Commits:** 2026-11-06 16:34:05 `59bb8c58`.
+
+**Change:** In `web_shell.js`, the observer of the sidebar applies only the saved width, and only when the sidebar's width changes. `TestTerminalPanel` drags and presses a key at the bottom with observers firing, and `TestTerminalPanelInBrowser` measures the height after a key.
+
+**Reason:** The user reported that resizing the panel at the bottom worked only sometimes: it flashed and went back. `f99d7745` added the observer to reapply every saved size, and the sidebar's height follows a panel at the bottom, so each change set the panel back to the saved height. Whether a drag survived depended on the order of pointer moves and the observer, and a release could save the old height. This was pushed in `34a8551b`.
+
+**Plan impact:** None.
+
+**Validation:** The new test failed before the fix with `'300px' !== '400px'`, and passes after it. `go test ./...` passed on top of `4c81ccb1`, and `go vet ./...`, `gofmt`, and `tsc` found nothing. `TestTerminalPanelInBrowser` was skipped here for lack of Chrome, and the user trying it is the check in a real browser.
+
+**Remaining:** The user's look, then integrating and pushing, and CI's result for the browser checks at a side.
