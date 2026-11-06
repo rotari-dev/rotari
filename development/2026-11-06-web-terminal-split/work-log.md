@@ -54,4 +54,18 @@
 
 **Validation:** As for step 3, which ran on this text's code. `go test ./...` passed.
 
-**Remaining:** Integrating into `main`, once the panes have been tried in a browser.
+**Remaining:** None for this step; see the next entry.
+
+## Tried and integrated
+
+**Commits:** The entries above, moved onto `main` together with this one.
+
+**Change:** This plan's status and this log. No code.
+
+**Reason:** `main` was held back for the user's trial in a browser, since layout, focus, and dragging could not be seen here.
+
+**Plan impact:** All steps are done. Which of the hand checks the user went through was not stated; they reported only that the split worked.
+
+**Validation:** The user tried the build and said the split worked. `TestTerminalPanelInBrowser`'s split checks have still not run anywhere, since nothing here has Chrome and nothing has been pushed.
+
+**Remaining:** Those checks' first run on CI.

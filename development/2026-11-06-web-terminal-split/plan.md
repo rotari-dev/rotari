@@ -1,8 +1,8 @@
 # Plan: Split the Web terminal panel
 
 Created: 2026-11-06
-Status: Steps 1 to 4 are implemented, and no one has yet looked at the panes in a browser: layout and focus need the
-checks by hand under [Tests and validation](#tests-and-validation). See the [work log](work-log.md). Follows [the Web terminal plan](../2026-11-05-web-terminal/plan.md).
+Status: Steps 1 to 4 are implemented, and the user tried the panes in a browser and said they work. What remains is the
+first run of `TestTerminalPanelInBrowser`'s split checks on CI. See the [work log](work-log.md). Follows [the Web terminal plan](../2026-11-05-web-terminal/plan.md).
 
 ## Terms
 
@@ -66,7 +66,7 @@ but cannot do those across its panes from the page.
 
 ## Decisions
 
-The user was asked to review these and said to go on. How each looks is still to be tried.
+The user was asked to review these, said to go on, and then tried the result.
 
 1. **Two panes, side by side, at first.** No nesting. A tree of splits, as in the Table viewer, can follow once panes
    are objects, if anyone wants it.
@@ -94,7 +94,7 @@ The user was asked to review these and said to go on. How each looks is still to
 | A pane's shell is taken over by another browser tab | That pane says so and offers to take it back; the other is unaffected |
 | Following a link to another project | That project's layout, or one pane offering to start a shell |
 | **Unsplit** | The other pane closes and its shell keeps running. A command waiting for that pane is told |
-| A narrow window | Panes stack, under 720 pixels wide; to be looked at |
+| A narrow window | Panes stack, under 720 pixels wide |
 
 ## Steps
 
@@ -111,8 +111,7 @@ change to them in this step means behavior changed. Look at the diff before goin
 
 A focused pane, following xterm.js's input element. The status and action move from the bar into each pane, over the
 screen so that a message coming and going does not resize the shell, since two panes can need different messages, such
-as one taken over and one reconnecting. This was chosen without seeing it; the bar showing the focused pane's, with a
-mark on the other, remains the alternative if it looks wrong.
+as one taken over and one reconnecting. This was chosen without seeing it, and the user's trial raised no objection.
 
 ### Step 3: two panes
 
