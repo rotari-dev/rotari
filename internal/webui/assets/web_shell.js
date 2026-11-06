@@ -180,7 +180,7 @@
   // This script runs first.
   const rootFetch = window.fetch;
   const serverFetch = (...args) => rootFetch.apply(window, args);
-  let panel, status, retry, viewport, groups, tabs, add, maximize, term, fit, socket, retryTimer;
+  let panel, status, retry, groups, tabs, add, maximize;
   let shells = [];
   let shellLimit = 0;
   let groupLimit = 0;
@@ -189,17 +189,29 @@
   let groupsDrawn = "";
   let startAsked = false; // Someone opened the panel: start a shell if there is none.
   let newAsked = false; // Someone asked for a new shell here.
-  let pendingSend = null; // A command waiting for this page to connect to a shell.
-  let shown = null; // The ID of the shell this page shows.
   let listSerial = 0;
-  let connectSerial = 0;
-  let waitingToOpen = false;
   let endingHere = new Set(); // Shells this page asked to end, which need no telling.
-  let retryDelay = 1000;
-  // What to do when this tab next becomes visible: a tab nobody is looking at
-  // neither connects nor retries. Browsers make connections to a server wait for
-  // each other, and old tabs retrying would hold up the tab in use.
-  let whenVisible = null;
+  // newPane makes a place to show a shell: one terminal screen, and one connection to
+  // the shell it shows. All of a connection's state is its pane's own.
+  const newPane = () => ({
+    term: null,
+    fit: null,
+    viewport: null,
+    socket: null,
+    shown: null, // The ID of the shell this pane shows.
+    pendingSend: null, // A command waiting for this pane to connect to a shell.
+    connectSerial: 0,
+    waitingToOpen: false,
+    retryTimer: undefined,
+    retryDelay: 1000,
+    // What to do when this tab next becomes visible: a tab nobody is looking at
+    // neither connects nor retries. Browsers make connections to a server wait for
+    // each other, and old tabs retrying would hold up the tab in use.
+    whenVisible: null,
+  });
+  // What the bar's buttons and sending from the page act on. It exists before the panel
+  // does, since a command can wait for the panel to open. The panel has only this pane.
+  const focused = newPane();
 
   const remember = (open) => {
     try {
@@ -236,7 +248,7 @@
     try {
       localStorage.setItem(maximizedKey, maximized ? "1" : "0");
     } catch {}
-    term?.focus();
+    focused.term?.focus();
   };
   // A value someone edited or an older version left must not make the shell unreadable.
   const savedFontSize = () => {
@@ -247,6 +259,7 @@
     return defaultFontSize;
   };
   const changeFontSize = (step) => {
+    const { term, fit } = focused;
     term?.focus();
     if (!term) return;
     const size = term.options.fontSize + step;
@@ -294,7 +307,7 @@
     return colours;
   };
   const applyTheme = () => {
-    if (term) term.options.theme = theme();
+    if (focused.term) focused.term.options.theme = theme();
   };
   const fontFamily = () =>
     getComputedStyle(root).getPropertyValue("--font-mono").trim() || "monospace";
@@ -356,14 +369,14 @@
     retry.hidden = !action;
     retry.onclick = handler || null;
   };
-  const send = (data) => {
-    if (socket?.readyState === WebSocket.OPEN) socket.send(data);
+  const send = (pane, data) => {
+    if (pane.socket?.readyState === WebSocket.OPEN) pane.socket.send(data);
   };
   // Each project keeps its own last tab.
   const shownStorageKey = () => shownKey + ":" + here.basedir + ":" + here.project;
-  const rememberShown = () => {
+  const rememberShown = (pane) => {
     try {
-      sessionStorage.setItem(shownStorageKey(), shown);
+      sessionStorage.setItem(shownStorageKey(), pane.shown);
     } catch {}
   };
   const rememberedShown = () => {
@@ -450,10 +463,10 @@
     const noun = targets.length === 1 ? "shell" : targets.length + " shells";
     const running = targets.length === 1 ? "it" : "them";
     if (!confirm("End " + noun + ", and anything running in " + running + "?")) return;
-    const ordered = [...targets].sort((a, b) => (a.id === shown) - (b.id === shown));
+    const ordered = [...targets].sort((a, b) => (a.id === focused.shown) - (b.id === focused.shown));
     for (const shell of targets) endingHere.add(shell.id);
     for (const shell of ordered) {
-      if (shell.id === shown) await refreshShells();
+      if (shell.id === focused.shown) await refreshShells();
       let response;
       try {
         response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), { method: "DELETE" });
@@ -463,7 +476,7 @@
         return;
       }
     }
-    if (!targets.some((shell) => shell.id === shown)) await refreshShells();
+    if (!targets.some((shell) => shell.id === focused.shown)) await refreshShells();
   };
   // arrangeShells puts this project's shells in the order given, here at once and then on
   // the server, so that later pages and other browser tabs see it.
@@ -598,14 +611,14 @@
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && tabMenu) {
       closeTabMenu();
-      term?.focus();
+      focused.term?.focus();
     }
   });
   const renderTabs = () => {
     renderGroups();
     const inGroup = shellsHere();
     add.disabled = inGroup.length >= groupLimit || shells.length >= shellLimit;
-    const drawn = JSON.stringify([inGroup.map((shell) => [shell.id, shell.number, shell.name, shell.dir, shell.unseen_output]), shown]);
+    const drawn = JSON.stringify([inGroup.map((shell) => [shell.id, shell.number, shell.name, shell.dir, shell.unseen_output]), focused.shown]);
     // Drawing them again would take focus from a tab and move nothing.
     if (drawn === tabsDrawn || draggingShell) return;
     tabsDrawn = drawn;
@@ -615,12 +628,12 @@
         tab.className = "terminal-tab";
         tab.setAttribute("role", "presentation");
         // The shown tab is connected, whatever the list said a moment ago.
-        const unseen = Boolean(shell.unseen_output) && shell.id !== shown;
+        const unseen = Boolean(shell.unseen_output) && shell.id !== focused.shown;
         tab.classList.toggle("terminal-tab-unseen", unseen);
         const label = document.createElement("button");
         label.type = "button";
         label.setAttribute("role", "tab");
-        label.setAttribute("aria-selected", String(shell.id === shown));
+        label.setAttribute("aria-selected", String(shell.id === focused.shown));
         label.setAttribute(
           "aria-label",
           "Shell " + shell.number + (shell.name ? ", " + shell.name : "") + (unseen ? ", new output" : ""),
@@ -628,8 +641,8 @@
         label.title = (unseen ? "New output. " : "") + "Started in " + shell.dir;
         label.textContent = shell.name || String(shell.number);
         label.onclick = () => {
-          if (shell.id !== shown) show(shell.id);
-          else term.focus();
+          if (shell.id !== focused.shown) show(focused, shell.id);
+          else focused.term.focus();
         };
         const close = document.createElement("button");
         close.type = "button";
@@ -664,7 +677,7 @@
   const noteEndedShells = (now) => {
     const ended = shells.filter(
       (shell) =>
-        shell.id !== shown &&
+        shell.id !== focused.shown &&
         !endingHere.has(shell.id) &&
         !now.some((other) => other.id === shell.id),
     );
@@ -690,113 +703,115 @@
     }
     return { ok: true };
   };
-  // connect attaches to the shown shell. Reconnecting by itself passes takeOver false,
+  // connect attaches a pane to its shell. Reconnecting by itself passes takeOver false,
   // so it cannot take the shell from a tab in use; only someone opening a page or
   // pressing a button does that.
-  const connect = (takeOver = true) => {
-    clearTimeout(retryTimer);
-    whenVisible = null;
+  const connect = (pane, takeOver = true) => {
+    clearTimeout(pane.retryTimer);
+    pane.whenVisible = null;
     panel.classList.remove("terminal-empty");
-    const previous = socket;
-    socket = null;
+    const previous = pane.socket;
+    pane.socket = null;
     previous?.close();
     showStatus("Connecting...");
-    const serial = ++connectSerial;
-    waitingToOpen = true;
+    const serial = ++pane.connectSerial;
+    pane.waitingToOpen = true;
     // xterm.js parses what it has been given later, and reset leaves that waiting, so a
     // fast program's output would land on the next shell's screen. Wait for it to finish.
-    term.write("", () => {
-      if (serial !== connectSerial) return;
-      waitingToOpen = false;
-      open(takeOver);
+    pane.term.write("", () => {
+      if (serial !== pane.connectSerial) return;
+      pane.waitingToOpen = false;
+      open(pane, takeOver);
     });
   };
-  const open = (takeOver) => {
+  const open = (pane, takeOver) => {
+    const { term } = pane;
     // Replay brings the screen back, so what is here would appear twice.
     term.reset();
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
     const current = new WebSocket(
-      scheme + "//" + location.host + "/_terminal/ws?shell=" + encodeURIComponent(shown) + "&rows=" + term.rows + "&cols=" + term.cols + (takeOver ? "" : "&takeover=0"),
+      scheme + "//" + location.host + "/_terminal/ws?shell=" + encodeURIComponent(pane.shown) + "&rows=" + term.rows + "&cols=" + term.cols + (takeOver ? "" : "&takeover=0"),
     );
-    socket = current;
+    pane.socket = current;
     current.binaryType = "arraybuffer";
     current.onopen = () => {
-      if (socket !== current) return;
-      retryDelay = 1000;
+      if (pane.socket !== current) return;
+      pane.retryDelay = 1000;
       // A login shell can take a while to read its profile.
       showStatus("Waiting for the shell...");
     };
     current.onmessage = (event) => {
       // Closing leaves what was already on its way, which is another shell's output now.
-      if (socket !== current) return;
+      if (pane.socket !== current) return;
       showStatus("");
       // After the replay, so that it lands at the end of what is on screen.
-      term.write(new Uint8Array(event.data), pendingSend ? deliverSend : undefined);
+      term.write(new Uint8Array(event.data), pane.pendingSend ? () => deliverSend(pane) : undefined);
     };
     current.onclose = (event) => {
-      if (socket !== current) return;
-      socket = null;
+      if (pane.socket !== current) return;
+      pane.socket = null;
       settleSend(
+        pane,
         event.code === closeTakenOver
           ? "Another browser tab is using this shell, so nothing was sent."
           : "The terminal lost its connection, so nothing was sent.",
       );
       if (event.code === closeTakenOver) {
-        showStatus("Another tab has this terminal.", "Use it here", () => connect());
+        showStatus("Another tab has this terminal.", "Use it here", () => connect(pane));
       } else if (event.code === closeExited) {
-        shellGone("The shell ended: " + event.reason + ".");
+        shellGone(pane, "The shell ended: " + event.reason + ".");
       } else if (event.code === closeNoShell) {
-        shellGone("The shell has ended.");
+        shellGone(pane, "The shell has ended.");
       } else if (event.code === closeFailed) {
-        showStatus("The shell could not be shown: " + event.reason, "Try again", () => connect());
+        showStatus("The shell could not be shown: " + event.reason, "Try again", () => connect(pane));
       } else {
-        reconnect();
+        reconnect(pane);
       }
     };
   };
-  const show = (id, takeOver = true) => {
-    shown = id;
-    rememberShown();
+  const show = (pane, id, takeOver = true) => {
+    pane.shown = id;
+    rememberShown(pane);
     renderTabs();
-    connect(takeOver);
-    term.focus();
+    connect(pane, takeOver);
+    pane.term.focus();
   };
-  const newShell = async () => {
-    clearTimeout(retryTimer);
+  const newShell = async (pane) => {
+    clearTimeout(pane.retryTimer);
     showStatus("Starting a shell...");
     let response;
     try {
       const place = pagePlace();
-      response = await serverFetch(shellsPath + "?rows=" + term.rows + "&cols=" + term.cols + (place && "&" + place), { method: "POST" });
+      response = await serverFetch(shellsPath + "?rows=" + pane.term.rows + "&cols=" + pane.term.cols + (place && "&" + place), { method: "POST" });
     } catch {}
     if (!response?.ok) {
-      await refusal(response, "The shell did not start", newShell);
+      await refusal(response, "The shell did not start", () => newShell(pane));
       return;
     }
     const shell = await response.json();
     listSerial++;
     shells = [...shells, shell];
-    show(shell.id);
+    show(pane, shell.id);
   };
-  // The shown shell has ended. The screen stays if there is nothing to show instead,
+  // A pane's shell has ended. The screen stays if there is nothing to show instead,
   // and a new shell is a choice: it may have been the last thing wanted.
-  const shellGone = async (message) => {
+  const shellGone = async (pane, message) => {
     const before = shellsHere();
-    const place = before.findIndex((shell) => shell.id === shown);
-    const gone = shown;
-    shown = null;
+    const place = before.findIndex((shell) => shell.id === pane.shown);
+    const gone = pane.shown;
+    pane.shown = null;
     shells = shells.filter((shell) => shell.id !== gone);
     renderTabs();
-    showStatus(message, "New shell", newShell);
+    showStatus(message, "New shell", () => newShell(pane));
     const { response, ok } = await refreshShells();
     if (!ok) {
       signInGone(response);
       return;
     }
-    if (shown !== null) return; // Someone chose meanwhile.
+    if (pane.shown !== null) return; // Someone chose meanwhile.
     const left = shellsHere();
     const next = left[Math.min(Math.max(place, 0), left.length - 1)];
-    if (next) show(next.id, false);
+    if (next) show(pane, next.id, false);
   };
   const endShell = async (shell) => {
     if (!confirm("End shell " + shell.number + ", and anything running in it?")) return;
@@ -810,43 +825,44 @@
       return;
     }
     // The shown shell's connection closes, which moves on to another.
-    if (shell.id !== shown) await refreshShells();
+    if (shell.id !== focused.shown) await refreshShells();
   };
   const noShellMessage = () =>
     (here.project ? "No shell for " + here.project + "." : "No shell here.") +
     " Open the terminal to start one.";
-  const settleSend = (problem) => {
-    if (!pendingSend) return;
-    const { resolve, timer } = pendingSend;
+  const settleSend = (pane, problem) => {
+    if (!pane.pendingSend) return;
+    const { resolve, timer } = pane.pendingSend;
     clearTimeout(timer);
-    pendingSend = null;
+    pane.pendingSend = null;
     resolve(problem);
   };
   // Several lines are safe only where the program takes them as pasted text; anywhere
   // else, each line break would run what came before it. Only the program knows, and it
   // says so by turning on bracketed paste.
-  const pasteProblem = (text) =>
-    text.includes("\n") && !term.modes.bracketedPasteMode
+  const pasteProblem = (pane, text) =>
+    text.includes("\n") && !pane.term.modes.bracketedPasteMode
       ? "What is running in this tab would run each line, so nothing was sent."
       : null;
-  const deliverSend = () => {
-    if (!pendingSend) return;
-    const problem = pasteProblem(pendingSend.text);
+  const deliverSend = (pane) => {
+    if (!pane.pendingSend) return;
+    const problem = pasteProblem(pane, pane.pendingSend.text);
     if (!problem) {
-      term.paste(pendingSend.text);
-      term.focus();
+      pane.term.paste(pane.pendingSend.text);
+      pane.term.focus();
     }
-    settleSend(problem);
+    settleSend(pane, problem);
   };
   // begin shows what this browser tab last showed for this project, or the project's
   // first shell. It starts one only if someone asked.
   const begin = async (takeOver = true) => {
-    whenVisible = null;
+    const pane = focused;
+    pane.whenVisible = null;
     showStatus("Connecting...");
     // Someone sending a command has not asked to take a shell from another browser tab.
-    if (pendingSend) takeOver = false;
+    if (pane.pendingSend) takeOver = false;
     const listFailed = (response) => {
-      settleSend("The shells could not be listed, so nothing was sent.");
+      settleSend(pane, "The shells could not be listed, so nothing was sent.");
       return refusal(response, "The shells could not be listed", () => begin());
     };
     let refused;
@@ -869,33 +885,33 @@
     const mayStart = startAsked;
     newAsked = startAsked = false;
     if (wantsNew) {
-      await newShell();
+      await newShell(pane);
       return;
     }
     const inGroup = shellsHere();
     const wanted = rememberedShown();
     const shell = inGroup.find((item) => item.id === wanted) || inGroup[0];
-    if (shell) show(shell.id, takeOver);
-    else if (mayStart) await newShell();
+    if (shell) show(pane, shell.id, takeOver);
+    else if (mayStart) await newShell(pane);
     else {
-      settleSend(noShellMessage());
+      settleSend(pane, noShellMessage());
       renderTabs();
       panel.classList.add("terminal-empty");
       showStatus(
         here.project ? "No shell for " + here.project + " yet." : "No shell here yet.",
         "Start a shell",
-        newShell,
+        () => newShell(pane),
       );
     }
   };
-  const reconnect = () => {
+  const reconnect = (pane) => {
     if (document.hidden) {
       showStatus("Disconnected.");
-      whenVisible = reconnect;
+      pane.whenVisible = () => reconnect(pane);
       return;
     }
     showStatus("Reconnecting...");
-    retryTimer = setTimeout(async () => {
+    pane.retryTimer = setTimeout(async () => {
       // A refused WebSocket does not say why, so ask with a plain request. After
       // the server restarts the sign-in is gone, and retrying can never succeed.
       let response;
@@ -903,19 +919,19 @@
         response = await serverFetch("/_terminal/xterm-license.txt", { method: "HEAD" });
       } catch {}
       if (signInGone(response)) return;
-      if (document.hidden) reconnect();
-      else if (response?.ok) connect(false);
+      if (document.hidden) reconnect(pane);
+      else if (response?.ok) connect(pane, false);
       else {
-        retryDelay = Math.min(retryDelay * 2, 10000);
-        reconnect();
+        pane.retryDelay = Math.min(pane.retryDelay * 2, 10000);
+        reconnect(pane);
       }
-    }, retryDelay);
-    retryDelay = Math.min(retryDelay * 2, 10000);
+    }, pane.retryDelay);
+    pane.retryDelay = Math.min(pane.retryDelay * 2, 10000);
   };
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
-    if (whenVisible) whenVisible();
-    else if (term && !panel.hidden) refreshShells();
+    if (focused.whenVisible) focused.whenVisible();
+    else if (focused.term && !panel.hidden) refreshShells();
   });
   const build = () => {
     panel = document.createElement("section");
@@ -949,7 +965,7 @@
     add.className = "terminal-add";
     add.setAttribute("aria-label", "New shell");
     add.textContent = "+";
-    add.onclick = () => newShell();
+    add.onclick = () => newShell(focused);
     add.onpointerenter = () => refreshHere().catch(() => {});
     const spacer = document.createElement("span");
     spacer.className = "terminal-spacer";
@@ -958,6 +974,7 @@
     clear.textContent = "Clear";
     clear.title = "Clear this shell's screen and scrollback, here and on the server";
     clear.onclick = () => {
+      const { term, socket } = focused;
       term?.focus();
       // Not connected, the server would bring it all back.
       if (socket?.readyState !== WebSocket.OPEN) return;
@@ -971,7 +988,7 @@
         return;
       }
       term.clear();
-      send(JSON.stringify({ type: "clear" }));
+      send(focused, JSON.stringify({ type: "clear" }));
     };
     maximize = document.createElement("button");
     maximize.type = "button";
@@ -995,10 +1012,40 @@
       maximize,
       hide,
     );
-    viewport = document.createElement("div");
-    viewport.className = "terminal-viewport";
-    panel.append(buildResizer(), bar, viewport);
+    focused.viewport = document.createElement("div");
+    focused.viewport.className = "terminal-viewport";
+    panel.append(buildResizer(), bar, focused.viewport);
     document.body.append(panel);
+  };
+  // openTerminal gives a pane its screen, inside its viewport.
+  const openTerminal = (pane) => {
+    const { viewport } = pane;
+    const term = new window.Terminal({
+      cursorBlink: true,
+      fontFamily: fontFamily(),
+      fontSize: savedFontSize(),
+      theme: theme(),
+    });
+    const fit = new window.FitAddon.FitAddon();
+    pane.term = term;
+    pane.fit = fit;
+    term.loadAddon(fit);
+    // A link is only text a program printed, so the new tab gets no hold on this page.
+    term.loadAddon(
+      new window.WebLinksAddon.WebLinksAddon((_, uri) => window.open(uri, "_blank", "noopener")),
+    );
+    term.open(viewport);
+    fit.fit();
+    term.onData((data) => send(pane, new TextEncoder().encode(data)));
+    term.onBinary((data) =>
+      send(pane, Uint8Array.from(data, (character) => character.charCodeAt(0))),
+    );
+    term.onResize(({ rows, cols }) =>
+      send(pane, JSON.stringify({ type: "resize", rows, cols })),
+    );
+    new ResizeObserver(() => {
+      if (!panel.hidden) fit.fit();
+    }).observe(viewport);
   };
   const start = async () => {
     build();
@@ -1007,33 +1054,10 @@
       await loadAssets();
     } catch (error) {
       showStatus(error.message);
-      settleSend(error.message);
+      settleSend(focused, error.message);
       return;
     }
-    term = new window.Terminal({
-      cursorBlink: true,
-      fontFamily: fontFamily(),
-      fontSize: savedFontSize(),
-      theme: theme(),
-    });
-    fit = new window.FitAddon.FitAddon();
-    term.loadAddon(fit);
-    // A link is only text a program printed, so the new tab gets no hold on this page.
-    term.loadAddon(
-      new window.WebLinksAddon.WebLinksAddon((_, uri) => window.open(uri, "_blank", "noopener")),
-    );
-    term.open(viewport);
-    fit.fit();
-    term.onData((data) => send(new TextEncoder().encode(data)));
-    term.onBinary((data) =>
-      send(Uint8Array.from(data, (character) => character.charCodeAt(0))),
-    );
-    term.onResize(({ rows, cols }) =>
-      send(JSON.stringify({ type: "resize", rows, cols })),
-    );
-    new ResizeObserver(() => {
-      if (!panel.hidden) fit.fit();
-    }).observe(viewport);
+    openTerminal(focused);
     // The theme can change by the viewer's choice or by the system's.
     new MutationObserver(applyTheme).observe(root, {
       attributes: true,
@@ -1042,19 +1066,19 @@
     matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", applyTheme);
     // A font that arrives late changes the size of every cell.
     document.fonts?.ready.then(() => {
-      term.options.fontFamily = fontFamily();
-      fit.fit();
+      focused.term.options.fontFamily = fontFamily();
+      focused.fit.fit();
     });
     // A page opened in the background waits to be looked at before taking a shell.
     if (document.hidden) {
       showStatus("Waiting for this tab to be shown.");
-      whenVisible = () => begin();
+      focused.whenVisible = () => begin();
     } else {
       await begin();
     }
-    term.focus();
+    focused.term.focus();
     setInterval(() => {
-      if (!document.hidden && !panel.hidden && !whenVisible) refreshShells();
+      if (!document.hidden && !panel.hidden && !focused.whenVisible) refreshShells();
     }, shellsRefresh);
   };
   const setOpen = (open) => {
@@ -1068,16 +1092,16 @@
         start().catch((error) => {
           console.error(error);
           showStatus("The terminal could not start: " + error.message);
-          settleSend("The terminal could not start: " + error.message);
+          settleSend(focused, "The terminal could not start: " + error.message);
         });
       return;
     }
     panel.hidden = !open;
-    if (open && term) {
-      fit.fit();
-      term.focus();
+    if (open && focused.term) {
+      focused.fit.fit();
+      focused.term.focus();
       // Opened again with nothing to show, or asked for a new shell.
-      if (newAsked || (startAsked && shown === null)) begin();
+      if (newAsked || (startAsked && focused.shown === null)) begin();
     }
   };
   window.toggleTerminalPanel = () => {
@@ -1121,7 +1145,10 @@
       return "This command has control characters, so it was not sent.";
     }
     if (!text) return "There is nothing to send.";
-    if (pendingSend) return "The terminal is still connecting.";
+    return sendToPane(focused, text);
+  };
+  const sendToPane = async (pane, text) => {
+    if (pane.pendingSend) return "The terminal is still connecting.";
     let refused, listed;
     try {
       refused = await refreshHere();
@@ -1135,30 +1162,30 @@
     }
     const inGroup = shellsHere();
     if (!inGroup.length) return noShellMessage();
-    const showing = term && inGroup.some((shell) => shell.id === shown);
+    const showing = pane.term && inGroup.some((shell) => shell.id === pane.shown);
     // Between connect and open, it is only waiting for the old output to finish.
-    if (showing && !socket && !waitingToOpen) {
+    if (showing && !pane.socket && !pane.waitingToOpen) {
       setOpen(true);
       return "This page is not connected to the shell, so nothing was sent.";
     }
-    if (showing && socket?.readyState === WebSocket.OPEN) {
+    if (showing && pane.socket?.readyState === WebSocket.OPEN) {
       setOpen(true);
-      const problem = pasteProblem(text);
+      const problem = pasteProblem(pane, text);
       if (problem) return problem;
-      term.paste(text);
-      term.focus();
+      pane.term.paste(text);
+      pane.term.focus();
       return null;
     }
     const waiting = new Promise((resolve) => {
-      pendingSend = {
+      pane.pendingSend = {
         text,
         resolve,
-        timer: setTimeout(() => settleSend("The terminal did not connect, so nothing was sent."), 15000),
+        timer: setTimeout(() => settleSend(pane, "The terminal did not connect, so nothing was sent."), 15000),
       };
     });
     setOpen(true);
     // A panel already showing nothing has no shell to wait for until it looks again.
-    if (term && !showing) begin();
+    if (pane.term && !showing) begin();
     return waiting;
   };
   // A value goes in as one word of a command, so one that needs quoting gets it.
