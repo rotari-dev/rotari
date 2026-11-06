@@ -336,6 +336,13 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the panel back at the left', 'document.documentElement.dataset.terminalPlace === "left"');
   await choosePlace('Bottom');
   await until('the panel at the bottom', 'document.documentElement.dataset.terminalPlace === undefined');
+  // Its height stays where it is put, though the sidebar's follows it and is watched.
+  const panelHeight = 'document.getElementById("terminal-panel").getBoundingClientRect().height';
+  const heightBefore = await page.evaluate(panelHeight);
+  await page.evaluate('document.querySelector(".terminal-resizer").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }))');
+  await sleep(300);
+  const heightAfter = await page.evaluate(panelHeight);
+  if (Math.abs(heightAfter - heightBefore - 24) > 1) throw new Error('the panel did not keep its height: ' + heightBefore + ' then ' + heightAfter);
   await collect();
 }).catch((error) => { failure = error.stack || String(error); });
 await close();

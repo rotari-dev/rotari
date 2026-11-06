@@ -1862,6 +1862,22 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   besideSidebar.server.observers.forEach((observer) => observer());
   assert.equal(sideRoom(besideSidebar), '324px');
   assert.equal(besideSidebar.window.localStorage.getItem('rotari-terminal-width'), '99999', 'the choice was lost to the room');
+  // The sidebar's height follows a panel at the bottom, which must not put the panel's size back.
+  const bottomDrag = load(process.argv[1], { stored: '1', height: '300', shells: [plain('1', 1)] });
+  await wait(30);
+  const bottomEdge = bottomDrag.document.querySelector('.terminal-resizer');
+  const bottomHeight = () => bottomDrag.document.documentElement.style.getPropertyValue('--terminal-saved-height');
+  bottomDrag.document.getElementById('terminal-panel').getBoundingClientRect = () => ({ height: 300 });
+  bottomEdge.onpointerdown({ preventDefault() {}, clientY: 500, pointerId: 1 });
+  bottomEdge.onpointermove({ clientY: 400 });
+  bottomDrag.server.observers.forEach((observer) => observer());
+  assert.equal(bottomHeight(), '400px', 'the panel went back to its saved height during a drag');
+  bottomDrag.document.getElementById('terminal-panel').getBoundingClientRect = () => ({ height: parseInt(bottomHeight(), 10) });
+  bottomEdge.onpointerup();
+  assert.equal(bottomDrag.window.localStorage.getItem('rotari-terminal-height'), '400', 'the drag was not kept');
+  bottomEdge.onkeydown({ key: 'ArrowUp', preventDefault() {} });
+  bottomDrag.server.observers.forEach((observer) => observer());
+  assert.equal(bottomHeight(), '424px', 'the panel went back to its saved height after a key');
   // The top bar is over the panel, so it wraps rather than running under it.
   assert.match(webShellCSS, /\[data-terminal-place\] \.content > \.topbar,\s*html\.terminal-open\[data-terminal-place\] \.content > \.topbar \.toolbar \{\s*flex-wrap: wrap;/);
   assert.equal(sideRoom(load(process.argv[1], { place: 'left', width: '5' })), '320px');

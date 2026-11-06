@@ -1815,8 +1815,17 @@
       sayAlive();
       setInterval(sayAlive, aliveInterval);
       applySavedSizes();
+      // Only its width matters. Its height follows a panel at the bottom, so answering that
+      // would put the panel back to its saved height while someone drags it.
       const sidebar = document.querySelector(".sidebar");
-      if (sidebar) new ResizeObserver(applySavedSizes).observe(sidebar);
+      if (sidebar) {
+        let measured = sidebar.offsetWidth;
+        new ResizeObserver(() => {
+          if (sidebar.offsetWidth === measured) return;
+          measured = sidebar.offsetWidth;
+          if (savedSize("width")) applySize("width", savedSize("width"));
+        }).observe(sidebar);
+      }
       setInterval(() => {
         if (!document.hidden && !panes.some((pane) => pane.whenVisible)) refreshShells();
       }, shellsRefresh);
