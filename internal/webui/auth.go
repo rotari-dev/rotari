@@ -26,6 +26,38 @@ type webSessions struct {
 	expiries map[string]time.Time
 }
 
+// AuthEvent is one allow-listed authentication decision. It intentionally
+// has no URL, credential, cookie value, headers, or client address fields.
+type AuthEvent struct {
+	Event        string
+	Outcome      string
+	Transport    string
+	Cookie       string
+	CookieSecure *bool
+	UserAgent    string
+}
+
+// AuthRecorder receives authentication decisions without learning any
+// credential or request details beyond the bounded user agent.
+type AuthRecorder interface {
+	RecordAuthEvent(AuthEvent)
+}
+
+// AuthOptions supplies optional authentication hooks.
+type AuthOptions struct {
+	Recorder  AuthRecorder
+	OnSignOut []func()
+}
+
+type sessionDecision string
+
+const (
+	sessionAccepted sessionDecision = "accepted"
+	sessionAbsent   sessionDecision = "absent"
+	sessionUnknown  sessionDecision = "unknown"
+	sessionExpired  sessionDecision = "expired"
+)
+
 func (sessions *webSessions) issue(writer http.ResponseWriter, request *http.Request) bool {
 	var id [32]byte
 	if _, err := rand.Read(id[:]); err != nil {
@@ -61,22 +93,26 @@ func (sessions *webSessions) issue(writer http.ResponseWriter, request *http.Req
 	return true
 }
 
-func (sessions *webSessions) accepts(request *http.Request, now time.Time) bool {
+func (sessions *webSessions) decision(request *http.Request, now time.Time) sessionDecision {
 	cookie, err := request.Cookie(webSessionCookie)
 	if err != nil {
-		return false
+		return sessionAbsent
 	}
 	sessions.mu.Lock()
 	defer sessions.mu.Unlock()
 	expires, ok := sessions.expiries[cookie.Value]
 	if !ok {
-		return false
+		return sessionUnknown
 	}
 	if !now.Before(expires) {
 		delete(sessions.expiries, cookie.Value)
-		return false
+		return sessionExpired
 	}
-	return true
+	return sessionAccepted
+}
+
+func (sessions *webSessions) accepts(request *http.Request, now time.Time) bool {
+	return sessions.decision(request, now) == sessionAccepted
 }
 
 func (sessions *webSessions) revoke(request *http.Request) {
@@ -90,14 +126,13 @@ func (sessions *webSessions) revoke(request *http.Request) {
 }
 
 // WithAuthToken protects the Web UI with an interactive login session and
-// accepts bearer or X-Rotari-Token credentials for API clients. onSignOut, if
-// given, runs when a browser signs out.
-func WithAuthToken(next http.Handler, token string, onSignOut ...func()) http.Handler {
+// accepts bearer or X-Rotari-Token credentials for API clients.
+func WithAuthToken(next http.Handler, token string, options AuthOptions) http.Handler {
 	sessions := &webSessions{}
 	launchSession := launchAuth{key: []byte(rand.Text())}
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path == webLoginPath {
-			handleWebLogin(writer, request, token, sessions)
+			handleWebLogin(writer, request, token, sessions, options.Recorder)
 			return
 		}
 
@@ -107,7 +142,14 @@ func WithAuthToken(next http.Handler, token string, onSignOut ...func()) http.Ha
 		}
 		tokenAuthenticated := len(provided) == len(token) &&
 			subtle.ConstantTimeCompare([]byte(provided), []byte(token)) == 1
-		sessionAuthenticated := allowsBrowserSession(request) && sessions.accepts(request, time.Now())
+		if provided != "" && !tokenAuthenticated {
+			recordAuth(options.Recorder, AuthEvent{Event: "credential_rejected", Transport: authTransport(request)})
+		}
+		sessionDecision := sessionDecision("transport_refused")
+		if allowsBrowserSession(request) {
+			sessionDecision = sessions.decision(request, time.Now())
+		}
+		sessionAuthenticated := sessionDecision == sessionAccepted
 		launchRequest := strings.HasPrefix(request.URL.Path, launchProxyPrefix)
 		launchSessionAuthenticated := launchRequest && launchSession.accepts(request, time.Now())
 		authenticated := tokenAuthenticated || sessionAuthenticated || launchSessionAuthenticated
@@ -117,11 +159,12 @@ func WithAuthToken(next http.Handler, token string, onSignOut ...func()) http.Ha
 				http.Error(writer, "authentication required", http.StatusUnauthorized)
 				return
 			}
-			handleWebLogout(writer, request, sessions, onSignOut)
+			handleWebLogout(writer, request, sessions, options)
 			return
 		}
 		if !authenticated {
 			if isHTMLNavigation(request) {
+				recordAuth(options.Recorder, AuthEvent{Event: "session_missing", Cookie: string(sessionDecision), Transport: authTransport(request), UserAgent: boundedUserAgent(request)})
 				nextPath := request.URL.RequestURI()
 				noCacheAuthResponse(writer)
 				http.Redirect(writer, request, webLoginPath+"?next="+url.QueryEscape(nextPath), http.StatusSeeOther)
@@ -143,9 +186,10 @@ func WithAuthToken(next http.Handler, token string, onSignOut ...func()) http.Ha
 	})
 }
 
-func handleWebLogin(writer http.ResponseWriter, request *http.Request, token string, sessions *webSessions) {
+func handleWebLogin(writer http.ResponseWriter, request *http.Request, token string, sessions *webSessions, recorder AuthRecorder) {
 	noCacheAuthResponse(writer)
 	if !allowsBrowserSession(request) {
+		recordAuth(recorder, AuthEvent{Event: "sign_in_refused", Transport: authTransport(request), UserAgent: boundedUserAgent(request)})
 		http.Error(writer, "browser login requires HTTPS or a direct connection to localhost", http.StatusForbidden)
 		return
 	}
@@ -159,11 +203,13 @@ func handleWebLogin(writer http.ResponseWriter, request *http.Request, token str
 		serveWebLoginPage(writer, nextPath, "")
 	case http.MethodPost:
 		if !sameOriginFormPost(request) {
+			recordAuth(recorder, AuthEvent{Event: "sign_in", Outcome: "cross_origin", Transport: authTransport(request), UserAgent: boundedUserAgent(request)})
 			http.Error(writer, "login request must be same-origin", http.StatusForbidden)
 			return
 		}
 		request.Body = http.MaxBytesReader(writer, request.Body, 8*1024)
 		if err := request.ParseForm(); err != nil {
+			recordAuth(recorder, AuthEvent{Event: "sign_in", Outcome: "malformed", Transport: authTransport(request), UserAgent: boundedUserAgent(request)})
 			serveWebLoginPageStatus(writer, nextPath, "Sign-in failed. Check your user name and token.", http.StatusBadRequest)
 			return
 		}
@@ -173,12 +219,15 @@ func handleWebLogin(writer http.ResponseWriter, request *http.Request, token str
 		validPassword := len(password) == len(token) &&
 			subtle.ConstantTimeCompare([]byte(password), []byte(token)) == 1
 		if username != "rotari" || !validPassword {
+			recordAuth(recorder, AuthEvent{Event: "sign_in", Outcome: "wrong_credentials", Transport: authTransport(request), UserAgent: boundedUserAgent(request)})
 			serveWebLoginPageStatus(writer, nextPath, "Sign-in failed. Check your user name and token.", http.StatusUnauthorized)
 			return
 		}
 		if !sessions.issue(writer, request) {
 			return
 		}
+		secure := isSecureAuthRequest(request)
+		recordAuth(recorder, AuthEvent{Event: "sign_in", Outcome: "accepted", Transport: authTransport(request), CookieSecure: &secure, UserAgent: boundedUserAgent(request)})
 		http.Redirect(writer, request, nextPath, http.StatusSeeOther)
 	default:
 		writer.Header().Set("Allow", "GET, HEAD, POST")
@@ -186,7 +235,7 @@ func handleWebLogin(writer http.ResponseWriter, request *http.Request, token str
 	}
 }
 
-func handleWebLogout(writer http.ResponseWriter, request *http.Request, sessions *webSessions, onSignOut []func()) {
+func handleWebLogout(writer http.ResponseWriter, request *http.Request, sessions *webSessions, options AuthOptions) {
 	noCacheAuthResponse(writer)
 	if request.Method != http.MethodPost {
 		writer.Header().Set("Allow", http.MethodPost)
@@ -198,7 +247,7 @@ func handleWebLogout(writer http.ResponseWriter, request *http.Request, sessions
 		return
 	}
 	sessions.revoke(request)
-	for _, signedOut := range onSignOut {
+	for _, signedOut := range options.OnSignOut {
 		signedOut()
 	}
 	http.SetCookie(writer, &http.Cookie{ // NOSONAR: this expires the cookie, so Secure must match how it was issued; a browser refuses to clear a Secure cookie over plain HTTP.
@@ -221,7 +270,35 @@ func handleWebLogout(writer http.ResponseWriter, request *http.Request, sessions
 		Secure:   isSecureAuthRequest(request),
 		SameSite: http.SameSiteStrictMode,
 	})
+	recordAuth(options.Recorder, AuthEvent{Event: "sign_out", Transport: authTransport(request), UserAgent: boundedUserAgent(request)})
 	http.Redirect(writer, request, webLoginPath, http.StatusSeeOther)
+}
+
+func recordAuth(recorder AuthRecorder, event AuthEvent) {
+	if recorder != nil {
+		recorder.RecordAuthEvent(event)
+	}
+}
+
+func boundedUserAgent(request *http.Request) string {
+	value := []byte(request.UserAgent())
+	if len(value) > 256 {
+		value = value[:256]
+	}
+	return string(value)
+}
+
+func authTransport(request *http.Request) string {
+	if isDirectLoopbackRequest(request) {
+		return "direct_loopback"
+	}
+	if request.TLS != nil {
+		return "https"
+	}
+	if strings.EqualFold(strings.TrimSpace(request.Header.Get("X-Forwarded-Proto")), "https") {
+		return "forwarded_https"
+	}
+	return "other"
 }
 
 func sameOriginFormPost(request *http.Request) bool {

@@ -1,8 +1,9 @@
 # Plan: Web sign-in and startup evidence in `rotari bug-report`
 
 Created: 2026-11-05
-Status: Not started. Implementation is expected in another thread. The decisions below are
-proposals the user has not reviewed one by one; raise any that do not hold up in the code.
+Status: Implemented in the working copy. The independent agent check remains to be run from a
+deliberately regressed temporary workspace; all product, contract, documentation, and automated
+test work below is complete.
 
 ## Goal
 

@@ -41,7 +41,7 @@ func terminalServer(t *testing.T, shell string) (*httptest.Server, *terminal.Kee
 	}
 	t.Cleanup(keeper.Close)
 	handler := Handler(Options{BaseDir: t.TempDir(), Terminal: keeper})
-	server := httptest.NewServer(WithExecGuard(WithAuthToken(handler, terminalTestToken, keeper.EndAll), nil))
+	server := httptest.NewServer(WithExecGuard(WithAuthToken(handler, terminalTestToken, AuthOptions{OnSignOut: []func(){keeper.EndAll}}), nil))
 	t.Cleanup(server.Close)
 	return server, keeper
 }

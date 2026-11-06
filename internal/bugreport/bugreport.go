@@ -3,6 +3,7 @@ package bugreport
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -47,8 +48,10 @@ type Bundle struct {
 
 // Options select what Collect gathers.
 type Options struct {
-	Version string
-	BaseDir string
+	Version            string
+	ExecutableSHA256   string
+	ExecutableModified time.Time
+	BaseDir            string
 	// Project and RunID select the run to collect; either may be empty.
 	Project string
 	RunID   string
@@ -61,7 +64,14 @@ type Options struct {
 	// Facts are files the caller produced, such as `rotari info --json`.
 	Facts   []File
 	Environ []string
-	Now     func() time.Time
+	// WebLogPath and RegisteredBaseDirs are master-directory evidence. When
+	// resolution fails, WebEvidenceError explains why neither is available.
+	WebLogPath              string
+	RegisteredBaseDirs      []string
+	RegisteredBaseDirsKnown bool
+	RegisteredBaseDirsError error
+	WebEvidenceError        error
+	Now                     func() time.Time
 }
 
 type collector struct {
@@ -84,6 +94,7 @@ func Collect(options Options) (Bundle, error) {
 	collector.rememberKnownLocations()
 	fmt.Fprintf(&collector.summary, "# rotari bug report\n\nGenerated: %s\n\n", options.Now().UTC().Format(time.RFC3339))
 	collector.environment()
+	collector.webEvidence()
 	collector.configuration()
 	collector.facts()
 	collector.serverLog()
@@ -107,6 +118,13 @@ func (collector *collector) rememberKnownLocations() {
 	}
 	if hostname, err := os.Hostname(); err == nil && hostname != "" {
 		collector.known[hostname] = "[REDACTED_HOST]"
+	}
+	registered := append([]string(nil), collector.options.RegisteredBaseDirs...)
+	sort.Strings(registered)
+	for index, path := range registered {
+		if _, exists := collector.known[path]; !exists && path != "" {
+			collector.known[path] = fmt.Sprintf("[REGISTERED_BASEDIR_%d]", index+1)
+		}
 	}
 }
 

@@ -2186,7 +2186,7 @@ func TestWebAuthTokenAcceptsBearerAndHeaderToken(t *testing.T) {
 	next := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusNoContent)
 	})
-	handler := WithAuthToken(next, "secret")
+	handler := WithAuthToken(next, "secret", AuthOptions{})
 
 	for _, test := range []struct {
 		name       string
@@ -2223,7 +2223,7 @@ func TestWebLoginFormCreatesAndRevokesSession(t *testing.T) {
 	next := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusNoContent)
 	})
-	handler := WithAuthToken(next, "secret")
+	handler := WithAuthToken(next, "secret", AuthOptions{})
 
 	apiRequest := httptest.NewRequest(http.MethodGet, "http://localhost/api/state", nil)
 	apiRecorder := httptest.NewRecorder()
@@ -2412,7 +2412,7 @@ func TestWebLoginOverHTTPOnlyOnDirectLoopback(t *testing.T) {
 	next := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusNoContent)
 	})
-	handler := WithAuthToken(next, "secret")
+	handler := WithAuthToken(next, "secret", AuthOptions{})
 	for _, tc := range []struct {
 		name    string
 		remote  string
@@ -2483,7 +2483,7 @@ func TestWebLoopbackSessionRejectedFromRemoteClient(t *testing.T) {
 	next := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusNoContent)
 	})
-	handler := WithAuthToken(next, "secret")
+	handler := WithAuthToken(next, "secret", AuthOptions{})
 	login := httptest.NewRequest(http.MethodPost, "http://localhost:8787"+webLoginPath, strings.NewReader(url.Values{
 		"username": {"rotari"}, "password": {"secret"},
 	}.Encode()))

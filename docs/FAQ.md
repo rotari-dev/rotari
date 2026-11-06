@@ -386,7 +386,9 @@ Yes. When a run finishes, each failed job is checked locally against [diagnosis 
 
 ### How do I report a bug in rotari itself?
 
-Run `rotari bug-report -p PROJECT --job-id ATTEMPT_ID --output report.tar.gz` and attach the file; without `--output` it prints a Markdown summary to paste instead. It collects the version, the basedir's filesystem type and clock offset, configuration, `server.log`, and the run's state files, job output tails, and scheduler query history, and runs the scheduler's queue and accounting queries again. Without `--job-id` it covers the latest run's jobs that did not succeed. Secrets in configuration and job environments are always replaced; paths and hostnames are too unless you add `--no-redact`. Job output and command lines are not checked for secrets, so review the file before sharing it.
+Run `rotari bug-report -p PROJECT --job-id ATTEMPT_ID --output report.tar.gz` and attach the file; without `--output` it prints a Markdown summary to paste instead. It collects the executable identity, registered basedirs, recent Web startup and sign-in outcomes, the basedir's filesystem type and clock offset, configuration, `server.log`, and the run's state files, job output tails, and scheduler query history, and runs the scheduler's queue and accounting queries again. Without `--job-id` it covers the latest run's jobs that did not succeed. Secrets in configuration and job environments are always replaced; paths and hostnames are too unless you add `--no-redact`. Job output and command lines are not checked for secrets, so review the file before sharing it.
+
+For a Web problem, also say which browser and version you used, whether it was a private window, and what the browser console and Network panel showed. rotari cannot collect browser-side console messages, request details, saved-cookie policy, or extensions.
 
 ## Interrupted runs and locking
 

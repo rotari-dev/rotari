@@ -9,8 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rotari-dev/rotari/internal/basedirregistry"
 	"github.com/rotari-dev/rotari/internal/bugreport"
 	"github.com/rotari-dev/rotari/internal/state"
+	"github.com/rotari-dev/rotari/internal/weblog"
 )
 
 // cmdBugReport prints a Markdown bug report, or writes it with the files it
@@ -48,6 +50,22 @@ func cmdBugReport(args []string) int {
 	}
 
 	options := bugreport.Options{Version: versionString(), Environ: os.Environ(), Redact: !*noRedact, JobIDs: jobIDs}
+	if identity, err := currentExecutableIdentity(); err == nil {
+		options.ExecutableSHA256 = identity.SHA256
+		options.ExecutableModified = identity.Modified
+	} else {
+		fmt.Fprintf(os.Stderr, "executable identity not collected: %v\n", err)
+	}
+	if masterDir, err := state.ResolveMasterDir(""); err != nil {
+		options.WebEvidenceError = fmt.Errorf("failed to resolve master directory: %w", err)
+	} else if baseDirs, _, err := basedirregistry.Discover(masterDir); err != nil {
+		options.WebLogPath = weblog.Path(masterDir)
+		options.RegisteredBaseDirsError = fmt.Errorf("failed to list registered basedirs: %w", err)
+	} else {
+		options.WebLogPath = weblog.Path(masterDir)
+		options.RegisteredBaseDirs = baseDirs
+		options.RegisteredBaseDirsKnown = true
+	}
 	switch {
 	case *fullOutput:
 		options.Output = bugreport.OutputFull

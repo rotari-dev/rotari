@@ -20,7 +20,7 @@ func TestWebLogoutCookiesMatchTheTransport(t *testing.T) {
 		{"TLS proxy", "http://localhost", "https://localhost", "https", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			handler := WithAuthToken(http.NotFoundHandler(), "secret")
+			handler := WithAuthToken(http.NotFoundHandler(), "secret", AuthOptions{})
 			request := httptest.NewRequest(http.MethodPost, test.target+webLogoutPath, nil)
 			request.Header.Set("X-Rotari-Token", "secret")
 			request.Header.Set("Origin", test.origin)
@@ -55,7 +55,7 @@ func TestLaunchAuthenticationWithServiceAuthorization(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	handler := WithAuthToken(next, "secret")
+	handler := WithAuthToken(next, "secret", AuthOptions{})
 	request := httptest.NewRequest(http.MethodGet, "/_launch/notebook/lab", nil)
 	request.Header.Set("Authorization", "Bearer secret")
 	recorder := httptest.NewRecorder()
@@ -93,7 +93,7 @@ func TestLaunchAuthenticationWithServiceAuthorization(t *testing.T) {
 			}
 		})
 	}
-	restarted := WithAuthToken(next, "secret")
+	restarted := WithAuthToken(next, "secret", AuthOptions{})
 	request = httptest.NewRequest(http.MethodGet, "/_launch/notebook/lab", nil)
 	request.AddCookie(cookie)
 	recorder = httptest.NewRecorder()
@@ -120,7 +120,7 @@ func TestLaunchAuthenticationCookieLifetimeAndTLS(t *testing.T) {
 func TestLaunchCookieDoesNotBypassExecGuard(t *testing.T) {
 	handler := WithAuthToken(WithExecGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-	}), nil), "secret")
+	}), nil), "secret", AuthOptions{})
 	request := httptest.NewRequest(http.MethodGet, "http://localhost/_launch/notebook/lab", nil)
 	request.Header.Set("Authorization", "Bearer secret")
 	recorder := httptest.NewRecorder()

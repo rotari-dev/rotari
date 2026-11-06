@@ -4,9 +4,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 
+	"github.com/rotari-dev/rotari/internal/state"
+	"github.com/rotari-dev/rotari/internal/weblog"
 	"github.com/rotari-dev/rotari/internal/webui"
 )
 
@@ -48,8 +53,16 @@ func cmdTableView(args []string) int {
 		printErrorf("cannot view %s: %v", path, err)
 		return 1
 	}
+	masterDir, masterErr := state.ResolveMasterDir("")
+	var webLog *weblog.Recorder
+	if masterErr != nil {
+		printErrorf("WARNING: cannot record Web events: %v", masterErr)
+	} else {
+		webLog = weblog.New(masterDir, "tableview", os.Stderr)
+		defer webLog.Close()
+	}
 	if *authToken != "" {
-		handler = webui.WithAuthToken(handler, *authToken)
+		handler = webui.WithAuthToken(handler, *authToken, webui.AuthOptions{Recorder: webLog})
 	} else if !webui.IsLoopbackHost(*host) {
 		printErrorf("WARNING: --host %s exposes the files under %s over unauthenticated HTTP.", *host, path)
 	}
@@ -59,6 +72,19 @@ func cmdTableView(args []string) int {
 		return 1
 	}
 	server := &http.Server{Handler: handler}
+	if webLog != nil {
+		identity, identityErr := currentExecutableIdentity()
+		if identityErr != nil {
+			printErrorf("WARNING: Table viewer executable identity not recorded: %v", identityErr)
+		}
+		host, portText, _ := net.SplitHostPort(listener.Addr().String())
+		port, _ := strconv.Atoi(portText)
+		auth := "none"
+		if *authToken != "" {
+			auth = "flag_or_env"
+		}
+		webLog.RecordServerStart(weblog.Start{Version: versionString(), ExecutableSHA256: identity.SHA256, ExecutableModified: identity.Modified, Host: host, Port: port, Auth: auth})
+	}
 	go func() {
 		<-interruptSignal()
 		_ = server.Close()

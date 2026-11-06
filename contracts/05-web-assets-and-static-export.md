@@ -404,6 +404,29 @@ and [`TestWebListsBasedirsRegisteredAfterStart`](../conformance/05-web/basedir_r
   never cross the HTTP boundary; `Value` is populated only by the local
   `rotari env` CLI command.
 
+**WEB-35** Each live `rotari web` and `rotari tableview` listener appends a
+`server_start` record to the private, bounded
+`<masterdir>/web-events.jsonl`, naming its command, PID, version, executable
+SHA-256 and modification time, bound host and port, authentication source,
+and its applicable control, notification, terminal, launch, artifact-root,
+and registered-basedir counts or flags. Servers protected by a token also
+record allow-listed decisions for sign-in, refused sign-in transport,
+missing browser sessions, rejected API credentials, and sign-out, including
+only the outcome, transport class, bounded user agent, and whether an accepted
+cookie was `Secure`. They never record a credential or cookie value, submitted
+user name, URL, path, query, `next`, forwarding header value, client address,
+or artifact-root path. Records are single-write JSON Lines, rotate at 1 MiB,
+rate-limit each authentication event kind with the suppressed count on its
+next record, and never make a request fail or wait for filesystem I/O; the
+first write failure is warned once. Static exports record nothing. Implemented
+by [`internal/weblog`](../internal/weblog/) and
+[`internal/webui/auth.go`](../internal/webui/auth.go); the binary and secret
+boundary are covered by `TestBugReportNeverIncludesSecrets` in
+[`conformance/03-interfaces/bug_report_test.go`](../conformance/03-interfaces/bug_report_test.go),
+with event, limit, concurrency, and failure cases in
+[`internal/weblog/log_test.go`](../internal/weblog/log_test.go) and
+[`internal/webui/auth_events_test.go`](../internal/webui/auth_events_test.go).
+
 ## Config viewing and generation
 
 The Web config view, generation, and save contracts are described with the

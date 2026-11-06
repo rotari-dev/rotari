@@ -510,8 +510,10 @@ does not promise to detect a lost remote client.
   `TestAddWarnsAboutUnexpandedVariables` in
   [`conformance/03-interfaces/add_warning_test.go`](../conformance/03-interfaces/add_warning_test.go).
 - **CLI-26** `bug-report` collects evidence for a rotari bug report: the
-  build, the host, the basedir's filesystem type and clock offset from the
-  host, configuration files, `ROTARI_*` variables, `info` and `check --deep`,
+  build and executable SHA-256 and modification time, the host, the basedir's
+  filesystem type and clock offset from the host, registered basedirs and
+  whether they exist, the bounded Web event history from the master directory,
+  configuration files, `ROTARI_*` variables, `info` and `check --deep`,
   the end of `server.log`, and, for a run (`--run-id`, the run of an attempt
   ID given with `--job-id`, or the latest run), the state files of every
   attempt of its jobs that did not succeed or that `--job-id` names, the

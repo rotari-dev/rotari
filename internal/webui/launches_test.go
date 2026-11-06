@@ -1127,7 +1127,7 @@ func TestJupyterAuthenticatedProxy(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	server := httptest.NewServer(WithAuthToken(WithExecGuard(handler, nil), "secret"))
+	server := httptest.NewServer(WithAuthToken(WithExecGuard(handler, nil), "secret", AuthOptions{}))
 	defer server.Close()
 	jar, err := cookiejar.New(nil)
 	if err != nil {

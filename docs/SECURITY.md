@@ -74,6 +74,23 @@ Chrome and Firefox. With SSH forwarding, `localhost` means the machine running t
 the server, so other users of the server are out of reach unless you forward a port of theirs
 and open it. Do not open a service you do not trust on the same host name, or use HTTPS.
 
+### Web event history
+
+Live `rotari web` and `rotari tableview` servers append startup and
+authentication outcomes to `<masterdir>/web-events.jsonl`. The file is mode
+`0600`, rotates at 1 MiB, and is collected by `rotari bug-report`. It records
+the server executable's identity and listener settings, and enough about a
+sign-in decision to distinguish an accepted cookie from an absent, unknown,
+expired, or transport-refused session.
+
+The history never contains the Web token or submitted password, a session or
+launch cookie value, the submitted user name, URLs or query strings, proxy
+header values, client addresses, or artifact-root paths. It does include a
+user agent cut to 256 bytes, the listener host and port, process ID, executable
+SHA-256 and modification time, and counts of registered basedirs and artifact
+roots. Anyone who can read the master directory can read this operational
+metadata. Static exports write no event history.
+
 ## Script on Web UI pages
 
 Live Web UI and Table viewer pages send a `Content-Security-Policy` that runs only

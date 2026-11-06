@@ -239,6 +239,65 @@ func TestCollectWithoutRunReportsEnvironment(t *testing.T) {
 	}
 }
 
+func TestCollectIncludesWebAndExecutableEvidenceWithoutRun(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+	baseDir := t.TempDir()
+	otherBase := filepath.Join(t.TempDir(), "registered")
+	webLog := filepath.Join(t.TempDir(), "web-events.jsonl")
+	writeFixtureFile(t, webLog+".1", `{"time":"2026-11-05T11:00:00Z","event":"sign_in","pid":122,"command":"web","outcome":"wrong_credentials","user_agent":"rotated-marker"}`+"\n")
+	writeFixtureFile(t, webLog, `{"time":"2026-11-05T12:00:00Z","event":"server_start","pid":123,"command":"web","host":"web-host-marker","port":8765,"executable_sha256":"server-hash","forged_secret":"forged-secret-value"}`+"\n")
+
+	bundle, err := Collect(Options{
+		Version: "rotari test", BaseDir: baseDir,
+		ExecutableSHA256: "report-hash", ExecutableModified: testTime(),
+		WebLogPath: webLog, RegisteredBaseDirs: []string{baseDir, otherBase}, RegisteredBaseDirsKnown: true,
+		Redact: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := bundleFile(bundle, "web-events.jsonl"); !ok {
+		t.Fatalf("bundle files = %#v, want web-events.jsonl", bundle.Files)
+	}
+	for _, want := range []string{"Executable SHA-256: report-hash", "Executable modified: 2026-10-14T09:00:00Z", "## Web events", "server_start", "rotated-marker", "## Registered basedirs", "exists", "missing"} {
+		if !strings.Contains(bundle.Summary, want) {
+			t.Errorf("summary lacks %q:\n%s", want, bundle.Summary)
+		}
+	}
+	for _, forbidden := range []string{baseDir, otherBase, "web-host-marker", "forged-secret-value"} {
+		if strings.Contains(bundle.Summary, forbidden) {
+			t.Errorf("redacted summary contains %q", forbidden)
+		}
+	}
+}
+
+func TestCollectNotesMissingAndUnreadableWebEventLog(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	for _, test := range []struct {
+		name, path, want string
+		prepare          func(string) error
+	}{
+		{name: "missing", path: filepath.Join(t.TempDir(), "missing.jsonl"), want: "does not exist yet"},
+		{name: "unreadable", path: filepath.Join(t.TempDir(), "directory"), want: "not read", prepare: func(path string) error { return os.Mkdir(path, 0o700) }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if test.prepare != nil {
+				if err := test.prepare(test.path); err != nil {
+					t.Fatal(err)
+				}
+			}
+			bundle, err := Collect(Options{Version: "rotari test", BaseDir: t.TempDir(), WebLogPath: test.path, RegisteredBaseDirsKnown: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(bundle.Summary, test.want) {
+				t.Fatalf("summary lacks %q:\n%s", test.want, bundle.Summary)
+			}
+		})
+	}
+}
+
 func TestWriteTarGz(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "report.tar.gz")
 	bundle := Bundle{Summary: "# summary\n", Files: []File{{Name: "run/r/summary.json", Data: []byte("{}\n")}}}

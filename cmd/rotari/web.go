@@ -4,11 +4,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"github.com/rotari-dev/rotari/internal/notificationlog"
 	"github.com/rotari-dev/rotari/internal/runwatch"
 	stateinternal "github.com/rotari-dev/rotari/internal/state"
+	"github.com/rotari-dev/rotari/internal/weblog"
 	"github.com/rotari-dev/rotari/internal/webui"
 )
 
@@ -57,6 +60,7 @@ type webCommandFlags struct {
 	basedir, host, staticDir, authToken string
 	port                                int
 	allowControl, notifications         bool
+	authGenerated                       bool
 	portExplicit                        bool
 	// allowExec enables launching registered commands; allowedHosts are
 	// extra Host names accepted while it is on.
@@ -241,6 +245,7 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 				printErrorf("cannot generate a Web token: %v", err)
 				return 1
 			}
+			flags.authGenerated = true
 			fmt.Fprintf(os.Stderr, "%s requires authentication. Sign in with user name %q and this token as the password:\n  %s\nSet %s to keep one token across restarts.\n", option, "rotari", flags.authToken, envWebAuthToken)
 		} else {
 			fmt.Fprintf(os.Stderr, "%s requires authentication. Sign in with user name %q and the configured token as the password.\n", option, "rotari")
@@ -259,13 +264,22 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 	if flags.authToken != "" {
 		options.AuthEnabled = true
 	}
+	masterDir, err := stateinternal.ResolveMasterDir("")
+	if err != nil {
+		printErrorf("WARNING: cannot record Web events: %v", err)
+	}
+	var webLog *weblog.Recorder
+	if err == nil {
+		webLog = weblog.New(masterDir, "web", os.Stderr)
+		defer webLog.Close()
+	}
 	handler := webui.Handler(options)
 	if flags.authToken != "" {
 		var onSignOut []func()
 		if options.Terminal != nil {
 			onSignOut = append(onSignOut, options.Terminal.EndAll)
 		}
-		handler = webui.WithAuthToken(handler, flags.authToken, onSignOut...)
+		handler = webui.WithAuthToken(handler, flags.authToken, webui.AuthOptions{Recorder: webLog, OnSignOut: onSignOut})
 	}
 	if flags.allowExec || flags.allowTerminal {
 		handler = webui.WithExecGuard(handler, execAllowedHosts(flags))
@@ -276,6 +290,26 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 		return 1
 	}
 	server := &http.Server{Handler: handler}
+	if webLog != nil {
+		identity, identityErr := currentExecutableIdentity()
+		if identityErr != nil {
+			printErrorf("WARNING: Web server executable identity not recorded: %v", identityErr)
+		}
+		host, portText, _ := net.SplitHostPort(listener.Addr().String())
+		port, _ := strconv.Atoi(portText)
+		auth := "none"
+		if flags.authGenerated {
+			auth = "generated"
+		} else if flags.authToken != "" {
+			auth = "flag_or_env"
+		}
+		webLog.RecordServerStart(weblog.Start{
+			Version: versionString(), ExecutableSHA256: identity.SHA256, ExecutableModified: identity.Modified,
+			Host: host, Port: port, Auth: auth, AllowExec: flags.allowExec, AllowTerminal: flags.allowTerminal,
+			AllowControl: flags.allowControl, Notifications: flags.notifications,
+			ArtifactRootCount: len(flags.artifactRoots), RegisteredBaseDirCount: len(options.BaseDirs),
+		})
+	}
 	go func() {
 		<-interruptSignal()
 		// Stop launches before the listener, so none starts meanwhile.

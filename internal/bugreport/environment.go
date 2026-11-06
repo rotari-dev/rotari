@@ -2,6 +2,7 @@ package bugreport
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +30,12 @@ func (collector *collector) environment() {
 	builder := &collector.summary
 	builder.WriteString("## rotari and host\n\n")
 	fmt.Fprintf(builder, "- Version: %s\n", options.Version)
+	if options.ExecutableSHA256 != "" {
+		fmt.Fprintf(builder, "- Executable SHA-256: %s\n", options.ExecutableSHA256)
+	}
+	if !options.ExecutableModified.IsZero() {
+		fmt.Fprintf(builder, "- Executable modified: %s\n", options.ExecutableModified.UTC().Format(time.RFC3339Nano))
+	}
 	fmt.Fprintf(builder, "- Go: %s, %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	if hostname, err := os.Hostname(); err == nil {
 		fmt.Fprintf(builder, "- Host: %s\n", hostname)
@@ -74,6 +81,122 @@ func (collector *collector) environment() {
 		writeFence(builder, strings.Join(variables, "\n"))
 		collector.addFile("environment.txt", []byte(strings.Join(variables, "\n")+"\n"))
 	}
+}
+
+func (collector *collector) webEvidence() {
+	builder := &collector.summary
+	builder.WriteString("## Web events\n\n")
+	if collector.options.WebEvidenceError != nil {
+		fmt.Fprintf(builder, "Not collected: %v\n\n", collector.options.WebEvidenceError)
+		collector.note("Web evidence not collected: %v", collector.options.WebEvidenceError)
+	} else if collector.options.WebLogPath == "" {
+		builder.WriteString("Web event log path is unavailable.\n\n")
+	} else {
+		data, err := readWebLogTail(collector.options.WebLogPath, serverLogBytes)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			builder.WriteString("No Web event log in the master directory.\n\n")
+			collector.note("Web event log does not exist yet")
+		case err != nil:
+			fmt.Fprintf(builder, "Web event log not read: %v\n\n", err)
+			collector.note("Web event log not read: %v", err)
+		default:
+			data = sanitizeWebEvents(data, collector.options.Redact)
+			collector.addFile("web-events.jsonl", data)
+			fmt.Fprintf(builder, "Last %d lines from the Web event log:\n\n", summaryLogLines)
+			writeFence(builder, lastLines(string(data), summaryLogLines))
+		}
+	}
+
+	builder.WriteString("## Registered basedirs\n\n")
+	if collector.options.WebEvidenceError != nil {
+		builder.WriteString("Not collected because the master directory was unavailable.\n\n")
+		return
+	}
+	if collector.options.RegisteredBaseDirsError != nil {
+		fmt.Fprintf(builder, "Not collected: %v\n\n", collector.options.RegisteredBaseDirsError)
+		collector.note("registered basedirs not collected: %v", collector.options.RegisteredBaseDirsError)
+		return
+	}
+	if !collector.options.RegisteredBaseDirsKnown {
+		builder.WriteString("Not collected.\n\n")
+		return
+	}
+	if len(collector.options.RegisteredBaseDirs) == 0 {
+		builder.WriteString("None registered.\n\n")
+		return
+	}
+	paths := append([]string(nil), collector.options.RegisteredBaseDirs...)
+	sort.Strings(paths)
+	for _, path := range paths {
+		status := "exists"
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			status = "missing"
+		} else if err != nil {
+			status = "unreadable (" + err.Error() + ")"
+		}
+		fmt.Fprintf(builder, "- %s: %s\n", path, status)
+	}
+	builder.WriteString("\n")
+}
+
+var webEventFields = map[string]bool{
+	"time": true, "event": true, "pid": true, "command": true, "outcome": true,
+	"transport": true, "cookie": true, "cookie_secure": true, "user_agent": true,
+	"suppressed": true, "version": true, "executable_sha256": true,
+	"executable_modified": true, "host": true, "port": true, "auth": true,
+	"allow_exec": true, "allow_terminal": true, "allow_control": true,
+	"notifications": true, "artifact_root_count": true, "registered_basedir_count": true,
+}
+
+func sanitizeWebEvents(data []byte, redactHost bool) []byte {
+	var builder strings.Builder
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var decoded map[string]any
+		decoder := json.NewDecoder(strings.NewReader(line))
+		decoder.UseNumber()
+		if decoder.Decode(&decoded) != nil {
+			builder.WriteString("{\"bug_report\":\"unreadable line omitted\"}\n")
+			continue
+		}
+		for key := range decoded {
+			if !webEventFields[key] {
+				delete(decoded, key)
+			}
+		}
+		if redactHost {
+			if _, exists := decoded["host"]; exists {
+				decoded["host"] = "[REDACTED_HOST]"
+			}
+		}
+		encoded, err := encodeJSON(decoded, "")
+		if err == nil {
+			builder.Write(encoded)
+		}
+	}
+	return []byte(builder.String())
+}
+
+func readWebLogTail(path string, limit int64) ([]byte, error) {
+	current, err := readTail(path, limit)
+	if err != nil {
+		return nil, err
+	}
+	remaining := limit - int64(len(current))
+	if remaining <= 0 {
+		return current, nil
+	}
+	rotated, err := readTail(path+".1", remaining)
+	if errors.Is(err, os.ErrNotExist) {
+		return current, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return append(rotated, current...), nil
 }
 
 // describeClockSkew compares the modification time the basedir's
