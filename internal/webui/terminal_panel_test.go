@@ -1083,6 +1083,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(ui.panes().length, 1);
   assert.equal(ui.bar('Close pane').disabled, true, 'offered to close the only pane');
   // The splits are pictures with names, a column's and a row's as in the Table viewer.
+  assert.match(webShellCSS, /button\.terminal-icon \{[^}]*align-items: center;[^}]*min-height: 0;[^}]*border: 0;[^}]*background: none;/);
   for (const [label, line] of [['Split right', 'M8 2.5v11'], ['Split down', 'M1.5 8h13']]) {
     const icon = ui.bar(label);
     assert.equal(icon.textContent, '', label + ' has words as well as a picture');

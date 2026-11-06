@@ -952,9 +952,25 @@ html.terminal-open.terminal-maximized .terminal-resizer {
   padding: 2px 8px;
   font-size: 12px;
 }
+/* No frame, as the Table viewer's, and centered: the page's buttons are taller than this. */
 .terminal-bar button.terminal-icon {
   display: inline-flex;
-  padding: 2px 5px;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 3px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-2);
+}
+.terminal-bar button.terminal-icon:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.terminal-bar button.terminal-icon:disabled {
+  background: none;
+  opacity: 0.4;
 }
 .terminal-icon svg {
   width: 16px;

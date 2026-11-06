@@ -154,6 +154,18 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   const barButton = (text) => '[...document.querySelectorAll(".terminal-bar button")].find((item) => item.textContent === ' + JSON.stringify(text) + ' || item.getAttribute("aria-label") === ' + JSON.stringify(text) + ')';
   const paneHas = (index, text) => 'document.querySelectorAll(".terminal-pane")[' + index + ']?.querySelector(".xterm-rows")?.textContent.includes(' + JSON.stringify(text) + ')';
   const bothSettled = '[...document.querySelectorAll(".terminal-status")].every((item) => item.hidden)';
+  // The splits are pictures with no frame, in the middle of their buttons and of the bar.
+  const icons = await page.evaluate('JSON.stringify(["Split right", "Split down"].map((label) => {' +
+    'const button = document.querySelector(".terminal-bar button[aria-label=\\"" + label + "\\"]");' +
+    'const box = button.getBoundingClientRect();' +
+    'const icon = button.querySelector("svg").getBoundingClientRect();' +
+    'const bar = document.querySelector(".terminal-bar").getBoundingClientRect();' +
+    'const style = getComputedStyle(button);' +
+    'return { border: style.borderTopWidth, off: Math.abs(box.top + box.height / 2 - icon.top - icon.height / 2), offBar: Math.abs(bar.top + bar.height / 2 - icon.top - icon.height / 2) };' +
+    '}))');
+  for (const icon of JSON.parse(icons)) {
+    if (icon.border !== '0px' || icon.off > 1 || icon.offBar > 2) throw new Error('a split icon is framed or off center: ' + icons);
+  }
   await page.evaluate(barButton('Split right') + '.click()');
   await until('a second pane', 'document.querySelectorAll(".xterm-helper-textarea").length === 2 && document.querySelectorAll(".terminal-tab").length === 2');
   await until('both panes to settle', bothSettled);
