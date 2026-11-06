@@ -873,6 +873,14 @@ html.terminal-open[data-terminal-place="right"] .terminal-resizer {
   color: var(--text-2);
   font-size: 12px;
 }
+/* Too many for one row at a side: the tabs have a row of their own under the buttons. */
+html.terminal-open[data-terminal-place]:not(.terminal-maximized) .terminal-bar {
+  flex-wrap: wrap;
+}
+html.terminal-open[data-terminal-place]:not(.terminal-maximized) .terminal-tabs {
+  order: 1;
+  flex: 1 0 100%;
+}
 .terminal-title {
   color: var(--text);
   font-weight: 600;
@@ -960,6 +968,9 @@ html.terminal-open[data-terminal-place="right"] .terminal-resizer {
 .terminal-tab-menu button:hover:not(:disabled),
 .terminal-tab-menu button:focus-visible {
   background: var(--surface-2);
+}
+.terminal-tab-menu button[aria-checked="true"]::before {
+  content: "\2713\00a0";
 }
 .terminal-tab-menu button:disabled {
   color: var(--muted);

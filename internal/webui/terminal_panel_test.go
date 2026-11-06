@@ -1874,6 +1874,57 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(tightSide.sockets.length, tightSockets, 'moving the panel reconnected');
   assert.equal(tightSide.sockets.some((socket) => socket.closed), false, 'moving the panel closed a connection');
 
+  // The menu moves the panel at once, keeps it there with the next page, and changes no connection.
+  const moving = await openSplit([1, 2]);
+  ui = sp(moving);
+  ui.split();
+  await wait(10);
+  const placeButton = ui.bar('Panel position');
+  const placeMenu = () => [...moving.document.querySelectorAll('.terminal-tab-menu button')];
+  const choosePlace = (label) => {
+    placeButton.click();
+    placeMenu().find((item) => item.textContent === label).click();
+  };
+  assert.equal(placeButton.textContent, '');
+  assert.equal(placeButton.disabled, false);
+  assert.equal(placeButton.querySelector('path').getAttribute('d'), 'M1.5 9.5h13');
+  placeButton.click();
+  assert.deepEqual(placeMenu().map((item) => [item.textContent, item.getAttribute('aria-checked'), item.getAttribute('role')]), [['Bottom', 'true', 'menuitemradio'], ['Left', 'false', 'menuitemradio'], ['Right', 'false', 'menuitemradio']]);
+  moving.document.dispatchEvent(new moving.window.KeyboardEvent('keydown', { key: 'Escape' }));
+  assert.equal(moving.document.querySelector('.terminal-tab-menu'), null, 'Escape left the menu');
+  const movingSockets = moving.sockets.length;
+  const focusesBeforeMoving = moving.terminals[1].focuses;
+  for (const [label, attribute, line] of [['Right', 'right', 'M10.5 2.5v11'], ['Left', 'left', 'M5.5 2.5v11'], ['Bottom', undefined, 'M1.5 9.5h13']]) {
+    choosePlace(label);
+    assert.equal(placeOf(moving), attribute);
+    assert.equal(placeButton.querySelector('path').getAttribute('d'), line);
+    assert.equal(moving.window.localStorage.getItem('rotari-terminal-place'), label.toLowerCase());
+    assert.equal(moving.document.querySelector('.terminal-tab-menu'), null, 'choosing left the menu open');
+  }
+  assert.equal(moving.sockets.length, movingSockets, 'moving the panel reconnected');
+  assert.equal(moving.sockets.some((socket) => socket.closed), false);
+  assert.ok(moving.terminals[1].focuses > focusesBeforeMoving, 'the keys did not come back to the focused pane');
+  assert.equal(ui.panes().length, 2);
+  // A panel loaded at a side shows that in its picture and its menu.
+  const loadedRight = load(process.argv[1], { stored: '1', place: 'right', shells: [plain('1', 1)] });
+  await wait(30);
+  const loadedButton = sp(loadedRight).bar('Panel position');
+  assert.equal(loadedButton.querySelector('path').getAttribute('d'), 'M10.5 2.5v11');
+  loadedButton.click();
+  assert.equal(loadedRight.document.querySelector('.terminal-tab-menu [aria-checked=true]').textContent, 'Right');
+  // A narrow window offers only the bottom, says why, and keeps the choice marked.
+  const tightMenu = load(process.argv[1], { stored: '1', place: 'left', tight: true, shells: [plain('1', 1)] });
+  await wait(30);
+  const tightButton = sp(tightMenu).bar('Panel position');
+  assert.equal(tightButton.querySelector('path').getAttribute('d'), 'M1.5 9.5h13', 'the picture showed a place it is not in');
+  tightButton.click();
+  const tightItems = [...tightMenu.document.querySelectorAll('.terminal-tab-menu button')];
+  assert.deepEqual(tightItems.map((item) => [item.textContent, item.disabled]), [['Bottom', false], ['Left (needs a wider window)', true], ['Right (needs a wider window)', true]]);
+  assert.equal(tightItems[1].getAttribute('aria-checked'), 'true');
+  // At a side the tabs have a row of their own, and maximized there is room for one row.
+  assert.match(webShellCSS, /\[data-terminal-place\]:not\(\.terminal-maximized\) \.terminal-bar \{\s*flex-wrap: wrap;/);
+  assert.match(webShellCSS, /\[data-terminal-place\]:not\(\.terminal-maximized\) \.terminal-tabs \{\s*order: 1;\s*flex: 1 0 100%;/);
+
   // xterm.js loads only on opening, under the page's nonce.
   const real = load(process.argv[1], { stubs: false });
   await wait(50);

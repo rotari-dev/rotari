@@ -262,6 +262,57 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   }
   if (await page.evaluate('document.querySelectorAll(".terminal-tab").length !== ' + tabCount)) throw new Error('closing a pane ended its shell');
   await collect();
+
+  // Down either side, the panel has the window's height, and the page, its top bar, and a dialog lie clear of it.
+  const choosePlace = (label) => page.evaluate(barButton('Panel position') + '.click(); [...document.querySelectorAll(".terminal-tab-menu button")].find((item) => item.textContent === ' + JSON.stringify(label) + ').click()');
+  const sideFacts = 'JSON.stringify((() => {' +
+    'const panel = document.getElementById("terminal-panel").getBoundingClientRect();' +
+    'const content = document.querySelector(".content").getBoundingClientRect();' +
+    'const topbar = document.querySelector(".content > .topbar").getBoundingClientRect();' +
+    'const sidebar = document.querySelector(".sidebar").getBoundingClientRect();' +
+    'const screen = document.querySelector(".terminal-pane .xterm-screen").getBoundingClientRect();' +
+    'const pane = document.querySelector(".terminal-pane").getBoundingClientRect();' +
+    'window.showPath("/p");' +
+    'const dialog = document.querySelector(".output-panel").getBoundingClientRect();' +
+    'window.closeOutputModal();' +
+    'return { panel: [panel.left, panel.top, panel.right, panel.bottom], content: [content.left, content.right], topbar: [topbar.left, topbar.right], sidebar: [sidebar.left, sidebar.right], dialog: [dialog.left, dialog.right], screen: screen.width, pane: pane.width, innerWidth, innerHeight };' +
+    '})())';
+  const checkSide = async (where) => {
+    const facts = JSON.parse(await page.evaluate(sideFacts));
+    const { panel, content, topbar, sidebar, dialog, screen, pane } = facts;
+    const fail = (what) => { throw new Error('at the ' + where + ', ' + what + ': ' + JSON.stringify(facts)); };
+    if (panel[1] !== 0 || panel[3] !== facts.innerHeight) fail('the panel does not have the window\'s height');
+    if (Math.abs(panel[2] - panel[0] - 480) > 1) fail('the panel is not its usual width');
+    if (where === 'right') {
+      if (panel[2] !== facts.innerWidth) fail('the panel is not at the edge');
+      if (content[1] > panel[0] + 1 || topbar[1] > panel[0] + 1 || dialog[1] > panel[0] + 1) fail('the page is under the panel');
+    } else {
+      if (panel[0] !== 0) fail('the panel is not at the edge');
+      if (sidebar[0] < panel[2] - 1 || content[0] < panel[2] - 1 || topbar[0] < panel[2] - 1 || dialog[0] < panel[2] - 1) fail('the page is under the panel');
+    }
+    if (screen > pane || screen < pane - 60) fail('the terminal does not fit its pane');
+  };
+  for (const [label, where] of [['Right', 'right'], ['Left', 'left']]) {
+    await choosePlace(label);
+    await until('the panel at the ' + where, 'document.documentElement.dataset.terminalPlace === ' + JSON.stringify(where));
+    await sleep(300);
+    await checkSide(where);
+    await collect();
+  }
+  // It stays there with the next page, and keeps the shell.
+  await page.evaluate('location.href = "/project/p1"');
+  await until('the next page with the panel at the left', 'document.documentElement.dataset.terminalPlace === "left" && document.querySelector(".xterm-helper-textarea") !== null');
+  await until('the shell at the left to settle', bothSettled);
+  await sleep(300);
+  await checkSide('left');
+  // A narrow window has it at the bottom, and a wider one gives it back.
+  await page.send('Emulation.setDeviceMetricsOverride', { width: 900, height: 900, deviceScaleFactor: 1, mobile: false });
+  await until('the panel at the bottom of a narrow window', 'document.documentElement.dataset.terminalPlace === undefined && document.getElementById("terminal-panel").getBoundingClientRect().top > 0');
+  await page.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+  await until('the panel back at the left', 'document.documentElement.dataset.terminalPlace === "left"');
+  await choosePlace('Bottom');
+  await until('the panel at the bottom', 'document.documentElement.dataset.terminalPlace === undefined');
+  await collect();
 }).catch((error) => { failure = error.stack || String(error); });
 await close();
 console.log(JSON.stringify({ failure, violations: [...violations] }));

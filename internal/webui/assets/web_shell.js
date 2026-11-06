@@ -136,6 +136,8 @@
   const heightKey = "rotari-terminal-height";
   const widthKey = "rotari-terminal-width";
   const placeKey = "rotari-terminal-place";
+  // The line that marks where the panel is, in a picture of the window.
+  const placeLines = { bottom: "M1.5 9.5h13", left: "M5.5 2.5v11", right: "M10.5 2.5v11" };
   const shownKey = "rotari-terminal-shell";
   const layoutKey = "rotari-terminal-layout";
   const maximizedKey = "rotari-terminal-maximized";
@@ -190,7 +192,7 @@
   // This script runs first.
   const rootFetch = window.fetch;
   const serverFetch = (...args) => rootFetch.apply(window, args);
-  let panel, panesBox, groups, tabs, add, splitRightButton, splitDownButton, closePaneButton, maximize;
+  let panel, panesBox, groups, tabs, add, splitRightButton, splitDownButton, closePaneButton, placeButton, maximize;
   let shells = [];
   let shellLimit = 0;
   let groupLimit = 0;
@@ -353,7 +355,16 @@
     else root.dataset.terminalPlace = place;
     if (!panel) return;
     panel.querySelector(".terminal-resizer").setAttribute("aria-orientation", place === "bottom" ? "horizontal" : "vertical");
+    placeButton.querySelector("path").setAttribute("d", placeLines[place]);
     applyLayout();
+  };
+  const choosePlace = (place) => {
+    chosen = place;
+    try {
+      localStorage.setItem(placeKey, place);
+    } catch {}
+    applyPlace();
+    focused.term?.focus();
   };
   const applySavedSizes = () => {
     for (const axis of Object.keys(panelSizes)) {
@@ -713,54 +724,77 @@
     }
     await refreshShells();
   };
-  let tabMenu = null;
-  const closeTabMenu = () => {
-    tabMenu?.remove();
-    tabMenu = null;
+  let panelMenu = null;
+  const closePanelMenu = () => {
+    panelMenu?.remove();
+    panelMenu = null;
+  };
+  // openPanelMenu lists choices by the pointer, or by what opened it for the keyboard. Each
+  // is a label, what it does, and whether it can be chosen, and in a list of alternatives
+  // whether it is the current one.
+  const openPanelMenu = (event, choices) => {
+    event.preventDefault();
+    closePanelMenu();
+    panelMenu = document.createElement("div");
+    panelMenu.className = "terminal-tab-menu";
+    panelMenu.setAttribute("role", "menu");
+    for (const [label, action, enabled, current] of choices) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.setAttribute("role", current === undefined ? "menuitem" : "menuitemradio");
+      if (current !== undefined) item.setAttribute("aria-checked", String(current));
+      item.textContent = label;
+      item.disabled = !enabled;
+      item.onclick = () => {
+        closePanelMenu();
+        action();
+      };
+      panelMenu.append(item);
+    }
+    document.body.append(panelMenu);
+    const anchor = event.currentTarget.getBoundingClientRect();
+    const size = panelMenu.getBoundingClientRect();
+    const x = event.clientX || anchor.left;
+    const y = event.clientY || anchor.bottom;
+    panelMenu.style.left = Math.max(0, Math.min(x, innerWidth - size.width)) + "px";
+    panelMenu.style.top = Math.max(0, Math.min(y, innerHeight - size.height)) + "px";
+    panelMenu.querySelector("button:not(:disabled)").focus();
   };
   const openTabMenu = (event, shell) => {
-    event.preventDefault();
-    closeTabMenu();
     const inGroup = shellsHere();
     const place = inGroup.findIndex((item) => item.id === shell.id);
     const right = inGroup.slice(place + 1);
-    tabMenu = document.createElement("div");
-    tabMenu.className = "terminal-tab-menu";
-    tabMenu.setAttribute("role", "menu");
-    for (const [label, action, enabled] of [
+    openPanelMenu(event, [
       ["Rename...", () => renameShell(shell), true],
       ["Move left", () => moveShell(shell, place - 1), place > 0],
       ["Move right", () => moveShell(shell, place + 1), right.length > 0],
       ["Close tabs to the right", () => endShells(right), right.length > 0],
       ["Close all tabs", () => endShells(inGroup), true],
-    ]) {
-      const item = document.createElement("button");
-      item.type = "button";
-      item.setAttribute("role", "menuitem");
-      item.textContent = label;
-      item.disabled = !enabled;
-      item.onclick = () => {
-        closeTabMenu();
-        action();
-      };
-      tabMenu.append(item);
-    }
-    document.body.append(tabMenu);
-    // By the pointer, or by the tab for the keyboard's menu key, and inside the window.
-    const anchor = event.currentTarget.getBoundingClientRect();
-    const size = tabMenu.getBoundingClientRect();
-    const x = event.clientX || anchor.left;
-    const y = event.clientY || anchor.bottom;
-    tabMenu.style.left = Math.max(0, Math.min(x, innerWidth - size.width)) + "px";
-    tabMenu.style.top = Math.max(0, Math.min(y, innerHeight - size.height)) + "px";
-    tabMenu.querySelector("button").focus();
+    ]);
+  };
+  // A narrow window has only the bottom to offer, and the menu says why.
+  const openPlaceMenu = (event) => {
+    const wide = wideWindow?.matches !== false;
+    openPanelMenu(
+      event,
+      [
+        ["Bottom", "bottom"],
+        ["Left", "left"],
+        ["Right", "right"],
+      ].map(([label, place]) => [
+        place === "bottom" || wide ? label : label + " (needs a wider window)",
+        () => choosePlace(place),
+        place === "bottom" || wide,
+        chosen === place,
+      ]),
+    );
   };
   document.addEventListener("pointerdown", (event) => {
-    if (tabMenu && !tabMenu.contains(event.target)) closeTabMenu();
+    if (panelMenu && !panelMenu.contains(event.target)) closePanelMenu();
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && tabMenu) {
-      closeTabMenu();
+    if (event.key === "Escape" && panelMenu) {
+      closePanelMenu();
       focused.term?.focus();
     }
   });
@@ -1513,6 +1547,8 @@
     };
     splitRightButton = iconButton("Split right", "M8 2.5v11", () => splitPane(true));
     splitDownButton = iconButton("Split down", "M1.5 8h13", () => splitPane(false));
+    placeButton = iconButton("Panel position", placeLines.bottom, openPlaceMenu);
+    placeButton.disabled = false;
     closePaneButton = barButton("Close pane", "Close this pane; its shell keeps running", () => {
       closePane(focused);
       focused.term?.focus();
@@ -1537,6 +1573,7 @@
       splitRightButton,
       splitDownButton,
       closePaneButton,
+      placeButton,
       maximize,
       hide,
     );
