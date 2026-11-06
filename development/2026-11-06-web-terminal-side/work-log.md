@@ -55,3 +55,17 @@
 **Validation:** `go test ./...` passed, and `go vet ./...`, `gofmt`, `tsc`, and `-race` on the terminal tests of `internal/webui` found nothing. Fifteen deliberate breakages of steps 1 to 3 each failed `TestTerminalPanel`. `tsc` does not cover `web_shell.js`. **`TestTerminalPanelInBrowser` has not run on this,** for lack of Chrome here, so only its script's syntax was checked, and no one has seen a panel at a side. `scripts/check.sh` and pre-commit could not be run here, so their parts were run by hand.
 
 **Remaining:** The user's look at each place, as listed under [Tests and validation](plan.md#tests-and-validation), and the browser test's first run on CI, before integrating.
+
+## The top bar under a panel at a side
+
+**Commits:** 2026-11-06 15:00:36 `f99d7745`.
+
+**Change:** In `web_shell.css`, the top bar and its toolbar wrap with the panel at a side. In `web_shell.js`, `pageWidthNeeded` counts the sidebar's width and 400 pixels for the content, replacing 480 for the whole page, and sizes apply again when the page exists and when the sidebar is resized. `TestTerminalPanel` covers the limit, and `TestTerminalPanelInBrowser` grows the panel as far as it goes at each side, at 1280 and 1000 pixels, and measures the top bar against it and that the page does not scroll sideways.
+
+**Reason:** The user put the panel at the right and widened it, and Refresh and Settings ended up over the panel. The toolbar has `flex: none` and did not wrap, so it ran past the content, and the top bar's `z-index` of 6, which lets its menus open over the panel at 5, put it on top.
+
+**Plan impact:** Decision 4's limit changed as above. A saved width stays as chosen and comes back when there is room.
+
+**Validation:** The cause was read from the CSS, not reproduced, for lack of a browser here. The `Terminal` tests of `internal/webui` and `conformance/05-web` and `gofmt` passed. The browser test's measurement has not run, and the page's own sideways scroll check may find something else on CI.
+
+**Remaining:** The user's look.
