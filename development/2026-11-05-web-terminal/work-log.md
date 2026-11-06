@@ -324,3 +324,17 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** The user said OK. `go test ./...` passed all 55 packages, `go vet ./...` and `gofmt` found nothing, the generators' `--check` modes passed, and `-race` passed on the new unit tests and the terminal tests of `conformance/05-web`. `TestTerminalFollowsItsFlags` runs the limits, the replay size, and the shell through the binary. An idle timeout was accepted there but not waited out; the expiry is tested in `internal/terminal`.
 
 **Remaining:** None.
+
+## The number of shells on the Terminal button
+
+**Commits:** 2026-11-06 12:14:47 `25f5ee57`.
+
+**Change:** `showShellCount` in `web_shell.js`, with the list refreshing from every page in view rather than only with the panel open, contract WEB-33, `docs/WEB.md`, `TestTerminalPanel`, and a check in `TestTerminalPanelInBrowser`. A panel hidden or never opened now asks for `/_terminal/shells` every five seconds; that request does not count as keeping the shells alive. One expectation in `TestTerminalPanel` gained the list request a closed page now makes, and another looks its request up rather than expecting it first.
+
+**Reason:** The user asked for a count on the button, as on Inbox: the total of open shells.
+
+**Plan impact:** The count covers every project. It shows `Terminal (0)` with none, and `Terminal` when the server gives no answer, as a number that may be out of date would mislead. A shell that ends on a page whose panel was never opened still tells no one, as before; with a hidden panel the note now comes when it ends rather than on reopening.
+
+**Validation:** `go test ./...` passed, as did `gofmt`, and `go vet` on the two packages. Eight deliberate breakages each failed `TestTerminalPanel`. `TestTerminalPanelInBrowser` has not run on this, for lack of Chrome here. The look of the longer label in the top bar has not been seen.
+
+**Remaining:** The user's look. It is on the same unintegrated line as [the columns plan](../2026-11-06-web-terminal-columns/plan.md)'s steps.
