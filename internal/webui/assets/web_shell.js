@@ -1437,8 +1437,27 @@
       button.onclick = onclick;
       return button;
     };
-    splitRightButton = barButton("Split right", "Show another shell in a new column", () => splitPane(true));
-    splitDownButton = barButton("Split down", "Show another shell under this one", () => splitPane(false));
+    // The same pictures as the Table viewer's panes, for the same two choices.
+    const iconButton = (label, line, onclick) => {
+      const button = barButton("", label, onclick);
+      button.className = "terminal-icon";
+      button.setAttribute("aria-label", label);
+      const svgNS = "http://www.w3.org/2000/svg";
+      const icon = document.createElementNS(svgNS, "svg");
+      icon.setAttribute("viewBox", "0 0 16 16");
+      icon.setAttribute("aria-hidden", "true");
+      const frame = document.createElementNS(svgNS, "rect");
+      for (const [name, value] of Object.entries({ x: 1.5, y: 2.5, width: 13, height: 11, rx: 1.5 })) {
+        frame.setAttribute(name, String(value));
+      }
+      const divider = document.createElementNS(svgNS, "path");
+      divider.setAttribute("d", line);
+      icon.append(frame, divider);
+      button.append(icon);
+      return button;
+    };
+    splitRightButton = iconButton("Split right", "M8 2.5v11", () => splitPane(true));
+    splitDownButton = iconButton("Split down", "M1.5 8h13", () => splitPane(false));
     closePaneButton = barButton("Close pane", "Close this pane; its shell keeps running", () => {
       closePane(focused);
       focused.term?.focus();

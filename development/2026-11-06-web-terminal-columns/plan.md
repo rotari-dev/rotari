@@ -1,8 +1,8 @@
 # Plan: Up to four panes in the Web terminal panel
 
 Created: 2026-11-06
-Status: Steps 0 to 4 are implemented. What remains is the user's look at four panes, and the browser test's first run with
-them on CI. See the [work log](work-log.md). Follows
+Status: Steps 0 to 4 are implemented, and the user tried four panes and said they look good. What remains is the browser
+test's first run with them on CI. See the [work log](work-log.md). Follows
 [the split plan](../2026-11-06-web-terminal-split/plan.md), whose terms this uses. The limit of four, the single level of
 nesting, and closing the focused pane are the user's choices. They accepted decisions 3, 6, and 7 as proposed, decision 3
 tentatively: it is an implementation choice to judge by what step 1 does to the panel. Decisions 5 and 8 were not raised
@@ -93,8 +93,8 @@ connects. The new saved form, ignoring anything that makes no sense.
 
 ### Step 3: the bar
 
-**Split right**, **Split down**, and **Close pane**, and the dashed mark as "in another pane". Look at the bar's room at
-ordinary widths: it already holds many buttons, and these may need icons.
+**Split right**, **Split down**, and **Close pane**, and the dashed mark as "in another pane". After trying them, the user
+asked for the two splits to be icons, the same as the Table viewer's panes. **Close pane** stays in words.
 
 ### Step 4: promise and document
 

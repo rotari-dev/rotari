@@ -1055,7 +1055,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   };
   const partOf = (length) => Number(/([\d.]+)%/.exec(length)[1]) / 100;
   const sp = (page) => {
-    const bar = (text) => [...page.document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === text);
+    const bar = (text) => [...page.document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === text || item.getAttribute('aria-label') === text);
     const panes = () => [...page.document.querySelectorAll('.terminal-pane')];
     const tabEl = (name) => [...page.document.querySelectorAll('.terminal-tab')].find((tab) => tab.querySelector('[role=tab]').textContent === name);
     return {
@@ -1082,6 +1082,15 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   let ui = sp(splitting);
   assert.equal(ui.panes().length, 1);
   assert.equal(ui.bar('Close pane').disabled, true, 'offered to close the only pane');
+  // The splits are pictures with names, a column's and a row's as in the Table viewer.
+  for (const [label, line] of [['Split right', 'M8 2.5v11'], ['Split down', 'M1.5 8h13']]) {
+    const icon = ui.bar(label);
+    assert.equal(icon.textContent, '', label + ' has words as well as a picture');
+    assert.equal(icon.title, label);
+    assert.equal(icon.querySelector('svg path').getAttribute('d'), line);
+    assert.equal(icon.querySelector('svg').getAttribute('aria-hidden'), 'true');
+    assert.ok(fs.readFileSync(process.argv[5], 'utf8').includes('<path d="' + line + '"/>'), label + ' differs from the Table viewer\'s');
+  }
   assert.equal(splitting.document.querySelector('.terminal-bar .terminal-status'), null, 'a status stayed in the bar');
   ui.split();
   await wait(20);
@@ -1803,7 +1812,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   process.exit(0);
 })().catch((error) => { console.error(error.stack || String(error)); process.exit(1); });
 `
-	if output, err := exec.Command("node", "-e", script, withTerminal, without, filepath.Join("assets", "web_shell.css"), jobsWithTerminal).CombinedOutput(); err != nil {
+	if output, err := exec.Command("node", "-e", script, withTerminal, without, filepath.Join("assets", "web_shell.css"), jobsWithTerminal, filepath.Join("assets", "table_view_panes.js")).CombinedOutput(); err != nil {
 		t.Fatalf("terminal panel check failed: %v\n%s", err, output)
 	}
 }

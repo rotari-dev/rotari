@@ -952,6 +952,17 @@ html.terminal-open.terminal-maximized .terminal-resizer {
   padding: 2px 8px;
   font-size: 12px;
 }
+.terminal-bar button.terminal-icon {
+  display: inline-flex;
+  padding: 2px 5px;
+}
+.terminal-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+}
 .terminal-spacer {
   flex: 1;
 }

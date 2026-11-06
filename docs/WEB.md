@@ -136,8 +136,8 @@ link. It sends nothing to the shell, so the prompt may not show again until you 
 while a full-screen program such as `vim` runs, and says so.
 
 The panel shows up to four shells at once, such as an editor beside `rotari wait` and a prompt.
-**Split right** adds a column of the whole height beside the focused pane's, and **Split down** a pane
-under it. Each shows a shell not yet in a pane, or a new one if there is none, and refuses if the panes
+In the bar, the **Split right** icon adds a column of the whole height beside the focused pane's, and the
+**Split down** icon a pane under it. Each shows a shell not yet in a pane, or a new one if there is none, and refuses if the panes
 would get too small. Drag the handles between the panes to change their shares; in a narrow window they all stack. The
 pane with a colored top edge has the keys, and **Clear** and the send buttons act on it, while **A-**, **A+**, and
 **Maximize** apply to the whole panel.

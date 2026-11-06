@@ -151,7 +151,7 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await collect();
 
   // Split shows two shells side by side, each typed into and sized on its own.
-  const barButton = (text) => '[...document.querySelectorAll(".terminal-bar button")].find((item) => item.textContent === ' + JSON.stringify(text) + ')';
+  const barButton = (text) => '[...document.querySelectorAll(".terminal-bar button")].find((item) => item.textContent === ' + JSON.stringify(text) + ' || item.getAttribute("aria-label") === ' + JSON.stringify(text) + ')';
   const paneHas = (index, text) => 'document.querySelectorAll(".terminal-pane")[' + index + ']?.querySelector(".xterm-rows")?.textContent.includes(' + JSON.stringify(text) + ')';
   const bothSettled = '[...document.querySelectorAll(".terminal-status")].every((item) => item.hidden)';
   await page.evaluate(barButton('Split right') + '.click()');
