@@ -299,6 +299,30 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
     await checkSide(where);
     await collect();
   }
+  // As wide as it goes, in a window as narrow as allows a side, nothing in the top bar runs under the panel.
+  const topbarClear = 'JSON.stringify((() => {' +
+    'const panel = document.getElementById("terminal-panel").getBoundingClientRect();' +
+    'const items = [...document.querySelectorAll(".content > .topbar button, .content > .topbar .crumbs")].filter((item) => item.getClientRects().length).map((item) => item.getBoundingClientRect());' +
+    'return { panel: [panel.left, panel.right], furthest: Math.max(...items.map((item) => item.right)), nearest: Math.min(...items.map((item) => item.left)), scroll: document.documentElement.scrollWidth, innerWidth };' +
+    '})())';
+  const growPanel = 'for (let press = 0; press < 80; press++) document.querySelector(".terminal-resizer").dispatchEvent(new KeyboardEvent("keydown", { key: document.documentElement.dataset.terminalPlace === "right" ? "ArrowLeft" : "ArrowRight", bubbles: true }))';
+  for (const [label, where] of [['Right', 'right'], ['Left', 'left']]) {
+    for (const width of [1280, 1000]) {
+      await page.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+      await choosePlace(label);
+      await until('the panel at the ' + where + ' in ' + width, 'document.documentElement.dataset.terminalPlace === ' + JSON.stringify(where) + ' && innerWidth === ' + width);
+      await page.evaluate(growPanel);
+      await sleep(200);
+      const facts = JSON.parse(await page.evaluate(topbarClear));
+      const clear = where === 'right' ? facts.furthest <= facts.panel[0] + 1 : facts.nearest >= facts.panel[1] - 1;
+      if (!clear || facts.scroll > facts.innerWidth + 1) throw new Error('at the ' + where + ' in ' + width + ', the top bar runs under the panel or the page scrolls sideways: ' + JSON.stringify(facts));
+    }
+  }
+  await page.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+  await page.evaluate('localStorage.removeItem("rotari-terminal-width"); document.documentElement.style.removeProperty("--terminal-saved-width")');
+  await choosePlace('Left');
+  await until('the panel at the left again', 'document.documentElement.dataset.terminalPlace === "left"');
+
   // It stays there with the next page, and keeps the shell.
   await page.evaluate('location.href = "/project/p1"');
   await until('the next page with the panel at the left', 'document.documentElement.dataset.terminalPlace === "left" && document.querySelector(".xterm-helper-textarea") !== null');

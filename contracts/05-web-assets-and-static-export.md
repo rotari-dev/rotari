@@ -1436,8 +1436,8 @@ line breaks and tabs, up to 256 KiB; with several lines, only where the program 
 paste, since elsewhere each line would run. It starts no shell, takes none from another browser tab, and refuses text with
 control characters, saying why in each case; a page with no terminal has no such button. The panel's requests
 go to the server's root on a page under a basedir's mount too.
-At a side the panel has the window's height and a width of its own, between 320 pixels and what leaves the page 480, and the page, its
-top bar, and its dialogs take the rest; under 1000 pixels wide it is at the bottom, and the choice stays for a wider window. Moving it changes no
+At a side the panel has the window's height and a width of its own, from 320 pixels up to what leaves 400 beside the sidebar, and the page, its
+top bar, which wraps rather than running under the panel, and its dialogs take the rest; under 1000 pixels wide it is at the bottom, and the choice stays for a wider window. Moving it changes no
 connection, and panes stack when the panel is under 720 pixels wide, keeping their columns for when it has room.
 xterm.js loads when the panel first opens, under the page's nonce. A browser tab that is not visible
 neither connects nor retries, and a page whose sign-in has gone stops retrying and says so

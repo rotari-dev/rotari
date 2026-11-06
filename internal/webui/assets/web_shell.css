@@ -729,6 +729,16 @@ html.terminal-open[data-terminal-place="left"] {
 html.terminal-open[data-terminal-place="right"] {
   --terminal-right: var(--terminal-saved-width, 480px);
 }
+/* The top bar is over the panel, for its menus, so what is in it must not run under the
+   panel in the room left: it wraps. */
+html.terminal-open[data-terminal-place] .content > .topbar,
+html.terminal-open[data-terminal-place] .content > .topbar .toolbar {
+  flex-wrap: wrap;
+}
+html.terminal-open[data-terminal-place] .content > .topbar .toolbar {
+  justify-content: flex-end;
+  max-width: 100%;
+}
 html.terminal-open body {
   min-height: calc(100vh - var(--terminal-height));
   padding-bottom: var(--terminal-height);

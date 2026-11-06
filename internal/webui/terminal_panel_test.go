@@ -1850,7 +1850,20 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(placeOf(badPlace), undefined);
   assert.equal(badPlace.document.querySelector('.terminal-resizer').getAttribute('aria-orientation'), 'horizontal');
   const wideSaved = load(process.argv[1], { place: 'right', width: '99999' });
-  assert.equal(sideRoom(wideSaved), (wideSaved.window.innerWidth - 480) + 'px');
+  assert.equal(sideRoom(wideSaved), (wideSaved.window.innerWidth - 400) + 'px');
+  // That room counts the sidebar, as wide as someone has made it, and only the panel's room gives way.
+  const besideSidebar = load(process.argv[1], { place: 'right', width: '99999' });
+  await wait(20);
+  const sidebarOf = besideSidebar.document.querySelector('.sidebar');
+  Object.defineProperty(sidebarOf, 'offsetWidth', { configurable: true, get: () => 200 });
+  besideSidebar.server.observers.forEach((observer) => observer());
+  assert.equal(sideRoom(besideSidebar), (besideSidebar.window.innerWidth - 200 - 400) + 'px');
+  Object.defineProperty(sidebarOf, 'offsetWidth', { configurable: true, get: () => 300 });
+  besideSidebar.server.observers.forEach((observer) => observer());
+  assert.equal(sideRoom(besideSidebar), '324px');
+  assert.equal(besideSidebar.window.localStorage.getItem('rotari-terminal-width'), '99999', 'the choice was lost to the room');
+  // The top bar is over the panel, so it wraps rather than running under it.
+  assert.match(webShellCSS, /\[data-terminal-place\] \.content > \.topbar,\s*html\.terminal-open\[data-terminal-place\] \.content > \.topbar \.toolbar \{\s*flex-wrap: wrap;/);
   assert.equal(sideRoom(load(process.argv[1], { place: 'left', width: '5' })), '320px');
   // A closed panel still knows its place, before the page is drawn, and takes no room.
   const closedSide = load(process.argv[1], { place: 'left' });

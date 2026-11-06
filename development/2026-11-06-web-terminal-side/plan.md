@@ -40,7 +40,7 @@ the rule that the top bar's menus open over the panel.
 3. **On the left, outside the sidebar:** panel, sidebar, content, by `body`'s padding as at the bottom. Between the
    sidebar and the content would keep the sidebar at the window's edge, but would mean changing how the page is laid out.
 4. **Width and height are kept apart.** A new `rotari-terminal-width` holds the side's size, from 480 pixels, so that
-   moving the panel and back restores each. Left and right share it. It is at least 320 pixels and leaves the page 480.
+   moving the panel and back restores each. Left and right share it. It is at least 320 pixels and leaves 400 beside the sidebar, however wide the sidebar has been made.
 5. **Narrow windows use the bottom.** Under 1000 pixels the panel is at the bottom whatever is chosen, and the choice
    stays for a wider window: a page narrower than its layouts expect is the main danger of this work, and the drawer
    sidebar assumes the left edge is free.

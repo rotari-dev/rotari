@@ -155,7 +155,7 @@
   const aliveInterval = 60000;
   const minHeight = 120;
   const minWidth = 320;
-  const minPageWidth = 480;
+  const minContentWidth = 400;
   const maxPanes = 4;
   const minPaneWidth = 200;
   const minPaneHeight = 100;
@@ -257,8 +257,11 @@
   // The page cannot lose all its room to the panel, nor the panel all of its own.
   const clampHeight = (height) =>
     Math.max(minHeight, Math.min(height, Math.max(minHeight, innerHeight - minHeight)));
+  // The page beside a panel needs its sidebar, which someone can resize, and room for the
+  // rest. Before the page exists there is no sidebar to measure, so this runs again then.
+  const pageWidthNeeded = () => (document.querySelector(".sidebar")?.offsetWidth || 0) + minContentWidth;
   const clampWidth = (width) =>
-    Math.max(minWidth, Math.min(width, Math.max(minWidth, innerWidth - minPageWidth)));
+    Math.max(minWidth, Math.min(width, Math.max(minWidth, innerWidth - pageWidthNeeded())));
   const root = document.documentElement;
   const rememberedMaximized = () => {
     try {
@@ -1811,6 +1814,9 @@
       addJobsSendButtons();
       sayAlive();
       setInterval(sayAlive, aliveInterval);
+      applySavedSizes();
+      const sidebar = document.querySelector(".sidebar");
+      if (sidebar) new ResizeObserver(applySavedSizes).observe(sidebar);
       setInterval(() => {
         if (!document.hidden && !panes.some((pane) => pane.whenVisible)) refreshShells();
       }, shellsRefresh);
