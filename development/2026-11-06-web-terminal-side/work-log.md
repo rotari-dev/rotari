@@ -96,4 +96,4 @@
 
 **Validation:** The new test failed before the fix with `'300px' !== '400px'`, and passes after it. `go test ./...` passed on top of `4c81ccb1`, and `go vet ./...`, `gofmt`, and `tsc` found nothing. `TestTerminalPanelInBrowser` was skipped here for lack of Chrome, and the user trying it is the check in a real browser.
 
-**Remaining:** The user's look, then integrating and pushing, and CI's result for the browser checks at a side.
+**Remaining:** The new measurement's first run on CI, with this push. The user tried the build and said it is fixed. CI on `34a8551b` passed on its second attempt: the first lost its runner, and the browser checks at a side passed in the second, as the `go` job requires them.
