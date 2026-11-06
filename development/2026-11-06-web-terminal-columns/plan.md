@@ -1,7 +1,8 @@
 # Plan: Up to four panes in the Web terminal panel
 
 Created: 2026-11-06
-Status: Not started; [step 0](#step-0-the-first-run-on-ci) needs a push. Follows
+Status: [Step 1](#step-1-place-panes-by-position-still-two) is committed and waits to be looked at; [step 0](#step-0-the-first-run-on-ci)'s
+CI run is under way. See the [work log](work-log.md). Follows
 [the split plan](../2026-11-06-web-terminal-split/plan.md), whose terms this uses. The limit of four, the single level of
 nesting, and closing the focused pane are the user's choices. They accepted decisions 3, 6, and 7 as proposed, decision 3
 tentatively: it is an implementation choice to judge by what step 1 does to the panel. Decisions 5 and 8 were not raised
