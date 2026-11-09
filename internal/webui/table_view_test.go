@@ -2092,8 +2092,12 @@ func TestTableViewMovesBetweenDirectoriesInBrowser(t *testing.T) {
   document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true }));
   await until('Alt+Up to the source', () => !crumbs().length && enter('eval') && !window.location.search.includes('child='));
   enter('eval').click();
-  await until('eval again', () => current() === 'eval');
-  window.history.pushState(null, '', document.querySelector('#tv-table a.tv-open-table').getAttribute('href'));
+  // The name changes before the rows do, so wait for eval's own rows, and take its table
+  // file's link by name rather than the first one, which the source's rows may still hold.
+  await until('eval again', () => current() === 'eval' && enter('ref'));
+  const scoresLink = [...document.querySelectorAll('#tv-table a.tv-open-table')].find(a => new window.URL(a.href).searchParams.get('child') === 'eval/scores.csv');
+  if (!scoresLink) fail('no link to eval/scores.csv', document.getElementById('tv-table').innerHTML.slice(0, 2000));
+  window.history.pushState(null, '', scoresLink.getAttribute('href'));
   window.dispatchEvent(new window.PopStateEvent('popstate'));
   await until('table file', () => current() === 'scores.csv' && headings().includes('id'));
   document.querySelector('#tv-name a.tv-crumb:last-of-type').click();
