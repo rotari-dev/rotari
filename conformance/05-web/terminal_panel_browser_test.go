@@ -374,6 +374,8 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
 
   // All shells shows a card for each shell in the page's dialog, as a log is, saying where
   // it is now, and choosing one closes it.
+  // The send above typed its line without Enter; run it first, so that cd starts a line of its own.
+  await typeLine('');
   await typeLine('cd / && echo "rooted-$((3+4))"');
   await until('the shell to move', screenHas('rooted-7'));
   await page.evaluate(barButton('All shells') + '.click()');

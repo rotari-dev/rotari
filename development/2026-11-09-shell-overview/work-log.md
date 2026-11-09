@@ -272,3 +272,22 @@ overview and the launch dialog took their frame from `.output-modal` and `.outpu
 checks the dialog is fixed and in view; it runs only on CI, as Chrome is not here.
 
 **Remaining:** Seeing it on the Recent jobs page and in the panel's own window.
+
+## Step 13: the browser test's cd
+
+**Commits:** Not yet committed.
+
+**Change:** `TestTerminalPanelInBrowser` failed on CI at the overview step: every card showed the directory its shell
+started in, none `/`. The window step before it sends `echo popped-$((2+3))` with `sendToTerminal`, which types
+without Enter, so the step's `cd / && echo "rooted-$((3+4))"` joined that line and ran as `echo popped-5cd /` and
+`echo rooted-7`: no `cd`, while the awaited `rooted-7` still appeared. The step now presses Enter on the pending line
+first. The overview and `Keeper.Dir` were right; `TestDirIsWhereTheShellIsNow` and
+`TestTerminalPreviewSaysWhereTheShellIs` passed in the same CI run.
+
+**Reason:** The CI failure the user reported on 2026-11-09.
+
+**Plan impact:** None.
+
+**Validation:** `go vet ./conformance/05-web`. The browser test runs only on CI, as Chrome is not here.
+
+**Remaining:** The next CI run.
