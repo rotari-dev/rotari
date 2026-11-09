@@ -134,7 +134,7 @@ starts none. A log or other text of several lines goes in as pasted text, withou
 256 KiB, and only where the program takes it as such, such as a recent `bash` or `zsh` prompt or an
 editor; elsewhere each line would run, so the button says so and sends nothing.
 
-**Clear** empties the tab's screen and scrollback, and what would be shown again after following a
+The **Clear** icon empties the tab's screen and scrollback, and what would be shown again after following a
 link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing
 while a full-screen program such as `vim` runs, and says so.
 
@@ -147,7 +147,7 @@ pane with a colored top edge has the keys, and **Clear** and the send buttons ac
 
 There is one row of tabs. Clicking a tab shows it in the focused pane, and a dashed tab is in another
 pane: clicking it makes the two panes change places, since a shell cannot be in two. **+** starts a
-shell in the focused pane. **Close pane** closes the focused pane, and its shell keeps running in its tab;
+shell in the focused pane. The **Close pane** icon closes the focused pane, and its shell keeps running in its tab;
 closing a tab ends its shell, wherever it shows. When a pane's shell ends, the pane moves to a tab not
 in a pane, or closes if there is none. Each browser tab keeps its own panes for each
 project, and gets them back after following a link.
@@ -165,7 +165,8 @@ before you click, as in any terminal.
 
 **A-** and **A+** change the text size, which the browser remembers.
 
-**Maximize** gives the panel the whole window, for programs such as `vim`, until you press **Restore**.
+The **Maximize** icon gives the panel the whole window, for programs such as `vim`, until you press it
+again, now **Restore**. Each icon's name shows when you point at it.
 The browser remembers it from page to page. Keep the panel small to reach the page's menus and dialogs.
 
 Opening the panel starts a shell if the project has none. Following a link to another project with

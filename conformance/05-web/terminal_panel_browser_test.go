@@ -136,7 +136,7 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
     'return box.top === 0 && box.bottom === innerHeight && top.closest("#terminal-panel") !== null;' +
     '})()';
   if (await page.evaluate(covers)) throw new Error('the panel covered the page before it was maximized');
-  await page.evaluate('[...document.querySelectorAll(".terminal-bar button")].find((item) => item.textContent === "Maximize").click()');
+  await page.evaluate('[...document.querySelectorAll(".terminal-bar button")].find((item) => item.getAttribute("aria-label") === "Maximize").click()');
   // Says what it found, since nothing but CI runs this.
   const measured = 'JSON.stringify((() => {' +
     'const box = document.getElementById("terminal-panel").getBoundingClientRect();' +
@@ -146,7 +146,7 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the panel to cover the window', covers).catch(async (error) => {
     throw new Error(error.message + '; measured ' + (await page.evaluate(measured)));
   });
-  await page.evaluate('[...document.querySelectorAll(".terminal-bar button")].find((item) => item.textContent === "Restore").click()');
+  await page.evaluate('[...document.querySelectorAll(".terminal-bar button")].find((item) => item.getAttribute("aria-label") === "Restore").click()');
   await until('the panel to give the window back', '!' + covers);
   await collect();
 

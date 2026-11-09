@@ -138,6 +138,31 @@
   const placeKey = "rotari-terminal-place";
   // The line that marks where the panel is, in a picture of the window.
   const placeLines = { bottom: "M1.5 9.5h13", left: "M5.5 2.5v11", right: "M10.5 2.5v11" };
+  // The bar's pictures, drawn in a 16 by 16 box: a string is a path, and an object a rectangle.
+  const paneFrame = { x: 1.5, y: 2.5, width: 13, height: 11, rx: 1.5 };
+  const icons = {
+    clear: ["M2.5 4.5h8", "M2.5 8h8", "M2.5 11.5h4.5", "M10 10l3.5 3.5", "M13.5 10L10 13.5"],
+    closePane: [paneFrame, "M6 6l4 4", "M10 6l-4 4"],
+    maximize: ["M9.5 2.5h4v4", "M13.5 2.5L9 7", "M6.5 13.5h-4v-4", "M2.5 13.5L7 9"],
+    restore: ["M13.5 2.5L9.5 6.5", "M9.5 3v3.5H13", "M2.5 13.5l4-4", "M6.5 13V9.5H3"],
+    hide: ["M3.5 12.5h9"],
+  };
+  // drawIcon replaces what a button shows with a picture. Its label names it for those who
+  // cannot see the picture, and its title for those who point at it.
+  const drawIcon = (button, shapes) => {
+    const svgNS = "http://www.w3.org/2000/svg";
+    const icon = document.createElementNS(svgNS, "svg");
+    icon.setAttribute("viewBox", "0 0 16 16");
+    icon.setAttribute("aria-hidden", "true");
+    for (const shape of shapes) {
+      const element = document.createElementNS(svgNS, typeof shape === "string" ? "path" : "rect");
+      if (typeof shape === "string") element.setAttribute("d", shape);
+      else for (const [name, value] of Object.entries(shape)) element.setAttribute(name, String(value));
+      icon.append(element);
+    }
+    button.classList.add("terminal-icon");
+    button.replaceChildren(icon);
+  };
   const shownKey = "rotari-terminal-shell";
   const layoutKey = "rotari-terminal-layout";
   const maximizedKey = "rotari-terminal-maximized";
@@ -273,7 +298,10 @@
   const applyMaximized = (maximized) => {
     root.classList.toggle("terminal-maximized", maximized);
     if (!maximize) return;
-    maximize.textContent = maximized ? "Restore" : "Maximize";
+    const label = maximized ? "Restore" : "Maximize";
+    drawIcon(maximize, maximized ? icons.restore : icons.maximize);
+    maximize.title = maximized ? "Restore the panel's size" : "Give the panel the whole window";
+    maximize.setAttribute("aria-label", label);
     maximize.setAttribute("aria-pressed", String(maximized));
   };
   const toggleMaximized = () => {
@@ -1504,7 +1532,8 @@
     spacer.className = "terminal-spacer";
     const clear = document.createElement("button");
     clear.type = "button";
-    clear.textContent = "Clear";
+    drawIcon(clear, icons.clear);
+    clear.setAttribute("aria-label", "Clear");
     clear.title = "Clear this shell's screen and scrollback, here and on the server";
     clear.onclick = () => {
       const pane = focused;
@@ -1529,40 +1558,35 @@
       button.onclick = onclick;
       return button;
     };
-    // The same pictures as the Table viewer's panes, for the same two choices.
-    const iconButton = (label, line, onclick) => {
-      const button = barButton("", label, onclick);
-      button.className = "terminal-icon";
+    const iconButton = (label, shapes, onclick, title = label) => {
+      const button = barButton("", title, onclick);
       button.setAttribute("aria-label", label);
-      const svgNS = "http://www.w3.org/2000/svg";
-      const icon = document.createElementNS(svgNS, "svg");
-      icon.setAttribute("viewBox", "0 0 16 16");
-      icon.setAttribute("aria-hidden", "true");
-      const frame = document.createElementNS(svgNS, "rect");
-      for (const [name, value] of Object.entries({ x: 1.5, y: 2.5, width: 13, height: 11, rx: 1.5 })) {
-        frame.setAttribute(name, String(value));
-      }
-      const divider = document.createElementNS(svgNS, "path");
-      divider.setAttribute("d", line);
-      icon.append(frame, divider);
-      button.append(icon);
+      drawIcon(button, shapes);
       return button;
     };
-    splitRightButton = iconButton("Split right", "M8 2.5v11", () => splitPane(true));
-    splitDownButton = iconButton("Split down", "M1.5 8h13", () => splitPane(false));
-    placeButton = iconButton("Panel position", placeLines.bottom, openPlaceMenu);
+    // The split and place pictures are the Table viewer's panes, for the same choices.
+    splitRightButton = iconButton("Split right", [paneFrame, "M8 2.5v11"], () => splitPane(true));
+    splitDownButton = iconButton("Split down", [paneFrame, "M1.5 8h13"], () => splitPane(false));
+    placeButton = iconButton("Panel position", [paneFrame, placeLines.bottom], openPlaceMenu);
     placeButton.disabled = false;
-    closePaneButton = barButton("Close pane", "Close this pane; its shell keeps running", () => {
-      closePane(focused);
-      focused.term?.focus();
-    });
+    closePaneButton = iconButton(
+      "Close pane",
+      icons.closePane,
+      () => {
+        closePane(focused);
+        focused.term?.focus();
+      },
+      "Close this pane; its shell keeps running",
+    );
     maximize = document.createElement("button");
     maximize.type = "button";
     maximize.onclick = toggleMaximized;
     applyMaximized(rememberedMaximized());
     const hide = document.createElement("button");
     hide.type = "button";
-    hide.textContent = "Hide";
+    drawIcon(hide, icons.hide);
+    hide.setAttribute("aria-label", "Hide");
+    hide.title = "Hide the terminal; its shells keep running";
     hide.onclick = () => window.toggleTerminalPanel();
     bar.append(
       title,

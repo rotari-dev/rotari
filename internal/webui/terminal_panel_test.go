@@ -338,7 +338,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.doesNotMatch(sockets[0].url, /takeover/, 'opening the panel did not take the shell');
 
   // Clear empties the screen and the server's replay, and does neither unconnected.
-  const clearButton = [...document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === 'Clear');
+  const clearButton = [...document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'Clear');
   clearButton.click();
   assert.equal(terminals[0].cleared, 1);
   assert.deepEqual(JSON.parse(sockets[11].sent.at(-1)), { type: 'clear' });
@@ -356,22 +356,22 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   terminals[0].buffer.active.type = 'normal';
 
   // Maximize covers the page, comes back with the next page, and changes no connection.
-  const maximizeButton = [...document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === 'Maximize');
+  const maximizeButton = [...document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'Maximize');
   assert.equal(maximizeButton.getAttribute('aria-pressed'), 'false');
   maximizeButton.click();
   assert.equal(document.documentElement.classList.contains('terminal-maximized'), true);
-  assert.equal(maximizeButton.textContent, 'Restore');
+  assert.equal(maximizeButton.getAttribute('aria-label'), 'Restore');
   assert.equal(maximizeButton.getAttribute('aria-pressed'), 'true');
   assert.equal(window.localStorage.getItem('rotari-terminal-maximized'), '1');
   assert.equal(sockets.length, 12, 'maximizing reconnected');
   maximizeButton.click();
   assert.equal(document.documentElement.classList.contains('terminal-maximized'), false);
-  assert.equal(maximizeButton.textContent, 'Maximize');
+  assert.equal(maximizeButton.getAttribute('aria-label'), 'Maximize');
   assert.equal(window.localStorage.getItem('rotari-terminal-maximized'), '0');
   const big = load(process.argv[1], { stored: '1', maximized: true });
   await wait(50);
   assert.equal(big.document.documentElement.classList.contains('terminal-maximized'), true, 'the next page lost it');
-  assert.equal([...big.document.querySelectorAll('.terminal-bar button')].some((item) => item.textContent === 'Restore'), true);
+  assert.equal([...big.document.querySelectorAll('.terminal-bar button')].some((item) => item.getAttribute('aria-label') === 'Restore'), true);
   assert.match(webShellCSS, /html\.terminal-open\.terminal-maximized #terminal-panel \{\s*top: 0;\s*z-index: 50;/);
   // The panel is a <section>, and the page's rule for those would make it a card that stops short of the window's edges.
   assert.match(webShellCSS, /\n#terminal-panel \{[^}]*margin: 0;\s*padding: 0;\s*border: 0;\s*border-top: 1px solid var\(--line\);\s*border-radius: 0;\s*box-shadow: none;/);
@@ -400,7 +400,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   }
 
   // Hide leaves the shell and the connection alone.
-  [...document.querySelectorAll('.terminal-bar button')].find((item) => item.textContent === 'Hide').click();
+  [...document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'Hide').click();
   assert.equal(document.getElementById('terminal-panel').hidden, true);
   assert.equal(window.localStorage.getItem('rotari-terminal-open'), '0');
   assert.equal(button.getAttribute('aria-pressed'), 'false');
