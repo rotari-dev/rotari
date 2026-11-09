@@ -698,6 +698,20 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   await wait(30);
   assert.deepEqual(deleted().slice(2), ['DELETE /_terminal/shells/1', 'DELETE /_terminal/shells/2']);
   assert.deepEqual(menuPage.server.shells.map((shell) => shell.id), ['9'], 'closing all reached another project');
+  // A command that finished out of sight rings a bell on its tab, in place of the dot, and
+  // on its All shells card; the shown shell's does not.
+  const belling = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [{ ...inProject('1', 1, 'p1'), command_finished: true }, { ...inProject('2', 2, 'p1'), command_finished: true, unseen_output: true }, { ...inProject('3', 3, 'p1'), unseen_output: true }], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const bellTabs = [...belling.document.querySelectorAll('.terminal-tab')];
+  assert.deepEqual(bellTabs.map((tab) => [tab.classList.contains('terminal-tab-finished'), tab.classList.contains('terminal-tab-unseen')]), [[false, false], [true, false], [false, true]]);
+  assert.equal(bellTabs[1].querySelector('[role=tab]').getAttribute('aria-label'), 'Shell 2, command finished');
+  assert.match(bellTabs[1].querySelector('[role=tab]').title, /^A command finished\. /);
+  [...belling.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'All shells').click();
+  await wait(30);
+  const bellCard = (id) => belling.document.querySelector('.terminal-overview-card[data-shell="' + id + '"]');
+  assert.deepEqual(['1', '2', '3'].map((id) => [bellCard(id).classList.contains('terminal-overview-finished'), bellCard(id).querySelector('.terminal-overview-state').textContent]), [[false, 'shown'], [true, 'command finished'], [false, 'new output']]);
+  assert.match(webShellCSS, /\.terminal-tab-finished \[role="tab"\]::before,\s*\.terminal-overview-finished \.terminal-overview-name::before \{/);
+
   // Closing every project's shells ends them all, the shown one last, after asking in so many
   // words; with only this project's, it is off, since Close all tabs does that.
   const everyMenu = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1'), inProject('9', 1, 'p2')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });

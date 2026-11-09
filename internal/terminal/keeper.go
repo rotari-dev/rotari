@@ -108,6 +108,9 @@ type ShellInfo struct {
 	// UnseenOutput says it has printed something that no attachment has shown since one
 	// last did. A shell nothing has ever shown does not count: it is only starting.
 	UnseenOutput bool
+	// CommandFinished says a command the shell ran ended, back at its prompt, while no
+	// attachment showed it, and none has since.
+	CommandFinished bool
 }
 
 // Keeper holds shells, which outlive the attachments that show them: callers come
@@ -137,7 +140,10 @@ type keptShell struct {
 	attached *Attachment
 	// shown says something has attached before, so a program may be running that
 	// needs to redraw.
-	shown    bool
+	shown bool
+	// busy says a command held the terminal's foreground when last looked: as an
+	// attachment ended, and as output arrived.
+	busy     bool
 	finished chan struct{}
 }
 
@@ -284,6 +290,7 @@ func (keeper *Keeper) attach(id string, rows, cols uint16, takeOver bool) (*Atta
 	}
 	shell.shown = true
 	shell.info.UnseenOutput = false
+	shell.info.CommandFinished = false
 	keeper.stopIdleTimer()
 	if shell.attached != nil {
 		shell.detach(TakenOver)
@@ -351,8 +358,19 @@ func (keeper *Keeper) deliver(shell *keptShell, output []byte) {
 	defer keeper.mu.Unlock()
 	shell.ring.write(output)
 	attachment := shell.attached
+	busy, err := shell.session.busy()
 	if attachment == nil {
 		shell.info.UnseenOutput = shell.info.UnseenOutput || shell.shown
+		// The shell prints its prompt once a command ends, so output that finds it back
+		// in the foreground after a command is that command's end.
+		if err == nil && shell.busy && !busy {
+			shell.info.CommandFinished = true
+		}
+	}
+	if err == nil {
+		shell.busy = busy
+	}
+	if attachment == nil {
 		return
 	}
 	attachment.pending = append(attachment.pending, output...)
@@ -418,6 +436,10 @@ func (shell *keptShell) detach(reason DetachReason) {
 	shell.attached.reason = reason
 	close(shell.attached.ended)
 	shell.attached = nil
+	// A command that prints nothing until it ends is known by what ran as it left sight.
+	if busy, err := shell.session.busy(); err == nil {
+		shell.busy = busy
+	}
 }
 
 func (keeper *Keeper) anyAttached() bool {

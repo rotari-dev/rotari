@@ -994,7 +994,7 @@ async function copyJobsValue(button) {
     add.disabled = inGroup.length >= groupLimit || shells.length >= shellLimit;
     updatePaneButtons();
     const drawn = JSON.stringify([
-      inGroup.map((shell) => [shell.id, shell.number, shell.name, shell.dir, shell.unseen_output]),
+      inGroup.map((shell) => [shell.id, shell.number, shell.name, shell.dir, shell.unseen_output, shell.command_finished]),
       panes.map((pane) => pane.shown),
       panes.indexOf(focused),
     ]);
@@ -1010,7 +1010,10 @@ async function copyJobsValue(button) {
         const showing = paneShowing(shell.id);
         const elsewhere = Boolean(showing) && showing !== focused;
         const unseen = Boolean(shell.unseen_output) && !showing;
-        tab.classList.toggle("terminal-tab-unseen", unseen);
+        // A command that ended out of sight rings a bell, in place of the dot.
+        const finished = Boolean(shell.command_finished) && !showing;
+        tab.classList.toggle("terminal-tab-unseen", unseen && !finished);
+        tab.classList.toggle("terminal-tab-finished", finished);
         tab.classList.toggle("terminal-tab-other-pane", elsewhere);
         const label = document.createElement("button");
         label.type = "button";
@@ -1018,9 +1021,9 @@ async function copyJobsValue(button) {
         label.setAttribute("aria-selected", String(shell.id === focused.shown));
         label.setAttribute(
           "aria-label",
-          "Shell " + shell.number + (shell.name ? ", " + shell.name : "") + (unseen ? ", new output" : "") + (elsewhere ? ", in another pane" : ""),
+          "Shell " + shell.number + (shell.name ? ", " + shell.name : "") + (finished ? ", command finished" : unseen ? ", new output" : "") + (elsewhere ? ", in another pane" : ""),
         );
-        label.title = (unseen ? "New output. " : "") + (elsewhere ? "In another pane. " : "") + "Started in " + shell.dir;
+        label.title = (finished ? "A command finished. " : unseen ? "New output. " : "") + (elsewhere ? "In another pane. " : "") + "Started in " + shell.dir;
         label.textContent = shell.name || String(shell.number);
         label.onclick = () => chooseTab(shell.id);
         const close = document.createElement("button");
@@ -1487,14 +1490,16 @@ async function copyJobsValue(button) {
     const current = ours && focused.shown === shell.id;
     const elsewhere = ours && !current && Boolean(paneShowing(shell.id));
     const unseen = Boolean(shell.unseen_output) && !(ours && paneShowing(shell.id));
+    const finished = Boolean(shell.command_finished) && !(ours && paneShowing(shell.id));
     card.classList.toggle("terminal-overview-current", current);
-    card.classList.toggle("terminal-overview-unseen", unseen);
+    card.classList.toggle("terminal-overview-unseen", unseen && !finished);
+    card.classList.toggle("terminal-overview-finished", finished);
     const name = document.createElement("span");
     name.className = "terminal-overview-name";
     name.textContent = shell.name || "Shell " + shell.number;
     const state = document.createElement("span");
     state.className = "terminal-overview-state";
-    state.textContent = [current && "shown", elsewhere && "in another pane", unseen && "new output"].filter(Boolean).join(", ");
+    state.textContent = [current && "shown", elsewhere && "in another pane", finished ? "command finished" : unseen && "new output"].filter(Boolean).join(", ");
     const top = document.createElement("span");
     top.className = "terminal-overview-top";
     top.append(name, state);

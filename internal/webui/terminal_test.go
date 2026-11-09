@@ -381,6 +381,10 @@ func TestTerminalShellRoutes(t *testing.T) {
 	if shells := listTerminalShells(t, server); len(shells) != 1 {
 		t.Errorf("the requests left %v", shells)
 	}
+	// The list says whether a command finished out of sight, for the tabs' bell.
+	if status, body := terminalRequest(t, server, http.MethodGet, terminalShellsPath); status != http.StatusOK || !strings.Contains(body, `"command_finished":false`) {
+		t.Errorf("the list does not say whether a command finished: status %d: %s", status, body)
+	}
 }
 
 // A preview says where the shell is now, without taking it from the page showing it.

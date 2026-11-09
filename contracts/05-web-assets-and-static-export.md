@@ -1423,7 +1423,8 @@ project. A project's shell has `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME` set to
 rejected on the command line without `--allow-terminal`, and with a bad value from anywhere when the terminal is on,
 before the server starts. `--allow-terminal`, `--allowed-host`, and these options may also come from the environment or
 a config, as WEB-36 says. A shell's `unseen_output` says it has printed something since a connection last showed it, and starts false
-until one has. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
+until one has; its `command_finished` says a command it ran in its foreground ended, back at its prompt, while no
+connection showed it, and a connection showing it clears it. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
 use in its project when it started, and its `link` is the page that shows it. A connection names its shell with
 `shell`, and never starts one: a shell not running closes it with 4005. A shell outlives its
 connections and replays recent output to the next, except what came before a `clear` message. A new connection to it takes it over, closing
@@ -1489,7 +1490,8 @@ with the panel open or not and without connecting to any, on a page in view; wit
 shows no number. Each project row in the sidebar whose project has shells is marked with how many. It opens a panel along the bottom, or down the left or right of the window as the browser
 keeps from a menu in the panel's bar, with a tab for each
 shell of the page's project, or of no project on a page of none. A list names the projects with
-shells, and choosing one goes to its page. **All shells** in the bar opens a dialog over the page, as a log's is,
+shells, and choosing one goes to its page. A tab not shown whose `command_finished` is set shows a bell in place of
+its unseen-output mark, as its All shells card does. **All shells** in the bar opens a dialog over the page, as a log's is,
 with the panel's room left to it: every running shell, grouped by project with the page's first, each with its tab
 name, its shell's working directory now, or where it started, said as such, when that cannot be found, and the
 command running in its foreground, if any, or that it is not known (WEB-34); it connects to none. Choosing one

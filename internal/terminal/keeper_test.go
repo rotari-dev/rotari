@@ -889,3 +889,52 @@ func TestForegroundIsTheProgramRunning(t *testing.T) {
 		t.Errorf("Foreground() of an unknown shell: %v, want ErrNoShell", err)
 	}
 }
+
+// A command counts as finished once it ends with nothing attached, a silent one too;
+// one ending in view, or a background job's output, does not, and attaching clears it.
+func TestCommandFinishedIsAnEndNoAttachmentShowed(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	first := watch(t, keeper)
+	id := keeper.Shells()[0].ID
+	finished := func() bool {
+		t.Helper()
+		return keeper.Shells()[0].CommandFinished
+	}
+	first.run(t, `sleep 0.2; echo "shown-$((1+1))"`, "shown-2")
+	if finished() {
+		t.Error("a command that ended in view counted as finished")
+	}
+	if _, err := fmt.Fprintf(first, "sleep 1\n"); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(testWait); ; time.Sleep(20 * time.Millisecond) {
+		if command, _ := keeper.Foreground(id); command == "sleep 1" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("sleep never ran")
+		}
+	}
+	first.Detach()
+	first.awaitEnd(t, DetachedByCaller)
+	for deadline := time.Now().Add(testWait); !finished(); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("a silent command that ended out of sight never counted as finished")
+		}
+	}
+	second := watchShell(t, keeper, id)
+	if finished() {
+		t.Error("attaching left the command finished")
+	}
+	second.run(t, `(sleep 0.5; echo "late-$((1+1))") & echo "bg-$((1+1))"`, "bg-2")
+	second.Detach()
+	second.awaitEnd(t, DetachedByCaller)
+	for deadline := time.Now().Add(testWait); !keeper.Shells()[0].UnseenOutput; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the background job never printed")
+		}
+	}
+	if finished() {
+		t.Error("a background job's output counted as a command finishing")
+	}
+}

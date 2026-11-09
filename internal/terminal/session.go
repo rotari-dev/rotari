@@ -169,29 +169,45 @@ func (session *Session) Dir() (string, error) {
 // Foreground is the command line of the program the shell runs in the foreground, or
 // "" while the shell itself is, at its prompt. A pipeline gives its first program.
 func (session *Session) Foreground() (string, error) {
+	group, err := session.foregroundGroup()
+	if err != nil {
+		return "", err
+	}
+	if group == session.command.Process.Pid {
+		return "", nil
+	}
+	return processCommand(group)
+}
+
+// busy says something other than the shell holds the terminal's foreground: a command
+// it runs, as opposed to its prompt.
+func (session *Session) busy() (bool, error) {
+	group, err := session.foregroundGroup()
+	return err == nil && group != session.command.Process.Pid, err
+}
+
+// foregroundGroup is the terminal's foreground process group.
+func (session *Session) foregroundGroup() (int, error) {
 	select {
 	case <-session.done:
-		return "", errors.New("the shell has exited")
+		return 0, errors.New("the shell has exited")
 	default:
 	}
 	connection, err := session.terminal.SyscallConn()
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 	var group int
 	var groupErr error
 	if err := connection.Control(func(descriptor uintptr) {
 		group, groupErr = unix.IoctlGetInt(int(descriptor), unix.TIOCGPGRP)
 	}); err != nil {
-		return "", err
+		return 0, err
 	}
 	if groupErr != nil {
-		return "", fmt.Errorf("find the terminal's foreground program: %w", groupErr)
+		return 0, fmt.Errorf("find the terminal's foreground program: %w", groupErr)
 	}
-	if group == session.command.Process.Pid {
-		return "", nil
-	}
-	return processCommand(group)
+	return group, nil
 }
 
 // Done is closed when the shell has exited.

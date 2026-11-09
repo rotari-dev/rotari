@@ -849,3 +849,52 @@ func TestTerminalShellEndsWithTheServer(t *testing.T) {
 		})
 	}
 }
+
+// TestTerminalMarksACommandFinishedOutOfSight checks that the shell list says when a
+// command ended while no connection showed its shell, until one does again.
+func TestTerminalMarksACommandFinishedOutOfSight(t *testing.T) {
+	covers(t, "WEB-34")
+	e := terminalEnv(t)
+	base := e.StartWeb("--allow-terminal")
+	headers := http.Header{"X-Rotari-Token": {launchToken}}
+	finished := func() bool {
+		t.Helper()
+		status, body := terminalShellsRequest(t, http.MethodGet, base+"/_terminal/shells", headers)
+		var listed struct {
+			Shells []struct {
+				CommandFinished bool `json:"command_finished"`
+			} `json:"shells"`
+		}
+		if err := json.Unmarshal(body, &listed); status != http.StatusOK || err != nil || len(listed.Shells) != 1 {
+			t.Fatalf("listing: status %d, %v: %s", status, err, body)
+		}
+		return listed.Shells[0].CommandFinished
+	}
+	page := openTerminalPage(t, base)
+	page.typeLine(`echo "ready-$((1+1))"`)
+	page.await("ready-2")
+	id := listTerminalShells(t, base, headers)[0].ID
+	page.typeLine(`sleep 1`)
+	for deadline := time.Now().Add(terminalWait); ; time.Sleep(20 * time.Millisecond) {
+		if _, body := terminalShellsRequest(t, http.MethodGet, base+"/_terminal/shells/"+id+"/preview", headers); strings.Contains(string(body), `"command":"sleep 1"`) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("sleep never ran")
+		}
+	}
+	if finished() {
+		t.Error("a command still running counted as finished")
+	}
+	_ = page.connection.Close(websocket.StatusNormalClosure, "")
+	for deadline := time.Now().Add(terminalWait); !finished(); time.Sleep(50 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the command that ended out of sight never counted as finished")
+		}
+	}
+	again := openTerminalPage(t, base)
+	again.await("ready-2")
+	if finished() {
+		t.Error("showing the shell again left its command finished")
+	}
+}

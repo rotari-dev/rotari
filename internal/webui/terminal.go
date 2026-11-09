@@ -238,12 +238,14 @@ type terminalShellResponse struct {
 	Dir     string `json:"dir"`
 	// UnseenOutput is what a tab marks.
 	UnseenOutput bool `json:"unseen_output"`
+	// CommandFinished is a command ended out of sight, which a tab and a card mark with a bell.
+	CommandFinished bool `json:"command_finished"`
 	// Link is the page that shows this shell's tabs.
 	Link string `json:"link"`
 }
 
 func (s site) terminalShellResponse(shell terminal.ShellInfo) terminalShellResponse {
-	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Name: shell.Name, Dir: shell.Dir, UnseenOutput: shell.UnseenOutput, Link: "/"}
+	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Name: shell.Name, Dir: shell.Dir, UnseenOutput: shell.UnseenOutput, CommandFinished: shell.CommandFinished, Link: "/"}
 	baseDir, project, ok := strings.Cut(shell.Group, "\x00")
 	if !ok {
 		return response
