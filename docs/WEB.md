@@ -54,6 +54,37 @@ environment variables are in
 | `--static-artifact-contents` | With `--static-dir`, copy previewable artifact files into the export. |
 | `--notifications` | Default state of the browser notification toggle. |
 
+### Setting them in a config or the environment
+
+Each option above can also go in a config file, at the top level or under `[web]`, or in its
+environment variable, except `--artifact-root`. For example, in the global config
+(`~/.config/rotari/config.toml`):
+
+```toml
+[web]
+allow-terminal = true
+terminal-max-shells = 16
+```
+
+`--allow-terminal`, `--allow-exec`, and `--allowed-host` let other people reach this host, so
+`rotari web` reads them only from the command line, the environment, the global config, or a file
+named with `--config`. With the terminal or launchers on, the same goes for `--host` and
+`--auth-token`. A workspace (`.rotari.toml`), basedir, or project config may have been written by
+someone else, or come with a cloned repository, so `rotari web` ignores its values for them and says
+so when it starts:
+
+```text
+WARNING: ignoring allow-terminal = true in workspace config /work/.rotari.toml; rotari web reads it only from the command line, ROTARI_WEB_ALLOW_TERMINAL, the global config, or --config FILE
+```
+
+A value from a config or variable that does not parse, such as `terminal-max-shells = "lots"`, stops
+`rotari web` with an error naming where it came from. With `allow-terminal` or `allow-exec` in the
+global config or the environment, `--static-dir` is rejected, as it is for `host` there; use
+`--config FILE` with a file without them for the export.
+
+Settings in the Web UI cannot add, change, or remove `auth-token` in any config file; edit the file
+directly for that.
+
 ## Reaching the UI
 
 - **Same machine:** the default `127.0.0.1` binding needs no token unless you
@@ -206,7 +237,8 @@ rotari web --allow-terminal
   keeps them, even in the background with its panel closed. A computer that sleeps counts as closing
   its pages, and so does a sign-in that has expired. Use `rotari run` or `tmux` for long work: a run
   started in the terminal carries on regardless.
-- **Changing the limits:**
+- **Changing the limits,** on the command line, in a config, or in the environment (see
+  [above](#setting-them-in-a-config-or-the-environment)):
 
   | Flag | Default | |
   | --- | --- | --- |

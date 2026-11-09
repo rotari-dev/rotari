@@ -716,9 +716,12 @@ projects overview and a project page by
 **WEB-3** `rotari web --static-dir DIR` writes a static export and exits; it
 does not start the live HTTP server. Options that configure that server
 (`--host`, `--port`, `--auth-token`, `--artifact-root`), its control endpoints
-(`--allow-control`), or launching (`--allow-exec`, `--allowed-host`) are
+(`--allow-control`), launching (`--allow-exec`, `--allowed-host`), or the
+terminal (`--allow-terminal` and the `--terminal-*` options) are
 rejected when explicitly supplied by flag, environment, or config, rather than
-accepted and silently ignored. The shared web command
+accepted and silently ignored. A value a workspace, basedir, or project config
+may not supply (WEB-36) is not supplied: it is ignored with its warning, and
+the export goes on. The shared web command
 boundary is in [cmd/rotari/web.go](../cmd/rotari/web.go); static-mode pair and
 standalone checks are in
 [conformance/03-interfaces/pairweb/web_static_pairs_test.go](../conformance/03-interfaces/pairweb/web_static_pairs_test.go).
@@ -1411,7 +1414,9 @@ which replays with its output. With no project it starts in the home directory, 
 project. A project's shell has `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME` set to its basedir and project. Up to eight shells run per project of a basedir, and thirty-two in all, or what
 `--terminal-max-shells-per-project` and `--terminal-max-shells` say. `--terminal-shell` replaces `$SHELL`, and
 `--terminal-replay-size` the 256 KiB of output kept per shell. These flags and `--terminal-idle-timeout` are
-rejected without `--allow-terminal`, or with a bad value, before the server starts. A shell's `unseen_output` says it has printed something since a connection last showed it, and starts false
+rejected on the command line without `--allow-terminal`, and with a bad value from anywhere when the terminal is on,
+before the server starts. `--allow-terminal`, `--allowed-host`, and these options may also come from the environment or
+a config, as WEB-36 says. A shell's `unseen_output` says it has printed something since a connection last showed it, and starts false
 until one has. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
 use in its project when it started, and its `link` is the page that shows it. A connection names its shell with
 `shell`, and never starts one: a shell not running closes it with 4005. A shell outlives its
@@ -1427,6 +1432,26 @@ level by `TestIdleLimitAppliesToTheShellsTogether` and
 `TestKeepAliveHoldsTheIdleLimitOff`. A process that left its session or ignores the hangup,
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
+
+**WEB-36** `--allow-terminal`, `--allow-exec`, `--allowed-host`, and the `--terminal-*` options of `rotari web` have
+environment variables (`ROTARI_WEB_ALLOW_TERMINAL` and so on) and config keys, at the top level or in `[web]`, as other
+options do. Because they let other people reach this host, `--allow-terminal`, `--allow-exec`, and `--allowed-host`
+are read only from the command line, the environment, the global config, and a file named with `--config`; and so are
+`--host` and `--auth-token` when the terminal or launchers end up on. A workspace, basedir, or project config's value
+for them is ignored, the next place in the order (a trusted config, then the built-in default) supplying the value, and
+unless the command line or the environment replaces it anyway, `rotari web` says on stderr, before serving, which key,
+value, and file it ignored. It never shows a token. The `--terminal-*` limits and `--terminal-shell` are read from every
+config. A value for these options from the environment or a config that does not parse is an error, and one out of
+range is when the terminal is on; either names the variable or file it came from, and the server does not start. An
+empty variable counts as unset. `rotari config` templates for a workspace, basedir, or project leave out the options
+those configs cannot set. The Web UI can save the global config, so a save from it that would add, change, or remove
+`auth-token`, at the top level or in `[web]`, in any config file, is refused, naming the file to edit directly, and the
+file is left as it was; the terminal and launchers always require a token, which a page that can save config therefore
+cannot choose. Implemented in [cmd/rotari/web_config.go](../cmd/rotari/web_config.go) and `keepsWebAuthToken` in
+[internal/webui/webui.go](../internal/webui/webui.go); tested by `TestWebTrustedOptionsComeOnlyFromTrustedConfigs` and
+`TestWebConfiguredBadValuesAreErrors` in [cmd/rotari/web_config_test.go](../cmd/rotari/web_config_test.go),
+`TestWebSaveConfigCannotChangeAuthToken` in [internal/webui/webui_test.go](../internal/webui/webui_test.go), and through
+the binary in [conformance/05-web/terminal_config_test.go](../conformance/05-web/terminal_config_test.go).
 
 **WEB-33** `rotari web --allow-terminal` adds a Terminal button to the top bar of the
 application and Recent jobs pages, which shows how many shells there are in all projects, as `Terminal (3)`,

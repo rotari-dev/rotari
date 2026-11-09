@@ -28,6 +28,10 @@ var cliLocationExplicit map[string]bool
 var cliLocationDefaults map[string]string
 var cliIgnoreImplicitLocationDefaults map[string]bool
 
+// cliConfigLayers are the config files read for this invocation, one per
+// file, lowest scope first, so that a value can be traced to its file.
+var cliConfigLayers []config.Loaded
+
 // cliLocatedBaseDir is the state directory found to hold the named project;
 // it replaces implicit basedir defaults for --basedir.
 var cliLocatedBaseDir string
@@ -60,6 +64,7 @@ func loadCLIConfig(args []string) error {
 	cliLocationDefaults = nil
 	cliLocatedBaseDir = ""
 	cliFileConfig = config.Loaded{Values: map[string]any{}}
+	cliConfigLayers = nil
 	baseDir, projectName := configLocationArgs(args)
 	cliBaseDirGiven := baseDir != ""
 	invocationOptions, positional := configInvocationOptions(args)
@@ -91,6 +96,7 @@ func loadCLIConfig(args []string) error {
 			return err
 		}
 		cliFileConfig = config.Loaded{Values: config.Merge(nil, values), Sources: []config.Source{{Scope: "explicit", Path: cliConfigPath}}}
+		cliConfigLayers = []config.Loaded{cliFileConfig}
 		rememberConfigLocations()
 		return nil
 	}
@@ -107,7 +113,7 @@ func loadCLIConfig(args []string) error {
 		if err != nil {
 			return err
 		}
-		cliFileConfig.Add(layer)
+		addCLIConfigLayer(layer)
 	}
 	cliConfig = config.Merge(nil, cliFileConfig.Values)
 	// Registry-wide listings have no single basedir or project config scope.
@@ -186,7 +192,7 @@ func loadCLIConfig(args []string) error {
 		if err != nil {
 			return err
 		}
-		cliFileConfig.Add(layer)
+		addCLIConfigLayer(layer)
 	}
 	cliConfig = config.Merge(nil, cliFileConfig.Values)
 	if projectName == "" && !cliIgnoreImplicitLocationDefaults["project-name"] {
@@ -218,7 +224,7 @@ func loadCLIConfig(args []string) error {
 			if err != nil {
 				return err
 			}
-			cliFileConfig.Add(layer)
+			addCLIConfigLayer(layer)
 		}
 	}
 	cliConfig = config.Merge(nil, cliFileConfig.Values)
@@ -234,6 +240,15 @@ func loadCLIConfig(args []string) error {
 	}
 	rememberConfigLocations()
 	return nil
+}
+
+// addCLIConfigLayer merges a discovered config file into this invocation's
+// values and keeps it in cliConfigLayers.
+func addCLIConfigLayer(layer config.Loaded) {
+	cliFileConfig.Add(layer)
+	if len(layer.Sources) > 0 {
+		cliConfigLayers = append(cliConfigLayers, layer)
+	}
 }
 
 // projectRunListing reports whether command lists runs or what they
@@ -491,6 +506,16 @@ func configTemplateWithDefaults(format string, defaults map[string]any, scopes .
 			filtered = append(filtered, key)
 		}
 		common = filtered
+		// A local config cannot set these; rotari web ignores them there.
+		if scopes[0] != "global" && scopes[0] != "explicit" {
+			kept := sections["web"][:0:0]
+			for _, name := range sections["web"] {
+				if !isWebTrustedOption(name) {
+					kept = append(kept, name)
+				}
+			}
+			sections["web"] = kept
+		}
 	}
 	switch format {
 	case "yaml":

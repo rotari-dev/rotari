@@ -22,7 +22,7 @@ func TestParseWebTerminalSize(t *testing.T) {
 }
 
 func TestNewWebTerminalSettings(t *testing.T) {
-	settings, err := newWebTerminalSettings(5*time.Minute, 4, 2, "1MiB", "/bin/sh")
+	settings, err := newWebTerminalSettings(5*time.Minute, 4, 2, "1MiB", "/bin/sh", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestNewWebTerminalSettings(t *testing.T) {
 		{time.Hour, 1, 1, "big", "", "--terminal-replay-size"},
 		{time.Hour, 1, 1, "1KiB", "/no/such/shell", "--terminal-shell"},
 	} {
-		if _, err := newWebTerminalSettings(test.idle, test.shells, test.group, test.size, test.shell); err == nil || !strings.Contains(err.Error(), test.says) {
+		if _, err := newWebTerminalSettings(test.idle, test.shells, test.group, test.size, test.shell, nil); err == nil || !strings.Contains(err.Error(), test.says) {
 			t.Errorf("%+v: %v", test, err)
 		}
 	}
@@ -52,7 +52,7 @@ func TestNewWebTerminalSettings(t *testing.T) {
 
 // The defaults stand on their own, so a bad one cannot wait for someone to open the panel.
 func TestWebTerminalDefaultsAreValid(t *testing.T) {
-	if _, err := newWebTerminalSettings(webTerminalIdleLimit, webTerminalShellLimit, webTerminalGroupLimit, webTerminalRingSize, ""); err != nil {
+	if _, err := newWebTerminalSettings(webTerminalIdleLimit, webTerminalShellLimit, webTerminalGroupLimit, webTerminalRingSize, "", nil); err != nil {
 		t.Error(err)
 	}
 }

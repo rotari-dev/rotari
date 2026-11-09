@@ -63,26 +63,34 @@ func parseWebTerminalSize(value string) (int, error) {
 	return size, nil
 }
 
-// newWebTerminalSettings checks what the flags say. A shell that cannot run is reported
-// now, rather than when someone first opens the panel.
-func newWebTerminalSettings(idleLimit time.Duration, shellLimit, groupLimit int, replaySize, shell string) (webTerminalSettings, error) {
+// newWebTerminalSettings checks what the options say. A shell that cannot run is reported
+// now, rather than when someone first opens the panel. from names where an option's value
+// came from when it was not the command line, such as an environment variable or a config
+// file, for the error to say.
+func newWebTerminalSettings(idleLimit time.Duration, shellLimit, groupLimit int, replaySize, shell string, from map[string]string) (webTerminalSettings, error) {
 	settings := webTerminalSettings{idleLimit: idleLimit, shellLimit: shellLimit, groupLimit: groupLimit, shell: shell}
+	fail := func(name string, err error) (webTerminalSettings, error) {
+		if source := from[name]; source != "" {
+			err = fmt.Errorf("%w (from %s)", err, source)
+		}
+		return settings, err
+	}
 	if idleLimit < webTerminalMinIdleLimit {
-		return settings, fmt.Errorf("--terminal-idle-timeout %s must be at least %s", idleLimit, webTerminalMinIdleLimit)
+		return fail("terminal-idle-timeout", fmt.Errorf("--terminal-idle-timeout %s must be at least %s", idleLimit, webTerminalMinIdleLimit))
 	}
 	if shellLimit < 1 {
-		return settings, fmt.Errorf("--terminal-max-shells %d must be at least 1", shellLimit)
+		return fail("terminal-max-shells", fmt.Errorf("--terminal-max-shells %d must be at least 1", shellLimit))
 	}
 	if groupLimit < 1 {
-		return settings, fmt.Errorf("--terminal-max-shells-per-project %d must be at least 1", groupLimit)
+		return fail("terminal-max-shells-per-project", fmt.Errorf("--terminal-max-shells-per-project %d must be at least 1", groupLimit))
 	}
 	var err error
 	if settings.ringSize, err = parseWebTerminalSize(replaySize); err != nil {
-		return settings, err
+		return fail("terminal-replay-size", err)
 	}
 	if shell != "" {
 		if _, err := exec.LookPath(shell); err != nil {
-			return settings, fmt.Errorf("--terminal-shell: %w", err)
+			return fail("terminal-shell", fmt.Errorf("--terminal-shell: %w", err))
 		}
 	}
 	return settings, nil

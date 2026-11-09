@@ -3446,7 +3446,9 @@ CLI_SCHEMA: dict[str, Any] = {
                 },
                 {
                     "description": "HTTP listen host (live server only; cannot "
-                    "be combined with --static-dir)",
+                    "be combined with --static-dir); with "
+                    "--allow-exec or --allow-terminal, not read "
+                    "from a workspace, basedir, or project config",
                     "environment": "ROTARI_WEB_HOST",
                     "name": "host",
                     "value_name": "HOST",
@@ -3476,7 +3478,9 @@ CLI_SCHEMA: dict[str, Any] = {
                     "description": "require this token in Authorization: Bearer "
                     "or X-Rotari-Token on the live server; cannot "
                     "be combined with --static-dir; prefer "
-                    "ROTARI_WEB_AUTH_TOKEN for secrets",
+                    "ROTARI_WEB_AUTH_TOKEN for secrets; with "
+                    "--allow-exec or --allow-terminal, not read "
+                    "from a workspace, basedir, or project config",
                     "environment": "ROTARI_WEB_AUTH_TOKEN",
                     "name": "auth-token",
                     "value_name": "TOKEN",
@@ -3508,69 +3512,78 @@ CLI_SCHEMA: dict[str, Any] = {
                     "value_name": "DIR",
                 },
                 {
-                    "command_line_only": True,
                     "description": "let the Web UI run the commands registered "
                     "in the global launchers.toml against "
                     "artifacts; requires job control and a token "
                     "(generated and printed when none is set); "
-                    "cannot be combined with --static-dir",
+                    "cannot be combined with --static-dir; read "
+                    "only from the command line, the environment, "
+                    "the global config, or --config FILE, not "
+                    "from a workspace, basedir, or project config",
+                    "environment": "ROTARI_WEB_ALLOW_EXEC",
                     "name": "allow-exec",
                 },
                 {
-                    "command_line_only": True,
                     "description": "let the Web UI open a shell on this host, as "
                     "you, for anyone who can sign in; requires "
                     "job control and a token (generated and "
                     "printed when none is set), and a direct "
                     "localhost connection or HTTPS; cannot be "
-                    "combined with --static-dir",
+                    "combined with --static-dir; read only from "
+                    "the command line, the environment, the "
+                    "global config, or --config FILE, not from a "
+                    "workspace, basedir, or project config",
+                    "environment": "ROTARI_WEB_ALLOW_TERMINAL",
                     "name": "allow-terminal",
                 },
                 {
-                    "command_line_only": True,
                     "description": "with --allow-terminal, end the shells this "
                     "long after the last Web page closes (at "
                     "least 2m; default 30m)",
+                    "environment": "ROTARI_WEB_TERMINAL_IDLE_TIMEOUT",
                     "name": "terminal-idle-timeout",
                     "value_name": "DURATION",
                 },
                 {
-                    "command_line_only": True,
                     "description": "with --allow-terminal, how many shells may "
                     "run at once (default 32)",
+                    "environment": "ROTARI_WEB_TERMINAL_MAX_SHELLS",
                     "name": "terminal-max-shells",
                     "value_name": "COUNT",
                 },
                 {
-                    "command_line_only": True,
                     "description": "with --allow-terminal, how many shells of "
                     "one project may run at once (default 8)",
+                    "environment": "ROTARI_WEB_TERMINAL_MAX_SHELLS_PER_PROJECT",
                     "name": "terminal-max-shells-per-project",
                     "value_name": "COUNT",
                 },
                 {
-                    "command_line_only": True,
                     "description": "with --allow-terminal, how much of each "
                     "shell's recent output to show again after "
                     "switching tabs or following a link, in "
                     "bytes, KiB, or MiB, from 1KiB to 64MiB "
                     "(default 256KiB)",
+                    "environment": "ROTARI_WEB_TERMINAL_REPLAY_SIZE",
                     "name": "terminal-replay-size",
                     "value_name": "SIZE",
                 },
                 {
-                    "command_line_only": True,
                     "description": "with --allow-terminal, the shell to run "
                     "(default: $SHELL, or /bin/sh)",
+                    "environment": "ROTARI_WEB_TERMINAL_SHELL",
                     "name": "terminal-shell",
                     "value_name": "PATH",
                 },
                 {
-                    "command_line_only": True,
                     "description": "with --allow-exec or --allow-terminal, also "
                     "accept this Host name besides localhost, "
                     "127.0.0.1, ::1, and a specific --host (may "
-                    "be repeated)",
+                    "be repeated); read only from the command "
+                    "line, the environment, the global config, or "
+                    "--config FILE, not from a workspace, "
+                    "basedir, or project config",
+                    "environment": "ROTARI_WEB_ALLOWED_HOST",
                     "name": "allowed-host",
                     "repeated": True,
                     "value_name": "NAME",
@@ -4805,6 +4818,62 @@ CLI_SCHEMA: dict[str, Any] = {
             "description": "Default for rotari run --partial-array.",
             "job": False,
             "name": "ROTARI_RUN_PARTIAL_ARRAY",
+        },
+        {
+            "array": False,
+            "cli_default": True,
+            "description": "Default for rotari web --allow-exec.",
+            "job": False,
+            "name": "ROTARI_WEB_ALLOW_EXEC",
+        },
+        {
+            "array": False,
+            "cli_default": True,
+            "description": "Default for rotari web --allow-terminal.",
+            "job": False,
+            "name": "ROTARI_WEB_ALLOW_TERMINAL",
+        },
+        {
+            "array": False,
+            "cli_default": True,
+            "description": "Default for rotari web --terminal-idle-timeout.",
+            "job": False,
+            "name": "ROTARI_WEB_TERMINAL_IDLE_TIMEOUT",
+        },
+        {
+            "array": False,
+            "cli_default": True,
+            "description": "Default for rotari web --terminal-max-shells.",
+            "job": False,
+            "name": "ROTARI_WEB_TERMINAL_MAX_SHELLS",
+        },
+        {
+            "array": False,
+            "cli_default": True,
+            "description": "Default for rotari web --terminal-max-shells-per-project.",
+            "job": False,
+            "name": "ROTARI_WEB_TERMINAL_MAX_SHELLS_PER_PROJECT",
+        },
+        {
+            "array": False,
+            "cli_default": True,
+            "description": "Default for rotari web --terminal-replay-size.",
+            "job": False,
+            "name": "ROTARI_WEB_TERMINAL_REPLAY_SIZE",
+        },
+        {
+            "array": False,
+            "cli_default": True,
+            "description": "Default for rotari web --terminal-shell.",
+            "job": False,
+            "name": "ROTARI_WEB_TERMINAL_SHELL",
+        },
+        {
+            "array": False,
+            "cli_default": True,
+            "description": "Default for rotari web --allowed-host.",
+            "job": False,
+            "name": "ROTARI_WEB_ALLOWED_HOST",
         },
     ],
     "version": 1,

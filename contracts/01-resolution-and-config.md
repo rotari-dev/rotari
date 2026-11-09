@@ -297,7 +297,8 @@ Implemented by [internal/config/layers.go](../internal/config/layers.go),
   file directly, and selects among multiple files; there is no merged current
   viewer/editor. Control-gated saves identify and validate the selected source
   against allowed targets, parse its format, apply location restrictions, and
-  atomically write only that source. Workspace context is server startup cwd,
+  atomically write only that source. A save that would add, change, or remove
+  `auth-token` is refused (WEB-36). Workspace context is server startup cwd,
   not viewed-job cwd. Generation uses the same scope-aware CLI templates.
   Live and static exports retain the same source-selection UI, with static
   writes refused. Settings on a run page use the same current sources and

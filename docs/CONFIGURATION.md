@@ -64,6 +64,13 @@ the root key, even when that section originated in a lower scope. CLI and
 environment overrides still win. Output paths such as `export --output` are
 command-line-only.
 
+A few `rotari web` options are read only from the global config and a file named
+with `--config`, besides the command line and the environment:
+`allow-terminal`, `allow-exec`, and `allowed-host`, and `host` and `auth-token`
+when the terminal or launchers are on. A workspace, basedir, or project
+config's value for them is ignored with a warning; see
+[Setting them in a config or the environment](WEB.md#setting-them-in-a-config-or-the-environment).
+
 ### Workspace defaults and initialization
 
 Use `rotari init` when you want **one experiment working directory paired

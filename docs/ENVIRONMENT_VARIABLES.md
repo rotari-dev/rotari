@@ -181,5 +181,13 @@ included in the saved merged file-config snapshot. See
 | `ROTARI_RUN_STAGE` | yes | no | no | Default for rotari run --stage. |
 | `ROTARI_RUN_MATRIX` | yes | no | no | Default for rotari run --matrix. |
 | `ROTARI_RUN_PARTIAL_ARRAY` | yes | no | no | Default for rotari run --partial-array. |
+| `ROTARI_WEB_ALLOW_EXEC` | yes | no | no | Default for rotari web --allow-exec. |
+| `ROTARI_WEB_ALLOW_TERMINAL` | yes | no | no | Default for rotari web --allow-terminal. |
+| `ROTARI_WEB_TERMINAL_IDLE_TIMEOUT` | yes | no | no | Default for rotari web --terminal-idle-timeout. |
+| `ROTARI_WEB_TERMINAL_MAX_SHELLS` | yes | no | no | Default for rotari web --terminal-max-shells. |
+| `ROTARI_WEB_TERMINAL_MAX_SHELLS_PER_PROJECT` | yes | no | no | Default for rotari web --terminal-max-shells-per-project. |
+| `ROTARI_WEB_TERMINAL_REPLAY_SIZE` | yes | no | no | Default for rotari web --terminal-replay-size. |
+| `ROTARI_WEB_TERMINAL_SHELL` | yes | no | no | Default for rotari web --terminal-shell. |
+| `ROTARI_WEB_ALLOWED_HOST` | yes | no | no | Default for rotari web --allowed-host. |
 
 <!-- END GENERATED ENVIRONMENT REFERENCE -->

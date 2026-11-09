@@ -191,6 +191,15 @@ it always requires a token and checks `Host` and `Origin`. Its connection also r
 a direct loopback connection, even with an API token, which the rest of the API accepts over plain
 HTTP. The shell's environment leaves out the Web token.
 
+Who can turn it on matters as much. `allow-terminal`, `allow-exec`, and `allowed-host` are read from
+the command line, the environment, the global config, and a file named with `--config`, never from a
+workspace `.rotari.toml`, a basedir config, or a project config, which other people or a cloned
+repository may have written. With the terminal or launchers on, the same goes for `host` and
+`auth-token`, so such a file cannot expose the server on another address or behind a token someone
+else knows. `rotari web` warns of each value it ignores. Keep the global config writable only by you.
+The Web UI's Settings can save the global config, but never its `auth-token`, so whoever can reach
+that page cannot choose the token that the terminal and launchers require.
+
 Signing in is the entrance: there is no second prompt. A page's script could reach the shell if a
 stored value ever became script, which [the page policy](#script-on-web-ui-pages) exists to prevent,
 and a launched service's own pages, which that policy does not cover, can reach it just as they can

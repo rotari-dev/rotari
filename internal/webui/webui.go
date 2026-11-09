@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -1165,10 +1166,39 @@ func (s site) saveSelectedConfig(baseDir string, request webSaveConfigRequest) (
 	if err := config.Validate(selected.Scope, selected.Path, values); err != nil {
 		return "", err
 	}
+	if err := keepsWebAuthToken(*selected, values); err != nil {
+		return "", err
+	}
 	if err := atomicWriteNotificationConfig(selected.Path, []byte(request.Content)); err != nil {
 		return "", err
 	}
 	return selected.Path, nil
+}
+
+// keepsWebAuthToken refuses a save that adds, changes, or removes auth-token,
+// at the top level or in [web]. Anyone who can save config here could
+// otherwise choose the token of the next rotari web, including one with the
+// terminal or launchers on, which always require a token (WEB-36).
+func keepsWebAuthToken(file webprojection.ConfigFile, values map[string]any) error {
+	// A current file that does not parse sets no token, so a save that
+	// repairs it may not add one.
+	current, err := config.Parse(file.Path, []byte(file.Content))
+	if err != nil {
+		current = nil
+	}
+	if !reflect.DeepEqual(webAuthTokens(current), webAuthTokens(values)) {
+		return fmt.Errorf("auth-token cannot be changed from the Web UI; edit %s directly", file.Path)
+	}
+	return nil
+}
+
+func webAuthTokens(values map[string]any) [2]any {
+	var tokens [2]any
+	tokens[0] = values["auth-token"]
+	if section, ok := values["web"].(map[string]any); ok {
+		tokens[1] = section["auth-token"]
+	}
+	return tokens
 }
 
 func (s site) configSources(baseDir, projectName string) []model.ConfigSource {

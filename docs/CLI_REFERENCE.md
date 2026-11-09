@@ -776,22 +776,22 @@ serve the web status UI
 | --- | --- | --- | --- |
 | `--config` | `FILE` | `CLI only` | config file to use |
 | `-b` / `--basedir` | `DIR` | `ROTARI_BASEDIR` | state directory |
-| `--host` | `HOST` | `ROTARI_WEB_HOST` | HTTP listen host (live server only; cannot be combined with --static-dir) |
+| `--host` | `HOST` | `ROTARI_WEB_HOST` | HTTP listen host (live server only; cannot be combined with --static-dir); with --allow-exec or --allow-terminal, not read from a workspace, basedir, or project config |
 | `--port` | `PORT` | `ROTARI_WEB_PORT` | HTTP listen port (live server only; cannot be combined with --static-dir) |
 | `--static-dir` | `DIR` | `ROTARI_WEB_STATIC_DIR` | generate a static web UI |
 | `--allow-control` | `` | `ROTARI_WEB_ALLOW_CONTROL` | enable job control (copy/change/remove/cancel/clear) in the live server; false makes it read-only; incompatible with --static-dir |
-| `--auth-token` | `TOKEN` | `ROTARI_WEB_AUTH_TOKEN` | require this token in Authorization: Bearer or X-Rotari-Token on the live server; cannot be combined with --static-dir; prefer ROTARI_WEB_AUTH_TOKEN for secrets |
+| `--auth-token` | `TOKEN` | `ROTARI_WEB_AUTH_TOKEN` | require this token in Authorization: Bearer or X-Rotari-Token on the live server; cannot be combined with --static-dir; prefer ROTARI_WEB_AUTH_TOKEN for secrets; with --allow-exec or --allow-terminal, not read from a workspace, basedir, or project config |
 | `--notifications` | `` | `ROTARI_WEB_NOTIFICATIONS` | default state of the browser desktop-notification toggle; pass --notifications=false to default it off |
 | `--static-artifact-contents` | `` | `CLI only` | copy previewable artifact files (up to 10 MiB each, 100 MiB in all) into the static export so previews work there; requires --static-dir |
 | `--artifact-root` | `DIR (repeatable)` | `CLI only` | also serve recorded artifact files under this directory, besides each job's working directory (live server only; may be repeated; cannot be combined with --static-dir) |
-| `--allow-exec` | `` | `CLI only` | let the Web UI run the commands registered in the global launchers.toml against artifacts; requires job control and a token (generated and printed when none is set); cannot be combined with --static-dir |
-| `--allow-terminal` | `` | `CLI only` | let the Web UI open a shell on this host, as you, for anyone who can sign in; requires job control and a token (generated and printed when none is set), and a direct localhost connection or HTTPS; cannot be combined with --static-dir |
-| `--terminal-idle-timeout` | `DURATION` | `CLI only` | with --allow-terminal, end the shells this long after the last Web page closes (at least 2m; default 30m) |
-| `--terminal-max-shells` | `COUNT` | `CLI only` | with --allow-terminal, how many shells may run at once (default 32) |
-| `--terminal-max-shells-per-project` | `COUNT` | `CLI only` | with --allow-terminal, how many shells of one project may run at once (default 8) |
-| `--terminal-replay-size` | `SIZE` | `CLI only` | with --allow-terminal, how much of each shell's recent output to show again after switching tabs or following a link, in bytes, KiB, or MiB, from 1KiB to 64MiB (default 256KiB) |
-| `--terminal-shell` | `PATH` | `CLI only` | with --allow-terminal, the shell to run (default: $SHELL, or /bin/sh) |
-| `--allowed-host` | `NAME (repeatable)` | `CLI only` | with --allow-exec or --allow-terminal, also accept this Host name besides localhost, 127.0.0.1, ::1, and a specific --host (may be repeated) |
+| `--allow-exec` | `` | `ROTARI_WEB_ALLOW_EXEC` | let the Web UI run the commands registered in the global launchers.toml against artifacts; requires job control and a token (generated and printed when none is set); cannot be combined with --static-dir; read only from the command line, the environment, the global config, or --config FILE, not from a workspace, basedir, or project config |
+| `--allow-terminal` | `` | `ROTARI_WEB_ALLOW_TERMINAL` | let the Web UI open a shell on this host, as you, for anyone who can sign in; requires job control and a token (generated and printed when none is set), and a direct localhost connection or HTTPS; cannot be combined with --static-dir; read only from the command line, the environment, the global config, or --config FILE, not from a workspace, basedir, or project config |
+| `--terminal-idle-timeout` | `DURATION` | `ROTARI_WEB_TERMINAL_IDLE_TIMEOUT` | with --allow-terminal, end the shells this long after the last Web page closes (at least 2m; default 30m) |
+| `--terminal-max-shells` | `COUNT` | `ROTARI_WEB_TERMINAL_MAX_SHELLS` | with --allow-terminal, how many shells may run at once (default 32) |
+| `--terminal-max-shells-per-project` | `COUNT` | `ROTARI_WEB_TERMINAL_MAX_SHELLS_PER_PROJECT` | with --allow-terminal, how many shells of one project may run at once (default 8) |
+| `--terminal-replay-size` | `SIZE` | `ROTARI_WEB_TERMINAL_REPLAY_SIZE` | with --allow-terminal, how much of each shell's recent output to show again after switching tabs or following a link, in bytes, KiB, or MiB, from 1KiB to 64MiB (default 256KiB) |
+| `--terminal-shell` | `PATH` | `ROTARI_WEB_TERMINAL_SHELL` | with --allow-terminal, the shell to run (default: $SHELL, or /bin/sh) |
+| `--allowed-host` | `NAME (repeatable)` | `ROTARI_WEB_ALLOWED_HOST` | with --allow-exec or --allow-terminal, also accept this Host name besides localhost, 127.0.0.1, ::1, and a specific --host (may be repeated); read only from the command line, the environment, the global config, or --config FILE, not from a workspace, basedir, or project config |
 
 ### `rotari tableview`
 

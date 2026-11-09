@@ -4445,3 +4445,41 @@ func formatInt(value int) string {
 	}
 	return "1"
 }
+
+func TestWebSaveConfigCannotChangeAuthToken(t *testing.T) {
+	baseDir := t.TempDir()
+	basePath := filepath.Join(baseDir, "config.toml")
+	original := "auth-token = \"mine\"\n[web]\nport = 8000\n"
+	if err := os.WriteFile(basePath, []byte(original), stateinternal.FileMode()); err != nil {
+		t.Fatal(err)
+	}
+	handler := Handler(testOptions(baseDir, true))
+	save := func(content string) *httptest.ResponseRecorder {
+		body, err := json.Marshal(map[string]string{"scope": "basedir", "path": basePath, "content": content})
+		if err != nil {
+			t.Fatal(err)
+		}
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/save-config", bytes.NewReader(body)))
+		return recorder
+	}
+	for _, content := range []string{
+		"auth-token = \"theirs\"\n[web]\nport = 8000\n",
+		"[web]\nport = 8000\n",
+		"auth-token = \"mine\"\n[web]\nauth-token = \"theirs\"\n",
+	} {
+		if recorder := save(content); recorder.Code == http.StatusOK || !strings.Contains(recorder.Body.String(), "auth-token cannot be changed from the Web UI") {
+			t.Errorf("save %q: status %d, body %q", content, recorder.Code, recorder.Body.String())
+		}
+		if data, err := os.ReadFile(basePath); err != nil || string(data) != original {
+			t.Fatalf("config after refused save = %q, err = %v", data, err)
+		}
+	}
+	kept := "auth-token = \"mine\"\n[web]\nport = 9000\n"
+	if recorder := save(kept); recorder.Code != http.StatusOK {
+		t.Fatalf("save keeping the token: status %d, body %q", recorder.Code, recorder.Body.String())
+	}
+	if data, err := os.ReadFile(basePath); err != nil || string(data) != kept {
+		t.Fatalf("config = %q, err = %v", data, err)
+	}
+}

@@ -87,17 +87,31 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 	var artifactRoots stringSliceFlag
 	cliValue(fs, &artifactRoots, "artifact-root")
 	staticArtifactContents := cliBool(fs, "static-artifact-contents", false)
-	allowExec := cliBool(fs, "allow-exec", false)
-	allowTerminal := cliBool(fs, "allow-terminal", false)
-	terminalIdleTimeout := cliDuration(fs, "terminal-idle-timeout", webTerminalIdleLimit)
-	terminalMaxShells := cliInt(fs, "terminal-max-shells", webTerminalShellLimit)
-	terminalMaxPerProject := cliInt(fs, "terminal-max-shells-per-project", webTerminalGroupLimit)
-	terminalReplaySize := cliString(fs, "terminal-replay-size", webTerminalRingSize)
-	terminalShell := cliString(fs, "terminal-shell", "")
-	var allowedHosts stringSliceFlag
-	cliValue(fs, &allowedHosts, "allowed-host")
+	// The terminal and launch options read the environment and config
+	// strictly, and webTrustedOptions only trusted configs.
+	configured, configuredErr := readWebConfigured()
+	allowExec := fs.Bool("allow-exec", configured.allowExec, webFlagUsage("allow-exec"))
+	allowTerminal := fs.Bool("allow-terminal", configured.allowTerminal, webFlagUsage("allow-terminal"))
+	terminalIdleTimeout := fs.Duration("terminal-idle-timeout", configured.idleLimit, webFlagUsage("terminal-idle-timeout"))
+	terminalMaxShells := fs.Int("terminal-max-shells", configured.shellLimit, webFlagUsage("terminal-max-shells"))
+	terminalMaxPerProject := fs.Int("terminal-max-shells-per-project", configured.groupLimit, webFlagUsage("terminal-max-shells-per-project"))
+	terminalReplaySize := fs.String("terminal-replay-size", configured.replaySize, webFlagUsage("terminal-replay-size"))
+	terminalShell := fs.String("terminal-shell", configured.shell, webFlagUsage("terminal-shell"))
+	allowedHosts := stringSliceFlag(configured.allowedHosts)
+	fs.Var(&allowedHosts, "allowed-host", webFlagUsage("allowed-host"))
 	if err := cliParse(fs, args); err != nil {
 		return webCommandFlags{}, 1
+	}
+	for _, name := range webTrustedOptions {
+		warnIgnoredWebConfig(fs, name, configured.ignored[name], false)
+	}
+	if configuredErr != nil {
+		printError(configuredErr)
+		return webCommandFlags{}, 1
+	}
+	if *allowExec || *allowTerminal {
+		*host = trustedWebExposedValue(fs, "host", *host, "127.0.0.1")
+		*authToken = trustedWebExposedValue(fs, "auth-token", *authToken, "")
 	}
 	if len(fs.Args()) != 0 || *port < 0 || *port > 65535 {
 		printError("usage: " + cliUsage("web"))
@@ -128,12 +142,21 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 			return webCommandFlags{}, 1
 		}
 	}
-	terminalSettings, err := newWebTerminalSettings(*terminalIdleTimeout, *terminalMaxShells, *terminalMaxPerProject, *terminalReplaySize, *terminalShell)
-	if err != nil {
-		printError(err)
-		return webCommandFlags{}, 1
+	var terminalSettings webTerminalSettings
+	if *allowTerminal {
+		for _, name := range webTerminalOptions {
+			if cliOptionSet(fs, name) {
+				delete(configured.from, name)
+			}
+		}
+		var err error
+		terminalSettings, err = newWebTerminalSettings(*terminalIdleTimeout, *terminalMaxShells, *terminalMaxPerProject, *terminalReplaySize, *terminalShell, configured.from)
+		if err != nil {
+			printError(err)
+			return webCommandFlags{}, 1
+		}
 	}
-	if len(allowedHosts) > 0 && !*allowExec && !*allowTerminal {
+	if cliOptionSet(fs, "allowed-host") && !*allowExec && !*allowTerminal {
 		printError("--allowed-host only applies with --allow-exec or --allow-terminal")
 		return webCommandFlags{}, 1
 	}
@@ -342,13 +365,15 @@ func staticServerOptions(fs *flag.FlagSet, command string, names []string) []str
 	for _, name := range names {
 		provided := cliOptionSet(fs, name)
 		spec := cliCommandFlag(command, name)
-		if !provided && !spec.CommandLineOnly {
+		if !provided && !spec.CommandLineOnly && command == "web" {
+			provided = webOptionConfigured(name)
+		} else if !provided && !spec.CommandLineOnly {
 			if envName := cliCommandEnvironmentVariable(command, name); envName != "" {
 				_, provided = os.LookupEnv(envName)
 			}
-		}
-		if !provided && !spec.CommandLineOnly {
-			_, provided = configValue(name)
+			if !provided {
+				_, provided = configValue(name)
+			}
 		}
 		if provided {
 			incompatible = append(incompatible, name)
