@@ -275,7 +275,7 @@ checks the dialog is fixed and in view; it runs only on CI, as Chrome is not her
 
 ## Step 13: the browser test's cd
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 21:55:54 `818df1a7`.
 
 **Change:** `TestTerminalPanelInBrowser` failed on CI at the overview step: every card showed the directory its shell
 started in, none `/`. The window step before it sends `echo popped-$((2+3))` with `sendToTerminal`, which types
