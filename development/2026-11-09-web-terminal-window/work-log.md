@@ -131,3 +131,25 @@ records the project as followed and goes there, so that the next page does not s
 on this server. jsdom does not navigate, so the page's going is checked by what it records.
 
 **Remaining:** Trying it by hand.
+
+## Step 7: the window closes with its tab
+
+**Commits:** Not yet committed.
+
+**Change:** In [web_shell.js](../../internal/webui/assets/web_shell.js), the window's heartbeat, every second, closes
+the window when the page that opened it had one and `window.opener` is now gone or closed. Following a link or
+reloading keeps the browser tab, whose window object the window keeps as its opener, so only closing the tab closes
+the window. A window opened by its address never had an opener and stays. Closing ends no shell.
+
+**Reason:** On 2026-11-09 the user asked for the window to close when its browser tab is closed, taking back the
+decision that it stays as a terminal of its own.
+
+**Plan impact:** The "When the page goes away" decision and the table's row changed. Back to page saying it has
+nowhere to go is now reached only from a window opened by its address. Done during the shell overview work, in
+the same working copy.
+
+**Validation:** `TestTerminalPanel`: a window whose opener stays open is not closed after a heartbeat, is closed
+within the next once the opener is closed, and ends no shell; a window opened by its address, whose `close` fails the
+test, stays. `go test ./internal/webui -run 'TestTerminalPanel$'` passed. Not tried in a browser.
+
+**Remaining:** Trying it by hand: closing the tab, and reloading and following links in it.

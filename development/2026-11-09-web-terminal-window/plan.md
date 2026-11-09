@@ -37,7 +37,7 @@ window can go on a second screen or beside the browser, and the page keeps all o
 2. **The window follows the page's project, and has its own list.** It opens on the project of the page it came from.
    When the page moves to another project's page, the window switches to that project; a page of no project leaves
    it. Its project list, as the panel's, takes the page to that project's page, and the window switches with it;
-   with the page gone, only the window switches. (First proposed as a window that neither followed nor moved the
+   (First proposed as a window that neither followed nor moved the
    page; after trying it, the user asked for the page and the window to behave as the panel does.)
 3. **The panes and shells move with it.** The page hands its panes for each project to the window, which keeps them in its
    own `sessionStorage`, and the page closes its panel, letting go of its connections first, so that neither side shows
@@ -64,7 +64,8 @@ window can go on a second screen or beside the browser, and the page keeps all o
 | A send button in the page | Types into the window's focused pane, brings the window to the front, and names that pane's project when it is not the page's |
 | **Terminal** in the page's top bar | Brings the window to the front |
 | Closing the window, or **Back to page** | The panel comes back in the page at its previous place, with the window's panes for the page's project |
-| Closing or reloading the page | The window keeps working as a terminal; only Back to page has nowhere to go, and it says so |
+| Reloading the page, or following a link | The window stays, and the page finds it again |
+| Closing the page's browser tab | The window closes too; the shells keep running (first proposed as the window staying as a terminal of its own; see step 7 of the work log) |
 | A narrow window | The panes stack as they do in a narrow panel |
 
 ## Decided
@@ -74,6 +75,8 @@ The user chose the recommended answer to each question, on 2026-11-09:
 - **A send button in the page** types into the window's focused pane and brings the window to the front, saying which
   project that pane is in when it is not the page's.
 - **When the page goes away,** the window stays as a terminal of its own, and **Back to page** says it has nowhere to go.
+  Changed on 2026-11-09, after the window was committed: the user asked for closing the page's browser tab to close
+  the window too ([work log, step 7](work-log.md#step-7-the-window-closes-with-its-tab)).
 - **The menu calls it "Window".**
 - **"Terminal here"** while the window is open starts the shell in the window, switching the window to the page's
   project.

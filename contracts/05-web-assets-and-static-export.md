@@ -1491,15 +1491,17 @@ connection, and panes stack when the panel is under 720 pixels wide, keeping the
 **Window** in the same menu opens the panel in a browser window of its own, from the click, on the page's project
 with the panes this browser tab had for each project; the window fills itself, has no resizer, Maximize, or Hide,
 and its project list, as the panel's does, takes the page that opened it to that project's page, the window
-switching with it; with that page gone, only the window switches. When the page moves to another project's page,
+switching with it. When the page moves to another project's page,
 the window switches to that project; a page of no project, or of the project it last followed, leaves it. The page lets go of its shells without
 saying another tab took them, gives up the panel's room, and keeps whether the panel is open for other pages.
 While the window is open, the Terminal button brings it to the front, a send button types into the window's pane
 with the keys and names its project when it is not the page's, and **Open a terminal here** starts the shell
 in the window, on the page's project. A link followed in that browser tab finds the window again rather than taking its
 shells, and the panel comes back if the window does not answer within three seconds. Closing the window, or its
-**Back to page**, puts the panel back where it was with the window's panes for the page's project; with its page
-gone, the window says so and stays. A blocked window leaves the panel where it was, saying why.
+**Back to page**, puts the panel back where it was with the window's panes for the page's project. Closing the
+browser tab that opened the window closes the window within a few seconds, leaving its shells running; following
+links and reloading in that tab keep it. A window opened by its address has no such tab, and its **Back to page**
+says it has nowhere to go. A blocked window leaves the panel where it was, saying why.
 xterm.js loads when the panel first opens, under the page's nonce. A browser tab that is not visible
 neither connects nor retries, and a page whose sign-in has gone stops retrying and says so
 (`TestTerminalPanel`). `TestTerminalPanelInBrowser` checks the panel in

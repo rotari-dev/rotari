@@ -2191,7 +2191,22 @@
       if (placeOverride) newAsked = true;
       else startAsked = true;
       setOpen(true);
+      // The window goes with the browser tab that opened it. Following a link or reloading
+      // keeps that tab, so only closing it closes the window; the shells keep running, as
+      // when the panel is hidden. A window opened by its address has no tab to go with.
+      const hadOpener = Boolean(window.opener);
+      const openerGone = () => {
+        try {
+          return !window.opener || window.opener.closed;
+        } catch {
+          return false;
+        }
+      };
       const beat = () => {
+        if (hadOpener && openerGone()) {
+          window.close();
+          return;
+        }
         tellOpener({ type: "rotari-terminal-window" });
         setTimeout(beat, windowBeat);
       };

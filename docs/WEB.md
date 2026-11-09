@@ -143,7 +143,8 @@ to the front, the send buttons type into it, and **Open a terminal here** starts
 links in the page keeps the window. Close the window, or choose **Back to page** in its **Panel position** menu,
 to put the panel back where it was. If the browser blocks pop-ups, the panel stays and says so. Reloading the
 page while the window is open keeps the window, but a page opened in another browser tab takes its shells, as
-another tab does today.
+another tab does today. Closing the browser tab closes its window too; the shells keep running for the next page
+that opens the terminal.
 The button shows how many shells are running in all
 projects, as **Terminal (3)**, so you can see what is left running with the panel closed, and each project
 in the sidebar with a shell running has a terminal icon; point at it to see how many.

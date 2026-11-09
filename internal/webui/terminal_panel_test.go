@@ -2171,6 +2171,18 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   win.window.close = () => assert.fail('closed a window with no page to go back to');
   [...win.document.querySelectorAll('.terminal-tab-menu button')][0].click();
   assert.match(win.document.querySelector('.terminal-status').textContent, /page that opened this window is gone/);
+  // Closing the browser tab that opened it closes it too, leaving the shells running; until
+  // then it stays, and one opened by its address has no tab to go with.
+  const tabOpener = { closed: false, postMessage() {} };
+  const tabbed = load(process.argv[6], { path: '/_terminal/window/project/p1', shells: [inProject('1', 1, 'p1')], opener: tabOpener });
+  let tabbedClosed = 0;
+  tabbed.window.close = () => tabbedClosed++;
+  await wait(1100);
+  assert.equal(tabbedClosed, 0, 'closed with its tab still open');
+  tabOpener.closed = true;
+  await wait(1100);
+  assert.equal(tabbedClosed, 1, 'stayed after its tab closed');
+  assert.equal(tabbed.requests.filter((request) => request.startsWith('DELETE')).length, 0, 'ended a shell on closing');
 
   // The sidebar marks each project with shells, with the panel closed, and again after
   // the sidebar is drawn again; a basedir's row and a shell of no project mark nothing.
@@ -2207,7 +2219,15 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   process.exit(0);
 })().catch((error) => { console.error(error.stack || String(error)); process.exit(1); });
 `
-	if output, err := exec.Command("node", "-e", script, withTerminal, without, filepath.Join("assets", "web_shell.css"), jobsWithTerminal, filepath.Join("assets", "table_view_panes.js"), terminalWindow).CombinedOutput(); err != nil {
+	// The script is longer than one argument may be, so -e reads it from a file. Run by -e,
+	// it finds jsdom from this directory and its arguments start at argv[1].
+	scriptFile := filepath.Join(dir, "panel_check.js")
+	if err := os.WriteFile(scriptFile, []byte(script), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	check := exec.Command("node", "-e", "eval(require('fs').readFileSync(process.env.ROTARI_PANEL_CHECK, 'utf8'))", withTerminal, without, filepath.Join("assets", "web_shell.css"), jobsWithTerminal, filepath.Join("assets", "table_view_panes.js"), terminalWindow)
+	check.Env = append(os.Environ(), "ROTARI_PANEL_CHECK="+scriptFile)
+	if output, err := check.CombinedOutput(); err != nil {
 		t.Fatalf("terminal panel check failed: %v\n%s", err, output)
 	}
 }
