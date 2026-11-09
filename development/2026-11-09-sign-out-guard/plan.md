@@ -1,7 +1,7 @@
 # Plan: Asking before signing out ends running commands
 
 Created: 2026-11-09
-Status: Done, not yet committed or tried by hand. See the [work log](work-log.md).
+Status: Done in `3c7d30c7`, not yet tried by hand. See the [work log](work-log.md).
 
 ## Goal
 

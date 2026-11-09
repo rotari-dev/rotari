@@ -1,7 +1,7 @@
 # Plan: A bell when a command finishes out of sight
 
 Created: 2026-11-09
-Status: Done, not yet committed or tried by hand. See the [work log](work-log.md). The user asked for the usual mark that a shell's command has finished, on tabs not shown and
+Status: Done in `896744f0`, not yet tried by hand. See the [work log](work-log.md). The user asked for the usual mark that a shell's command has finished, on tabs not shown and
 on All shells' cards.
 
 ## Goal

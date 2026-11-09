@@ -2,7 +2,7 @@
 
 ## Steps 1 and 2: the Keeper's tracking, and the bell
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 20:59:45 `896744f0`.
 
 **Change:** In [session.go](../../internal/terminal/session.go), `foregroundGroup` reads the terminal's foreground
 process group, which `Foreground` and the new `busy` use. In [keeper.go](../../internal/terminal/keeper.go), a kept

@@ -2,7 +2,7 @@
 
 ## Steps 1 and 2: the list's running, and the question
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 20:59:54 `3c7d30c7`.
 
 **Change:** `Keeper.Shells` fills `ShellInfo.Running` from the shell's `busy`, and
 [terminal.go](../../internal/webui/terminal.go) lists it as `running`. In
