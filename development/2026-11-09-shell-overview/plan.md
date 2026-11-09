@@ -3,7 +3,7 @@
 Created: 2026-11-09
 Status: Steps 1 to 3 done; step 5 (a window of its own) built and then replaced by step 6 (the page's dialog);
 steps 7 (the running command), 8 (renaming and ending from a card), and 9 (starting shells from the overview)
-done, with the icons' titles fixed on the way (10), and 11 (ending a project's shells, or all) done. Not yet committed or tried by hand; step 4 waits for the user. See the [work log](work-log.md). The user asked for something like macOS Mission Control: all shells shown at once, to pick one.
+done, with the icons' titles fixed on the way (10), and 11 (ending a project's shells, or all) done. Committed in `a642e843`, not yet tried by hand; step 4 waits for the user. See the [work log](work-log.md). The user asked for something like macOS Mission Control: all shells shown at once, to pick one.
 They chose a still view over a live one, and every project's shells over the current project's. What matters most
 to them is seeing each shell's project, tab name, and current directory at a glance; a picture of the screen is
 welcome but not needed.

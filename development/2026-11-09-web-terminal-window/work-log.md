@@ -134,7 +134,7 @@ on this server. jsdom does not navigate, so the page's going is checked by what 
 
 ## Step 7: the window closes with its tab
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 19:58:44 `8f336ad1`, with the panel test's script reaching node through a file, from step 2 of the shell overview work, which the test needed.
 
 **Change:** In [web_shell.js](../../internal/webui/assets/web_shell.js), the window's heartbeat, every second, closes
 the window when the page that opened it had one and `window.opener` is now gone or closed. Following a link or

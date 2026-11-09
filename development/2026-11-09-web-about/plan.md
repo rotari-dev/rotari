@@ -1,7 +1,7 @@
 # Plan: Which rotari serves the Web page
 
 Created: 2026-11-09
-Status: Step 1 done, not yet committed or tried by hand; proposals 3 and 4 dropped. See the
+Status: Step 1 done in `875abb62`, not yet tried by hand; proposals 3 and 4 dropped. See the
 [work log](work-log.md). The user asked for the path of the rotari running `rotari web`, and its version, to be visible
 somewhere in rotari, without knowing where it would fit best.
 

@@ -1,7 +1,7 @@
 # Plan: The Web terminal panel in a window of its own
 
 Created: 2026-11-09
-Status: Done in `45bef46a`, with steps 5 and 6 of the work log added after the user tried it. Steps 2 and 3 are not yet tried by hand, and the browser test runs only on CI. The user asked for the panel to pop out as one more choice of its position, taking the
+Status: Done in `45bef46a`, with steps 5 and 6 of the work log added after the user tried it, and step 7 (the window closing with its tab) in `8f336ad1`. Steps 2 and 3 are not yet tried by hand, and the browser test runs only on CI. The user asked for the panel to pop out as one more choice of its position, taking the
 whole panel, tabs and project list included, into the window, and chose the recommended answers below.
 Follows [the side plan](../2026-11-06-web-terminal-side/plan.md), which listed "one in a window of its own" as a
 non-goal. This plan takes that back.

@@ -2,7 +2,7 @@
 
 ## Step 1: the Settings menu
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 20:10:22 `875abb62`.
 
 **Change:** `webui.Options` has `About` (`Version`, `Executable`, `ExecutableError`), which `webAbout` in
 [web.go](../../cmd/rotari/web.go) fills from `versionString()` and `os.Executable` for `rotari web` only, so a static

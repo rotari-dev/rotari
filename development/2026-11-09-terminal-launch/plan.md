@@ -1,7 +1,7 @@
 # Plan: Launching from where a shell is
 
 Created: 2026-11-09
-Status: Done, not yet committed or tried by hand. See the [work log](work-log.md). The user asked whether the artifacts' launch feature, which opens TensorBoard and other viewers,
+Status: Done in `4424402f`, not yet tried by hand. See the [work log](work-log.md). The user asked whether the artifacts' launch feature, which opens TensorBoard and other viewers,
 could work from the terminal too, from the directory a shell is in. (An earlier reading of "launch from the current
 directory" as "start a new shell there" was built and then removed at the user's word.)
 

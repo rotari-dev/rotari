@@ -2,7 +2,7 @@
 
 ## Steps 1 and 2: the launch on a shell, and the dialog
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 20:07:50 `4424402f`.
 
 **Change:** In [launches.go](../../internal/webui/launches.go), `webLaunchRequest` takes `shell`, and the preview
 reads it from the query; `launchStart` hands such a request to `shellLaunchStart`, which refuses any artifact field

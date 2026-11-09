@@ -2,7 +2,7 @@
 
 ## Step 1: the current directory
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 20:05:10 `a642e843`, which holds steps 1 to 3 and 6 to 11 together.
 
 **Change:** [session.go](../../internal/terminal/session.go) gains `Session.Dir`, the shell process's working
 directory, which is an error once the shell has exited. It comes from `processDir`: the link `/proc/<pid>/cwd` on
@@ -29,7 +29,7 @@ freebsd. The macOS path was not run: there is no Mac here.
 
 ## Step 2: the overview
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 20:05:10 `a642e843`, which holds steps 1 to 3 and 6 to 11 together.
 
 **Change:** In [web_shell.js](../../internal/webui/assets/web_shell.js), **All shells** (four squares) follows **+**
 in the bar, in the window too, and covers `.terminal-panes` with `.terminal-overview`. `drawOverview` refreshes the
@@ -51,14 +51,14 @@ The styles are in [web_shell.css](../../internal/webui/assets/web_shell.css); a 
 known and a shell ended before its preview, the keys, Refresh, choosing in the page's project (a new connection) and
 in another (the stored shell and layout), hiding the panel, the window telling its page, and a list refused. The
 check script passed 128 KiB, the most one argument to `node -e` may be, so it now goes through a file that `-e`
-reads, which keeps jsdom found from the package directory and the arguments where they were.
+reads, which keeps jsdom found from the package directory and the arguments where they were. That change went into `8f336ad1`, the terminal window's, whose test needed it first.
 `go test ./internal/webui -run 'TestTerminalPanel$'` passed. Not looked at in a browser: there is no Chrome here.
 
 **Remaining:** None.
 
 ## Step 3: promise and document
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 20:05:10 `a642e843`, which holds steps 1 to 3 and 6 to 11 together.
 
 **Change:** WEB-33 in [05-web-assets-and-static-export.md](../../contracts/05-web-assets-and-static-export.md)
 and its row in [contracts/README.md](../../contracts/README.md) describe the overview, and
@@ -111,7 +111,7 @@ want of Chrome.
 
 ## Step 6: the overview as the page's dialog
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 20:05:10 `a642e843`, which holds steps 1 to 3 and 6 to 11 together.
 
 **Change:** [web_shell.js](../../internal/webui/assets/web_shell.js), [web_shell.css](../../internal/webui/assets/web_shell.css),
 [terminal_panel_test.go](../../internal/webui/terminal_panel_test.go), and
@@ -138,7 +138,7 @@ here for want of Chrome.
 
 ## Step 7: the running command
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 20:05:10 `a642e843`, which holds steps 1 to 3 and 6 to 11 together.
 
 **Change:** In [internal/terminal](../../internal/terminal), `dir_*.go` became `process_*.go`, which add
 `processCommand`: `/proc/<pid>/cmdline` with its arguments joined by spaces on Linux, and `/bin/ps -o command=` with
@@ -163,7 +163,7 @@ known, and none). `go vet` passed for darwin, and the package builds for freebsd
 
 ## Step 8: renaming and ending from a card
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 20:05:10 `a642e843`, which holds steps 1 to 3 and 6 to 11 together.
 
 **Change:** In [web_shell.js](../../internal/webui/assets/web_shell.js), `renameShell` and `endShell` take how to tell
 a refusal (the pane with the keys by default, `paneRefusal`) and return whether they did it; `endShell`'s question
@@ -187,7 +187,7 @@ pane. The tab's own rename and close tests pass unchanged.
 
 ## Step 9: starting shells from the overview
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 20:05:10 `a642e843`, which holds steps 1 to 3 and 6 to 11 together.
 
 **Change:** In [web_shell.js](../../internal/webui/assets/web_shell.js), `pagePlace` reads its query through
 `placeOfPath`, which a shell's `link` can be given too. Each project's heading has a **+**
@@ -214,7 +214,7 @@ Start in another basedir, the basedirs not listed, and a start refused. The test
 
 ## Step 10: the icons' titles
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 20:05:10 `a642e843`, which holds steps 1 to 3 and 6 to 11 together.
 
 **Change:** [web_shell.css](../../internal/webui/assets/web_shell.css) gives `.terminal-icon svg`
 `pointer-events: none`, so that the pointer over a picture is over its button and the button's title shows. This
@@ -234,7 +234,7 @@ button, such as Split right in a full panel, may show no tooltip in some browser
 
 ## Step 11: ending a project's shells, or every shell
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 20:05:10 `a642e843`, which holds steps 1 to 3 and 6 to 11 together.
 
 **Change:** In [web_shell.js](../../internal/webui/assets/web_shell.js), `endShells` takes a question and how to tell a
 refusal, and returns whether it ended them; `projectEndQuestion` and `everyEndQuestion` word the question. The tab
