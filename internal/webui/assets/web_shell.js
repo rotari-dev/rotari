@@ -997,6 +997,38 @@
     if (!ended.length) return;
     showNote((ended.length === 1 ? shellName(ended[0]) : ended.length + " shells") + " ended.", 6000);
   };
+  // markSidebarProjects marks each project in the sidebar that has shells, which
+  // web_shell.css draws as an icon on its row. Links are compared decoded, since the
+  // server and the page encode a project's name differently.
+  const linkPath = (href) => {
+    try {
+      return decodeURIComponent(new URL(href, location.origin).pathname).replace(/\/$/, "");
+    } catch {
+      return "";
+    }
+  };
+  const markSidebarProjects = () => {
+    const counts = new Map();
+    for (const shell of shells) {
+      if (!shell.project) continue;
+      const path = linkPath(shell.link);
+      counts.set(path, (counts.get(path) || 0) + 1);
+    }
+    for (const link of document.querySelectorAll("#sidebar-basedirs .sidebar-project-link")) {
+      const row = link.closest(".sidebar-project-row");
+      if (!row || row.classList.contains("basedir-row")) continue;
+      const count = counts.get(linkPath(link.getAttribute("href") || "")) || 0;
+      const marked = row.dataset.terminalShells || "";
+      if (marked === (count ? String(count) : "")) continue;
+      if (count) {
+        row.dataset.terminalShells = String(count);
+        row.title = count + (count === 1 ? " shell" : " shells") + " in the terminal";
+      } else {
+        delete row.dataset.terminalShells;
+        row.removeAttribute("title");
+      }
+    }
+  };
   // refreshShells updates the tabs, and returns whether it could. A newer change here
   // wins over an older answer, which may not have heard of it.
   const refreshShells = async () => {
@@ -1016,6 +1048,7 @@
       shellLimit = listed.limit;
       groupLimit = listed.group_limit;
       showShellCount();
+      markSidebarProjects();
       if (panel) renderTabs();
     }
     return { ok: true };
@@ -2132,6 +2165,9 @@
     const offered = inWindow || document.getElementById("terminal-button");
     if (offered) {
       if (!inWindow) addJobsSendButtons();
+      // The sidebar is drawn again with every refresh, without the marks.
+      const sidebarList = document.getElementById("sidebar-basedirs");
+      if (sidebarList) new MutationObserver(markSidebarProjects).observe(sidebarList, { childList: true, subtree: true });
       sayAlive();
       setInterval(sayAlive, aliveInterval);
       applySavedSizes();

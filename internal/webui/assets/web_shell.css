@@ -221,6 +221,22 @@ main {
   white-space: nowrap;
 }
 
+/* A project with shells running, marked by web_shell.js: the icon of Open a terminal
+   here, after the link so that a long name cut short does not hide it. */
+.sidebar-project-row[data-terminal-shells]::after {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  background: currentColor;
+  color: var(--muted);
+  content: "";
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 8 5 4-5 4'/%3E%3Cpath d='M12 17h7'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 8 5 4-5 4'/%3E%3Cpath d='M12 17h7'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
 /* A basedir is labelled by its parent directory and its own name (basedirLabelHTML). */
 .basedir-path {
   font-family: var(--font-mono);

@@ -2172,6 +2172,29 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   [...win.document.querySelectorAll('.terminal-tab-menu button')][0].click();
   assert.match(win.document.querySelector('.terminal-status').textContent, /page that opened this window is gone/);
 
+  // The sidebar marks each project with shells, with the panel closed, and again after
+  // the sidebar is drawn again; a basedir's row and a shell of no project mark nothing.
+  const marking = load(process.argv[1], { shells: [inProject('1', 1, 'p 1'), inProject('2', 2, 'p 1'), inProject('3', 1, 'p3'), plain('4', 1)] });
+  const sidebarRows = '<div class="sidebar-project-row basedir-row"><a class="sidebar-project-link" href="/">b</a></div>' +
+    '<div class="sidebar-project"><div class="sidebar-project-row"><a class="sidebar-project-link" href="/project/p%201">p 1</a></div></div>' +
+    '<div class="sidebar-project"><div class="sidebar-project-row"><a class="sidebar-project-link" href="/project/p2">p2</a></div></div>';
+  marking.document.getElementById('sidebar-basedirs').innerHTML = sidebarRows;
+  await wait(50);
+  const marks = () => [...marking.document.querySelectorAll('#sidebar-basedirs .sidebar-project-row')].map((row) => [row.textContent, row.dataset.terminalShells || '', row.title]);
+  assert.deepEqual(marks(), [['b', '', ''], ['p 1', '2', '2 shells in the terminal'], ['p2', '', '']]);
+  marking.document.getElementById('sidebar-basedirs').innerHTML = sidebarRows;
+  await wait(10);
+  assert.deepEqual(marks()[1], ['p 1', '2', '2 shells in the terminal'], 'a sidebar drawn again lost its mark');
+  marking.server.shells = marking.server.shells.filter((shell) => shell.id !== '2');
+  marking.polls[0]();
+  await wait(20);
+  assert.deepEqual(marks()[1], ['p 1', '1', '1 shell in the terminal']);
+  marking.server.shells = marking.server.shells.filter((shell) => shell.id !== '1');
+  marking.polls[0]();
+  await wait(20);
+  assert.deepEqual(marks()[1], ['p 1', '', ''], 'a project with no shell kept its mark');
+  assert.match(webShellCSS, /\.sidebar-project-row\[data-terminal-shells\]::after \{/);
+
   // xterm.js loads only on opening, under the page's nonce.
   const real = load(process.argv[1], { stubs: false });
   await wait(50);

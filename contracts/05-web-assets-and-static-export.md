@@ -1431,7 +1431,7 @@ including a run started in a shell, goes on. Covered by the tests in
 **WEB-33** `rotari web --allow-terminal` adds a Terminal button to the top bar of the
 application and Recent jobs pages, which shows how many shells there are in all projects, as `Terminal (3)`,
 with the panel open or not and without connecting to any, on a page in view; with no answer from the server it
-shows no number. It opens a panel along the bottom, or down the left or right of the window as the browser
+shows no number. Each project row in the sidebar whose project has shells is marked with how many. It opens a panel along the bottom, or down the left or right of the window as the browser
 keeps from a menu in the panel's bar, with a tab for each
 shell of the page's project, or of no project on a page of none. A list names the projects with
 shells, and choosing one goes to its page. Opening the panel with no shell there starts one, **+**

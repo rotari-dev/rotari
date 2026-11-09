@@ -114,7 +114,8 @@ to put the panel back where it was. If the browser blocks pop-ups, the panel sta
 page while the window is open keeps the window, but a page opened in another browser tab takes its shells, as
 another tab does today.
 The button shows how many shells are running in all
-projects, as **Terminal (3)**, so you can see what is left running with the panel closed.
+projects, as **Terminal (3)**, so you can see what is left running with the panel closed, and each project
+in the sidebar with a shell running has a terminal icon; point at it to see how many.
 
 Shells belong to projects, as an editor's terminals belong to its window. A project's pages show
 that project's tabs, and the list beside them goes to other projects that have shells. Other pages,
