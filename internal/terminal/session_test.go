@@ -151,6 +151,12 @@ func TestShellExitIsReported(t *testing.T) {
 	if result := shell.Result(); result.ExitCode != 7 || result.Signal != 0 {
 		t.Errorf("Result() = %+v, want exit 7", result)
 	}
+	if dir, err := shell.Dir(); err == nil {
+		t.Errorf("Dir() of an exited shell = %q, want an error", dir)
+	}
+	if command, err := shell.Foreground(); err == nil {
+		t.Errorf("Foreground() of an exited shell = %q, want an error", command)
+	}
 	select {
 	case err := <-shell.ended:
 		if !errors.Is(err, io.EOF) {

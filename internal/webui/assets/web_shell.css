@@ -1071,7 +1071,10 @@ html.terminal-open[data-terminal-place]:not(.terminal-maximized) .terminal-tabs 
   background: none;
   opacity: 0.4;
 }
+/* The pointer is over the button, not its picture, so that the button's title shows as
+   it did when the buttons were words. */
 .terminal-icon svg {
+  pointer-events: none;
   width: 16px;
   height: 16px;
   fill: none;
@@ -1080,6 +1083,210 @@ html.terminal-open[data-terminal-place]:not(.terminal-maximized) .terminal-tabs 
 }
 .terminal-spacer {
   flex: 1;
+}
+/* The overview is the page's dialog, as a log is; the panel's own window has no room to leave. */
+.terminal-overview-modal {
+  z-index: 60;
+}
+html[data-terminal-window] .terminal-overview-modal {
+  inset: 0;
+}
+/* As tall as its cards, up to a log's height. */
+.output-panel.terminal-overview,
+html.terminal-open .output-panel.terminal-overview {
+  height: auto;
+  overflow: hidden;
+  font-size: 12px;
+}
+.terminal-overview-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.terminal-overview header button {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.terminal-overview-group + .terminal-overview-group {
+  margin-top: 12px;
+}
+.terminal-overview-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.terminal-overview-end-all {
+  min-height: 0;
+  margin-left: auto;
+  padding: 0 6px;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 18px;
+}
+.terminal-overview-add {
+  min-height: 0;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 18px;
+}
+.terminal-overview-group h3 {
+  margin: 0 0 6px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.terminal-overview-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+}
+/* Rename and End sit in the card's top corner, beside the button that chooses it. */
+.terminal-overview-item {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+.terminal-overview-item > .terminal-overview-card {
+  flex: 1;
+}
+.terminal-overview-item .terminal-overview-top {
+  padding-right: 44px;
+}
+.terminal-overview-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+}
+.terminal-overview-actions button.terminal-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-2);
+}
+.terminal-overview-actions button.terminal-icon:hover,
+.terminal-overview-actions button.terminal-icon:focus-visible {
+  background: var(--surface-2);
+  color: var(--text);
+}
+/* A shell in a project with none yet, under the cards. */
+.terminal-overview-new {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.terminal-overview-new select {
+  max-width: 320px;
+  font-size: 12px;
+}
+.terminal-overview-new button {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.terminal-overview-new-note {
+  color: var(--muted);
+}
+.terminal-overview-problem {
+  margin: 0 0 8px;
+  color: var(--s-bad);
+}
+.terminal-overview-problem[hidden] {
+  display: none;
+}
+.terminal-overview-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+}
+.terminal-overview-card:hover,
+.terminal-overview-card:focus-visible {
+  border-color: color-mix(in oklab, var(--accent) 60%, var(--line));
+  background: var(--surface-2);
+}
+.terminal-overview-current {
+  box-shadow: inset 2px 0 0 var(--focus);
+}
+.terminal-overview-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.terminal-overview-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-overview-unseen .terminal-overview-name::before {
+  content: "\2022\00a0";
+  color: var(--s-run);
+}
+.terminal-overview-state {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+/* A long path loses its start rather than its end, which is where the shell is. */
+.terminal-overview-dir {
+  overflow: hidden;
+  color: var(--text-2);
+  direction: rtl;
+  font-family: var(--font-mono);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-overview-dir bdi {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.terminal-overview-command {
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-overview-command::before {
+  content: "\25b6\00a0";
+  color: var(--s-run);
+}
+.terminal-overview-command[hidden] {
+  display: none;
+}
+.terminal-overview-command-unknown {
+  color: var(--muted);
+  font-style: italic;
+}
+.terminal-overview-command-unknown::before {
+  content: none;
+}
+.terminal-overview-dir-unknown {
+  color: var(--muted);
+  font-style: italic;
 }
 /* web_shell.js places what is inside by position, so that no screen moves in the page. */
 .terminal-panes {

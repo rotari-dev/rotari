@@ -156,6 +156,44 @@ func (session *Session) Resize(rows, cols uint16) error {
 	return resizeErr
 }
 
+// Dir is the shell's working directory now, which programs it runs do not change.
+func (session *Session) Dir() (string, error) {
+	select {
+	case <-session.done:
+		return "", errors.New("the shell has exited")
+	default:
+	}
+	return processDir(session.command.Process.Pid)
+}
+
+// Foreground is the command line of the program the shell runs in the foreground, or
+// "" while the shell itself is, at its prompt. A pipeline gives its first program.
+func (session *Session) Foreground() (string, error) {
+	select {
+	case <-session.done:
+		return "", errors.New("the shell has exited")
+	default:
+	}
+	connection, err := session.terminal.SyscallConn()
+	if err != nil {
+		return "", err
+	}
+	var group int
+	var groupErr error
+	if err := connection.Control(func(descriptor uintptr) {
+		group, groupErr = unix.IoctlGetInt(int(descriptor), unix.TIOCGPGRP)
+	}); err != nil {
+		return "", err
+	}
+	if groupErr != nil {
+		return "", fmt.Errorf("find the terminal's foreground program: %w", groupErr)
+	}
+	if group == session.command.Process.Pid {
+		return "", nil
+	}
+	return processCommand(group)
+}
+
 // Done is closed when the shell has exited.
 func (session *Session) Done() <-chan struct{} {
 	return session.done

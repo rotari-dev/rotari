@@ -30,9 +30,11 @@ const terminalPrefix = "/_terminal/"
 const (
 	terminalSocketPath = terminalPrefix + "ws"
 	terminalShellsPath = terminalPrefix + "shells"
-	terminalHerePath   = terminalPrefix + "here"
-	terminalAlivePath  = terminalPrefix + "alive"
-	terminalOrderPath  = terminalPrefix + "order"
+	// terminalPreviewName follows a shell's path for what the overview shows of it.
+	terminalPreviewName = "preview"
+	terminalHerePath    = terminalPrefix + "here"
+	terminalAlivePath   = terminalPrefix + "alive"
+	terminalOrderPath   = terminalPrefix + "order"
 	// terminalWindowPath is the panel in a window of its own. What follows it is the path
 	// of the page whose project it shows, such as /project/p.
 	terminalWindowPath = terminalPrefix + "window"
@@ -356,6 +358,10 @@ func writeTerminalJSON(writer http.ResponseWriter, status int, value any) {
 // serveTerminalShell ends a shell on DELETE, whose connection closes as for an exit, and
 // names it on PATCH.
 func (s site) serveTerminalShell(writer http.ResponseWriter, request *http.Request, id string) {
+	if id, ok := strings.CutSuffix(id, "/"+terminalPreviewName); ok {
+		s.serveTerminalPreview(writer, request, id)
+		return
+	}
 	switch request.Method {
 	case http.MethodDelete:
 		if err := s.Terminal.End(id); errors.Is(err, terminal.ErrNoShell) {
@@ -369,6 +375,48 @@ func (s site) serveTerminalShell(writer http.ResponseWriter, request *http.Reque
 		writer.Header().Set("Allow", "DELETE, PATCH")
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// terminalPreviewResponse is what the overview shows of a shell beyond the list: where
+// it is now, and what it is running. Cwd is empty when it could not be found, and
+// CwdError says why. Command is empty while the shell is at its prompt, and when it could
+// not be found, which CommandError then says.
+type terminalPreviewResponse struct {
+	Cwd          string `json:"cwd,omitempty"`
+	CwdError     string `json:"cwd_error,omitempty"`
+	Command      string `json:"command,omitempty"`
+	CommandError string `json:"command_error,omitempty"`
+}
+
+// serveTerminalPreview describes a shell on GET without attaching to it, so it takes the
+// shell from no page.
+func (s site) serveTerminalPreview(writer http.ResponseWriter, request *http.Request, id string) {
+	writer.Header().Set("Cache-Control", "no-store")
+	if request.Method != http.MethodGet {
+		writer.Header().Set("Allow", http.MethodGet)
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var preview terminalPreviewResponse
+	cwd, err := s.Terminal.Dir(id)
+	if errors.Is(err, terminal.ErrNoShell) {
+		http.Error(writer, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		preview.CwdError = err.Error()
+	}
+	preview.Cwd = cwd
+	command, err := s.Terminal.Foreground(id)
+	if errors.Is(err, terminal.ErrNoShell) {
+		http.Error(writer, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		preview.CommandError = err.Error()
+	}
+	preview.Command = command
+	writeTerminalJSON(writer, http.StatusOK, preview)
 }
 
 func (s site) renameTerminalShell(writer http.ResponseWriter, request *http.Request, id string) {

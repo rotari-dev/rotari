@@ -150,6 +150,14 @@
     maximize: ["M9.5 2.5h4v4", "M13.5 2.5L9 7", "M6.5 13.5h-4v-4", "M2.5 13.5L7 9"],
     restore: ["M13.5 2.5L9.5 6.5", "M9.5 3v3.5H13", "M2.5 13.5l4-4", "M6.5 13V9.5H3"],
     hide: ["M3.5 12.5h9"],
+    rename: ["M10 3.5l2.5 2.5L6 12.5H3.5V10z", "M8.5 5l2.5 2.5"],
+    endShell: ["M4.5 4.5l7 7", "M11.5 4.5l-7 7"],
+    overview: [
+      { x: 1.5, y: 2.5, width: 5.5, height: 4.5, rx: 1 },
+      { x: 9, y: 2.5, width: 5.5, height: 4.5, rx: 1 },
+      { x: 1.5, y: 9, width: 5.5, height: 4.5, rx: 1 },
+      { x: 9, y: 9, width: 5.5, height: 4.5, rx: 1 },
+    ],
   };
   // drawIcon replaces what a button shows with a picture. Its label names it for those who
   // cannot see the picture, and its title for those who point at it.
@@ -636,9 +644,9 @@
   };
   // The page's basedir ID, project, and run, as it would ask for them in a query. The
   // parts are still percent-encoded, so they go in as they are.
-  const pagePlace = () => {
-    if (placeOverride) return placeOverride;
-    const path = inWindow ? location.pathname.slice(windowPath.length) : location.pathname;
+  const pagePlace = () => placeOverride || placeOfPath(inWindow ? location.pathname.slice(windowPath.length) : location.pathname);
+  // placeOfPath is a page path's place: a shell's link gives its project's.
+  const placeOfPath = (path) => {
     const parts = path.split("/").filter(Boolean);
     const query = [];
     if (parts[0] === "_basedir") {
@@ -655,6 +663,9 @@
     shell.basedir === other.basedir && shell.project === other.project;
   const shellsHere = () => shells.filter((shell) => sameGroup(shell, here));
   const projectName = (group) => group.project || "No project";
+  // inBasedir tells apart projects of the same name in different basedirs.
+  const inBasedir = (entry, entries) =>
+    entry.basedir && entries.some((item) => item !== entry && item.project === entry.project) ? " in " + entry.basedir : "";
   const refreshHere = async () => {
     const response = await serverFetch("/_terminal/here?" + pagePlace());
     if (!response.ok) return response;
@@ -684,17 +695,8 @@
         });
       }
     }
-    const label = (entry) => {
-      const twin = entries.some((item) => item !== entry && item.project === entry.project);
-      return (
-        (entry.unseen ? "\u2022 " : "") +
-        projectName(entry) +
-        (twin && entry.basedir ? " in " + entry.basedir : "") +
-        " (" +
-        entry.count +
-        ")"
-      );
-    };
+    const label = (entry) =>
+      (entry.unseen ? "\u2022 " : "") + projectName(entry) + inBasedir(entry, entries) + " (" + entry.count + ")";
     const drawn = JSON.stringify(entries.map((entry) => [label(entry), entry.link]));
     if (drawn === groupsDrawn) return;
     groupsDrawn = drawn;
@@ -708,13 +710,14 @@
     );
     groups.value = "";
   };
-  // endShells ends several shells after asking once. Those shown go last and the focused
-  // pane's last of all, so that moving on from one does not land on one about to end.
-  const endShells = async (targets) => {
-    if (!targets.length) return;
+  // endShells ends several shells after asking once, in the words given or its own, and
+  // says whether it did; a refusal is told as renameShell's is. Those shown go last and the
+  // focused pane's last of all, so that moving on from one does not land on one about to end.
+  const endShells = async (targets, { refused = paneRefusal, question } = {}) => {
+    if (!targets.length) return false;
     const noun = targets.length === 1 ? "shell" : targets.length + " shells";
     const running = targets.length === 1 ? "it" : "them";
-    if (!confirm("End " + noun + ", and anything running in " + running + "?")) return;
+    if (!confirm(question || "End " + noun + ", and anything running in " + running + "?")) return false;
     const rank = (shell) => (shell.id === focused.shown ? 2 : paneShowing(shell.id) ? 1 : 0);
     const ordered = [...targets].sort((a, b) => rank(a) - rank(b));
     for (const shell of targets) endingHere.add(shell.id);
@@ -725,12 +728,18 @@
         response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), { method: "DELETE" });
       } catch {}
       if (!response?.ok && response?.status !== 404) {
-        await refusal(focused, response, "The shell did not end", () => endShells(targets));
-        return;
+        await refused(response, "The shell did not end", () => endShells(targets, { refused, question }));
+        return false;
       }
     }
     if (!targets.some((shell) => paneShowing(shell.id))) await refreshShells();
+    return true;
   };
+  // The questions for ending a project's shells, and every shell of the server.
+  const projectEndQuestion = (count, name) =>
+    "End " + (count === 1 ? "the shell" : "the " + count + " shells") + " of " + name + ", and anything running in " + (count === 1 ? "it" : "them") + "?";
+  const everyEndQuestion = (count) =>
+    "End " + (count === 1 ? "the one shell" : "all " + count + " shells") + ", of every project, and anything running in " + (count === 1 ? "it" : "them") + "?";
   // arrangeShells puts this project's shells in the order given, here at once and then on
   // the server, so that later pages and other browser tabs see it.
   const arrangeShells = async (arranged) => {
@@ -799,9 +808,12 @@
       renderTabs();
     };
   };
-  const renameShell = async (shell) => {
+  // renameShell and endShell say whether they did it. A refusal is told in the pane with
+  // the keys, or as the caller says, with a way to try again.
+  const paneRefusal = (response, what, retry) => refusal(focused, response, what, retry);
+  const renameShell = async (shell, refused = paneRefusal) => {
     const name = prompt("Name for shell " + shell.number + " (empty for its number):", shell.name || "");
-    if (name === null) return;
+    if (name === null) return false;
     let response;
     try {
       response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), {
@@ -811,10 +823,11 @@
       });
     } catch {}
     if (!response?.ok) {
-      await refusal(focused, response, "The tab was not renamed", () => renameShell(shell));
-      return;
+      await refused(response, "The tab was not renamed", () => renameShell(shell, refused));
+      return false;
     }
     await refreshShells();
+    return true;
   };
   let panelMenu = null;
   const closePanelMenu = () => {
@@ -862,6 +875,7 @@
       ["Move right", () => moveShell(shell, place + 1), right.length > 0],
       ["Close tabs to the right", () => endShells(right), right.length > 0],
       ["Close all tabs", () => endShells(inGroup), true],
+      ["Close all shells of every project", () => endShells(shells, { question: everyEndQuestion(shells.length) }), shells.length > inGroup.length],
     ]);
   };
   // A narrow window has only the bottom to offer, and the menu says why. A window of the
@@ -1028,6 +1042,418 @@
         row.removeAttribute("title");
       }
     }
+  };
+  // The overview shows every shell of the server at once, grouped by project with this
+  // page's first, to choose one from, in a dialog over the page as a log is. Choosing one
+  // closes it. It is a still view, taken when it opens: the list refreshing meanwhile
+  // leaves it alone, and Refresh takes it again.
+  let overview = null;
+  let overviewButton;
+  let overviewSerial = 0;
+  const closeOverview = () => {
+    if (!overview) return;
+    overviewSerial++;
+    overview.remove();
+    overview = null;
+    overviewButton?.setAttribute("aria-pressed", "false");
+  };
+  // preferShell has the focused pane of a shell's project show it when that project's page
+  // next begins in this browser tab, in the layout it had.
+  const preferShell = (shell) => {
+    const suffix = ":" + shell.basedir + ":" + shell.project;
+    try {
+      sessionStorage.setItem(shownKey + suffix, shell.id);
+      const saved = JSON.parse(sessionStorage.getItem(layoutKey + suffix));
+      const rows = Array.isArray(saved?.columns)
+        ? saved.columns.flatMap((column) => (Array.isArray(column?.rows) ? column.rows.filter(Boolean) : []))
+        : [];
+      if (!rows.length) return;
+      if (!rows.some((row) => row.shell === shell.id)) {
+        (rows.find((row) => row.shell === saved.focused) || rows[0]).shell = shell.id;
+      }
+      saved.focused = shell.id;
+      sessionStorage.setItem(layoutKey + suffix, JSON.stringify(saved));
+    } catch {}
+  };
+  // A shell of this page's project is shown as choosing its tab would; another project's
+  // takes the page there, as the project list does.
+  const chooseFromOverview = (shell) => {
+    closeOverview();
+    if (sameGroup(shell, here)) {
+      chooseTab(shell.id);
+      return;
+    }
+    preferShell(shell);
+    if (inWindow) {
+      tellOpener({ type: "rotari-terminal-go", path: shell.link });
+      location.assign(windowPath + shell.link);
+    } else {
+      location.assign(shell.link);
+    }
+  };
+  // Where a shell is now comes from the server for each card. When it cannot say, the card
+  // shows where the shell started, and says that is what it is.
+  // A refusal in the overview is told at its top, where the cards are, rather than in a
+  // pane under the dialog.
+  let overviewProblem = null;
+  const overviewRefusal = async (response, what) => {
+    const reason = response ? (await response.text()).trim() : "the server did not answer";
+    if (!overviewProblem) return;
+    overviewProblem.hidden = false;
+    overviewProblem.textContent = what + ": " + (reason || "status " + response.status);
+  };
+  // Renaming keeps the card with the keys; ending moves them to the card after it.
+  const renameFromOverview = async (shell) => {
+    if (await renameShell(shell, overviewRefusal)) drawOverview(shell.id);
+  };
+  // A project's + starts another shell there, where its page would, and shows it in no
+  // pane: the overview draws it as a card, with the keys on it.
+  const startFromOverview = async (entry) => {
+    let response;
+    try {
+      const place = placeOfPath(entry.link);
+      response = await serverFetch(
+        shellsPath + "?rows=" + (focused.term?.rows || 24) + "&cols=" + (focused.term?.cols || 80) + (place && "&" + place),
+        { method: "POST" },
+      );
+    } catch {}
+    if (!response?.ok) {
+      await overviewRefusal(response, "The shell did not start");
+      return;
+    }
+    const started = await response.json();
+    drawOverview(started.id);
+  };
+  // drawOverviewNew offers, under the cards, a shell in a project with none yet: every
+  // project of every basedir the server knows that has no shell, and no project at all,
+  // which starts in the home directory.
+  const drawOverviewNew = async (serial, listed) => {
+    const row = document.createElement("div");
+    row.className = "terminal-overview-new";
+    const label = document.createElement("label");
+    label.textContent = "New shell in ";
+    const choice = document.createElement("select");
+    choice.setAttribute("aria-label", "Project for a new shell");
+    choice.disabled = true;
+    label.append(choice);
+    const start = document.createElement("button");
+    start.type = "button";
+    start.textContent = "Start";
+    start.disabled = true;
+    const said = document.createElement("span");
+    said.className = "terminal-overview-new-note";
+    said.textContent = "Listing the projects...";
+    row.append(label, start, said);
+    overview?.firstElementChild.append(row);
+    const reason = async (response) => (response ? (await response.text()).trim() || "status " + response.status : "the server did not answer");
+    let response;
+    try {
+      response = await serverFetch("/api/basedirs");
+    } catch {}
+    if (serial !== overviewSerial) return;
+    if (!response?.ok) {
+      said.textContent = "The projects could not be listed: " + (await reason(response));
+      return;
+    }
+    const basedirs = (await response.json()).basedirs || [];
+    const lists = await Promise.all(
+      basedirs.map(async (basedir) => {
+        let answer;
+        try {
+          answer = await serverFetch("/api/projects?basedir_id=" + encodeURIComponent(basedir.id));
+        } catch {}
+        return answer?.ok ? { basedir, projects: (await answer.json()).projects || [] } : { basedir, problem: await reason(answer) };
+      }),
+    );
+    if (serial !== overviewSerial) return;
+    const hasShells = (basedir, project) => listed.some((entry) => entry.basedir === basedir && entry.project === project);
+    const option = (text, link) => {
+      const item = document.createElement("option");
+      item.value = link;
+      item.textContent = text;
+      return item;
+    };
+    const options = [];
+    if (!hasShells("", "")) options.push(option("No project (home directory)", "/"));
+    for (const { basedir, projects } of lists) {
+      const free = (projects || []).filter((project) => !hasShells(basedir.path, project));
+      if (!free.length) continue;
+      const items = free.map((project) =>
+        option(project, (basedir.current ? "" : "/_basedir/" + basedir.id) + "/project/" + encodeURIComponent(project)),
+      );
+      if (basedirs.length > 1) {
+        const group = document.createElement("optgroup");
+        group.label = basedir.path;
+        group.append(...items);
+        options.push(group);
+      } else options.push(...items);
+    }
+    const problems = lists.filter((item) => item.problem).map((item) => item.basedir.path + ": " + item.problem);
+    choice.replaceChildren(...options);
+    const full = shells.length >= shellLimit ? "at most " + shellLimit + " shells can run at once" : "";
+    choice.disabled = !options.length;
+    start.disabled = !options.length || Boolean(full);
+    said.textContent = [
+      !options.length && !problems.length ? "Every project has a shell; use its + for another." : "",
+      full ? "No more: " + full + "." : "",
+      problems.length ? "Not listed: " + problems.join("; ") : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    start.onclick = () => startFromOverview({ link: choice.value });
+  };
+  const endFromOverview = async (shell) => {
+    const cards = [...(overview?.querySelectorAll(".terminal-overview-card") || [])];
+    const at = cards.findIndex((item) => item.dataset.shell === shell.id);
+    const next = cards[at + 1] || cards[at - 1];
+    if (await endShell(shell, overviewRefusal)) drawOverview(next?.dataset.shell);
+  };
+  const overviewCard = (shell, serial) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "terminal-overview-card";
+    card.dataset.shell = shell.id;
+    const ours = sameGroup(shell, here);
+    const current = ours && focused.shown === shell.id;
+    const elsewhere = ours && !current && Boolean(paneShowing(shell.id));
+    const unseen = Boolean(shell.unseen_output) && !(ours && paneShowing(shell.id));
+    card.classList.toggle("terminal-overview-current", current);
+    card.classList.toggle("terminal-overview-unseen", unseen);
+    const name = document.createElement("span");
+    name.className = "terminal-overview-name";
+    name.textContent = shell.name || "Shell " + shell.number;
+    const state = document.createElement("span");
+    state.className = "terminal-overview-state";
+    state.textContent = [current && "shown", elsewhere && "in another pane", unseen && "new output"].filter(Boolean).join(", ");
+    const top = document.createElement("span");
+    top.className = "terminal-overview-top";
+    top.append(name, state);
+    const dir = document.createElement("span");
+    dir.className = "terminal-overview-dir";
+    const path = document.createElement("bdi");
+    path.textContent = "…";
+    dir.append(path);
+    // What the shell runs in the foreground, if anything; nothing at its prompt.
+    const running = document.createElement("span");
+    running.className = "terminal-overview-command";
+    running.hidden = true;
+    card.append(top, dir, running);
+    card.onclick = () => chooseFromOverview(shell);
+    const label = shell.name ? "shell " + shell.number + ", " + shell.name : "shell " + shell.number;
+    const rename = document.createElement("button");
+    rename.type = "button";
+    rename.setAttribute("aria-label", "Rename " + label);
+    rename.title = "Rename this tab";
+    drawIcon(rename, icons.rename);
+    rename.onclick = () => renameFromOverview(shell);
+    const end = document.createElement("button");
+    end.type = "button";
+    end.setAttribute("aria-label", "End " + label);
+    end.title = "End this shell, and anything running in it";
+    drawIcon(end, icons.endShell);
+    end.onclick = () => endFromOverview(shell);
+    const actions = document.createElement("span");
+    actions.className = "terminal-overview-actions";
+    actions.append(rename, end);
+    const item = document.createElement("div");
+    item.className = "terminal-overview-item";
+    item.append(card, actions);
+    const started = (reason) => {
+      if (serial !== overviewSerial) return;
+      path.textContent = "started in " + shell.dir;
+      dir.classList.add("terminal-overview-dir-unknown");
+      dir.title = "Where it is now is not known: " + reason;
+    };
+    serverFetch(shellsPath + "/" + encodeURIComponent(shell.id) + "/preview")
+      .then(async (response) => {
+        if (!response.ok) {
+          started((await response.text()).trim() || "status " + response.status);
+          return;
+        }
+        const preview = await response.json();
+        if (serial !== overviewSerial) return;
+        if (preview.command) {
+          running.hidden = false;
+          running.textContent = preview.command;
+          running.title = "Running " + preview.command;
+        } else if (preview.command_error) {
+          running.hidden = false;
+          running.textContent = "running program not known";
+          running.classList.add("terminal-overview-command-unknown");
+          running.title = preview.command_error;
+        }
+        if (!preview.cwd) {
+          started(preview.cwd_error || "the server did not say");
+          return;
+        }
+        path.textContent = preview.cwd;
+        dir.title = preview.cwd;
+      })
+      .catch(() => started("the server did not answer"));
+    return item;
+  };
+  const drawOverview = async (focusOn) => {
+    const serial = ++overviewSerial;
+    const head = document.createElement("header");
+    const title = document.createElement("strong");
+    title.id = "terminal-overview-title";
+    title.textContent = "All shells";
+    const actions = document.createElement("div");
+    actions.className = "modal-actions";
+    const refresh = document.createElement("button");
+    refresh.type = "button";
+    refresh.textContent = "Refresh";
+    refresh.onclick = () => drawOverview();
+    const close = document.createElement("button");
+    close.type = "button";
+    close.textContent = "Close";
+    close.onclick = () => {
+      closeOverview();
+      focused.term?.focus();
+    };
+    const endEvery = document.createElement("button");
+    endEvery.type = "button";
+    endEvery.textContent = "End all shells";
+    endEvery.title = "End every shell of every project, after asking";
+    endEvery.disabled = true;
+    endEvery.onclick = async () => {
+      const every = [...shells];
+      if (await endShells(every, { refused: overviewRefusal, question: everyEndQuestion(every.length) })) drawOverview();
+    };
+    actions.append(endEvery, refresh, close);
+    head.append(title, actions);
+    overviewProblem = document.createElement("p");
+    overviewProblem.className = "terminal-overview-problem";
+    overviewProblem.setAttribute("role", "alert");
+    overviewProblem.hidden = true;
+    const body = document.createElement("div");
+    body.className = "terminal-overview-body";
+    body.textContent = "Listing the shells...";
+    overview.firstElementChild.replaceChildren(head, overviewProblem, body);
+    const { ok, response } = await refreshShells();
+    if (serial !== overviewSerial) return;
+    if (!ok) {
+      const reason = response ? (await response.text()).trim() : "the server did not answer";
+      if (serial === overviewSerial) body.textContent = "The shells could not be listed: " + reason;
+      return;
+    }
+    const entries = [{ ...here, shells: [] }];
+    for (const shell of shells) {
+      let entry = entries.find((item) => sameGroup(item, shell));
+      if (!entry) entries.push((entry = { basedir: shell.basedir, project: shell.project, link: shell.link, shells: [] }));
+      entry.link = shell.link;
+      entry.shells.push(shell);
+    }
+    const listed = entries.filter((entry) => entry.shells.length);
+    endEvery.disabled = !shells.length;
+    if (!listed.length) {
+      body.textContent = "No shells are running.";
+      drawOverviewNew(serial, listed);
+      return;
+    }
+    body.replaceChildren(
+      ...listed.map((entry) => {
+        const group = document.createElement("section");
+        group.className = "terminal-overview-group";
+        const heading = document.createElement("h3");
+        const name = projectName(entry) + inBasedir(entry, listed);
+        const named = document.createElement("span");
+        named.textContent = name;
+        const more = document.createElement("button");
+        more.type = "button";
+        more.className = "terminal-overview-add";
+        more.setAttribute("aria-label", "New shell in " + name);
+        more.textContent = "+";
+        const full = entry.shells.length >= groupLimit ? "at most " + groupLimit + " shells can run for one project" : shells.length >= shellLimit ? "at most " + shellLimit + " shells can run at once" : "";
+        more.disabled = Boolean(full);
+        more.title = full ? "No more: " + full : "Start another shell here, where its page would, without showing it";
+        more.onclick = () => startFromOverview(entry);
+        const endAll = document.createElement("button");
+        endAll.type = "button";
+        endAll.className = "terminal-overview-end-all";
+        endAll.textContent = "End all";
+        endAll.setAttribute("aria-label", "End all shells of " + name);
+        endAll.title = "End every shell of " + name + ", after asking";
+        endAll.onclick = async () => {
+          if (await endShells(entry.shells, { refused: overviewRefusal, question: projectEndQuestion(entry.shells.length, name) })) drawOverview();
+        };
+        heading.append(named, more, endAll);
+        const cards = document.createElement("div");
+        cards.className = "terminal-overview-cards";
+        cards.append(...entry.shells.map((shell) => overviewCard(shell, serial)));
+        group.setAttribute("aria-label", name);
+        group.append(heading, cards);
+        return group;
+      }),
+    );
+    drawOverviewNew(serial, listed);
+    const cardList = [...body.querySelectorAll(".terminal-overview-card")];
+    (cardList.find((item) => item.dataset.shell === focusOn) || body.querySelector(".terminal-overview-current") || cardList[0])?.focus();
+  };
+  // Arrows move between cards, up and down to the nearest card of the next row; Enter
+  // chooses, as a button does, and Escape goes back to the shell.
+  const overviewKeys = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeOverview();
+      focused.term?.focus();
+      return;
+    }
+    const cards = [...overview.querySelectorAll(".terminal-overview-card")];
+    const at = cards.indexOf(document.activeElement);
+    if (at < 0) return;
+    // F2 renames the card's shell, and Delete ends it, as in a file list.
+    const shell = shells.find((item) => item.id === cards[at].dataset.shell);
+    if (shell && (event.key === "F2" || event.key === "Delete")) {
+      event.preventDefault();
+      if (event.key === "F2") renameFromOverview(shell);
+      else endFromOverview(shell);
+      return;
+    }
+    let next;
+    if (event.key === "ArrowRight") next = cards[at + 1];
+    else if (event.key === "ArrowLeft") next = cards[at - 1];
+    else if (event.key === "Home") next = cards[0];
+    else if (event.key === "End") next = cards.at(-1);
+    else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      const down = event.key === "ArrowDown";
+      const from = cards[at].getBoundingClientRect();
+      let best = Infinity;
+      for (const card of cards) {
+        const box = card.getBoundingClientRect();
+        const rise = down ? box.top - from.top : from.top - box.top;
+        if (rise <= 1) continue;
+        const distance = rise * 1000 + Math.abs(box.left - from.left);
+        if (distance < best) [best, next] = [distance, card];
+      }
+    } else return;
+    event.preventDefault();
+    next?.focus();
+  };
+  const toggleOverview = () => {
+    if (overview) {
+      closeOverview();
+      focused.term?.focus();
+      return;
+    }
+    // The page's dialog, with the panel's room left to it as a log's is.
+    overview = document.createElement("div");
+    overview.className = "output-modal terminal-overview-modal";
+    overview.setAttribute("role", "dialog");
+    overview.setAttribute("aria-modal", "true");
+    overview.setAttribute("aria-labelledby", "terminal-overview-title");
+    overview.onkeydown = overviewKeys;
+    overview.onclick = (event) => {
+      if (event.target !== overview) return;
+      closeOverview();
+      focused.term?.focus();
+    };
+    const box = document.createElement("div");
+    box.className = "output-panel terminal-overview";
+    overview.append(box);
+    document.body.append(overview);
+    overviewButton.setAttribute("aria-pressed", "true");
+    drawOverview();
   };
   // refreshShells updates the tabs, and returns whether it could. A newer change here
   // wins over an older answer, which may not have heard of it.
@@ -1262,19 +1688,20 @@
     if (next) show(pane, next.id, false);
     else closePane(pane); // The other panes have all there is. With none, this stays.
   };
-  const endShell = async (shell) => {
-    if (!confirm("End shell " + shell.number + ", and anything running in it?")) return;
+  const endShell = async (shell, refused = paneRefusal) => {
+    if (!confirm("End " + (shell.project && !sameGroup(shell, here) ? "shell " + shell.number + " of " + shell.project : "shell " + shell.number) + ", and anything running in it?")) return false;
     endingHere.add(shell.id);
     let response;
     try {
       response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), { method: "DELETE" });
     } catch {}
     if (!response?.ok && response?.status !== 404) {
-      await refusal(focused, response, "The shell did not end", () => endShell(shell));
-      return;
+      await refused(response, "The shell did not end", () => endShell(shell, refused));
+      return false;
     }
     // A shown shell's connection closes, which moves on to another.
     if (!paneShowing(shell.id)) await refreshShells();
+    return true;
   };
   const noShellMessage = () =>
     (here.project ? "No shell for " + here.project + "." : "No shell here.") +
@@ -1672,6 +2099,9 @@
     splitDownButton = iconButton("Split down", [paneFrame, "M1.5 8h13"], () => splitPane(false));
     placeButton = iconButton("Panel position", [paneFrame, placeLines.bottom], openPlaceMenu);
     placeButton.disabled = false;
+    overviewButton = iconButton("All shells", icons.overview, toggleOverview, "All shells, of every project, to choose one");
+    overviewButton.disabled = false;
+    overviewButton.setAttribute("aria-pressed", "false");
     closePaneButton = iconButton(
       "Close pane",
       icons.closePane,
@@ -1696,6 +2126,7 @@
       groups,
       tabs,
       add,
+      overviewButton,
       spacer,
       fontButton("A-", "Smaller text", -1),
       fontButton("A+", "Larger text", 1),
@@ -1802,6 +2233,7 @@
       return;
     }
     panel.hidden = !open;
+    if (!open) closeOverview();
     if (open && focused.term) {
       fitPanes();
       focused.term.focus();
@@ -1837,6 +2269,7 @@
       socket?.close();
       settleSend(pane, "The terminal moved to its own window, so nothing was sent.");
     }
+    closeOverview();
     root.classList.remove("terminal-open");
     document.getElementById("terminal-button")?.setAttribute("aria-pressed", "false");
     if (panel) panel.hidden = true;

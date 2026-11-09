@@ -496,6 +496,33 @@ func (keeper *Keeper) Reorder(ids []string) {
 	})
 }
 
+// Dir is a shell's working directory now. It attaches nothing, so it neither takes the
+// shell from an attachment nor counts as showing its output. It returns ErrNoShell for
+// a shell that is not running, and another error when the directory cannot be found.
+func (keeper *Keeper) Dir(id string) (string, error) {
+	keeper.mu.Lock()
+	shell := keeper.find(id)
+	keeper.mu.Unlock()
+	if shell == nil {
+		return "", ErrNoShell
+	}
+	// Outside the lock: finding it may run a program.
+	return shell.session.Dir()
+}
+
+// Foreground is the command line of the program a shell runs in the foreground, or ""
+// while the shell is at its prompt. As Dir, it attaches nothing, and returns ErrNoShell
+// for a shell that is not running.
+func (keeper *Keeper) Foreground(id string) (string, error) {
+	keeper.mu.Lock()
+	shell := keeper.find(id)
+	keeper.mu.Unlock()
+	if shell == nil {
+		return "", ErrNoShell
+	}
+	return shell.session.Foreground()
+}
+
 // Rename sets a shell's name, which means nothing to the Keeper.
 func (keeper *Keeper) Rename(id, name string) (ShellInfo, error) {
 	keeper.mu.Lock()

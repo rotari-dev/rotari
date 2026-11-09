@@ -138,9 +138,11 @@ flowchart LR
    ([cmd/rotari/web_terminal.go](../cmd/rotari/web_terminal.go) builds it;
    [internal/webui/terminal.go](../internal/webui/terminal.go) serves them at `/_terminal/shells`,
    `/_terminal/here`, and `/_terminal/ws`, groups them by basedir and project, and serves the panel's own window
-   at `/_terminal/window`). Pages only attach to shells, since each link reloads the page, and the
-   panel in [web_shell.js](../internal/webui/assets/web_shell.js) loads xterm.js when first opened
-   and connects only to the tab shown. A shell is not a run: it takes no project lock and writes
+   at `/_terminal/window`; `/_terminal/shells/ID/preview` says where a shell is and what it runs, which
+   [internal/terminal](../internal/terminal) finds from its process without attaching). Pages only attach to
+   shells, since each link reloads the page, and the panel in
+   [web_shell.js](../internal/webui/assets/web_shell.js) loads xterm.js when first opened and connects only to the
+   tab shown. A shell is not a run: it takes no project lock and writes
    nothing under a basedir.
 - **Jobs and wrappers.** Local jobs are child processes of the supervisor.
   Scheduler jobs run elsewhere through a generated wrapper script that writes

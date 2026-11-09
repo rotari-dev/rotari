@@ -828,3 +828,64 @@ func TestOutputRingContentsIsACopy(t *testing.T) {
 		t.Errorf("contents() after changing a copy = %q", got)
 	}
 }
+
+// Dir follows the shell's cd, and asks nothing of an attachment.
+func TestDirIsWhereTheShellIsNow(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	start, err := filepath.EvalSymlinks(keeper.DefaultDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := watch(t, keeper)
+	id := keeper.Shells()[0].ID
+	if dir, err := keeper.Dir(id); err != nil || dir != start {
+		t.Errorf("Dir() at the start = %q, %v; want %q", dir, err, start)
+	}
+	seen.run(t, `mkdir 'a b' && cd 'a b' && echo "moved-$((1+1))"`, "moved-2")
+	if dir, err := keeper.Dir(id); err != nil || dir != filepath.Join(start, "a b") {
+		t.Errorf("Dir() after cd = %q, %v; want %q", dir, err, filepath.Join(start, "a b"))
+	}
+	// The attachment is still the shell's.
+	seen.run(t, `echo "still-$((1+1))"`, "still-2")
+	if _, err := keeper.Dir("nope"); !errors.Is(err, ErrNoShell) {
+		t.Errorf("Dir() of an unknown shell: %v, want ErrNoShell", err)
+	}
+}
+
+// Foreground names the program running in the foreground, and nothing at the prompt.
+func TestForegroundIsTheProgramRunning(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	seen := watch(t, keeper)
+	id := keeper.Shells()[0].ID
+	seen.run(t, `echo "ready-$((1+1))"`, "ready-2")
+	if command, err := keeper.Foreground(id); err != nil || command != "" {
+		t.Errorf("Foreground() at the prompt = %q, %v; want nothing", command, err)
+	}
+	if _, err := fmt.Fprintf(seen, "sleep 30\n"); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(testWait); ; time.Sleep(20 * time.Millisecond) {
+		command, err := keeper.Foreground(id)
+		if err == nil && command == "sleep 30" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Foreground() while sleep runs = %q, %v", command, err)
+		}
+	}
+	if _, err := seen.Write([]byte{3}); err != nil { // Ctrl-C.
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(testWait); ; time.Sleep(20 * time.Millisecond) {
+		command, err := keeper.Foreground(id)
+		if err == nil && command == "" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Foreground() after Ctrl-C = %q, %v", command, err)
+		}
+	}
+	if _, err := keeper.Foreground("nope"); !errors.Is(err, ErrNoShell) {
+		t.Errorf("Foreground() of an unknown shell: %v, want ErrNoShell", err)
+	}
+}

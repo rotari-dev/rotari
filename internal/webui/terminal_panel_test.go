@@ -53,6 +53,14 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     requests.push(method + ' ' + url);
     const refused = (code, text) => Promise.resolve({ ok: false, status: code, text: async () => text });
     if (status() !== 200) return refused(status(), 'refused');
+    const previewed = /\/_terminal\/shells\/([^/]+)\/preview$/.exec(url);
+    if (previewed) {
+      const id = decodeURIComponent(previewed[1]);
+      if (!server.shells.some((shell) => shell.id === id) || server.endedSinceListed?.includes(id)) return refused(404, 'no such shell');
+      const cwd = server.cwds?.[id];
+      const command = server.commands?.[id];
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ ...(cwd ? { cwd } : { cwd_error: 'no such process' }), ...(command === '?' ? { command_error: 'no such group' } : command ? { command } : {}) }) });
+    }
     if (method === 'GET') return Promise.resolve({ ok: true, status: 200, json: async () => ({ shells: [...server.shells], limit: 32, group_limit: server.limit }) });
     if (method === 'POST') {
       if (server.startError) return refused(500, server.startError);
@@ -66,6 +74,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       server.shells = [...server.shells, shell];
       return Promise.resolve({ ok: true, status: 201, json: async () => shell });
     }
+    if (server.refuse && (method === 'PATCH' || method === 'DELETE')) return refused(500, server.refuse);
     if (method === 'PATCH') {
       const shell = server.shells.find((item) => url.endsWith('/' + item.id));
       shell.name = JSON.parse(body).name;
@@ -105,6 +114,17 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           return Promise.resolve({ ok: true, status: 204 });
         }
         if (address.startsWith('/_terminal/shells')) return fakeShells(address, init.method || 'GET', init.body);
+        if (address === '/api/basedirs') {
+          requests.push('GET ' + address);
+          if (server.basedirsStatus) return Promise.resolve({ ok: false, status: server.basedirsStatus, text: async () => 'refused' });
+          return Promise.resolve({ ok: true, status: 200, json: async () => ({ basedirs: server.basedirs || [{ id: 'b', path: '/b', current: true }] }) });
+        }
+        if (address.startsWith('/api/projects?basedir_id=')) {
+          const id = decodeURIComponent(address.slice('/api/projects?basedir_id='.length));
+          const projects = (server.projects || {})[id];
+          if (!projects) return Promise.resolve({ ok: false, status: 404, text: async () => 'gone' });
+          return Promise.resolve({ ok: true, status: 200, json: async () => ({ projects }) });
+        }
         if (address.startsWith('/_terminal/here')) {
           requests.push('GET ' + address);
           if (status() !== 200) return Promise.resolve({ ok: false, status: status(), text: async () => 'refused' });
@@ -662,6 +682,23 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   await wait(30);
   assert.deepEqual(deleted().slice(2), ['DELETE /_terminal/shells/1', 'DELETE /_terminal/shells/2']);
   assert.deepEqual(menuPage.server.shells.map((shell) => shell.id), ['9'], 'closing all reached another project');
+  // Closing every project's shells ends them all, the shown one last, after asking in so many
+  // words; with only this project's, it is off, since Close all tabs does that.
+  const everyMenu = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1'), inProject('9', 1, 'p2')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const everyItem = (label) => [...everyMenu.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === label);
+  const everyAsked = [];
+  everyMenu.window.confirm = (text) => { everyAsked.push(text); return true; };
+  everyMenu.document.querySelector('.terminal-tab').dispatchEvent(new everyMenu.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+  everyItem('Close all shells of every project').click();
+  await wait(50);
+  assert.deepEqual(everyAsked, ['End all 3 shells, of every project, and anything running in them?']);
+  assert.deepEqual(everyMenu.requests.filter((request) => request.startsWith('DELETE')), ['DELETE /_terminal/shells/2', 'DELETE /_terminal/shells/9', 'DELETE /_terminal/shells/1']);
+  assert.deepEqual(everyMenu.server.shells, []);
+  const onlyHere = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')] });
+  await wait(50);
+  onlyHere.document.querySelector('.terminal-tab').dispatchEvent(new onlyHere.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+  assert.equal([...onlyHere.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Close all shells of every project').disabled, true);
 
   // Dragging a tab, or the menu, arranges this project's tabs, on the server too, and the
   // menu's and neighbours' idea of right and left follows.
@@ -2206,6 +2243,262 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   await wait(20);
   assert.deepEqual(marks()[1], ['p 1', '', ''], 'a project with no shell kept its mark');
   assert.match(webShellCSS, /\.sidebar-project-row\[data-terminal-shells\]::after \{/);
+
+  // All shells shows every project's shells in the page's dialog, as a log is, this page's
+  // first, each with where it is now, or where it started, said as such, when the server
+  // cannot tell.
+  const elsewhereShell = { ...inProject('4', 1, 'p1', '/c'), name: 'build', link: '/_basedir/c/project/p1', unseen_output: true };
+  const touring = load(process.argv[1], { stored: '1', path: '/project/p2', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1'), inProject('3', 1, 'p2'), elsewhereShell] });
+  touring.server.cwds = { 1: '/w/p1/src', 3: '/w/p2/deep', 4: '/c/p1' };
+  touring.server.commands = { 1: 'vim notes.md', 2: '?' };
+  await wait(50);
+  const allShellsButton = (page) => [...page.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'All shells');
+  const overviewButton = allShellsButton(touring);
+  assert.equal(overviewButton.getAttribute('aria-pressed'), 'false');
+  const tour = () => touring.document.querySelector('.terminal-overview');
+  const cards = () => [...touring.document.querySelectorAll('.terminal-overview-card')];
+  const card = (id) => cards().find((item) => item.dataset.shell === id);
+  overviewButton.click();
+  await wait(30);
+  assert.equal(overviewButton.getAttribute('aria-pressed'), 'true');
+  const tourDialog = tour().parentElement;
+  assert.equal(tourDialog.parentElement, touring.document.body, 'the overview is not the page\'s dialog');
+  assert.deepEqual([...tourDialog.classList], ['output-modal', 'terminal-overview-modal']);
+  assert.ok(tour().classList.contains('output-panel'));
+  assert.equal(tourDialog.getAttribute('aria-modal'), 'true');
+  assert.equal(touring.document.getElementById(tourDialog.getAttribute('aria-labelledby')).textContent, 'All shells');
+  assert.deepEqual([...tour().querySelectorAll('h3 span')].map((item) => item.textContent), ['p2', 'p1 in /b', 'p1 in /c']);
+  assert.deepEqual(cards().map((item) => [item.dataset.shell, item.querySelector('.terminal-overview-name').textContent, item.querySelector('.terminal-overview-state').textContent, item.querySelector('.terminal-overview-dir').textContent]), [
+    ['3', 'Shell 1', 'shown', '/w/p2/deep'],
+    ['1', 'Shell 1', '', '/w/p1/src'],
+    ['2', 'Shell 2', '', 'started in /w/p1'],
+    ['4', 'build', 'new output', '/c/p1'],
+  ]);
+  assert.ok(card('2').querySelector('.terminal-overview-dir-unknown').title.includes('no such process'));
+  // A card names what its shell runs, and nothing while the shell waits at its prompt.
+  const runningOf = (id) => { const line = card(id).querySelector('.terminal-overview-command'); return line.hidden ? null : [line.textContent, line.title, line.classList.contains('terminal-overview-command-unknown')]; };
+  assert.deepEqual(runningOf('1'), ['vim notes.md', 'Running vim notes.md', false]);
+  assert.deepEqual(runningOf('2'), ['running program not known', 'no such group', true]);
+  assert.equal(runningOf('3'), null);
+  assert.ok(card('3').classList.contains('terminal-overview-current'));
+  assert.ok(card('4').classList.contains('terminal-overview-unseen'));
+  assert.equal(touring.sockets.length, 1, 'the overview connected to a shell');
+  // Keys move between cards, and Escape goes back to the shell.
+  assert.equal(touring.document.activeElement, card('3'));
+  const key = (name) => touring.document.activeElement.dispatchEvent(new touring.window.KeyboardEvent('keydown', { key: name, bubbles: true }));
+  key('ArrowRight');
+  assert.equal(touring.document.activeElement, card('1'));
+  key('End');
+  assert.equal(touring.document.activeElement, card('4'));
+  key('ArrowLeft');
+  assert.equal(touring.document.activeElement, card('2'));
+  const termFocuses = touring.terminals[0].focuses || 0;
+  key('Escape');
+  assert.equal(tour(), null);
+  assert.equal(overviewButton.getAttribute('aria-pressed'), 'false');
+  assert.equal(touring.terminals[0].focuses, termFocuses + 1);
+  // A click beside it closes it, and one inside does not.
+  overviewButton.click();
+  await wait(30);
+  tour().click();
+  assert.notEqual(tour(), null, 'a click inside closed it');
+  tour().parentElement.click();
+  assert.equal(tour(), null, 'a click beside it left it open');
+  // A shell of this page's project is shown in the focused pane, closing it; Refresh takes a new view.
+  overviewButton.click();
+  await wait(30);
+  touring.server.shells = [...touring.server.shells, inProject('5', 2, 'p2')];
+  [...tour().querySelectorAll('button')].find((item) => item.textContent === 'Refresh').click();
+  await wait(30);
+  assert.deepEqual(cards().map((item) => item.dataset.shell), ['3', '5', '1', '2', '4']);
+  card('5').click();
+  await wait(20);
+  assert.equal(tour(), null);
+  assert.match(touring.sockets.at(-1).url, /[?]shell=5&/);
+  // Another project's shell is the one its page shows next, in the layout it had.
+  touring.window.sessionStorage.setItem('rotari-terminal-layout:/b:p1', JSON.stringify({ columns: [{ share: 0.5, rows: [{ share: 1, shell: '1' }] }, { share: 0.5, rows: [{ share: 1, shell: '9' }] }], focused: '9' }));
+  overviewButton.click();
+  await wait(30);
+  card('2').click();
+  assert.equal(touring.window.sessionStorage.getItem('rotari-terminal-shell:/b:p1'), '2');
+  assert.deepEqual(JSON.parse(touring.window.sessionStorage.getItem('rotari-terminal-layout:/b:p1')), { columns: [{ share: 0.5, rows: [{ share: 1, shell: '1' }] }, { share: 0.5, rows: [{ share: 1, shell: '2' }] }], focused: '2' });
+  overviewButton.click();
+  await wait(30);
+  card('4').click();
+  assert.equal(touring.window.sessionStorage.getItem('rotari-terminal-shell:/c:p1'), '4');
+  assert.equal(touring.window.sessionStorage.getItem('rotari-terminal-layout:/c:p1'), null);
+  // Hiding the panel closes it.
+  overviewButton.click();
+  await wait(30);
+  touring.window.toggleTerminalPanel();
+  assert.equal(tour(), null);
+  // A shell that ends before its card asks where it is says why that is not known.
+  touring.window.toggleTerminalPanel();
+  await wait(30);
+  touring.server.endedSinceListed = ['1'];
+  overviewButton.click();
+  await wait(30);
+  assert.equal(card('1').querySelector('.terminal-overview-dir').textContent, 'started in /w/p1');
+  assert.match(card('1').querySelector('.terminal-overview-dir').title, /not known: no such shell/);
+  touring.server.endedSinceListed = [];
+  // Each card renames its tab and ends its shell, the overview staying open with the keys
+  // on that card, or the one after it.
+  assert.deepEqual(cards().map((item) => item.dataset.shell), ['3', '5', '1', '2', '4']);
+  const cardAction = (id, label) => card(id).parentElement.querySelector('[aria-label="' + label + '"]');
+  const prompts = [];
+  touring.window.prompt = (text, value) => { prompts.push([text, value]); return 'logs'; };
+  cardAction('2', 'Rename shell 2').click();
+  await wait(30);
+  assert.deepEqual(prompts, [['Name for shell 2 (empty for its number):', '']]);
+  assert.ok(touring.requests.includes('PATCH /_terminal/shells/2'), touring.requests.join(', '));
+  assert.notEqual(tour(), null, 'renaming closed the overview');
+  assert.equal(card('2').querySelector('.terminal-overview-name').textContent, 'logs');
+  assert.equal(touring.document.activeElement, card('2'));
+  // F2 renames the card with the keys; cancelling sends nothing.
+  touring.window.prompt = (text, value) => { prompts.push([text, value]); return null; };
+  key('F2');
+  await wait(30);
+  assert.deepEqual(prompts.at(-1), ['Name for shell 2 (empty for its number):', 'logs']);
+  assert.equal(touring.requests.filter((request) => request === 'PATCH /_terminal/shells/2').length, 1);
+  // Ending asks first, naming another project's shell by its project.
+  const endAsked = [];
+  touring.window.confirm = (text) => { endAsked.push(text); return true; };
+  cardAction('2', 'End shell 2, logs').click();
+  await wait(30);
+  assert.deepEqual(endAsked, ['End shell 2 of p1, and anything running in it?']);
+  assert.ok(touring.requests.includes('DELETE /_terminal/shells/2'));
+  assert.equal(card('2'), undefined);
+  assert.notEqual(tour(), null, 'ending closed the overview');
+  assert.equal(touring.document.activeElement, card('4'));
+  // Delete ends the card with the keys, after asking; declining ends nothing.
+  touring.window.confirm = (text) => { endAsked.push(text); return false; };
+  key('Delete');
+  await wait(30);
+  assert.equal(endAsked.at(-1), 'End shell 1 of p1, and anything running in it?');
+  assert.ok(!touring.requests.includes('DELETE /_terminal/shells/4'), 'a declined question ended the shell');
+  assert.notEqual(card('4'), undefined);
+  // A refusal is told in the overview, not in a pane under it.
+  touring.server.refuse = 'not today';
+  touring.window.confirm = () => true;
+  cardAction('4', 'End shell 1, build').click();
+  await wait(30);
+  const tourProblem = tour().querySelector('.terminal-overview-problem');
+  assert.equal(tourProblem.hidden, false);
+  assert.equal(tourProblem.textContent, 'The shell did not end: not today');
+  touring.window.prompt = () => 'x';
+  cardAction('4', 'Rename shell 1, build').click();
+  await wait(30);
+  assert.equal(tourProblem.textContent, 'The tab was not renamed: not today');
+  touring.server.refuse = '';
+  assert.doesNotMatch(touring.document.querySelector('.terminal-pane-status').textContent, /not today/);
+  // A project's + starts another shell where its page would, shown in no pane, with the
+  // keys on its new card; at the limit it is off and says why, and a refusal is told.
+  const growing = load(process.argv[1], { stored: '1', path: '/project/p2', limit: 2, shells: [inProject('1', 1, 'p1'), inProject('3', 1, 'p2'), { ...inProject('4', 1, 'q', '/c'), link: '/_basedir/c/project/q' }] });
+  await wait(50);
+  allShellsButton(growing).click();
+  await wait(30);
+  const growTour = () => growing.document.querySelector('.terminal-overview');
+  const addFor = (name) => growTour().querySelector('[aria-label="New shell in ' + name + '"]');
+  assert.deepEqual([...growTour().querySelectorAll('h3 span')].map((item) => item.textContent), ['p2', 'p1', 'q']);
+  const growSockets = growing.sockets.length;
+  addFor('p1').click();
+  await wait(30);
+  assert.ok(growing.requests.includes('POST /_terminal/shells?rows=24&cols=80&project=p1'), growing.requests.join(', '));
+  assert.equal(growing.sockets.length, growSockets, 'the new shell was shown in a pane');
+  assert.notEqual(growTour(), null, 'starting closed the overview');
+  assert.equal(growing.document.activeElement.dataset.shell, '101');
+  assert.equal(addFor('p1').disabled, true);
+  assert.match(addFor('p1').title, /at most 2 shells can run for one project/);
+  addFor('q').click();
+  await wait(30);
+  assert.ok(growing.requests.includes('POST /_terminal/shells?rows=24&cols=80&basedir=c&project=q'), growing.requests.join(', '));
+  // A project with no shell yet starts one from the list under the cards, where its page
+  // would; no project starts in the home directory, and a basedir that cannot be listed says so.
+  growing.server.basedirs = [{ id: 'b', path: '/b', current: true }, { id: 'c', path: '/c', current: false }, { id: 'd', path: '/d', current: false }];
+  growing.server.projects = { b: ['p1', 'p2', 'fresh'], c: ['q', 'other one'] };
+  [...growTour().querySelectorAll('button')].find((item) => item.textContent === 'Refresh').click();
+  await wait(50);
+  const newRow = () => growTour().querySelector('.terminal-overview-new');
+  const newChoice = () => newRow().querySelector('select');
+  assert.deepEqual([...newChoice().children].map((item) => item.tagName === 'OPTGROUP' ? [item.label, [...item.children].map((option) => [option.textContent, option.value])] : [item.textContent, item.value]), [
+    ['No project (home directory)', '/'],
+    ['/b', [['fresh', '/project/fresh']]],
+    ['/c', [['other one', '/_basedir/c/project/other%20one']]],
+  ]);
+  assert.equal(newRow().querySelector('.terminal-overview-new-note').textContent, 'Not listed: /d: gone');
+  newChoice().value = '/_basedir/c/project/other%20one';
+  [...newRow().querySelectorAll('button')].find((item) => item.textContent === 'Start').click();
+  await wait(50);
+  assert.ok(growing.requests.includes('POST /_terminal/shells?rows=24&cols=80&basedir=c&project=other%20one'), growing.requests.join(', '));
+  assert.equal(growing.document.activeElement.dataset.shell, String(growing.server.lastID));
+  assert.equal(growing.sockets.length, growSockets, 'the new shell was shown in a pane');
+  growing.server.basedirsStatus = 500;
+  [...growTour().querySelectorAll('button')].find((item) => item.textContent === 'Refresh').click();
+  await wait(50);
+  assert.equal(newRow().querySelector('.terminal-overview-new-note').textContent, 'The projects could not be listed: refused');
+  assert.equal(newRow().querySelector('button').disabled, true);
+  growing.server.startError = 'disk full';
+  addFor('p2').click();
+  await wait(30);
+  assert.equal(growTour().querySelector('.terminal-overview-problem').textContent, 'The shell did not start: disk full');
+
+  // The overview ends a project's shells, or every shell, after asking, and stays open.
+  const endingAll = load(process.argv[1], { stored: '1', path: '/project/p2', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1'), inProject('3', 1, 'p2')] });
+  await wait(50);
+  allShellsButton(endingAll).click();
+  await wait(30);
+  const endTour = () => endingAll.document.querySelector('.terminal-overview');
+  const endAllAsked = [];
+  endingAll.window.confirm = (text) => { endAllAsked.push(text); return true; };
+  endTour().querySelector('[aria-label="End all shells of p1"]').click();
+  await wait(50);
+  assert.deepEqual(endAllAsked, ['End the 2 shells of p1, and anything running in them?']);
+  assert.deepEqual(endingAll.requests.filter((request) => request.startsWith('DELETE')), ['DELETE /_terminal/shells/1', 'DELETE /_terminal/shells/2']);
+  assert.notEqual(endTour(), null, 'ending closed the overview');
+  assert.deepEqual([...endTour().querySelectorAll('h3 span')].map((item) => item.textContent), ['p2']);
+  // A refusal is told in the overview.
+  endingAll.server.refuse = 'busy';
+  const endEveryButton = () => [...endTour().querySelectorAll('header button')].find((item) => item.textContent === 'End all shells');
+  endEveryButton().click();
+  await wait(50);
+  assert.equal(endTour().querySelector('.terminal-overview-problem').textContent, 'The shell did not end: busy');
+  endingAll.server.refuse = '';
+  endEveryButton().click();
+  await wait(50);
+  assert.equal(endAllAsked.at(-1), 'End the one shell, of every project, and anything running in it?');
+  assert.deepEqual(endingAll.server.shells, []);
+  endingAll.sockets[0].onclose({ code: 4002, reason: 'hangup' });
+  await wait(30);
+  allShellsButton(endingAll).click();
+  await wait(30);
+  allShellsButton(endingAll).click();
+  await wait(30);
+  assert.equal(endTour().querySelector('.terminal-overview-body').textContent, 'No shells are running.');
+  assert.equal(endEveryButton().disabled, true);
+
+  // In a window, another project's shell takes the window and the page that opened it along.
+  const toldTour = [];
+  const tourWin = load(process.argv[6], { path: '/_terminal/window/project/p2', shells: [inProject('1', 1, 'p1'), inProject('3', 1, 'p2')], opener: { closed: false, postMessage: (message, target) => toldTour.push(JSON.parse(JSON.stringify([message, target]))) } });
+  await wait(50);
+  [...tourWin.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'All shells').click();
+  await wait(30);
+  [...tourWin.document.querySelectorAll('.terminal-overview-card')].find((item) => item.dataset.shell === '1').click();
+  assert.deepEqual(toldTour.filter(([message]) => message.type === 'rotari-terminal-go'), [[{ type: 'rotari-terminal-go', path: '/project/p1' }, origin]]);
+  assert.equal(tourWin.window.sessionStorage.getItem('rotari-terminal-shell:/b:p1'), '1');
+  // With no list, it says why.
+  let tourStatus = 200;
+  const tourless = load(process.argv[1], { stored: '1', path: '/project/p2', shells: [inProject('3', 1, 'p2')], status: () => tourStatus });
+  await wait(50);
+  tourStatus = 503;
+  [...tourless.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'All shells').click();
+  await wait(30);
+  assert.equal(tourless.document.querySelector('.terminal-overview-body').textContent, 'The shells could not be listed: refused');
+  assert.match(webShellCSS, /html\[data-terminal-window\] \.terminal-overview-modal \{\s*inset: 0;/);
+  // Every picture button says in words what it does, and the pointer reaches the button, not its picture.
+  const pictured = [...touring.document.querySelectorAll('button.terminal-icon')];
+  assert.ok(pictured.length >= 8, String(pictured.length));
+  for (const button of pictured) assert.ok(button.title && button.getAttribute('aria-label'), button.outerHTML.slice(0, 120));
+  assert.match(webShellCSS, /\.terminal-icon svg \{\s*pointer-events: none;/);
 
   // xterm.js loads only on opening, under the page's nonce.
   const real = load(process.argv[1], { stubs: false });

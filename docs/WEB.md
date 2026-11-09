@@ -149,6 +149,22 @@ The button shows how many shells are running in all
 projects, as **Terminal (3)**, so you can see what is left running with the panel closed, and each project
 in the sidebar with a shell running has a terminal icon; point at it to see how many.
 
+The **All shells** icon beside **+** opens a dialog over the page, as a log does, listing every running shell,
+grouped by project with the page's first. Each card shows its tab name, the directory its shell is in now, and
+the command running in it, if any. Choose one with a click, or with the arrow keys and Enter, to close the dialog
+and show that shell in the pane with the keys; one of another project takes the page there, as the project list
+does. The pencil on a card renames its tab and the cross ends its shell, after asking; **F2** and **Delete** do
+the same for the card with the keys, and the dialog stays open for the next one. **End all** beside a project's
+name ends its shells, and **End all shells** at the top every shell, after asking. The **+** beside a project's name
+starts another shell there, and **New shell in** under the cards starts one in a project that has none, or in no
+project; each starts where that project's page would, and the new shell appears as a card without being shown
+in a pane. The list is taken when the dialog
+opens, and **Refresh** takes it again. Escape, **Close**, or a click
+beside the dialog closes it. The directory is the shell's own, not that of a program running in it, and when the
+server cannot find it the card says where the shell started instead. The command is the one in the foreground,
+the first of a pipeline; a shell with no job control runs everything in its own process group, so its cards
+show no command.
+
 Shells belong to projects, as an editor's terminals belong to its window. A project's pages show
 that project's tabs, and the list beside them goes to other projects that have shells. Other pages,
 such as Recent jobs, show the shells of no project.
@@ -199,8 +215,9 @@ A tab you are not looking at is marked when it prints something, until you show 
 other projects the same way. When a shell in another tab ends, a note says so. These update every few
 seconds while the panel is open and the page is in view.
 
-Drag a tab to move it, or right-click it to move it, rename it, close the tabs to its right, or close all of
-this project's tabs. A new tab goes at the right end, and keeps the lowest number free. Names and places last
+Drag a tab to move it, or right-click it to move it, rename it, close the tabs to its right, close all of
+this project's tabs, or close every shell of every project. All shells offers the last two as well: **End all**
+beside a project's name and **End all shells** at the top. A new tab goes at the right end, and keeps the lowest number free. Names and places last
 as long as their shells.
 
 A web address in the output opens in a new tab when clicked. A program can print any address, so look

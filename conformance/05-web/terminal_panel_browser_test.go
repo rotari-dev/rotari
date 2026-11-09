@@ -161,10 +161,12 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
     'const icon = button.querySelector("svg").getBoundingClientRect();' +
     'const bar = document.querySelector(".terminal-bar").getBoundingClientRect();' +
     'const style = getComputedStyle(button);' +
-    'return { border: style.borderTopWidth, off: Math.abs(box.top + box.height / 2 - icon.top - icon.height / 2), offBar: Math.abs(bar.top + bar.height / 2 - icon.top - icon.height / 2) };' +
+    'return { border: style.borderTopWidth, off: Math.abs(box.top + box.height / 2 - icon.top - icon.height / 2), offBar: Math.abs(bar.top + bar.height / 2 - icon.top - icon.height / 2), hit: document.elementFromPoint(icon.left + icon.width / 2, icon.top + icon.height / 2) === button, title: button.title };' +
     '}))');
   for (const icon of JSON.parse(icons)) {
     if (icon.border !== '0px' || icon.off > 1 || icon.offBar > 2) throw new Error('a split icon is framed or off center: ' + icons);
+    // The pointer over the picture is over the button, whose title says what it does.
+    if (!icon.hit || !icon.title) throw new Error('a split icon\'s picture hides its button\'s title: ' + icons);
   }
   await page.evaluate(barButton('Split right') + '.click()');
   await until('a second pane', 'document.querySelectorAll(".xterm-helper-textarea").length === 2 && document.querySelectorAll(".terminal-tab").length === 2');
@@ -362,6 +364,22 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await page.evaluate('window.__popups[0].close(); true');
   await until('the panel back in the page', 'document.documentElement.classList.contains("terminal-open") && !document.getElementById("terminal-panel").hidden');
   await until('the same shell in the page', screenHas('popped-$((2+3))'));
+  await collect();
+
+  // All shells shows a card for each shell in the page's dialog, as a log is, saying where
+  // it is now, and choosing one closes it.
+  await typeLine('cd / && echo "rooted-$((3+4))"');
+  await until('the shell to move', screenHas('rooted-7'));
+  await page.evaluate(barButton('All shells') + '.click()');
+  const cardDirs = '[...document.querySelectorAll(".terminal-overview-card .terminal-overview-dir")].map((item) => item.textContent)';
+  await until('the cards to say where their shells are', cardDirs + '.length > 0 && ' + cardDirs + '.every((text) => text !== "\u2026")');
+  const dirs = JSON.parse(await page.evaluate('JSON.stringify(' + cardDirs + ')'));
+  if (!dirs.includes('/') || dirs.some((text) => text.startsWith('started in'))) throw new Error('the cards say ' + JSON.stringify(dirs));
+  // Over the page and inside the window, with the panel's room left to it, as a log is.
+  const placed = JSON.parse(await page.evaluate('JSON.stringify((() => { const box = document.querySelector(".terminal-overview").getBoundingClientRect(); const panel = document.getElementById("terminal-panel").getBoundingClientRect(); return { box: [box.left, box.top, box.right, box.bottom], panelTop: panel.top, width: innerWidth, height: innerHeight, top: document.elementFromPoint((box.left + box.right) / 2, box.top + 8)?.closest(".terminal-overview") !== null }; })())'));
+  if (!placed.top || placed.box[0] < 0 || placed.box[1] < 0 || placed.box[2] > placed.width || placed.box[3] > placed.panelTop + 1) throw new Error('the overview is not over the page above the panel: ' + JSON.stringify(placed));
+  await page.evaluate('document.querySelector(".terminal-overview-current").click()');
+  await until('the overview to close on a choice', 'document.querySelector(".terminal-overview") === null');
   await collect();
 }).catch((error) => { failure = error.stack || String(error); });
 await close();

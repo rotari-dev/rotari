@@ -318,25 +318,29 @@ func TestTerminalIsOfferedAndGuarded(t *testing.T) {
 		headers         map[string]string
 		want            int
 	}{
-		"list, no credentials":   {http.MethodGet, base + "/_terminal/shells", map[string]string{}, http.StatusUnauthorized},
-		"start, no credentials":  {http.MethodPost, base + "/_terminal/shells?rows=24&cols=80", map[string]string{}, http.StatusForbidden},
-		"start, another site":    {http.MethodPost, base + "/_terminal/shells?rows=24&cols=80", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
-		"start, plain proxy":     {http.MethodPost, base + "/_terminal/shells?rows=24&cols=80", map[string]string{"X-Rotari-Token": launchToken, "X-Forwarded-For": "192.0.2.1"}, http.StatusForbidden},
-		"end, no credentials":    {http.MethodDelete, base + "/_terminal/shells/1", map[string]string{}, http.StatusForbidden},
-		"end, another site":      {http.MethodDelete, base + "/_terminal/shells/1", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
-		"start, no size":         {http.MethodPost, base + "/_terminal/shells", map[string]string{"X-Rotari-Token": launchToken}, http.StatusBadRequest},
-		"alive, no credentials":  {http.MethodPost, base + "/_terminal/alive", map[string]string{}, http.StatusForbidden},
-		"alive, another site":    {http.MethodPost, base + "/_terminal/alive", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
-		"alive":                  {http.MethodPost, base + "/_terminal/alive", map[string]string{"X-Rotari-Token": launchToken}, http.StatusNoContent},
-		"order, another site":    {http.MethodPut, base + "/_terminal/order", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
-		"order, no credentials":  {http.MethodPut, base + "/_terminal/order", map[string]string{}, http.StatusForbidden},
-		"name, another site":     {http.MethodPatch, base + "/_terminal/shells/1", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
-		"name, not running":      {http.MethodPatch, base + "/_terminal/shells/7", map[string]string{"X-Rotari-Token": launchToken}, http.StatusBadRequest},
-		"window, no credentials": {http.MethodGet, base + "/_terminal/window/project/p", map[string]string{}, http.StatusUnauthorized},
-		"window, plain proxy":    {http.MethodGet, base + "/_terminal/window/project/p", map[string]string{"X-Rotari-Token": launchToken, "X-Forwarded-For": "192.0.2.1"}, http.StatusForbidden},
-		"window, posted":         {http.MethodPost, base + "/_terminal/window/project/p", map[string]string{"X-Rotari-Token": launchToken}, http.StatusMethodNotAllowed},
-		"window":                 {http.MethodGet, base + "/_terminal/window/project/p", map[string]string{"X-Rotari-Token": launchToken}, http.StatusOK},
-		"end, not running":       {http.MethodDelete, base + "/_terminal/shells/7", map[string]string{"X-Rotari-Token": launchToken}, http.StatusNotFound},
+		"list, no credentials":    {http.MethodGet, base + "/_terminal/shells", map[string]string{}, http.StatusUnauthorized},
+		"start, no credentials":   {http.MethodPost, base + "/_terminal/shells?rows=24&cols=80", map[string]string{}, http.StatusForbidden},
+		"start, another site":     {http.MethodPost, base + "/_terminal/shells?rows=24&cols=80", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
+		"start, plain proxy":      {http.MethodPost, base + "/_terminal/shells?rows=24&cols=80", map[string]string{"X-Rotari-Token": launchToken, "X-Forwarded-For": "192.0.2.1"}, http.StatusForbidden},
+		"end, no credentials":     {http.MethodDelete, base + "/_terminal/shells/1", map[string]string{}, http.StatusForbidden},
+		"end, another site":       {http.MethodDelete, base + "/_terminal/shells/1", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
+		"start, no size":          {http.MethodPost, base + "/_terminal/shells", map[string]string{"X-Rotari-Token": launchToken}, http.StatusBadRequest},
+		"alive, no credentials":   {http.MethodPost, base + "/_terminal/alive", map[string]string{}, http.StatusForbidden},
+		"alive, another site":     {http.MethodPost, base + "/_terminal/alive", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
+		"alive":                   {http.MethodPost, base + "/_terminal/alive", map[string]string{"X-Rotari-Token": launchToken}, http.StatusNoContent},
+		"order, another site":     {http.MethodPut, base + "/_terminal/order", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
+		"order, no credentials":   {http.MethodPut, base + "/_terminal/order", map[string]string{}, http.StatusForbidden},
+		"name, another site":      {http.MethodPatch, base + "/_terminal/shells/1", map[string]string{"X-Rotari-Token": launchToken, "Origin": "http://attacker.example"}, http.StatusForbidden},
+		"name, not running":       {http.MethodPatch, base + "/_terminal/shells/7", map[string]string{"X-Rotari-Token": launchToken}, http.StatusBadRequest},
+		"window, no credentials":  {http.MethodGet, base + "/_terminal/window/project/p", map[string]string{}, http.StatusUnauthorized},
+		"window, plain proxy":     {http.MethodGet, base + "/_terminal/window/project/p", map[string]string{"X-Rotari-Token": launchToken, "X-Forwarded-For": "192.0.2.1"}, http.StatusForbidden},
+		"window, posted":          {http.MethodPost, base + "/_terminal/window/project/p", map[string]string{"X-Rotari-Token": launchToken}, http.StatusMethodNotAllowed},
+		"window":                  {http.MethodGet, base + "/_terminal/window/project/p", map[string]string{"X-Rotari-Token": launchToken}, http.StatusOK},
+		"end, not running":        {http.MethodDelete, base + "/_terminal/shells/7", map[string]string{"X-Rotari-Token": launchToken}, http.StatusNotFound},
+		"preview, no credentials": {http.MethodGet, base + "/_terminal/shells/1/preview", map[string]string{}, http.StatusUnauthorized},
+		"preview, plain proxy":    {http.MethodGet, base + "/_terminal/shells/1/preview", map[string]string{"X-Rotari-Token": launchToken, "X-Forwarded-For": "192.0.2.1"}, http.StatusForbidden},
+		"preview, posted":         {http.MethodPost, base + "/_terminal/shells/1/preview", map[string]string{"X-Rotari-Token": launchToken}, http.StatusMethodNotAllowed},
+		"preview, not running":    {http.MethodGet, base + "/_terminal/shells/7/preview", map[string]string{"X-Rotari-Token": launchToken}, http.StatusNotFound},
 	} {
 		if got := e.HTTPDo(test.method, test.address, test.headers, ""); got.Status != test.want {
 			t.Errorf("%s: status %d, want %d: %s", name, got.Status, test.want, got.Body)
@@ -449,6 +453,11 @@ func TestTerminalKeepsSeveralShells(t *testing.T) {
 	}
 	if status, body := terminalShellsRequest(t, http.MethodGet, base+"/_terminal/shells", token); status != http.StatusOK || !strings.Contains(string(body), `"name":"build"`) {
 		t.Errorf("the list lost the name: status %d: %s", status, body)
+	}
+
+	// A preview says where a running shell is.
+	if got := e.HTTPDo(http.MethodGet, base+"/_terminal/shells/"+two.ID+"/preview", map[string]string{"X-Rotari-Token": launchToken}, ""); got.Status != http.StatusOK || !strings.Contains(got.Body, `"cwd":"/`) {
+		t.Errorf("a preview: status %d: %s", got.Status, got.Body)
 	}
 
 	// A freed number comes back, under an ID that does not, up to the limit.

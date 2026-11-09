@@ -370,6 +370,9 @@ func TestTerminalShellRoutes(t *testing.T) {
 		"the window, bare":    {http.MethodGet, terminalWindowPath, http.StatusOK},
 		"post to the window":  {http.MethodPost, terminalWindowPath + "/project/p", http.StatusMethodNotAllowed},
 		"a window lookalike":  {http.MethodGet, terminalWindowPath + "s", http.StatusNotFound},
+		"preview an unknown":  {http.MethodGet, terminalShellsPath + "/7/" + terminalPreviewName, http.StatusNotFound},
+		"post to a preview":   {http.MethodPost, terminalShellsPath + "/" + shell.ID + "/" + terminalPreviewName, http.StatusMethodNotAllowed},
+		"end a preview":       {http.MethodDelete, terminalShellsPath + "/" + shell.ID + "/" + terminalPreviewName, http.StatusMethodNotAllowed},
 	} {
 		if status, body := terminalRequest(t, server, test.method, test.path); status != test.want {
 			t.Errorf("%s: status %d, want %d: %s", name, status, test.want, body)
@@ -377,6 +380,38 @@ func TestTerminalShellRoutes(t *testing.T) {
 	}
 	if shells := listTerminalShells(t, server); len(shells) != 1 {
 		t.Errorf("the requests left %v", shells)
+	}
+}
+
+// A preview says where the shell is now, without taking it from the page showing it.
+func TestTerminalPreviewSaysWhereTheShellIs(t *testing.T) {
+	server, _ := terminalServer(t, "/bin/sh")
+	client := dialTerminal(t, server)
+	id := listTerminalShells(t, server)[0].ID
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.typeLine(`cd '` + dir + `' && echo "moved-$((1+1))"`)
+	client.await("moved-2")
+	status, body := terminalRequest(t, server, http.MethodGet, terminalShellsPath+"/"+id+"/"+terminalPreviewName)
+	var preview terminalPreviewResponse
+	if err := json.Unmarshal([]byte(body), &preview); status != http.StatusOK || err != nil || preview != (terminalPreviewResponse{Cwd: dir}) {
+		t.Errorf("preview: status %d, %v: %s; want the directory %q", status, err, body, dir)
+	}
+	client.typeLine(`echo "still-$((1+1))"`)
+	client.await("still-2")
+	// What it runs, while it runs.
+	client.typeLine(`sleep 30`)
+	for deadline := time.Now().Add(15 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		status, body = terminalRequest(t, server, http.MethodGet, terminalShellsPath+"/"+id+"/"+terminalPreviewName)
+		preview = terminalPreviewResponse{}
+		if err := json.Unmarshal([]byte(body), &preview); status == http.StatusOK && err == nil && preview == (terminalPreviewResponse{Cwd: dir, Command: "sleep 30"}) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("preview while sleep runs: status %d: %s", status, body)
+		}
 	}
 }
 
@@ -438,6 +473,7 @@ func TestTerminalShellRoutesAreGuarded(t *testing.T) {
 		{http.MethodPatch, terminalShellsPath + "/" + shell.ID},
 		{http.MethodPut, terminalOrderPath},
 		{http.MethodGet, terminalWindowPath + "/project/p"},
+		{http.MethodGet, terminalShellsPath + "/" + shell.ID + "/" + terminalPreviewName},
 	} {
 		mutates := route.method != http.MethodGet
 		for _, test := range []struct {

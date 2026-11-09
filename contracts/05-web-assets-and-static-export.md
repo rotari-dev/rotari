@@ -1400,7 +1400,12 @@ it, and the flag is rejected with `--allow-control=false` or `--static-dir`. Wit
 or a direct loopback connection, even with a token, and so do `/_terminal/shells`, which lists the
 shells on `GET` and starts one on `POST` with `rows` and `cols` (409 at the limit), and
 `/_terminal/shells/ID`, which ends one on `DELETE` (404 if it is not running) and names it on `PATCH` with
-`{"name": ...}`, up to 64 characters on one line, or empty for none. `GET /_terminal/window`, followed by
+`{"name": ...}`, up to 64 characters on one line, or empty for none. `GET /_terminal/shells/ID/preview`
+says where a shell is now and what it runs without connecting to it, so it takes the shell from no page and
+leaves its output unseen: `"cwd"`, the shell's own working directory, or `"cwd_error"` saying why it could not be
+found, and `"command"`, the command line of the program the shell runs in the foreground, absent while the shell
+is at its prompt, or `"command_error"` saying why it could not be found (404 if the shell is not running, 405 for
+other methods). `GET /_terminal/window`, followed by
 the path of a page such as `/project/p`, is the panel's page of its own (405 for other methods). `PUT /_terminal/order` with `{"ids":
 [...]}` arranges the project of the first running shell named, with others of it following and shells that have
 ended or are of another project ignored; the list then gives each project's shells in that order, with a new one
@@ -1459,9 +1464,25 @@ with the panel open or not and without connecting to any, on a page in view; wit
 shows no number. Each project row in the sidebar whose project has shells is marked with how many. It opens a panel along the bottom, or down the left or right of the window as the browser
 keeps from a menu in the panel's bar, with a tab for each
 shell of the page's project, or of no project on a page of none. A list names the projects with
-shells, and choosing one goes to its page. Opening the panel with no shell there starts one, **+**
+shells, and choosing one goes to its page. **All shells** in the bar opens a dialog over the page, as a log's is,
+with the panel's room left to it: every running shell, grouped by project with the page's first, each with its tab
+name, its shell's working directory now, or where it started, said as such, when that cannot be found, and the
+command running in its foreground, if any, or that it is not known (WEB-34); it connects to none. Choosing one
+closes the dialog and shows the shell in the pane with the keys, as its tab would, or for another project has that
+project's page show it in the pane with the keys and goes there, as the list does, a window taking its page along.
+Each card also renames its tab and ends its shell, after asking and naming another project's shell by its project,
+as a tab's menu and close button do, and **End all** beside a project's name and **End all shells** at its top end
+that project's shells and every shell, after one question, leaving the dialog open and drawn again; a refusal is
+told in the dialog. A
+project's **+** starts another shell there, off at the limit and saying which, and **New shell in**, a list of every
+basedir's projects with no shell and of no project, starts one in the project chosen, each where that project's
+page would start it (WEB-34), shown in no pane but as a card with the keys; a basedir whose projects cannot be
+listed is named.
+It is a view of when it opened, or of **Refresh**, and Escape, **Close**, a click beside it, or hiding the panel
+closes it. Opening the panel with no shell there starts one, **+**
 starts another, and a run page's **Open a terminal here** button starts another, each where the page
-says (WEB-34); closing a tab asks, then ends that shell. A page loaded with the panel left open starts
+says (WEB-34); closing a tab asks, then ends that shell. A tab's menu also closes the tabs to its right, all
+of the project's tabs, and every shell of every project, each after one question saying how many and whose. A page loaded with the panel left open starts
 nothing, and offers to, so browsing leaves no shells behind. Shells live on the server: each page load
 lists them and attaches to the one this browser tab last showed for the project, or the first,
 replaying recent output, so following a link ends none of them. Up to four panes show the project's shells, as columns each holding rows. **Split right** adds a column of
