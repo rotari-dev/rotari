@@ -255,7 +255,7 @@ existing Close all tabs tests, unchanged.
 
 ## Step 12: the dialogs on the Recent jobs page
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 21:06:26 `272442e0`.
 
 **Change:** The user found All shells on the Recent jobs page drawn under the jobs rather than as a dialog. The
 overview and the launch dialog took their frame from `.output-modal` and `.output-panel`, whose rules are in
