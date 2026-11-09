@@ -1167,12 +1167,57 @@ html.terminal-open[data-terminal-place]:not(.terminal-maximized) .terminal-tabs 
 .terminal-spacer {
   flex: 1;
 }
-/* The overview is the page's dialog, as a log is; the panel's own window has no room to leave. */
-.terminal-overview-modal {
-  z-index: 60;
-}
-html[data-terminal-window] .terminal-overview-modal {
+/* The terminal's dialogs, All shells and Launch, look like the application page's log
+   dialog but bring their own frame: the Recent jobs page and the panel's own window load
+   web_shell.css and not web_styles.css, which holds .output-modal's. They leave the
+   panel's room as a log's does (html.terminal-open .output-modal), and the panel's own
+   window has no room to leave. */
+.terminal-overview-modal,
+.terminal-launch-modal {
+  position: fixed;
   inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--overlay);
+}
+html[data-terminal-window] .terminal-overview-modal,
+html[data-terminal-window] .terminal-launch-modal {
+  inset: 0;
+}
+.terminal-overview,
+.terminal-launch {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: min(1100px, 96vw);
+  max-height: min(760px, 90vh);
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  color: var(--text);
+}
+.terminal-launch {
+  width: min(760px, 96vw);
+}
+.terminal-overview > header,
+.terminal-launch > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+.terminal-overview > header .modal-actions,
+.terminal-launch > header .modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 /* As tall as its cards, up to a log's height. */
 .output-panel.terminal-overview,
@@ -1259,13 +1304,7 @@ html.terminal-open .output-panel.terminal-overview {
   background: var(--surface-2);
   color: var(--text);
 }
-/* The launch dialog, the page's as the overview is. */
-.terminal-launch-modal {
-  z-index: 60;
-}
-html[data-terminal-window] .terminal-launch-modal {
-  inset: 0;
-}
+/* The launch dialog's own parts; its frame is the overview's. */
 .output-panel.terminal-launch,
 html.terminal-open .output-panel.terminal-launch {
   height: auto;

@@ -387,6 +387,17 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await page.evaluate('document.querySelector(".terminal-overview-current").click()');
   await until('the overview to close on a choice', 'document.querySelector(".terminal-overview") === null');
   await collect();
+  // On the Recent jobs page, whose styles are not the application page's, it is a dialog
+  // over the page too, not a block under the jobs.
+  await page.evaluate('location.href = "/jobs/"');
+  await until('the panel on Recent jobs', 'document.querySelector(".terminal-bar") !== null && document.querySelector(".xterm-rows") !== null');
+  await page.evaluate(barButton('All shells') + '.click()');
+  await until('the overview on Recent jobs', 'document.querySelector(".terminal-overview-card") !== null');
+  const jobsDialog = JSON.parse(await page.evaluate('JSON.stringify((() => { const dialog = document.querySelector(".terminal-overview-modal"); const box = document.querySelector(".terminal-overview").getBoundingClientRect(); return { position: getComputedStyle(dialog).position, top: box.top, bottom: box.bottom, height: innerHeight }; })())'));
+  if (jobsDialog.position !== 'fixed' || jobsDialog.top < 0 || jobsDialog.bottom > jobsDialog.height) throw new Error('the overview on Recent jobs is not a dialog in view: ' + JSON.stringify(jobsDialog));
+  await page.evaluate('document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
+  await until('the overview to close on Recent jobs', 'document.querySelector(".terminal-overview") === null');
+  await collect();
 }).catch((error) => { failure = error.stack || String(error); });
 await close();
 console.log(JSON.stringify({ failure, violations: [...violations] }));

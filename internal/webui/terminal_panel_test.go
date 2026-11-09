@@ -2632,7 +2632,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   [...tourless.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'All shells').click();
   await wait(30);
   assert.equal(tourless.document.querySelector('.terminal-overview-body').textContent, 'The shells could not be listed: refused');
-  assert.match(webShellCSS, /html\[data-terminal-window\] \.terminal-overview-modal \{\s*inset: 0;/);
+  assert.match(webShellCSS, /html\[data-terminal-window\] \.terminal-overview-modal,\s*html\[data-terminal-window\] \.terminal-launch-modal \{\s*inset: 0;/);
+  // The dialogs bring their own frame, since the Recent jobs page and the panel's window
+  // have no web_styles.css, where .output-modal's is.
+  assert.match(webShellCSS, /\.terminal-overview-modal,\s*\.terminal-launch-modal \{\s*position: fixed;\s*inset: 0;/);
   // Every picture button says in words what it does, and the pointer reaches the button, not its picture.
   const pictured = [...touring.document.querySelectorAll('button.terminal-icon')];
   assert.ok(pictured.length >= 8, String(pictured.length));

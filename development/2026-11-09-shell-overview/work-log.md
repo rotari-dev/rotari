@@ -252,3 +252,23 @@ all shells (refused and told in the dialog, then the question for one shell, non
 existing Close all tabs tests, unchanged.
 
 **Remaining:** Trying it by hand.
+
+## Step 12: the dialogs on the Recent jobs page
+
+**Commits:** Not yet committed.
+
+**Change:** The user found All shells on the Recent jobs page drawn under the jobs rather than as a dialog. The
+overview and the launch dialog took their frame from `.output-modal` and `.output-panel`, whose rules are in
+`web_styles.css`, which only the application page loads; the Recent jobs page and the panel's own window load
+`web_shell.css` and the info styles. [web_shell.css](../../internal/webui/assets/web_shell.css) now gives
+`.terminal-overview-modal` and `.terminal-launch-modal` their own fixed, full-window frame and overlay, and
+`.terminal-overview` and `.terminal-launch` their own box and header, keeping the classes that leave the panel's room.
+
+**Reason:** A bug in `a642e843` and `4424402f`, reported on 2026-11-09.
+
+**Plan impact:** None.
+
+**Validation:** `TestTerminalPanel` checks the rule. `TestTerminalPanelInBrowser` now opens All shells on `/jobs/` and
+checks the dialog is fixed and in view; it runs only on CI, as Chrome is not here.
+
+**Remaining:** Seeing it on the Recent jobs page and in the panel's own window.
