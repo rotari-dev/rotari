@@ -381,9 +381,20 @@ func TestTerminalShellRoutes(t *testing.T) {
 	if shells := listTerminalShells(t, server); len(shells) != 1 {
 		t.Errorf("the requests left %v", shells)
 	}
-	// The list says whether a command finished out of sight, for the tabs' bell.
-	if status, body := terminalRequest(t, server, http.MethodGet, terminalShellsPath); status != http.StatusOK || !strings.Contains(body, `"command_finished":false`) || !strings.Contains(body, `"running":false`) {
-		t.Errorf("the list does not say whether a command finished: status %d: %s", status, body)
+	// The list says whether a command finished out of sight, for the tabs' bell, and whether
+	// one runs now, for signing out. Their values are another test's: a login shell may still
+	// be running its profile's commands here.
+	status, body := terminalRequest(t, server, http.MethodGet, terminalShellsPath)
+	var listed struct {
+		Shells []map[string]json.RawMessage `json:"shells"`
+	}
+	if err := json.Unmarshal([]byte(body), &listed); status != http.StatusOK || err != nil || len(listed.Shells) != 1 {
+		t.Fatalf("listing: status %d, %v: %s", status, err, body)
+	}
+	for _, field := range []string{"command_finished", "running"} {
+		if value := string(listed.Shells[0][field]); value != "true" && value != "false" {
+			t.Errorf("the list's %s is %q, want true or false: %s", field, value, body)
+		}
 	}
 }
 
