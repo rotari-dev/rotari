@@ -155,6 +155,35 @@ type livePage struct {
 	nonce string
 	// terminal offers the terminal panel.
 	terminal bool
+	// about is which rotari serves the page, at the foot of its Settings menu.
+	about About
+}
+
+// aboutSection says, at the foot of the Settings menu, which rotari serves the page: its
+// version, and its binary's path with a button to copy it, which web_shell.js gives a
+// button to send it beside. A page with nothing to say has nothing there.
+func (page livePage) aboutSection() string {
+	if page.about.Version == "" {
+		return ""
+	}
+	var builder strings.Builder
+	builder.WriteString(`<div class="settings-about"><div class="settings-about-version">`)
+	builder.WriteString(html.EscapeString(page.about.Version))
+	builder.WriteString(`</div><div class="settings-about-path">`)
+	if page.about.Executable != "" {
+		builder.WriteString(`<code title="`)
+		builder.WriteString(html.EscapeString(page.about.Executable))
+		builder.WriteString(`"><bdi>`)
+		builder.WriteString(html.EscapeString(page.about.Executable))
+		builder.WriteString(`</bdi></code>`)
+		writeJobsCopyButton(&builder, page.about.Executable, "path of this rotari")
+	} else {
+		builder.WriteString(`<span class="settings-about-unknown">Its path is not known: `)
+		builder.WriteString(html.EscapeString(page.about.ExecutableError))
+		builder.WriteString(`</span>`)
+	}
+	builder.WriteString(`</div></div>`)
+	return builder.String()
 }
 
 // terminalControl is the top bar's button, whose presence tells web_shell.js the
@@ -190,6 +219,7 @@ func composeWebPage(page livePage, executors []string, notifications bool, boots
 	return strings.NewReplacer(
 		scriptNoncePlaceholder, scriptNonceAttribute(page.nonce),
 		"__ROTARI_TERMINAL_CONTROL__", page.terminalControl(),
+		"__ROTARI_ABOUT__", page.aboutSection(),
 		"__ROTARI_BASEDIRS__", string(basedirJSON),
 		"__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllNotificationBasedirs"),
 		"__ROTARI_EXECUTORS__", string(executorJSON),
@@ -305,6 +335,7 @@ func jobsPage(page livePage, homePath string, projects []string, rows []joblist.
 	values := []string{
 		scriptNoncePlaceholder, scriptNonceAttribute(page.nonce),
 		"__ROTARI_TERMINAL_CONTROL__", page.terminalControl(),
+		"__ROTARI_ABOUT__", page.aboutSection(),
 		"__ROTARI_JOBS_PROJECTS__", sidebar.String(),
 		"__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllJobsNotificationBasedirs"),
 		"__ROTARI_BASEDIR_SCROLL_KEY__", scrollKey,

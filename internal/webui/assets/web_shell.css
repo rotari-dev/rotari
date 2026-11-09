@@ -533,6 +533,73 @@ main {
 .settings-panel[hidden] {
   display: none;
 }
+/* Which rotari serves the page, at the foot of the Settings menu. Its buttons are drawn
+   here too, since the application page does not have the Recent jobs page's styles, and
+   their selectors outweigh the top bar's toolbar buttons (.content > .topbar .toolbar
+   button), whose padding would leave a 24-pixel button no room for its picture. */
+.settings-about {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--text-2);
+  font-size: 12px;
+}
+.settings-about-path {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+/* A long path loses its start rather than the binary's name. */
+.settings-about-path code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  direction: rtl;
+  font-family: var(--font-mono);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-about-path code bdi {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.settings-menu .settings-panel .settings-about button.jobs-copy {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.settings-menu .settings-panel .settings-about button.jobs-copy:hover {
+  background: var(--surface-2);
+}
+.settings-menu .settings-panel .settings-about button.jobs-copy.copied {
+  border-color: var(--s-ok);
+  color: var(--s-ok);
+}
+.settings-about .jobs-copy svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  pointer-events: none;
+}
+.settings-about-unknown {
+  color: var(--muted);
+  font-style: italic;
+}
 .theme-choice {
   display: flex;
   align-items: center;

@@ -150,6 +150,12 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the panel to give the window back', '!' + covers);
   await collect();
 
+  // The Settings menu's copy and send buttons beside the path of this rotari show their pictures.
+  await page.evaluate('document.getElementById("settings-button").click()');
+  const aboutIcons = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll(".settings-about button")].map((button) => { const icon = button.querySelector("svg").getBoundingClientRect(); return [button.getAttribute("aria-label"), Math.round(icon.width), Math.round(icon.height)]; }))'));
+  if (aboutIcons.length !== 2 || aboutIcons.some(([, width, height]) => width < 10 || height < 10)) throw new Error('the Settings menu\'s path buttons show no picture: ' + JSON.stringify(aboutIcons));
+  await page.evaluate('document.getElementById("settings-button").click()');
+
   // Split shows two shells side by side, each typed into and sized on its own.
   const barButton = (text) => '[...document.querySelectorAll(".terminal-bar button")].find((item) => item.textContent === ' + JSON.stringify(text) + ' || item.getAttribute("aria-label") === ' + JSON.stringify(text) + ')';
   const paneHas = (index, text) => 'document.querySelectorAll(".terminal-pane")[' + index + ']?.querySelector(".xterm-rows")?.textContent.includes(' + JSON.stringify(text) + ')';

@@ -336,7 +336,7 @@ func (s site) baseHandler() http.Handler {
 		_ = s.reloadBaseDirs()
 		nonce := setPagePolicy(writer)
 		writer.Header().Set(headerContentType, "text/html; charset=utf-8")
-		_, _ = writer.Write([]byte(s.webPage(livePage{nonce: nonce, terminal: s.Terminal != nil}, "")))
+		_, _ = writer.Write([]byte(s.webPage(livePage{nonce: nonce, terminal: s.Terminal != nil, about: s.About}, "")))
 	})
 	mux.HandleFunc("/fonts/", serveWebFont)
 	mux.HandleFunc("/web_fonts.css", func(writer http.ResponseWriter, request *http.Request) {
@@ -388,7 +388,7 @@ func (s site) baseHandler() http.Handler {
 		_ = s.reloadBaseDirs()
 		nonce := setPagePolicy(writer)
 		writer.Header().Set(headerContentType, "text/html; charset=utf-8")
-		_, _ = writer.Write([]byte(jobsPage(livePage{nonce: nonce, terminal: s.Terminal != nil}, s.currentBasePrefix()+"/", projects, rows, selection, true, s.Notifications, s.notificationSession, s.basedirEntries())))
+		_, _ = writer.Write([]byte(jobsPage(livePage{nonce: nonce, terminal: s.Terminal != nil, about: s.About}, s.currentBasePrefix()+"/", projects, rows, selection, true, s.Notifications, s.notificationSession, s.basedirEntries())))
 	})
 	mux.HandleFunc("/jobs", func(writer http.ResponseWriter, request *http.Request) {
 		http.Redirect(writer, request, s.currentBasePrefix()+"/jobs/", http.StatusMovedPermanently)

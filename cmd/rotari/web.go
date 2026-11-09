@@ -36,6 +36,7 @@ func cmdWeb(args []string) int {
 		return 1
 	}
 	options := webOptions(baseDir, flags.allowControl, flags.notifications)
+	options.About = webAbout()
 	options.LauncherFile, _ = webLauncherFile()
 	// An invalid notifications.toml is reported before serving; each
 	// project's file is read again whenever the inbox renders its records.
@@ -405,4 +406,16 @@ func webOptions(baseDir string, allowControl, notifications bool) webui.Options 
 		ConfigTemplate:         func() ([]byte, error) { return configTemplate("toml") },
 		ConfigTemplateForScope: func(scope string) ([]byte, error) { return configTemplate("toml", scope) },
 	}
+}
+
+// webAbout says which rotari serves the Web pages, for their Settings menu.
+func webAbout() webui.About {
+	about := webui.About{Version: versionString()}
+	executable, err := os.Executable()
+	if err != nil {
+		about.ExecutableError = err.Error()
+	} else {
+		about.Executable = executable
+	}
+	return about
 }

@@ -20,7 +20,7 @@ func TestTerminalPanel(t *testing.T) {
 	dir := t.TempDir()
 	withTerminal := filepath.Join(dir, "with.html")
 	without := filepath.Join(dir, "without.html")
-	if err := os.WriteFile(withTerminal, []byte(composeWebPage(livePage{nonce: "page-nonce", terminal: true}, nil, false, "", "")), 0o600); err != nil {
+	if err := os.WriteFile(withTerminal, []byte(composeWebPage(livePage{nonce: "page-nonce", terminal: true, about: About{Version: "rotari v9", Executable: "/opt/rotari bin/rotari"}}, nil, false, "", "")), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(without, []byte(composeWebPage(livePage{nonce: "page-nonce"}, nil, false, "", "")), 0o600); err != nil {
@@ -28,7 +28,7 @@ func TestTerminalPanel(t *testing.T) {
 	}
 	jobsWithTerminal := filepath.Join(dir, "jobs.html")
 	jobRows := []joblist.Row{{State: "success", Project: "p", RunID: "r", JobName: "decode", Command: "sh -c echo…", FullCommand: "sh -c 'echo hi'", AttemptID: "attempt-1"}}
-	if err := os.WriteFile(jobsWithTerminal, []byte(jobsPage(livePage{nonce: "page-nonce", terminal: true}, "/", nil, jobRows, jobsSelection{}, true, false, "")), 0o600); err != nil {
+	if err := os.WriteFile(jobsWithTerminal, []byte(jobsPage(livePage{nonce: "page-nonce", terminal: true, about: About{Version: "rotari v9", Executable: "/opt/rotari bin/rotari"}}, "/", nil, jobRows, jobsSelection{}, true, false, "")), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	terminalWindow := filepath.Join(dir, "window.html")
@@ -2574,6 +2574,23 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.ok(pictured.length >= 8, String(pictured.length));
   for (const button of pictured) assert.ok(button.title && button.getAttribute('aria-label'), button.outerHTML.slice(0, 120));
   assert.match(webShellCSS, /\.terminal-icon svg \{\s*pointer-events: none;/);
+
+  // The Settings menu's path of this rotari copies, and sends as one word, on both pages.
+  for (const file of [process.argv[1], process.argv[4]]) {
+    const aboutPage = load(file);
+    await wait(50);
+    const copiedPaths = [];
+    Object.defineProperty(aboutPage.window.navigator, 'clipboard', { configurable: true, value: { writeText: async (value) => copiedPaths.push(value) } });
+    const copyPath = aboutPage.document.querySelector('.settings-about .jobs-copy');
+    const sendPath = copyPath.nextElementSibling;
+    assert.ok(sendPath.classList.contains('terminal-send'), file + ': no send button beside the path');
+    assert.equal(sendPath.dataset.sendValue, '/opt/rotari bin/rotari');
+    assert.equal(sendPath.title, 'Send path of this rotari to the terminal');
+    copyPath.click();
+    await wait(20);
+    assert.deepEqual(copiedPaths, ['/opt/rotari bin/rotari']);
+    assert.ok(copyPath.classList.contains('copied'));
+  }
 
   // xterm.js loads only on opening, under the page's nonce.
   const real = load(process.argv[1], { stubs: false });

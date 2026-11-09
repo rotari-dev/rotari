@@ -122,6 +122,56 @@
   }
 })();
 
+// copyJobsValue copies the value of a copy button the server draws (writeJobsCopyButton in
+// assets.go), on the Recent jobs page and in either page's Settings menu, and shows a
+// check mark for a moment; copyJobsValueFallback is for a browser without the clipboard API.
+function copyJobsValueFallback(value) {
+  const input = document.createElement("textarea");
+  input.value = value;
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.append(input);
+  input.select();
+  const copied = document.execCommand("copy");
+  input.remove();
+  if (!copied) throw new Error("Copy failed");
+}
+
+async function copyJobsValue(button) {
+  const value = button.dataset.copyValue;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(value);
+      } catch (error) {
+        copyJobsValueFallback(value);
+      }
+    } else {
+      copyJobsValueFallback(value);
+    }
+  } catch (error) {
+    alert(error.message);
+    return;
+  }
+  // Show the same check-mark feedback as the main Web UI, then
+  // restore the button.
+  const title = button.dataset.copyTitle || button.title;
+  button.dataset.copyTitle = title;
+  button.classList.add("copied");
+  button.title = "Copied!";
+  button.setAttribute("aria-label", "Copied!");
+  button.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>';
+  clearTimeout(button.copyResetTimer);
+  button.copyResetTimer = setTimeout(() => {
+    button.classList.remove("copied");
+    button.title = title;
+    button.setAttribute("aria-label", title);
+    button.innerHTML =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-4"></path><rect x="9" y="4" width="11" height="11" rx="1"></rect></svg>';
+  }, 1200);
+}
+
 // The terminal panel along the bottom of the page, with a tab for each shell of the
 // page's project, as an editor keeps a window's terminals with its folder. Shells live
 // on the server, and every page load lists them, attaches to the tab this browser tab

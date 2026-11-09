@@ -126,6 +126,8 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 - **Notifications:** the in-page inbox and optional desktop popups; see
   [Notifications](NOTIFICATIONS.md#browser-notifications).
 - **Theme:** `Settings` selects Light, Dark, or System.
+- **Which rotari:** the foot of `Settings` shows the version of the `rotari web` serving the page and the path of
+  its binary, with buttons to copy the path or send it to the terminal.
 
 ## Terminal
 

@@ -298,7 +298,8 @@ and [`TestWebSidebarLazilyListsProjectsInOtherBasedirs`](../internal/webui/webui
 Both page kinds share one frame. A top bar holds breadcrumbs (the basedir,
 then the project and run), the notification toggle, Refresh, and a Settings
 menu with the theme choice and, on application pages, the config and
-notification config actions; the page title and its facts follow. The sidebar
+notification config actions, and at its foot which rotari serves the page
+(WEB-37); the page title and its facts follow. The sidebar
 starts with Views (History search), then the basedir list. Below 760px wide the
 sidebar is a drawer opened from the top bar, and no page scrolls sideways.
 
@@ -1452,6 +1453,15 @@ link. Implemented by `shellLaunchStart` in `internal/webui/launches.go` and the
 launch dialog in `web_shell.js`; covered by
 [`TestLaunchOnAShellsDirectory`](../conformance/05-web/launch_test.go), the unit
 test of that name, and `TestTerminalPanel`.
+
+**WEB-37** The Settings menu of a live application or Recent jobs page ends with
+which rotari serves it: the version `rotari version` prints, and the path of the
+running binary with buttons to copy it and, with the terminal, to send it to the
+terminal as one word, or why that path is not known. A static export says
+neither. Implemented by `webAbout` in `cmd/rotari/web.go` and `aboutSection` in
+`internal/webui/assets.go`; covered by
+[`TestSettingsSayWhichRotariServes`](../conformance/05-web/about_test.go), and by
+the unit test of that name and `TestTerminalPanel`.
 
 **WEB-36** `--allow-terminal`, `--allow-exec`, `--allowed-host`, and the `--terminal-*` options of `rotari web` have
 environment variables (`ROTARI_WEB_ALLOW_TERMINAL` and so on) and config keys, at the top level or in `[web]`, as other

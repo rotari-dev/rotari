@@ -48,6 +48,9 @@ type Options struct {
 	Launches *LaunchOptions
 	// Terminal is set when rotari web runs with --allow-terminal.
 	Terminal *terminal.Keeper
+	// About says which rotari serves the pages, in their Settings menu; empty for a
+	// static export and when nothing says.
+	About About
 	// LauncherFile is where launchers.toml is read from. Explanations of why
 	// launching is unavailable name it even when Launches is nil.
 	LauncherFile string
@@ -66,6 +69,14 @@ type Options struct {
 }
 
 // site serves one Options.
+// About is which rotari serves the pages: its version, as rotari version prints it, and
+// the path of its binary, or why that is not known.
+type About struct {
+	Version         string
+	Executable      string
+	ExecutableError string
+}
+
 type site struct {
 	Options
 	notificationSession string

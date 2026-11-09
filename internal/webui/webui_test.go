@@ -4394,6 +4394,57 @@ setTimeout(() => {
 	}
 }
 
+// Both pages' Settings menus say which rotari serves them, as text; a page with nothing to
+// say, such as a static export, says nothing.
+func TestSettingsSayWhichRotariServes(t *testing.T) {
+	about := About{Version: "rotari v9 <b>", Executable: "/opt/r <x>/rotari"}
+	pages := map[string]func(About) string{
+		"application": func(about About) string {
+			return composeWebPage(livePage{nonce: "n", about: about}, nil, false, "", "")
+		},
+		"recent jobs": func(about About) string {
+			return jobsPage(livePage{nonce: "n", about: about}, "/", nil, nil, jobsSelection{}, true, false, "")
+		},
+	}
+	for name, page := range pages {
+		got := page(about)
+		for _, want := range []string{
+			`<div class="settings-about"><div class="settings-about-version">rotari v9 &lt;b&gt;</div>`,
+			`<code title="/opt/r &lt;x&gt;/rotari"><bdi>/opt/r &lt;x&gt;/rotari</bdi></code>`,
+			`aria-label="Copy path of this rotari" data-copy-value="/opt/r &lt;x&gt;/rotari" data-action="copyJobsValue"`,
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("%s: no %s", name, want)
+			}
+		}
+		if index := strings.Index(got, `class="settings-about"`); index < strings.Index(got, `id="settings-panel"`) {
+			t.Errorf("%s: the section is not in the Settings menu", name)
+		}
+		if got := page(About{Version: "rotari dev", ExecutableError: "no /proc"}); !strings.Contains(got, `<span class="settings-about-unknown">Its path is not known: no /proc</span>`) || strings.Contains(got, "Copy path of this rotari") {
+			t.Errorf("%s: an unknown path is not said, or has a copy button", name)
+		}
+		if got := page(About{}); strings.Contains(got, `class="settings-about"`) || strings.Contains(got, "__ROTARI_ABOUT__") {
+			t.Errorf("%s: a page with nothing to say has the section or its placeholder", name)
+		}
+	}
+	server := httptest.NewServer(Handler(Options{BaseDir: t.TempDir(), About: about}))
+	defer server.Close()
+	for _, path := range []string{"/", "/jobs"} {
+		response, err := http.Get(server.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(response.Body)
+		response.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(body), "rotari v9 &lt;b&gt;") {
+			t.Errorf("%s: the served page does not say which rotari serves it", path)
+		}
+	}
+}
+
 func writeTestJobsRun(t *testing.T, baseDir, project, runID, jobID string, started, finished time.Time, exitCode int) {
 	t.Helper()
 	paths, err := stateinternal.ResolveProjectPaths(baseDir, project)
