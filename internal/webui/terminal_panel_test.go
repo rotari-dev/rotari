@@ -114,6 +114,22 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           return Promise.resolve({ ok: true, status: 204 });
         }
         if (address.startsWith('/_terminal/shells')) return fakeShells(address, init.method || 'GET', init.body);
+        if (address.startsWith('/api/launchers?')) {
+          requests.push('GET ' + address);
+          return Promise.resolve({ ok: true, status: 200, json: async () => server.launchers || { available: false, reason: 'Launching is disabled on this server.', hint: 'Restart with rotari web --allow-exec.' } });
+        }
+        if (address.startsWith('/api/launch-preview?')) {
+          requests.push('GET ' + address);
+          return Promise.resolve({ ok: true, status: 200, json: async () => server.launchPreview });
+        }
+        if (address === '/api/launch') {
+          requests.push('POST /api/launch ' + init.body);
+          const answer = server.launchAnswer;
+          return Promise.resolve({ ok: !answer.error, status: answer.error ? 400 : 200, json: async () => answer });
+        }
+        if (address === '/api/launches') {
+          return Promise.resolve({ ok: true, status: 200, json: async () => ({ launches: [server.launchStates.length > 1 ? server.launchStates.shift() : server.launchStates[0]] }) });
+        }
         if (address === '/api/basedirs') {
           requests.push('GET ' + address);
           if (server.basedirsStatus) return Promise.resolve({ ok: false, status: server.basedirsStatus, text: async () => 'refused' });
@@ -2475,6 +2491,65 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   await wait(30);
   assert.equal(endTour().querySelector('.terminal-overview-body').textContent, 'No shells are running.');
   assert.equal(endEveryButton().disabled, true);
+
+  // Launch here starts a registered command on the directory the pane's shell is in now:
+  // the commands that accept it, what one would run, the launch, and a service's Open link.
+  const launching = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  launching.server.cwds = { 1: '/w/p1/logs', 2: '/w/p1/other' };
+  await wait(50);
+  const launchBar = [...launching.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'Launch here');
+  assert.equal(launchBar.disabled, false);
+  // Without launching, it says why and how to have it.
+  launchBar.click();
+  await wait(30);
+  const launchBox = () => launching.document.querySelector('.terminal-launch');
+  assert.equal(launchBox().parentElement.parentElement, launching.document.body);
+  assert.equal(launchBox().querySelector('#terminal-launch-title').textContent, 'Launch in /w/p1/logs');
+  assert.deepEqual([...launchBox().querySelectorAll('.terminal-launch-problem, .terminal-launch-hint')].map((item) => item.textContent), ['Launching is disabled on this server.', 'Restart with rotari web --allow-exec.']);
+  launching.document.activeElement.dispatchEvent(new launching.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(launchBox(), null, 'Escape left the launch dialog');
+  launching.server.launchers = { available: true, user: 'u', host: 'h', commands: [{ name: 'TensorBoard' }, { name: 'Jupyter Lab', unavailable: 'jupyter is not on PATH' }] };
+  launching.server.launchPreview = { name: 'TensorBoard', command: 'tensorboard --logdir "$ROTARI_LAUNCHER_ARTIFACT"', shell: '/bin/sh', mode: 'service', target: '/w/p1/logs', kind: 'directory', cwd: '/w/p1/logs', host: 'h', user: 'u', labels: { project: 'p1', shell: '1' } };
+  launching.server.launchAnswer = { id: 'L1', mode: 'service', state: 'starting' };
+  launching.server.launchStates = [{ id: 'L1', mode: 'service', state: 'starting' }, { id: 'L1', mode: 'service', state: 'running', base_path: '/_launch/L1' }];
+  launchBar.click();
+  await wait(30);
+  assert.ok(launching.requests.includes('GET /api/launchers?kind=directory&name=logs'), launching.requests.join(', '));
+  const commandButtons = [...launchBox().querySelectorAll('.terminal-launch-commands button')];
+  assert.deepEqual(commandButtons.map((item) => [item.textContent, item.disabled, item.title]), [['TensorBoard', false, ''], ['Jupyter Lab', true, 'Not installed: jupyter is not on PATH']]);
+  assert.equal(launchBox().querySelector('.terminal-launch-intro').textContent, 'Run a registered command on this directory, as you, on u@h:');
+  commandButtons[0].click();
+  await wait(30);
+  assert.ok(launching.requests.includes('GET /api/launch-preview?shell=1&name=TensorBoard'));
+  assert.deepEqual([...launchBox().querySelectorAll('.terminal-launch-details dd')].map((item) => item.textContent), ['TensorBoard', '/w/p1/logs (directory)', '/w/p1/logs', 'service', 'u@h', 'project p1, shell 1', '/bin/sh -c tensorboard --logdir "$ROTARI_LAUNCHER_ARTIFACT"']);
+  launchBox().querySelector('.terminal-launch-confirm').click();
+  await wait(700);
+  assert.ok(launching.requests.includes('POST /api/launch {"shell":"1","name":"TensorBoard","new_instance":false}'), launching.requests.join(', '));
+  assert.match(launchBox().textContent, /TensorBoard is ready\./);
+  assert.equal(launchBox().querySelector('.terminal-launch-open').getAttribute('href'), '/_launch/L1/');
+  assert.equal(launchBox().querySelector('.terminal-launch-open').target, '_blank');
+  // A refused launch says why.
+  launching.server.launchAnswer = { error: 'launcher "TensorBoard" does not accept a file', hint: '' };
+  launchBox().querySelector('header button').click();
+  launchBar.click();
+  await wait(30);
+  launchBox().querySelector('.terminal-launch-commands button').click();
+  await wait(30);
+  launchBox().querySelector('.terminal-launch-confirm').click();
+  await wait(30);
+  assert.equal(launchBox().querySelector('.terminal-launch-problem').textContent, 'launcher "TensorBoard" does not accept a file');
+  launchBox().querySelector('header button').click();
+  // An All shells card launches in its own shell's directory, closing the overview.
+  allShellsButton(launching).click();
+  await wait(30);
+  launching.document.querySelector('.terminal-overview-card[data-shell="2"]').parentElement.querySelector('[aria-label="Launch in shell 2"]').click();
+  await wait(30);
+  assert.equal(launching.document.querySelector('.terminal-overview'), null);
+  assert.equal(launchBox().querySelector('#terminal-launch-title').textContent, 'Launch in /w/p1/other');
+  // With no shell shown, it is off.
+  const launchless = load(process.argv[1], { stored: '1', path: '/project/p9' });
+  await wait(50);
+  assert.equal([...launchless.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'Launch here').disabled, true);
 
   // In a window, another project's shell takes the window and the page that opened it along.
   const toldTour = [];

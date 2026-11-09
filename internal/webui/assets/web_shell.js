@@ -152,6 +152,8 @@
     hide: ["M3.5 12.5h9"],
     rename: ["M10 3.5l2.5 2.5L6 12.5H3.5V10z", "M8.5 5l2.5 2.5"],
     endShell: ["M4.5 4.5l7 7", "M11.5 4.5l-7 7"],
+    // A play mark: run something here.
+    launch: ["M5 3.5l7.5 4.5L5 12.5z"],
     overview: [
       { x: 1.5, y: 2.5, width: 5.5, height: 4.5, rx: 1 },
       { x: 9, y: 2.5, width: 5.5, height: 4.5, rx: 1 },
@@ -260,7 +262,7 @@
   // This script runs first.
   const rootFetch = window.fetch;
   const serverFetch = (...args) => rootFetch.apply(window, args);
-  let panel, panesBox, groups, tabs, add, splitRightButton, splitDownButton, closePaneButton, placeButton, maximize;
+  let panel, panesBox, groups, tabs, add, launchButton, splitRightButton, splitDownButton, closePaneButton, placeButton, maximize;
   let shells = [];
   let shellLimit = 0;
   let groupLimit = 0;
@@ -1043,6 +1045,224 @@
       }
     }
   };
+  // The launch dialog starts a registered command, such as TensorBoard, on the directory a
+  // shell is in now, as an artifact's Launch does: the commands that accept it, what one
+  // would run, then the launch, and a service's Open link once it answers. The server
+  // looks the directory up from the shell; the page names only the shell and the command.
+  let launchDialog = null;
+  let launchSerial = 0;
+  const closeLaunchDialog = () => {
+    if (!launchDialog) return;
+    launchSerial++;
+    launchDialog.remove();
+    launchDialog = null;
+  };
+  const makeElement = (tag, className, text) => {
+    const made = document.createElement(tag);
+    if (className) made.className = className;
+    if (text !== undefined) made.textContent = text;
+    return made;
+  };
+  const answerOf = async (response) => {
+    if (!response) return { error: "the server did not answer" };
+    return response.json().catch(() => ({ error: "HTTP " + response.status }));
+  };
+  // launchProblem shows a refusal and how to get past it, as the server words both.
+  const launchProblem = (body, error, hint) => {
+    const shown = [makeElement("p", "terminal-launch-problem", error)];
+    if (hint) shown.push(makeElement("p", "terminal-launch-hint", hint));
+    body.replaceChildren(...shown);
+  };
+  const launchButtons = (...buttons) => {
+    const row = makeElement("div", "terminal-launch-choices");
+    row.append(...buttons.filter(Boolean));
+    return row;
+  };
+  const textButton = (text, onclick) => {
+    const button = makeElement("button", "", text);
+    button.type = "button";
+    button.onclick = onclick;
+    return button;
+  };
+  const launchOpen = (launch) => {
+    if (launch.mode !== "service" || launch.state !== "running") return null;
+    const link = makeElement("a", "terminal-launch-open", "Open");
+    link.href = launch.base_path + "/";
+    link.target = "_blank";
+    link.rel = "noopener";
+    return link;
+  };
+  const showInLaunches = (id) =>
+    typeof window.showLaunches === "function"
+      ? textButton("Show in Launches", () => {
+          closeLaunchDialog();
+          window.showLaunches(id);
+        })
+      : null;
+  const followLaunch = async (serial, body, id, name) => {
+    for (;;) {
+      let launch;
+      try {
+        const response = await serverFetch("/api/launches");
+        launch = ((await response.json()).launches || []).find((item) => item.id === id);
+      } catch (error) {
+        if (serial === launchSerial) launchProblem(body, "Cannot follow " + name + ": " + error.message);
+        return;
+      }
+      if (serial !== launchSerial || !launch) return;
+      if (launch.state === "starting") {
+        body.replaceChildren(makeElement("p", "", "Starting " + name + "; waiting for it to answer..."), launchButtons(showInLaunches(id)));
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        continue;
+      }
+      body.replaceChildren(
+        makeElement("p", launch.state === "running" ? "" : "terminal-launch-problem", launch.state === "running" ? name + " is ready." : name + " has " + launch.state + "."),
+        launchButtons(launchOpen(launch), showInLaunches(id)),
+      );
+      return;
+    }
+  };
+  const startShellLaunch = async (serial, body, shell, name, newInstance) => {
+    body.replaceChildren(makeElement("p", "", "Starting..."));
+    let response;
+    try {
+      response = await serverFetch("/api/launch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shell: shell.id, name, new_instance: newInstance }),
+      });
+    } catch {}
+    const answer = await answerOf(response);
+    if (serial !== launchSerial) return;
+    if (!response?.ok) {
+      launchProblem(body, answer.error, answer.hint);
+      if (answer.launch) body.append(launchButtons(showInLaunches(answer.launch.id)));
+      return;
+    }
+    if (answer.reused) {
+      body.replaceChildren(
+        makeElement("p", "", name + " is already running here."),
+        launchButtons(launchOpen(answer), showInLaunches(answer.id), textButton("Start another instance", () => startShellLaunch(serial, body, shell, name, true))),
+      );
+      return;
+    }
+    if (answer.mode === "service") {
+      await followLaunch(serial, body, answer.id, name);
+      return;
+    }
+    body.replaceChildren(makeElement("p", "", "Started " + name + "."), launchButtons(showInLaunches(answer.id)));
+  };
+  const previewShellLaunch = async (serial, body, shell, name, back) => {
+    body.replaceChildren(makeElement("p", "", "Loading..."));
+    let response;
+    try {
+      response = await serverFetch("/api/launch-preview?shell=" + encodeURIComponent(shell.id) + "&name=" + encodeURIComponent(name));
+    } catch {}
+    const answer = await answerOf(response);
+    if (serial !== launchSerial) return;
+    if (!response?.ok) {
+      launchProblem(body, answer.error, answer.hint);
+      body.append(launchButtons(textButton("Back", back)));
+      return;
+    }
+    const labels = answer.labels || {};
+    const details = makeElement("dl", "terminal-launch-details");
+    for (const [label, value] of [
+      ["Command", answer.name],
+      ["Target", answer.target + " (" + answer.kind + ")"],
+      ["Working directory", answer.cwd],
+      ["Mode", answer.mode],
+      ["Runs as", answer.user + "@" + answer.host],
+      ["From", (labels.project ? "project " + labels.project + ", " : "") + "shell " + labels.shell],
+    ]) {
+      details.append(makeElement("dt", "", label), makeElement("dd", "", value));
+    }
+    const runs = makeElement("dd");
+    runs.append(makeElement("pre", "terminal-launch-command", answer.shell + " -c " + answer.command));
+    details.append(makeElement("dt", "", "Runs"), runs);
+    const confirmButton = textButton("Launch", () => startShellLaunch(serial, body, shell, name, false));
+    confirmButton.className = "terminal-launch-confirm";
+    body.replaceChildren(details, launchButtons(confirmButton, textButton("Back", back)));
+    confirmButton.focus();
+  };
+  const openLaunchDialog = async (shell) => {
+    closeOverview();
+    closeLaunchDialog();
+    const serial = ++launchSerial;
+    launchDialog = makeElement("div", "output-modal terminal-launch-modal");
+    launchDialog.setAttribute("role", "dialog");
+    launchDialog.setAttribute("aria-modal", "true");
+    launchDialog.setAttribute("aria-labelledby", "terminal-launch-title");
+    const done = () => {
+      closeLaunchDialog();
+      focused.term?.focus();
+    };
+    launchDialog.onclick = (event) => {
+      if (event.target === launchDialog) done();
+    };
+    launchDialog.onkeydown = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      done();
+    };
+    const box = makeElement("div", "output-panel terminal-launch");
+    const head = makeElement("header");
+    const title = makeElement("strong", "", "Launch in " + (shell.name || "shell " + shell.number));
+    title.id = "terminal-launch-title";
+    const actions = makeElement("div", "modal-actions");
+    actions.append(textButton("Close", done));
+    head.append(title, actions);
+    const body = makeElement("div", "terminal-launch-body", "Finding where the shell is...");
+    box.append(head, body);
+    launchDialog.append(box);
+    document.body.append(launchDialog);
+    actions.firstElementChild.focus();
+    let response;
+    try {
+      response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id) + "/preview");
+    } catch {}
+    if (serial !== launchSerial) return;
+    if (!response?.ok) {
+      launchProblem(body, "Where the shell is could not be found: " + (response ? (await response.text()).trim() : "the server did not answer"));
+      return;
+    }
+    const where = await response.json();
+    if (serial !== launchSerial) return;
+    if (!where.cwd) {
+      launchProblem(body, "Where the shell is now is not known: " + (where.cwd_error || "the server did not say"));
+      return;
+    }
+    title.textContent = "Launch in " + where.cwd;
+    const listCommands = async () => {
+      body.replaceChildren(makeElement("p", "", "Listing the commands..."));
+      let answer;
+      let listing;
+      try {
+        listing = await serverFetch("/api/launchers?kind=directory&name=" + encodeURIComponent(where.cwd.split("/").filter(Boolean).pop() || "/"));
+      } catch {}
+      answer = await answerOf(listing);
+      if (serial !== launchSerial) return;
+      if (!listing?.ok || !answer.available) {
+        launchProblem(body, answer.reason || answer.error, answer.hint);
+        return;
+      }
+      const commands = answer.commands || [];
+      if (!commands.length) {
+        launchProblem(body, (answer.unmatched || {}).directory || "No registered command accepts a directory.");
+        return;
+      }
+      const list = makeElement("div", "terminal-launch-commands");
+      for (const command of commands) {
+        const button = textButton(command.name, () => previewShellLaunch(serial, body, shell, command.name, listCommands));
+        button.disabled = Boolean(command.unavailable);
+        if (command.unavailable) button.title = "Not installed: " + command.unavailable;
+        list.append(button);
+      }
+      body.replaceChildren(makeElement("p", "terminal-launch-intro", "Run a registered command on this directory, as you, on " + (answer.user || "this user") + "@" + (answer.host || "this host") + ":"), list);
+      list.querySelector("button:not(:disabled)")?.focus();
+    };
+    await listCommands();
+  };
   // The overview shows every shell of the server at once, grouped by project with this
   // page's first, to choose one from, in a dialog over the page as a log is. Choosing one
   // closes it. It is a still view, taken when it opens: the list refreshing meanwhile
@@ -1252,9 +1472,15 @@
     end.title = "End this shell, and anything running in it";
     drawIcon(end, icons.endShell);
     end.onclick = () => endFromOverview(shell);
+    const launchHere = document.createElement("button");
+    launchHere.type = "button";
+    launchHere.setAttribute("aria-label", "Launch in " + label);
+    launchHere.title = "Launch a registered command, such as TensorBoard, in the directory this shell is in now";
+    drawIcon(launchHere, icons.launch);
+    launchHere.onclick = () => openLaunchDialog(shell);
     const actions = document.createElement("span");
     actions.className = "terminal-overview-actions";
-    actions.append(rename, end);
+    actions.append(launchHere, rename, end);
     const item = document.createElement("div");
     item.className = "terminal-overview-item";
     item.append(card, actions);
@@ -1920,6 +2146,7 @@
     const canSplit = panes.length < maxPanes && focused.shown !== null;
     splitRightButton.disabled = splitDownButton.disabled = !canSplit;
     closePaneButton.disabled = panes.length < 2;
+    launchButton.disabled = focused.shown === null;
   };
   // applyLayout places the panes and the handles between them, by position alone: moving
   // a screen in the page, as columns of their own elements would need, would make
@@ -2099,6 +2326,15 @@
     splitDownButton = iconButton("Split down", [paneFrame, "M1.5 8h13"], () => splitPane(false));
     placeButton = iconButton("Panel position", [paneFrame, placeLines.bottom], openPlaceMenu);
     placeButton.disabled = false;
+    launchButton = iconButton(
+      "Launch here",
+      icons.launch,
+      () => {
+        const shell = shells.find((item) => item.id === focused.shown);
+        if (shell) openLaunchDialog(shell);
+      },
+      "Launch a registered command, such as TensorBoard, in the directory this pane's shell is in now",
+    );
     overviewButton = iconButton("All shells", icons.overview, toggleOverview, "All shells, of every project, to choose one");
     overviewButton.disabled = false;
     overviewButton.setAttribute("aria-pressed", "false");
@@ -2127,6 +2363,7 @@
       tabs,
       add,
       overviewButton,
+      launchButton,
       spacer,
       fontButton("A-", "Smaller text", -1),
       fontButton("A+", "Larger text", 1),

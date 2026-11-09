@@ -21,6 +21,7 @@ import (
 
 	"github.com/rotari-dev/rotari/internal/launcher"
 	stateinternal "github.com/rotari-dev/rotari/internal/state"
+	"github.com/rotari-dev/rotari/internal/terminal"
 )
 
 // launchWrapperEnv makes the test binary act as `rotari __launch`.
@@ -1227,5 +1228,67 @@ func TestJupyterAuthenticatedProxy(t *testing.T) {
 		if err != nil || !strings.Contains(line, "101") {
 			t.Fatalf("authenticated kernel websocket = %q, %v", line, err)
 		}
+	}
+}
+
+// A launch may name a running shell, whose directory now is the target, labelled with the
+// shell and its project; it names nothing else, and needs the terminal.
+func TestLaunchOnAShellsDirectory(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	options := launchOptions(t, t.TempDir(),
+		launchCommand("Where", `pwd -P`, launcher.TargetDirectory),
+		launchCommand("Cat", `cat x`, launcher.TargetFile))
+	keeper, err := terminal.NewKeeper(terminal.KeeperOptions{
+		Shell:     terminal.Options{Shell: "/bin/sh", Dir: dir, Env: []string{"HOME=" + dir, "PATH=" + os.Getenv("PATH"), "PS1=$ "}},
+		IdleLimit: time.Hour, RingSize: 1 << 16, ShellLimit: 3, GroupLimit: 3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(keeper.Close)
+	shell, err := keeper.Start(terminal.StartOptions{Rows: 24, Cols: 80, Group: "/b\x00p", Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	options.Terminal = keeper
+	handler := Handler(options)
+
+	preview := serveJSON(t, handler, http.MethodGet, "/api/launch-preview?shell="+shell.ID+"&name=Where", "")
+	shown := decodeBody[webLaunchPreview](t, preview)
+	if preview.Code != http.StatusOK || shown.Target != dir || shown.Kind != launcher.TargetDirectory || shown.CWD != dir ||
+		shown.Labels["shell"] != "1" || shown.Labels["project"] != "p" || shown.Labels["basedir"] != "/b" {
+		t.Fatalf("preview = %d %s", preview.Code, preview.Body.String())
+	}
+	started := serveJSON(t, handler, http.MethodPost, "/api/launch", `{"shell":"`+shell.ID+`","name":"Where"}`)
+	launch := decodeBody[launcher.Launch](t, started)
+	if started.Code != http.StatusOK || launch.Target != dir {
+		t.Fatalf("launch = %d %s", started.Code, started.Body.String())
+	}
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		text := decodeBody[webLaunchLog](t, serveJSON(t, handler, http.MethodGet, "/api/launch-log?id="+launch.ID, "")).Text
+		if text == dir+"\n" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the launch printed %q, want %q", text, dir)
+		}
+	}
+	for name, test := range map[string]struct{ body, want string }{
+		"a file command":      {`{"shell":"` + shell.ID + `","name":"Cat"}`, "does not accept a directory"},
+		"a shell not running": {`{"shell":"77","name":"Where"}`, "shell 77 is not running"},
+		"an artifact as well": {`{"shell":"` + shell.ID + `","name":"Where","project_name":"p"}`, "names only the shell"},
+		"a child as well":     {`{"shell":"` + shell.ID + `","name":"Where","child":"sub"}`, "names only the shell"},
+	} {
+		got := serveJSON(t, handler, http.MethodPost, "/api/launch", test.body)
+		if got.Code != http.StatusBadRequest || !strings.Contains(got.Body.String(), test.want) {
+			t.Errorf("%s: %d %s, want 400 saying %q", name, got.Code, got.Body.String(), test.want)
+		}
+	}
+	options.Terminal = nil
+	if got := serveJSON(t, Handler(options), http.MethodPost, "/api/launch", `{"shell":"1","name":"Where"}`); got.Code != http.StatusBadRequest || !strings.Contains(got.Body.String(), "--allow-terminal") {
+		t.Errorf("without the terminal: %d %s", got.Code, got.Body.String())
 	}
 }

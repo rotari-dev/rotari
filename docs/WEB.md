@@ -323,6 +323,11 @@ rotari web --allow-exec
   can write it.
 - Commands run as you, with all your file permissions.
 
+With `--allow-terminal` too, **Launch here** (the play icon) in the terminal's bar runs a command on the directory
+the shell in the pane with the keys is in now, and each All shells card has the same button for its shell: pick a
+command, check what will run, and **Launch**. It is the same as launching on an artifact, with the shell's
+directory as the target.
+
 Without `--allow-exec`, Artifacts says which commands a restart with it could
 run on the artifact, including built-ins whose program is not installed, or
 why the launcher file would stop it from starting.

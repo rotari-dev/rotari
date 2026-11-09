@@ -1151,7 +1151,7 @@ html.terminal-open .output-panel.terminal-overview {
   flex: 1;
 }
 .terminal-overview-item .terminal-overview-top {
-  padding-right: 44px;
+  padding-right: 66px;
 }
 .terminal-overview-actions {
   position: absolute;
@@ -1176,6 +1176,63 @@ html.terminal-open .output-panel.terminal-overview {
   background: var(--surface-2);
   color: var(--text);
 }
+/* The launch dialog, the page's as the overview is. */
+.terminal-launch-modal {
+  z-index: 60;
+}
+html[data-terminal-window] .terminal-launch-modal {
+  inset: 0;
+}
+.output-panel.terminal-launch,
+html.terminal-open .output-panel.terminal-launch {
+  height: auto;
+  overflow: auto;
+  font-size: 13px;
+}
+.terminal-launch header button,
+.terminal-launch-choices button,
+.terminal-launch-commands button {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+.terminal-launch-commands,
+.terminal-launch-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.terminal-launch-choices {
+  margin-top: 10px;
+}
+.terminal-launch-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+.terminal-launch-details dt {
+  color: var(--text-2);
+}
+.terminal-launch-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.terminal-launch-command {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+}
+.terminal-launch-problem {
+  color: var(--s-bad);
+}
+.terminal-launch-hint {
+  color: var(--text-2);
+}
+.terminal-launch-open {
+  align-self: center;
+}
+
 /* A shell in a project with none yet, under the cards. */
 .terminal-overview-new {
   display: flex;

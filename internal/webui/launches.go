@@ -15,6 +15,7 @@ import (
 
 	"github.com/rotari-dev/rotari/internal/launcher"
 	"github.com/rotari-dev/rotari/internal/tableview"
+	"github.com/rotari-dev/rotari/internal/terminal"
 )
 
 // LaunchOptions enables launching registered commands from artifacts
@@ -301,9 +302,11 @@ func (s site) launchesUnavailable(writer http.ResponseWriter) bool {
 }
 
 // webLaunchRequest names an artifact the way the artifact content requests
-// do, and a registered command by name. Nothing else is accepted: unknown
-// fields such as command text or a working directory are rejected.
+// do, or a running shell of the terminal, whose directory now is the target,
+// and a registered command by name. Nothing else is accepted: unknown fields
+// such as command text or a working directory are rejected.
 type webLaunchRequest struct {
+	Shell       string         `json:"shell"`
 	ProjectName string         `json:"project_name"`
 	RunID       string         `json:"run_id"`
 	JobID       string         `json:"job_id"`
@@ -455,6 +458,9 @@ func (s site) launchStart(baseDir string, request webLaunchRequest) (launcher.St
 	if reason := command.Unavailable(); reason != "" {
 		return launcher.StartRequest{}, fmt.Errorf("cannot launch %q: %s; install it, or register a command that names its path in %s", command.Name, reason, s.Launches.Registry.Path)
 	}
+	if request.Shell != "" {
+		return s.shellLaunchStart(command, request)
+	}
 	if request.Entry == "" {
 		return launcher.StartRequest{}, errors.New("entry must name an artifact candidate of the attempt")
 	}
@@ -485,6 +491,49 @@ func (s site) launchStart(baseDir string, request webLaunchRequest) (launcher.St
 	return launcher.StartRequest{
 		Command: command, Target: filepath.Join(served.root, served.relative), Kind: kind, Labels: labels, NewInstance: request.NewInstance,
 	}, nil
+}
+
+// shellLaunchStart is a launch on the directory a running shell is in now. The page names
+// only the shell; its directory is looked up here, as the terminal's preview does. This
+// lets nothing run that the shell could not run itself, as the same user, so it needs
+// the terminal on as well as launching.
+func (s site) shellLaunchStart(command launcher.Command, request webLaunchRequest) (launcher.StartRequest, error) {
+	if request.ProjectName != "" || request.RunID != "" || request.JobID != "" || request.AttemptID != "" || request.Entry != "" || request.Child != "" {
+		return launcher.StartRequest{}, errors.New("a launch on a shell names only the shell: its directory is the target, so it takes no project, run, job, attempt, entry, or child")
+	}
+	if s.Terminal == nil {
+		return launcher.StartRequest{}, errors.New("a launch on a shell needs the terminal, which this server does not offer; restart with `rotari web --allow-terminal`")
+	}
+	var shell *terminal.ShellInfo
+	for _, item := range s.Terminal.Shells() {
+		if item.ID == request.Shell {
+			shell = &item
+			break
+		}
+	}
+	if shell == nil {
+		return launcher.StartRequest{}, fmt.Errorf("shell %s is not running", request.Shell)
+	}
+	dir, err := s.Terminal.Dir(request.Shell)
+	if err != nil {
+		return launcher.StartRequest{}, fmt.Errorf("where shell %d is now is not known: %w", shell.Number, err)
+	}
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return launcher.StartRequest{}, fmt.Errorf("shell %d is in %s, which is not a directory on this host", shell.Number, dir)
+	}
+	kind := launcher.TargetDirectory
+	if !command.Accepts(kind) {
+		return launcher.StartRequest{}, fmt.Errorf("launcher %q does not accept a %s", command.Name, kind)
+	}
+	if name := filepath.Base(dir); !command.Matches(kind, name) {
+		return launcher.StartRequest{}, fmt.Errorf("launcher %q accepts only %s, not %s", command.Name, strings.Join(command.PatternsFor(kind), ", "), name)
+	}
+	labels := map[string]string{"shell": strconv.Itoa(shell.Number)}
+	if baseDir, project, ok := strings.Cut(shell.Group, "\x00"); ok {
+		labels["basedir"], labels["project"] = baseDir, project
+	}
+	return launcher.StartRequest{Command: command, Target: dir, Kind: kind, Labels: labels, NewInstance: request.NewInstance}, nil
 }
 
 func (s site) startLaunch(writer http.ResponseWriter, baseDir string, request webLaunchRequest) {
@@ -520,7 +569,7 @@ type webLaunchPreview struct {
 }
 
 func (s site) previewLaunch(writer http.ResponseWriter, baseDir string, query url.Values) {
-	request := webLaunchRequest{ProjectName: query.Get("project_name"), RunID: query.Get("run_id"), JobID: query.Get("job_id"),
+	request := webLaunchRequest{Shell: query.Get("shell"), ProjectName: query.Get("project_name"), RunID: query.Get("run_id"), JobID: query.Get("job_id"),
 		AttemptID: query.Get("attempt_id"), Entry: webLaunchEntry(query.Get("entry")), Child: query.Get("child"), Name: query.Get("name")}
 	start, err := s.launchStart(baseDir, request)
 	if err != nil {

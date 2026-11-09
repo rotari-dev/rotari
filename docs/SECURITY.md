@@ -137,7 +137,9 @@ Streamlit, Datasette, marimo, Panel, Gradio, VS Code) and commands registered in
 against the job artifacts the Web UI may serve. See
 [Launching commands](WEB.md#launching-commands).
 
-The browser and API only name a registered command and an artifact. Command
+The browser and API only name a registered command and an artifact, or, with
+`--allow-terminal` as well, a running shell, whose directory now the server looks
+up; that runs nothing the shell could not run itself, as the same user. Command
 text, working directories, and modes come only from `launchers.toml`, which
 rotari refuses unless no other user can write or replace it. The listed
 artifact roots limit what can be selected, not what a command does: a command

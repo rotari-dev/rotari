@@ -1438,6 +1438,21 @@ level by `TestIdleLimitAppliesToTheShellsTogether` and
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-38** With `rotari web --allow-terminal --allow-exec`, a launch (`POST
+/api/launch`, `GET /api/launch-preview`) may name a running shell with `shell`
+instead of an artifact: the target is the directory that shell is in now, looked
+up on the server, launched as a directory with the command's own checks and
+labelled with the shell's number and project. Such a request names nothing else
+(400 with a project, run, job, attempt, entry, or child), and is refused, saying
+why, for a shell not running, one whose directory cannot be found, and a server
+without the terminal. **Launch here** in the terminal's bar, for the shell of the
+pane with the keys, and on each All shells card open a dialog of the commands that
+accept that directory, what one would run, and, once launched, a service's Open
+link. Implemented by `shellLaunchStart` in `internal/webui/launches.go` and the
+launch dialog in `web_shell.js`; covered by
+[`TestLaunchOnAShellsDirectory`](../conformance/05-web/launch_test.go), the unit
+test of that name, and `TestTerminalPanel`.
+
 **WEB-36** `--allow-terminal`, `--allow-exec`, `--allowed-host`, and the `--terminal-*` options of `rotari web` have
 environment variables (`ROTARI_WEB_ALLOW_TERMINAL` and so on) and config keys, at the top level or in `[web]`, as other
 options do. Because they let other people reach this host, `--allow-terminal`, `--allow-exec`, and `--allowed-host`

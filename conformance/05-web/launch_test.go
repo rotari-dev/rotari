@@ -1119,3 +1119,35 @@ func TestWebShowsAndGeneratesLauncherConfig(t *testing.T) {
 		t.Fatalf("save on a read-only server = (%d, %s)", refused.Status, refused.Body)
 	}
 }
+
+// TestLaunchOnAShellsDirectory checks that with the terminal and launching on, a launch
+// may name a running shell, and runs the command on the directory that shell is in now.
+func TestLaunchOnAShellsDirectory(t *testing.T) {
+	covers(t, "WEB-38")
+	e := terminalEnv(t)
+	writeLaunchers(t, e, launcherEntry("Where", "pwd -P", `"directory"`, "command"))
+	base := e.StartWeb("--allow-terminal", "--allow-exec")
+	dir := filepath.Join(e.Root, "logs here")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := openTerminalPage(t, base)
+	page.typeLine(`cd '` + dir + `' && echo "moved-$((1+1))"`)
+	page.await("moved-2")
+	shell := listTerminalShells(t, base, http.Header{"X-Rotari-Token": {launchToken}})[0].ID
+	if preview := api(e, http.MethodGet, base+"/api/launch-preview?shell="+shell+"&name=Where", ""); preview.Status != http.StatusOK || !strings.Contains(preview.Body, `"target":"`+real+`"`) {
+		t.Fatalf("preview: (%d, %s)", preview.Status, preview.Body)
+	}
+	launch := decodeLaunch(t, api(e, http.MethodPost, base+"/api/launch", `{"shell":"`+shell+`","name":"Where"}`))
+	waitLaunch(t, e, base, launch.ID, ended)
+	if got := launchOutput(t, e, base, launch.ID); got != real+"\n" {
+		t.Errorf("the launch ran in %q, want %q", got, real)
+	}
+	if refused := api(e, http.MethodPost, base+"/api/launch", `{"shell":"77","name":"Where"}`); refused.Status != http.StatusBadRequest {
+		t.Errorf("a shell not running: (%d, %s)", refused.Status, refused.Body)
+	}
+}
