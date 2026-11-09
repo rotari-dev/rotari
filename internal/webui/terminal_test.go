@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -365,6 +366,10 @@ func TestTerminalShellRoutes(t *testing.T) {
 		"rename, no body":     {http.MethodPatch, terminalShellsPath + "/" + shell.ID, http.StatusBadRequest},
 		"rename an unknown":   {http.MethodPatch, terminalShellsPath + "/7", http.StatusBadRequest},
 		"read alive":          {http.MethodGet, terminalAlivePath, http.StatusMethodNotAllowed},
+		"the window":          {http.MethodGet, terminalWindowPath + "/project/p", http.StatusOK},
+		"the window, bare":    {http.MethodGet, terminalWindowPath, http.StatusOK},
+		"post to the window":  {http.MethodPost, terminalWindowPath + "/project/p", http.StatusMethodNotAllowed},
+		"a window lookalike":  {http.MethodGet, terminalWindowPath + "s", http.StatusNotFound},
 	} {
 		if status, body := terminalRequest(t, server, test.method, test.path); status != test.want {
 			t.Errorf("%s: status %d, want %d: %s", name, status, test.want, body)
@@ -432,6 +437,7 @@ func TestTerminalShellRoutesAreGuarded(t *testing.T) {
 		{http.MethodPost, terminalAlivePath},
 		{http.MethodPatch, terminalShellsPath + "/" + shell.ID},
 		{http.MethodPut, terminalOrderPath},
+		{http.MethodGet, terminalWindowPath + "/project/p"},
 	} {
 		mutates := route.method != http.MethodGet
 		for _, test := range []struct {
@@ -640,7 +646,7 @@ func TestTerminalSessionAndSignOut(t *testing.T) {
 func TestTerminalIsAbsentWithoutTheOption(t *testing.T) {
 	server := httptest.NewServer(Handler(Options{BaseDir: t.TempDir()}))
 	defer server.Close()
-	for _, path := range []string{terminalSocketPath + "?shell=1&rows=24&cols=80", terminalShellsPath} {
+	for _, path := range []string{terminalSocketPath + "?shell=1&rows=24&cols=80", terminalShellsPath, terminalWindowPath + "/project/p"} {
 		response, err := http.Get(server.URL + path)
 		if err != nil {
 			t.Fatal(err)
@@ -649,5 +655,35 @@ func TestTerminalIsAbsentWithoutTheOption(t *testing.T) {
 		if response.StatusCode != http.StatusNotFound {
 			t.Errorf("%s: status %d, want 404", path, response.StatusCode)
 		}
+	}
+}
+
+// The window's page runs only its own script, under the nonce its policy names.
+func TestTerminalWindowPage(t *testing.T) {
+	server, _ := terminalServer(t, "/bin/sh")
+	request, err := http.NewRequest(http.MethodGet, server.URL+terminalWindowPath+"/project/p", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("X-Rotari-Token", terminalTestToken)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce := regexp.MustCompile(`script-src 'nonce-([^']+)'`).FindStringSubmatch(response.Header.Get("Content-Security-Policy"))
+	if nonce == nil {
+		t.Fatalf("no script nonce in the policy %q", response.Header.Get("Content-Security-Policy"))
+	}
+	page := string(body)
+	if !strings.Contains(page, `<script nonce="`+nonce[1]+`">`) || strings.Count(page, "<script") != 1 {
+		t.Errorf("the page's script does not carry the policy's nonce:\n%s", page[:min(len(page), 2000)])
+	}
+	if !strings.Contains(page, "data-terminal-window") || strings.Contains(page, "__ROTARI_") {
+		t.Errorf("the page is not the window's, or keeps a placeholder")
 	}
 }

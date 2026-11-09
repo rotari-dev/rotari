@@ -31,6 +31,10 @@ func TestTerminalPanel(t *testing.T) {
 	if err := os.WriteFile(jobsWithTerminal, []byte(jobsPage(livePage{nonce: "page-nonce", terminal: true}, "/", nil, jobRows, jobsSelection{}, true, false, "")), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	terminalWindow := filepath.Join(dir, "window.html")
+	if err := os.WriteFile(terminalWindow, []byte(composeTerminalWindow("page-nonce")), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	script := `
 const fs = require('fs');
 const assert = require('node:assert/strict');
@@ -40,7 +44,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const home = '/home/u';
 const plain = (id, number) => ({ id, number, basedir: '', project: '', dir: home, link: '/' });
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
-const load = (file, { stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/', maximized = false, fontSize = '' } = {}) => {
+const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/', maximized = false, fontSize = '' } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
   // xterm.js parses what it is given later; a test can hold that back.
   const parser = { held: false, waiting: [], release() { this.held = false; this.waiting.splice(0).forEach((parse) => parse()); } };
@@ -80,6 +84,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
       if (maximized) window.localStorage.setItem('rotari-terminal-maximized', '1');
       if (fontSize) window.localStorage.setItem('rotari-terminal-font-size', fontSize);
       if (remembered) window.sessionStorage.setItem(remembered[0], remembered[1]);
+      if (opener) Object.defineProperty(window, 'opener', { configurable: true, value: opener });
       if (split) window.sessionStorage.setItem(split[0], split[1]);
       window.fetch = (url, init = {}) => {
         const address = String(url);
@@ -1918,7 +1923,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(placeButton.disabled, false);
   assert.equal(placeButton.querySelector('path').getAttribute('d'), 'M1.5 9.5h13');
   placeButton.click();
-  assert.deepEqual(placeMenu().map((item) => [item.textContent, item.getAttribute('aria-checked'), item.getAttribute('role')]), [['Bottom', 'true', 'menuitemradio'], ['Left', 'false', 'menuitemradio'], ['Right', 'false', 'menuitemradio']]);
+  assert.deepEqual(placeMenu().map((item) => [item.textContent, item.getAttribute('aria-checked'), item.getAttribute('role')]), [['Bottom', 'true', 'menuitemradio'], ['Left', 'false', 'menuitemradio'], ['Right', 'false', 'menuitemradio'], ['Window', 'false', 'menuitemradio']]);
   moving.document.dispatchEvent(new moving.window.KeyboardEvent('keydown', { key: 'Escape' }));
   assert.equal(moving.document.querySelector('.terminal-tab-menu'), null, 'Escape left the menu');
   const movingSockets = moving.sockets.length;
@@ -1948,11 +1953,224 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   assert.equal(tightButton.querySelector('path').getAttribute('d'), 'M1.5 9.5h13', 'the picture showed a place it is not in');
   tightButton.click();
   const tightItems = [...tightMenu.document.querySelectorAll('.terminal-tab-menu button')];
-  assert.deepEqual(tightItems.map((item) => [item.textContent, item.disabled]), [['Bottom', false], ['Left (needs a wider window)', true], ['Right (needs a wider window)', true]]);
+  assert.deepEqual(tightItems.map((item) => [item.textContent, item.disabled]), [['Bottom', false], ['Left (needs a wider window)', true], ['Right (needs a wider window)', true], ['Window', false]]);
   assert.equal(tightItems[1].getAttribute('aria-checked'), 'true');
   // At a side the tabs have a row of their own, and maximized there is room for one row.
   assert.match(webShellCSS, /\[data-terminal-place\]:not\(\.terminal-maximized\) \.terminal-bar \{\s*flex-wrap: wrap;/);
   assert.match(webShellCSS, /\[data-terminal-place\]:not\(\.terminal-maximized\) \.terminal-tabs \{\s*order: 1;\s*flex: 1 0 100%;/);
+
+  // A window of its own opens at once on the project its path names, fills itself, has
+  // nothing to resize, maximize, hide, or move, and leaves the pages' panel as it was.
+  const win = load(process.argv[6], { path: '/_terminal/window/project/p1', shells: [inProject('1', 1, 'p1'), inProject('2', 1, 'p2')] });
+  await wait(50);
+  assert.equal(win.document.getElementById('terminal-panel').hidden, false);
+  assert.ok(win.requests.includes('GET /_terminal/here?project=p1'), win.requests.join(', '));
+  assert.equal(win.sockets.length, 1);
+  assert.match(win.sockets[0].url, /[?]shell=1&/);
+  assert.equal(win.window.localStorage.getItem('rotari-terminal-open'), null, 'the window changed whether the pages open the panel');
+  assert.equal(win.document.title, 'p1 - Terminal - rotari');
+  assert.equal(win.document.querySelector('.terminal-resizer'), null);
+  const winLabels = [...win.document.querySelectorAll('.terminal-bar button')].map((item) => item.getAttribute('aria-label'));
+  for (const gone of ['Maximize', 'Hide']) assert.ok(!winLabels.includes(gone), gone + ' is in the window');
+  assert.ok(winLabels.includes('Split right') && winLabels.includes('Clear'), winLabels.join(', '));
+  // Its project list goes to the other project's window, not its page.
+  assert.deepEqual([...win.document.querySelectorAll('.terminal-groups option')].map((option) => option.value), ['', '/_terminal/window/project/p2']);
+  assert.match(webShellCSS, /html\[data-terminal-window\] #terminal-panel \{\s*top: 0;\s*height: auto;/);
+  // Opening one on a project with no shell starts one there.
+  const emptyWin = load(process.argv[6], { path: '/_terminal/window/project/p3' });
+  await wait(50);
+  assert.ok(emptyWin.requests.includes('POST /_terminal/shells?rows=24&cols=80&project=p3'), emptyWin.requests.join(', '));
+  // Opened for a shell in a page's place, it starts a new one there, once.
+  const startWin = load(process.argv[6], { path: '/_terminal/window/project/p1?start=' + encodeURIComponent('project=p1&run=r1'), shells: [inProject('1', 1, 'p1')] });
+  await wait(50);
+  assert.ok(startWin.requests.includes('POST /_terminal/shells?rows=24&cols=80&project=p1&run=r1'), startWin.requests.join(', '));
+  assert.equal(startWin.window.location.search, '');
+
+  // Window moves the panel to a window of its own, opened straight from the click, with the
+  // panes this browser tab has. The page lets go of its shells saying nothing, and the
+  // Terminal button brings the window to the front.
+  const origin = 'http://127.0.0.1:9';
+  const post = (page, data, source) => {
+    const event = new page.window.Event('message');
+    Object.defineProperties(event, { data: { value: data }, origin: { value: origin }, source: { value: source } });
+    page.window.dispatchEvent(event);
+  };
+  const fakeWindow = () => ({ closed: false, focuses: 0, messages: [], focus() { this.focuses++; }, postMessage(message, target) { this.messages.push(JSON.parse(JSON.stringify([message, target]))); } });
+  const popping = load(process.argv[1], { stored: '1', path: '/project/p1/run/r1', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1')] });
+  await wait(50);
+  sp(popping).split();
+  await wait(30);
+  assert.deepEqual(sp(popping).live(), ['1', '2']);
+  const popped = [];
+  let poppedWindow = fakeWindow();
+  popping.window.open = (...args) => { popped.push(args); return poppedWindow; };
+  const chooseWindow = (page) => {
+    sp(page).bar('Panel position').click();
+    [...page.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Window').click();
+  };
+  chooseWindow(popping);
+  assert.equal(popped.length, 1);
+  const [address, hash] = popped[0][0].split('#');
+  assert.equal(address, '/_terminal/window/project/p1', 'the window is not on the page\'s project');
+  assert.equal(popped[0][2], 'popup,width=900,height=600');
+  const handover = JSON.parse(decodeURIComponent(hash));
+  assert.equal(handover['rotari-terminal-shell:/b:p1'], '1');
+  assert.deepEqual(JSON.parse(handover['rotari-terminal-layout:/b:p1']).columns.map((column) => column.rows.map((row) => row.shell)), [['1'], ['2']]);
+  assert.deepEqual(sp(popping).live(), [], 'the page kept a shell');
+  assert.equal(popping.document.getElementById('terminal-panel').hidden, true);
+  assert.equal(popping.document.documentElement.classList.contains('terminal-open'), false, 'the page kept room for the panel');
+  assert.equal(popping.window.localStorage.getItem('rotari-terminal-open'), '1', 'moving the panel closed it on other pages');
+  assert.equal(popping.window.sessionStorage.getItem('rotari-terminal-windowed'), '1');
+  for (const socket of popping.sockets) socket.onclose?.({ code: 4001, reason: '' });
+  for (const pane of sp(popping).panes()) assert.doesNotMatch(pane.querySelector('.terminal-pane-status').textContent, /Another tab/, 'a pane said another tab took its shell');
+  popping.document.getElementById('terminal-button').click();
+  assert.equal(poppedWindow.focuses, 1);
+  assert.equal(popping.sockets.length, 2, 'the Terminal button connected');
+  // A send button types into the window's focused pane, and says where when that is in
+  // another project; one the window does not answer says so.
+  const sendNote = () => popping.document.querySelector('.terminal-send-note').textContent;
+  const toWindow = popping.window.sendToTerminalAndSay('ls -l');
+  await wait(10);
+  assert.deepEqual(poppedWindow.messages.at(-1), [{ type: 'rotari-terminal-send', id: 1, text: 'ls -l', path: '/project/p1' }, origin]);
+  assert.equal(poppedWindow.focuses, 2);
+  post(popping, { type: 'rotari-terminal-sent', id: 1, problem: null, project: '' }, poppedWindow);
+  await toWindow;
+  assert.match(sendNote(), /^Sent\. Nothing runs/);
+  const toOther = popping.window.sendToTerminalAndSay('ls');
+  await wait(10);
+  post(popping, { type: 'rotari-terminal-sent', id: 2, problem: null, project: 'p2' }, poppedWindow);
+  await toOther;
+  assert.match(sendNote(), /window, in p2\./);
+  const refusedSend = popping.window.sendToTerminalAndSay('ls');
+  await wait(10);
+  post(popping, { type: 'rotari-terminal-sent', id: 3, problem: 'No shell here.', project: '' }, poppedWindow);
+  await refusedSend;
+  assert.equal(sendNote(), 'No shell here.');
+  assert.equal(popping.sockets.length, 2, 'sending connected the page');
+  // Terminal here asks the window for a shell in the page's place.
+  popping.window.openTerminalHere();
+  assert.deepEqual(poppedWindow.messages.at(-1), [{ type: 'rotari-terminal-here', path: '/project/p1', place: 'project=p1&run=r1' }, origin]);
+  assert.equal(popping.sockets.length, 2, 'Terminal here connected the page');
+  // What the window's panes become reaches the page, from that window only.
+  post(popping, { type: 'rotari-terminal-saved', entries: { 'rotari-terminal-shell:/b:p1': '2', 'rotari-terminal-layout:/b:p1': null, 'rotari-theme': 'dark' } }, fakeWindow());
+  assert.equal(popping.window.sessionStorage.getItem('rotari-terminal-shell:/b:p1'), '1', 'another window changed the panes');
+  post(popping, { type: 'rotari-terminal-saved', entries: { 'rotari-terminal-shell:/b:p1': '2', 'rotari-terminal-layout:/b:p1': null, 'rotari-theme': 'dark' } }, poppedWindow);
+  assert.equal(popping.window.sessionStorage.getItem('rotari-terminal-shell:/b:p1'), '2');
+  assert.equal(popping.window.sessionStorage.getItem('rotari-terminal-layout:/b:p1'), null);
+  assert.equal(popping.window.localStorage.getItem('rotari-theme'), null, 'the window set something not its panes');
+  // The window's project list takes the page along, only from that window and only on this server.
+  const assigned = [];
+  post(popping, { type: 'rotari-terminal-go', path: '//attacker.example/x' }, poppedWindow);
+  post(popping, { type: 'rotari-terminal-go', path: '/project/p2' }, fakeWindow());
+  assert.equal(popping.window.sessionStorage.getItem('rotari-terminal-followed'), '/project/p1', 'a path not on this server, or another window, moved the page');
+  post(popping, { type: 'rotari-terminal-go', path: '/project/p2' }, poppedWindow);
+  assert.equal(popping.window.sessionStorage.getItem('rotari-terminal-followed'), '/project/p2', 'the page did not go with its window');
+  popping.window.sessionStorage.setItem('rotari-terminal-followed', '/project/p1');
+  // Closing the window puts the panel back, with the panes it last had.
+  poppedWindow.closed = true;
+  await wait(600);
+  assert.equal(popping.document.getElementById('terminal-panel').hidden, false);
+  assert.equal(popping.document.documentElement.classList.contains('terminal-open'), true);
+  assert.deepEqual(sp(popping).live(), ['2']);
+  assert.equal(sp(popping).panes().length, 1);
+  assert.equal(popping.window.sessionStorage.getItem('rotari-terminal-windowed'), null);
+  // Back to page says so first.
+  poppedWindow = fakeWindow();
+  chooseWindow(popping);
+  assert.deepEqual(sp(popping).live(), []);
+  post(popping, { type: 'rotari-terminal-back' }, poppedWindow);
+  await wait(30);
+  assert.deepEqual(sp(popping).live(), ['2']);
+  // A blocked window leaves the panel as it was, and says why.
+  poppedWindow = null;
+  chooseWindow(popping);
+  assert.deepEqual(sp(popping).live(), ['2']);
+  assert.match(popping.document.querySelector('.terminal-status').textContent, /blocked the window/);
+  // Following a link while the panel is in a window takes no shell: the page waits for the
+  // window to say it is there, and puts the panel back once it closes.
+  const following = load(process.argv[1], { stored: '1', path: '/project/p1/run/r1', remembered: ['rotari-terminal-windowed', '1'], split: ['rotari-terminal-followed', '/project/p0'], shells: [inProject('1', 1, 'p1')] });
+  await wait(50);
+  assert.equal(following.sockets.length, 0, 'a page took the window\'s shell');
+  assert.equal(following.document.documentElement.classList.contains('terminal-open'), false);
+  const found = fakeWindow();
+  post(following, { type: 'rotari-terminal-window' }, found);
+  // The page is of another project than the window last followed, so the window follows it.
+  assert.deepEqual(found.messages, [[{ type: 'rotari-terminal-follow', path: '/project/p1' }, origin]]);
+  assert.equal(following.window.sessionStorage.getItem('rotari-terminal-followed'), '/project/p1');
+  following.document.getElementById('terminal-button').click();
+  assert.equal(found.focuses, 1);
+  found.closed = true;
+  await wait(600);
+  assert.deepEqual(sp(following).live(), ['1']);
+  // A page of the project the window last followed, or of none, leaves the window as it is,
+  // whatever was chosen in it since.
+  for (const [path, last] of [['/project/p1', '/project/p1'], ['/jobs/', '/project/p1'], ['/', '/project/p1']]) {
+    const staying = load(process.argv[1], { stored: '1', path, remembered: ['rotari-terminal-windowed', '1'], split: ['rotari-terminal-followed', last] });
+    await wait(30);
+    const kept = fakeWindow();
+    post(staying, { type: 'rotari-terminal-window' }, kept);
+    assert.deepEqual(kept.messages, [], path + ' moved the window');
+  }
+  // Popping out remembers the page's project as followed.
+  assert.equal(popping.window.sessionStorage.getItem('rotari-terminal-followed'), '/project/p1');
+  // A window that does not answer has gone, and the panel comes back.
+  const orphaned = load(process.argv[1], { stored: '1', path: '/project/p1', remembered: ['rotari-terminal-windowed', '1'], shells: [inProject('1', 1, 'p1')] });
+  await wait(2800);
+  assert.equal(orphaned.sockets.length, 0);
+  await wait(400);
+  assert.deepEqual(sp(orphaned).live(), ['1']);
+
+  // The window takes the panes from its address, once, and tells its page what they become.
+  const told = [];
+  const handing = encodeURIComponent(JSON.stringify({ 'rotari-terminal-shell:/b:p1': '2', 'rotari-terminal-other': 'x' }));
+  const takes = load(process.argv[6], { path: '/_terminal/window/project/p1#' + handing, shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1'), inProject('3', 1, 'p2')], opener: { closed: false, postMessage: (message, target) => told.push(JSON.parse(JSON.stringify([message, target]))) } });
+  await wait(50);
+  assert.deepEqual(sp(takes).live(), ['2']);
+  assert.equal(takes.window.location.hash, '');
+  assert.equal(takes.window.sessionStorage.getItem('rotari-terminal-other'), null);
+  assert.deepEqual(told[0], [{ type: 'rotari-terminal-window' }, origin]);
+  sp(takes).tab('1');
+  const saved = told.filter(([message]) => message.type === 'rotari-terminal-saved').at(-1);
+  assert.deepEqual(saved, [{ type: 'rotari-terminal-saved', entries: { 'rotari-terminal-shell:/b:p1': '1', 'rotari-terminal-layout:/b:p1': null } }, origin]);
+  // It types what its page sends, answering which project took it, and takes nothing from
+  // anyone else.
+  const takesOpener = takes.window.opener;
+  for (const socket of takes.sockets) socket.readyState = 1;
+  post(takes, { type: 'rotari-terminal-send', id: 7, text: 'make', path: '/project/p1' }, takesOpener);
+  await wait(30);
+  assert.deepEqual(takes.terminals.flatMap((term) => term.pastes || []), ['make']);
+  assert.deepEqual(told.at(-1), [{ type: 'rotari-terminal-sent', id: 7, problem: null, project: '' }, origin]);
+  post(takes, { type: 'rotari-terminal-send', id: 8, text: 'more', path: '/project/p9' }, takesOpener);
+  await wait(30);
+  assert.deepEqual(told.at(-1), [{ type: 'rotari-terminal-sent', id: 8, problem: null, project: 'p1' }, origin]);
+  post(takes, { type: 'rotari-terminal-send', id: 9, text: 'rm', path: '/project/p1' }, fakeWindow());
+  await wait(30);
+  assert.deepEqual(takes.terminals.flatMap((term) => term.pastes || []), ['make', 'more'], 'typed what another window sent');
+  // Terminal here on its project starts a shell in the page's place.
+  post(takes, { type: 'rotari-terminal-here', path: '/project/p1', place: 'project=p1&run=r1' }, takesOpener);
+  await wait(30);
+  assert.ok(takes.requests.includes('POST /_terminal/shells?rows=24&cols=80&project=p1&run=r1'), takes.requests.join(', '));
+  // Choosing a project in it takes its page along, as the panel's list does.
+  takes.document.querySelector('.terminal-groups').value = '';
+  const otherOption = [...takes.document.querySelectorAll('.terminal-groups option')].find((option) => option.value);
+  assert.equal(otherOption.value, '/_terminal/window/project/p2');
+  takes.document.querySelector('.terminal-groups').value = otherOption.value;
+  takes.document.querySelector('.terminal-groups').onchange();
+  assert.deepEqual(told.at(-1), [{ type: 'rotari-terminal-go', path: '/project/p2' }, origin]);
+  // Its Panel position offers only Back to page, which tells the page and closes.
+  sp(takes).bar('Panel position').click();
+  const backItems = [...takes.document.querySelectorAll('.terminal-tab-menu button')];
+  assert.deepEqual(backItems.map((item) => item.textContent), ['Back to page']);
+  let closedWindow = false;
+  takes.window.close = () => (closedWindow = true);
+  backItems[0].click();
+  assert.deepEqual(told.at(-1), [{ type: 'rotari-terminal-back' }, origin]);
+  assert.equal(closedWindow, true);
+  // With its page gone, it stays.
+  sp(win).bar('Panel position').click();
+  win.window.close = () => assert.fail('closed a window with no page to go back to');
+  [...win.document.querySelectorAll('.terminal-tab-menu button')][0].click();
+  assert.match(win.document.querySelector('.terminal-status').textContent, /page that opened this window is gone/);
 
   // xterm.js loads only on opening, under the page's nonce.
   const real = load(process.argv[1], { stubs: false });
@@ -1966,7 +2184,7 @@ const load = (file, { stubs = true, stored = '', height = '', hidden = false, st
   process.exit(0);
 })().catch((error) => { console.error(error.stack || String(error)); process.exit(1); });
 `
-	if output, err := exec.Command("node", "-e", script, withTerminal, without, filepath.Join("assets", "web_shell.css"), jobsWithTerminal, filepath.Join("assets", "table_view_panes.js")).CombinedOutput(); err != nil {
+	if output, err := exec.Command("node", "-e", script, withTerminal, without, filepath.Join("assets", "web_shell.css"), jobsWithTerminal, filepath.Join("assets", "table_view_panes.js"), terminalWindow).CombinedOutput(); err != nil {
 		t.Fatalf("terminal panel check failed: %v\n%s", err, output)
 	}
 }

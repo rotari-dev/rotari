@@ -817,6 +817,20 @@ html.terminal-open.terminal-maximized #terminal-panel {
 html.terminal-open.terminal-maximized .terminal-resizer {
   display: none;
 }
+/* The panel in a window of its own fills it, with no page to make room for. */
+html[data-terminal-window] {
+  overflow: hidden;
+}
+html[data-terminal-window] body {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+html[data-terminal-window] #terminal-panel {
+  top: 0;
+  height: auto;
+  border-top: 0;
+}
 /* No shell to show yet: an empty terminal would read as something broken. */
 #terminal-panel.terminal-empty,
 #terminal-panel.terminal-empty .terminal-viewport {

@@ -103,6 +103,16 @@ a panel along the bottom of the page, so you can type while watching jobs or rea
 the panel's top edge to change its height. The **Panel position** icon in its bar moves it down the left or
 right of the window, for a tall shell beside the jobs; the browser remembers the choice, and in a window
 under 1000 pixels wide the panel stays at the bottom. Panes stack when the panel is too narrow for columns.
+
+**Window** in the same menu moves the whole panel, with its tabs, panes, and project list, into a browser
+window of its own, for a second screen. The page gets all of its room back. The page and the window keep to one
+project, as with the panel: moving to another project's page switches the window, and choosing a project in the
+window takes the page there. Pages of no project, such as Recent jobs, leave the window as it is. While the window is open, the **Terminal** button brings it
+to the front, the send buttons type into it, and **Open a terminal here** starts the shell there. Following
+links in the page keeps the window. Close the window, or choose **Back to page** in its **Panel position** menu,
+to put the panel back where it was. If the browser blocks pop-ups, the panel stays and says so. Reloading the
+page while the window is open keeps the window, but a page opened in another browser tab takes its shells, as
+another tab does today.
 The button shows how many shells are running in all
 projects, as **Terminal (3)**, so you can see what is left running with the panel closed.
 

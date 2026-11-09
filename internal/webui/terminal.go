@@ -33,6 +33,9 @@ const (
 	terminalHerePath   = terminalPrefix + "here"
 	terminalAlivePath  = terminalPrefix + "alive"
 	terminalOrderPath  = terminalPrefix + "order"
+	// terminalWindowPath is the panel in a window of its own. What follows it is the path
+	// of the page whose project it shows, such as /project/p.
+	terminalWindowPath = terminalPrefix + "window"
 )
 
 //go:embed assets/vendor/xterm.js
@@ -121,6 +124,8 @@ func (s site) serveTerminal(writer http.ResponseWriter, request *http.Request) {
 		s.serveTerminalAlive(writer, request)
 	case path == terminalOrderPath:
 		s.serveTerminalOrder(writer, request)
+	case path == terminalWindowPath || strings.HasPrefix(path, terminalWindowPath+"/"):
+		serveTerminalWindow(writer, request)
 	case strings.HasPrefix(path, terminalShellsPath+"/"):
 		s.serveTerminalShell(writer, request, strings.TrimPrefix(path, terminalShellsPath+"/"))
 	default:

@@ -92,7 +92,7 @@ Contract WEB-33, `docs/WEB.md`, and the earlier plans. WEB-34 should not change;
 ## Non-goals
 
 - The top. If wanted later, the room named in step 1 is where it would start.
-- A floating panel, or one in a window of its own.
+- A floating panel, or one in a window of its own. The window came later, in [the window plan](../2026-11-09-web-terminal-window/plan.md).
 - A place per project or per browser tab.
 - Making the page's layouts respond to their own width rather than the window's. If step 2 shows that a page breaks, record
   it in [ISSUES.md](../ISSUES.md), and raise the 1000 pixels or fix that page.

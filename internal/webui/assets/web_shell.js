@@ -132,6 +132,10 @@
 // must not leave a shell in every project. Nothing loads until the panel first opens; a
 // page without the top bar's Terminal button has no terminal to offer.
 (() => {
+  // The panel can have a window of its own, whose page holds nothing else. Its path is
+  // windowPath and then the path of a page of the project it shows.
+  const windowPath = "/_terminal/window";
+  const inWindow = document.documentElement.hasAttribute("data-terminal-window");
   const openKey = "rotari-terminal-open";
   const heightKey = "rotari-terminal-height";
   const widthKey = "rotari-terminal-width";
@@ -165,6 +169,37 @@
   };
   const shownKey = "rotari-terminal-shell";
   const layoutKey = "rotari-terminal-layout";
+  // What a browser tab's panes showed for each project, which goes to its window and back.
+  const isPaneKey = (key) =>
+    typeof key === "string" && (key.startsWith(shownKey + ":") || key.startsWith(layoutKey + ":"));
+  // A browser tab whose panel is in a window says so here, so that following a link finds
+  // the window again rather than taking its shells.
+  const windowedKey = "rotari-terminal-windowed";
+  // A window says it is there this often, and a page loaded while it was waits this long
+  // to hear it before putting the panel back.
+  const windowBeat = 1000;
+  // The project page this browser tab last had its window follow, so that the window
+  // follows the page only when the page moves to another project, and a project chosen
+  // in the window stays until then.
+  const followedKey = "rotari-terminal-followed";
+  const windowWait = 3000;
+  // A window takes the panes its page handed it in its address, once.
+  if (inWindow && location.hash.length > 1) {
+    try {
+      const handover = JSON.parse(decodeURIComponent(location.hash.slice(1)));
+      for (const [key, value] of Object.entries(handover)) {
+        if (isPaneKey(key) && typeof value === "string") sessionStorage.setItem(key, value);
+      }
+    } catch {}
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+  // A page that asked for a shell in its place, such as a run's directory, opens the window
+  // on its project with that place, for the next shell started.
+  let placeOverride = "";
+  if (inWindow) {
+    placeOverride = new URLSearchParams(location.search).get("start") || "";
+    if (placeOverride) history.replaceState(null, "", location.pathname);
+  }
   const maximizedKey = "rotari-terminal-maximized";
   const fontSizeKey = "rotari-terminal-font-size";
   const defaultFontSize = 13;
@@ -228,6 +263,15 @@
   let newAsked = false; // Someone asked for a new shell here.
   let listSerial = 0;
   let endingHere = new Set(); // Shells this page asked to end, which need no telling.
+  let terminalWindow = null; // The window the panel moved to, while it is open.
+  let windowTimer;
+  // Loaded while the panel was in a window, this page waits to hear from it.
+  let awaitingWindow = false;
+  if (!inWindow) {
+    try {
+      awaitingWindow = sessionStorage.getItem(windowedKey) === "1";
+    } catch {}
+  }
   // newPane makes a place to show a shell: one terminal screen, and one connection to
   // the shell it shows. All of a connection's state is its pane's own.
   const newPane = () => ({
@@ -267,7 +311,9 @@
   let laidStacked = false;
   const paneShowing = (id) => panes.find((pane) => pane.shown === id);
 
+  // A window's panel is open as long as the window is, which says nothing of the pages'.
   const remember = (open) => {
+    if (inWindow) return;
     try {
       localStorage.setItem(openKey, open ? "1" : "0");
     } catch {}
@@ -355,7 +401,7 @@
   // A page narrower than its layouts expect is the danger of a panel at a side, and the
   // sidebar of a narrow window needs the left edge. The choice stays for a wider window.
   const wideWindow = window.matchMedia?.("(min-width: 1000px)");
-  const panelPlace = () => (wideWindow?.matches === false ? "bottom" : chosen);
+  const panelPlace = () => (inWindow || wideWindow?.matches === false ? "bottom" : chosen);
   const panelSizes = {
     height: { key: heightKey, variable: "--terminal-saved-height", clamp: clampHeight },
     width: { key: widthKey, variable: "--terminal-saved-width", clamp: clampWidth },
@@ -385,7 +431,7 @@
     if (place === "bottom") delete root.dataset.terminalPlace;
     else root.dataset.terminalPlace = place;
     if (!panel) return;
-    panel.querySelector(".terminal-resizer").setAttribute("aria-orientation", place === "bottom" ? "horizontal" : "vertical");
+    panel.querySelector(".terminal-resizer")?.setAttribute("aria-orientation", place === "bottom" ? "horizontal" : "vertical");
     placeButton.querySelector("path").setAttribute("d", placeLines[place]);
     applyLayout();
   };
@@ -498,7 +544,9 @@
   // Each project keeps its own last tab and panes, for this browser tab alone.
   const shownStorageKey = () => shownKey + ":" + here.basedir + ":" + here.project;
   const layoutStorageKey = () => layoutKey + ":" + here.basedir + ":" + here.project;
+  // While the panel is in a window, the window decides what the panes are.
   const rememberLayout = () => {
+    if (terminalWindow || awaitingWindow) return;
     try {
       if (panes[0].shown !== null) sessionStorage.setItem(shownStorageKey(), panes[0].shown);
       if (panes.length > 1) {
@@ -514,6 +562,15 @@
         );
       } else {
         sessionStorage.removeItem(layoutStorageKey());
+      }
+      if (inWindow) {
+        tellOpener({
+          type: "rotari-terminal-saved",
+          entries: {
+            [shownStorageKey()]: sessionStorage.getItem(shownStorageKey()),
+            [layoutStorageKey()]: sessionStorage.getItem(layoutStorageKey()),
+          },
+        });
       }
     } catch {}
   };
@@ -580,7 +637,9 @@
   // The page's basedir ID, project, and run, as it would ask for them in a query. The
   // parts are still percent-encoded, so they go in as they are.
   const pagePlace = () => {
-    const parts = location.pathname.split("/").filter(Boolean);
+    if (placeOverride) return placeOverride;
+    const path = inWindow ? location.pathname.slice(windowPath.length) : location.pathname;
+    const parts = path.split("/").filter(Boolean);
     const query = [];
     if (parts[0] === "_basedir") {
       query.push("basedir=" + parts[1]);
@@ -601,10 +660,12 @@
     if (!response.ok) return response;
     here = await response.json();
     if (add) add.title = "New shell in " + here.dir;
+    if (inWindow) document.title = projectName(here) + " - Terminal - rotari";
     return null;
   };
   // The projects with shells, this page's first. Choosing one goes to its page, so that
-  // what the panel shows always follows the page.
+  // what the panel shows always follows the page. A window goes to its own page for that
+  // project, and has the page that opened it go to that project's page.
   const renderGroups = () => {
     const entries = [{ ...here, link: "", count: shellsHere().length }];
     for (const shell of shells) {
@@ -640,7 +701,7 @@
     groups.replaceChildren(
       ...entries.map((entry) => {
         const option = document.createElement("option");
-        option.value = entry.link;
+        option.value = inWindow && entry.link ? windowPath + entry.link : entry.link;
         option.textContent = label(entry);
         return option;
       }),
@@ -803,8 +864,13 @@
       ["Close all tabs", () => endShells(inGroup), true],
     ]);
   };
-  // A narrow window has only the bottom to offer, and the menu says why.
+  // A narrow window has only the bottom to offer, and the menu says why. A window of the
+  // panel's own has only the page to go back to.
   const openPlaceMenu = (event) => {
+    if (inWindow) {
+      openPanelMenu(event, [["Back to page", backToPage, true]]);
+      return;
+    }
     const wide = wideWindow?.matches !== false;
     openPanelMenu(
       event,
@@ -817,7 +883,7 @@
         () => choosePlace(place),
         place === "bottom" || wide,
         chosen === place,
-      ]),
+      ]).concat([["Window", popOut, true, false]]),
     );
   };
   document.addEventListener("pointerdown", (event) => {
@@ -945,7 +1011,7 @@
     }
     const listed = await response.json();
     if (serial === listSerial) {
-      if (panel) noteEndedShells(listed.shells);
+      if (panel && !terminalWindow) noteEndedShells(listed.shells);
       shells = listed.shells;
       shellLimit = listed.limit;
       groupLimit = listed.group_limit;
@@ -1033,6 +1099,7 @@
     let response;
     try {
       const place = pagePlace();
+      placeOverride = "";
       response = await serverFetch(shellsPath + "?rows=" + pane.term.rows + "&cols=" + pane.term.cols + (place && "&" + place), { method: "POST" });
     } catch {}
     if (!response?.ok) {
@@ -1515,7 +1582,10 @@
     groups.className = "terminal-groups";
     groups.setAttribute("aria-label", "Project of these shells");
     groups.onchange = () => {
-      if (groups.value) location.assign(groups.value);
+      if (!groups.value) return;
+      // A window takes the page that opened it along, as the panel goes to the page.
+      if (inWindow) tellOpener({ type: "rotari-terminal-go", path: groups.value.slice(windowPath.length) });
+      location.assign(groups.value);
     };
     tabs = document.createElement("div");
     tabs.className = "terminal-tabs";
@@ -1607,7 +1677,13 @@
     panesBox = document.createElement("div");
     panesBox.className = "terminal-panes";
     buildPane(focused);
-    panel.append(buildResizer(), bar, panesBox);
+    // A window has the whole of itself, with nothing to resize, maximize, or hide it for.
+    if (inWindow) {
+      for (const button of [maximize, hide]) button.remove();
+      panel.append(bar, panesBox);
+    } else {
+      panel.append(buildResizer(), bar, panesBox);
+    }
     document.body.append(panel);
     applyPlace();
     new ResizeObserver(() => {
@@ -1700,13 +1776,227 @@
       if (newAsked || (startAsked && focused.shown === null)) begin();
     }
   };
+  // tellOpener sends a window's news to the page that opened it, if it is still there and
+  // still this server's.
+  const tellOpener = (message) => {
+    try {
+      if (window.opener && !window.opener.closed) window.opener.postMessage(message, location.origin);
+    } catch {}
+  };
+  // The page's path as far as its project, which a window opens on. A run's page gives
+  // its project.
+  const projectPath = (path = location.pathname) => {
+    const parts = path.split("/").filter(Boolean);
+    const kept = [];
+    if (parts[0] === "_basedir" && parts[1]) kept.push(...parts.splice(0, 2));
+    if (parts[0] === "project" && parts[1]) kept.push(parts[0], parts[1]);
+    return "/" + kept.join("/");
+  };
+  // letGo gives up every pane's connection, saying nothing of it, and closes the panel
+  // without remembering that, for the window to take the shells.
+  const letGo = () => {
+    for (const pane of panes) {
+      clearTimeout(pane.retryTimer);
+      pane.whenVisible = null;
+      pane.connectSerial++;
+      const { socket } = pane;
+      pane.socket = null;
+      socket?.close();
+      settleSend(pane, "The terminal moved to its own window, so nothing was sent.");
+    }
+    root.classList.remove("terminal-open");
+    document.getElementById("terminal-button")?.setAttribute("aria-pressed", "false");
+    if (panel) panel.hidden = true;
+  };
+  // A closed window sends no word, so the page looks.
+  const watchWindow = () => {
+    clearTimeout(windowTimer);
+    windowTimer = setTimeout(() => {
+      if (!terminalWindow) return;
+      if (terminalWindow.closed) windowGone();
+      else watchWindow();
+    }, 500);
+  };
+  const useWindow = (opened) => {
+    terminalWindow = opened;
+    awaitingWindow = false;
+    try {
+      sessionStorage.setItem(windowedKey, "1");
+    } catch {}
+    watchWindow();
+  };
+  const followed = () => {
+    try {
+      return sessionStorage.getItem(followedKey);
+    } catch {
+      return null;
+    }
+  };
+  const rememberFollowed = (path) => {
+    try {
+      sessionStorage.setItem(followedKey, path);
+    } catch {}
+  };
+  // followPage has the window show this page's project, when the page is of a project
+  // other than the one the window last followed. A page of no project leaves it.
+  const followPage = () => {
+    const path = projectPath();
+    if (!path.includes("/project/") || path === followed()) return;
+    rememberFollowed(path);
+    terminalWindow.postMessage({ type: "rotari-terminal-follow", path }, location.origin);
+  };
+  // popOut moves the panel to a window of its own, with the panes this browser tab has for
+  // each project. It opens the window before anything else, since a browser allows one only
+  // straight from a click.
+  const popOut = () => {
+    rememberLayout();
+    const handover = {};
+    try {
+      for (let index = 0; index < sessionStorage.length; index++) {
+        const key = sessionStorage.key(index);
+        if (isPaneKey(key)) handover[key] = sessionStorage.getItem(key);
+      }
+    } catch {}
+    const address = windowPath + projectPath() + "#" + encodeURIComponent(JSON.stringify(handover));
+    const opened = window.open(address, "", "popup,width=900,height=600");
+    if (!opened) {
+      showBriefly(focused, "The browser blocked the window. Allow pop-ups for this site to use it.");
+      focused.term?.focus();
+      return;
+    }
+    letGo();
+    useWindow(opened);
+    rememberFollowed(projectPath());
+  };
+  // windowGone puts the panel back where it was, with the panes the window last had for
+  // this project.
+  const windowGone = () => {
+    if (!terminalWindow && !awaitingWindow) return;
+    clearTimeout(windowTimer);
+    while (panes.length > 1) closePane(panes[panes.length - 1]);
+    terminalWindow = null;
+    awaitingWindow = false;
+    try {
+      sessionStorage.removeItem(windowedKey);
+    } catch {}
+    if (!panel) {
+      setOpen(true);
+      return;
+    }
+    setOpen(true);
+    begin();
+  };
+  // Back to page closes the window, and the page that opened it shows the panel again.
+  const backToPage = () => {
+    if (!window.opener || window.opener.closed) {
+      showBriefly(focused, "The page that opened this window is gone, so the terminal stays here.");
+      return;
+    }
+    tellOpener({ type: "rotari-terminal-back" });
+    window.close();
+  };
+  // sendToWindow has the window type text into its focused pane, and returns what stopped
+  // it. A pane in another project than the page's is named in sentToProject.
+  let sendSerial = 0;
+  let sentToProject = "";
+  const sendsWaiting = new Map();
+  const sendWait = 10000;
+  const sendToWindow = (text) => {
+    const id = ++sendSerial;
+    const answer = new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        sendsWaiting.delete(id);
+        resolve("The terminal's window did not answer, so nothing was sent.");
+      }, sendWait);
+      sendsWaiting.set(id, (reply) => {
+        clearTimeout(timer);
+        sendsWaiting.delete(id);
+        resolve(reply);
+      });
+    });
+    terminalWindow.postMessage({ type: "rotari-terminal-send", id, text, path: projectPath() }, location.origin);
+    terminalWindow.focus();
+    return answer;
+  };
+  // In the window, only the page that opened it sends, from this server.
+  addEventListener("message", async (event) => {
+    if (!inWindow || event.origin !== location.origin || !window.opener || event.source !== window.opener) return;
+    const { type, id, text, path, place } = event.data || {};
+    if (type === "rotari-terminal-send" && typeof text === "string") {
+      const problem = await sendToPane(focused, text);
+      const elsewhere = !problem && typeof path === "string" && projectPath(path) !== projectPath(location.pathname.slice(windowPath.length));
+      tellOpener({ type: "rotari-terminal-sent", id, problem, project: elsewhere ? projectName(here) : "" });
+    } else if (type === "rotari-terminal-follow" && typeof path === "string") {
+      if (!path.startsWith("/") || path.startsWith("//")) return;
+      if (projectPath(path) !== projectPath(location.pathname.slice(windowPath.length))) {
+        location.assign(windowPath + projectPath(path));
+      }
+    } else if (type === "rotari-terminal-here" && typeof path === "string" && typeof place === "string") {
+      // Only a path on this server: one starting // would be another.
+      if (!path.startsWith("/") || path.startsWith("//")) return;
+      window.focus();
+      if (projectPath(path) === projectPath(location.pathname.slice(windowPath.length))) {
+        placeOverride = place;
+        newAsked = true;
+        begin();
+      } else {
+        location.assign(windowPath + projectPath(path) + (place ? "?start=" + encodeURIComponent(place) : ""));
+      }
+    }
+  });
+  // Only this server's pages, and only the window this page opened, have a say. A page
+  // loaded while the panel was in a window takes the first that says it is there.
+  addEventListener("message", (event) => {
+    if (inWindow || event.origin !== location.origin || typeof event.data?.type !== "string") return;
+    const { type } = event.data;
+    if (type === "rotari-terminal-window" && awaitingWindow && event.source) {
+      useWindow(event.source);
+      followPage();
+      return;
+    }
+    if (!terminalWindow || event.source !== terminalWindow) return;
+    if (type === "rotari-terminal-saved") {
+      try {
+        for (const [key, value] of Object.entries(event.data.entries || {})) {
+          if (!isPaneKey(key)) continue;
+          if (typeof value === "string") sessionStorage.setItem(key, value);
+          else sessionStorage.removeItem(key);
+        }
+      } catch {}
+    } else if (type === "rotari-terminal-back") {
+      windowGone();
+    } else if (type === "rotari-terminal-go") {
+      // Only a path on this server: one starting // would be another.
+      const { path } = event.data;
+      if (typeof path === "string" && path.startsWith("/") && !path.startsWith("//")) {
+        rememberFollowed(projectPath(path));
+        location.assign(path);
+      }
+    } else if (type === "rotari-terminal-sent" && sendsWaiting.has(event.data.id)) {
+      const { problem, project } = event.data;
+      if (!problem && typeof project === "string") sentToProject = project;
+      sendsWaiting.get(event.data.id)(typeof problem === "string" ? problem : null);
+    }
+  });
   window.toggleTerminalPanel = () => {
+    if (terminalWindow) {
+      terminalWindow.focus();
+      return;
+    }
+    // Opening the panel now would take the shells from a window about to answer.
+    if (awaitingWindow) return;
     const open = !root.classList.contains("terminal-open");
     startAsked = open;
     setOpen(open);
   };
   // openTerminalHere starts a new shell in this page's place, such as the run's directory.
   window.openTerminalHere = () => {
+    if (terminalWindow) {
+      terminalWindow.postMessage({ type: "rotari-terminal-here", path: projectPath(), place: pagePlace() }, location.origin);
+      terminalWindow.focus();
+      return;
+    }
+    if (awaitingWindow) return;
     newAsked = true;
     setOpen(true);
   };
@@ -1714,7 +2004,7 @@
   applySavedSizes();
   applyPlace();
   wideWindow?.addEventListener?.("change", applyPlace);
-  if (remembered()) root.classList.add("terminal-open");
+  if (remembered() && !awaitingWindow) root.classList.add("terminal-open");
   if (rememberedMaximized()) root.classList.add("terminal-maximized");
   addEventListener("resize", applySavedSizes);
   // pastableText is text with only its lines and tabs left. A log's colours mean nothing
@@ -1741,6 +2031,8 @@
       return "This command has control characters, so it was not sent.";
     }
     if (!text) return "There is nothing to send.";
+    if (terminalWindow) return sendToWindow(text);
+    if (awaitingWindow) return "The terminal's window has not answered yet, so nothing was sent.";
     return sendToPane(focused, text);
   };
   const sendToPane = async (pane, text) => {
@@ -1797,8 +2089,12 @@
     sendNoteTimer = setTimeout(() => (sendNote.hidden = true), duration);
   };
   window.sendToTerminalAndSay = async (text, { word = false, pasted = false } = {}) => {
+    sentToProject = "";
     const problem = await window.sendToTerminal(word ? asWord(text) : text, { pasted });
-    showNote(problem || "Sent. Nothing runs until you press Enter in the terminal.", problem ? 6000 : 2500);
+    const sent = sentToProject
+      ? "Sent to the terminal's window, in " + sentToProject + ". Nothing runs until you press Enter there."
+      : "Sent. Nothing runs until you press Enter in the terminal.";
+    showNote(problem || sent, problem ? 6000 : sentToProject ? 4000 : 2500);
   };
   window.sendButtonPressed = (button) => {
     const { sendText, sendValue } = button.dataset;
@@ -1833,9 +2129,9 @@
     } catch {}
   };
   document.addEventListener("DOMContentLoaded", () => {
-    const offered = document.getElementById("terminal-button");
+    const offered = inWindow || document.getElementById("terminal-button");
     if (offered) {
-      addJobsSendButtons();
+      if (!inWindow) addJobsSendButtons();
       sayAlive();
       setInterval(sayAlive, aliveInterval);
       applySavedSizes();
@@ -1854,7 +2150,21 @@
         if (!document.hidden && !panes.some((pane) => pane.whenVisible)) refreshShells();
       }, shellsRefresh);
     }
-    if (offered && remembered()) setOpen(true);
+    // Opening a window asks for a shell, as opening the panel does.
+    if (inWindow) {
+      if (placeOverride) newAsked = true;
+      else startAsked = true;
+      setOpen(true);
+      const beat = () => {
+        tellOpener({ type: "rotari-terminal-window" });
+        setTimeout(beat, windowBeat);
+      };
+      beat();
+    } else if (offered && awaitingWindow) {
+      setTimeout(() => {
+        if (awaitingWindow) windowGone();
+      }, windowWait);
+    } else if (offered && remembered()) setOpen(true);
     else {
       root.classList.remove("terminal-open");
       // A page out of sight asks nothing until it is looked at.

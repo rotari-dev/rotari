@@ -137,7 +137,8 @@ flowchart LR
    With `--allow-terminal`, it holds shells in an `internal/terminal` `Keeper`
    ([cmd/rotari/web_terminal.go](../cmd/rotari/web_terminal.go) builds it;
    [internal/webui/terminal.go](../internal/webui/terminal.go) serves them at `/_terminal/shells`,
-   `/_terminal/here`, and `/_terminal/ws`, and groups them by basedir and project). Pages only attach to shells, since each link reloads the page, and the
+   `/_terminal/here`, and `/_terminal/ws`, groups them by basedir and project, and serves the panel's own window
+   at `/_terminal/window`). Pages only attach to shells, since each link reloads the page, and the
    panel in [web_shell.js](../internal/webui/assets/web_shell.js) loads xterm.js when first opened
    and connects only to the tab shown. A shell is not a run: it takes no project lock and writes
    nothing under a basedir.

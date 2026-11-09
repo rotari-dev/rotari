@@ -344,6 +344,25 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   const heightAfter = await page.evaluate(panelHeight);
   if (Math.abs(heightAfter - heightBefore - 24) > 1) throw new Error('the panel did not keep its height: ' + heightBefore + ' then ' + heightAfter);
   await collect();
+
+  // In a window of its own, the panel takes the page's shell, what the page sends reaches it
+  // there, and closing the window puts the panel back on the same shell.
+  await page.evaluate('window.__popups = []; const opening = window.open; window.open = (...args) => { const opened = opening.apply(window, args); window.__popups.push(opened); return opened; }; true');
+  await page.evaluate(barButton('Panel position') + '.click()');
+  // A browser opens a window only from a click.
+  await page.send('Runtime.evaluate', { expression: '[...document.querySelectorAll(".terminal-tab-menu button")].find((item) => item.textContent === "Window").click()', userGesture: true });
+  await until('the panel to leave the page', '!document.documentElement.classList.contains("terminal-open") && window.__popups.length === 1 && !window.__popups[0].closed');
+  const inPopup = (expression) => '(() => { const doc = window.__popups[0].document; return ' + expression + '; })()';
+  await until('the terminal in its window', inPopup('doc.documentElement.hasAttribute("data-terminal-window") && doc.querySelector(".xterm-rows") !== null && doc.querySelector(".terminal-pane-status").hidden'));
+  if (await page.evaluate(inPopup('doc.querySelector(".terminal-resizer") !== null'))) throw new Error('the window has a resizer');
+  const popupProblem = await page.evaluate('window.sendToTerminal("echo popped-$((2+3))").then((value) => value || "")');
+  if (popupProblem) throw new Error('sending to the window: ' + popupProblem);
+  await until('the sent line in the window', inPopup('doc.querySelector(".xterm-rows").textContent.includes("popped-$((2+3))")'));
+  if (await page.evaluate('[...document.querySelectorAll(".terminal-pane-status")].some((status) => /Another tab/.test(status.textContent))')) throw new Error('the page said another tab took its shell');
+  await page.evaluate('window.__popups[0].close(); true');
+  await until('the panel back in the page', 'document.documentElement.classList.contains("terminal-open") && !document.getElementById("terminal-panel").hidden');
+  await until('the same shell in the page', screenHas('popped-$((2+3))'));
+  await collect();
 }).catch((error) => { failure = error.stack || String(error); });
 await close();
 console.log(JSON.stringify({ failure, violations: [...violations] }));

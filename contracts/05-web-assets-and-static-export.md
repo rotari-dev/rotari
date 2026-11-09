@@ -1397,7 +1397,8 @@ it, and the flag is rejected with `--allow-control=false` or `--static-dir`. Wit
 or a direct loopback connection, even with a token, and so do `/_terminal/shells`, which lists the
 shells on `GET` and starts one on `POST` with `rows` and `cols` (409 at the limit), and
 `/_terminal/shells/ID`, which ends one on `DELETE` (404 if it is not running) and names it on `PATCH` with
-`{"name": ...}`, up to 64 characters on one line, or empty for none. `PUT /_terminal/order` with `{"ids":
+`{"name": ...}`, up to 64 characters on one line, or empty for none. `GET /_terminal/window`, followed by
+the path of a page such as `/project/p`, is the panel's page of its own (405 for other methods). `PUT /_terminal/order` with `{"ids":
 [...]}` arranges the project of the first running shell named, with others of it following and shells that have
 ended or are of another project ignored; the list then gives each project's shells in that order, with a new one
 last. `POST` and
@@ -1462,6 +1463,18 @@ go to the server's root on a page under a basedir's mount too.
 At a side the panel has the window's height and a width of its own, from 320 pixels up to what leaves 400 beside the sidebar, and the page, its
 top bar, which wraps rather than running under the panel, and its dialogs take the rest; under 1000 pixels wide it is at the bottom, and the choice stays for a wider window. Moving it changes no
 connection, and panes stack when the panel is under 720 pixels wide, keeping their columns for when it has room.
+**Window** in the same menu opens the panel in a browser window of its own, from the click, on the page's project
+with the panes this browser tab had for each project; the window fills itself, has no resizer, Maximize, or Hide,
+and its project list, as the panel's does, takes the page that opened it to that project's page, the window
+switching with it; with that page gone, only the window switches. When the page moves to another project's page,
+the window switches to that project; a page of no project, or of the project it last followed, leaves it. The page lets go of its shells without
+saying another tab took them, gives up the panel's room, and keeps whether the panel is open for other pages.
+While the window is open, the Terminal button brings it to the front, a send button types into the window's pane
+with the keys and names its project when it is not the page's, and **Open a terminal here** starts the shell
+in the window, on the page's project. A link followed in that browser tab finds the window again rather than taking its
+shells, and the panel comes back if the window does not answer within three seconds. Closing the window, or its
+**Back to page**, puts the panel back where it was with the window's panes for the page's project; with its page
+gone, the window says so and stays. A blocked window leaves the panel where it was, saying why.
 xterm.js loads when the panel first opens, under the page's nonce. A browser tab that is not visible
 neither connects nor retries, and a page whose sign-in has gone stops retrying and says so
 (`TestTerminalPanel`). `TestTerminalPanelInBrowser` checks the panel in
