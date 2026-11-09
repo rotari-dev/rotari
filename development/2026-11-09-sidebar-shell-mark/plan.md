@@ -1,7 +1,7 @@
 # Plan: Marking the sidebar's projects that have shells
 
 Created: 2026-11-09
-Status: Implemented, not yet committed. The user asked for an icon in the left sidebar by each project with a shell
+Status: Done in `fe15da58`. The user asked for an icon in the left sidebar by each project with a shell
 open, and left the details to this plan.
 
 ## Goal

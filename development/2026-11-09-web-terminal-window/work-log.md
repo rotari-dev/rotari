@@ -2,7 +2,7 @@
 
 ## Step 1: the window's page
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 12:22:22 `45bef46a`, which holds steps 1 to 6 together.
 
 **Change:** `/_terminal/window` and `/_terminal/window/<page path>` serve
 [terminal_window.html](../../internal/webui/assets/terminal_window.html) from
@@ -29,7 +29,7 @@ browser: there is no Chrome here.
 
 ## Step 2: opening and closing
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 12:22:22 `45bef46a`, which holds steps 1 to 6 together.
 
 **Change:** In [web_shell.js](../../internal/webui/assets/web_shell.js), **Window** follows Bottom, Left, and Right in
 the Panel position menu. `popOut` opens `/_terminal/window` with the page's project path and, after `#`, the
@@ -60,7 +60,7 @@ its panes, and Back to page with and without its page. The place menu's existing
 
 ## Step 3: the page and the window together
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 12:22:22 `45bef46a`, which holds steps 1 to 6 together.
 
 **Change:** `sendToTerminal` in a page whose panel is in a window posts the text to it and waits up to ten seconds
 for its answer; the window types it with `sendToPane` and answers with what stopped it and, when the page's project
@@ -81,7 +81,7 @@ another project's window is not checked: jsdom does not navigate.
 
 ## Step 4: promise and document
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 12:22:22 `45bef46a`, which holds steps 1 to 6 together.
 
 **Change:** WEB-33 describes **Window**, and WEB-34 the route; the status table's WEB-33 row names the window.
 [docs/WEB.md](../../docs/WEB.md) explains it and [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) names the route.
@@ -99,7 +99,7 @@ Chrome here. It runs on CI.
 
 ## Step 5: the window follows the page's project
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 12:22:22 `45bef46a`, which holds steps 1 to 6 together.
 
 **Change:** A page that finds its window again after a link posts `rotari-terminal-follow` with its project path when
 it is of a project other than the one in `rotari-terminal-followed` (`sessionStorage`), which popping out also sets.
@@ -117,7 +117,7 @@ the home page do not. The window's navigation is not checked: jsdom does not nav
 
 ## Step 6: the window's project list moves the page
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-09 12:22:22 `45bef46a`, which holds steps 1 to 6 together.
 
 **Change:** Choosing a project in the window's list posts `rotari-terminal-go` with that project's page path to the
 opener and goes to the project's window page. The page, from its window only and only for a path on this server,
