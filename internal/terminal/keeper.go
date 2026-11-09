@@ -111,6 +111,9 @@ type ShellInfo struct {
 	// CommandFinished says a command the shell ran ended, back at its prompt, while no
 	// attachment showed it, and none has since.
 	CommandFinished bool
+	// Running says a command holds the shell's foreground as Shells looks, rather than
+	// its prompt; false when that cannot be told.
+	Running bool
 }
 
 // Keeper holds shells, which outlive the attachments that show them: callers come
@@ -228,7 +231,9 @@ func (keeper *Keeper) Shells() []ShellInfo {
 	defer keeper.mu.Unlock()
 	infos := make([]ShellInfo, 0, len(keeper.shells))
 	for _, shell := range keeper.shells {
-		infos = append(infos, shell.info)
+		info := shell.info
+		info.Running, _ = shell.session.busy()
+		infos = append(infos, info)
 	}
 	return infos
 }

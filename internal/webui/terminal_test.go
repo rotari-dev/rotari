@@ -382,7 +382,7 @@ func TestTerminalShellRoutes(t *testing.T) {
 		t.Errorf("the requests left %v", shells)
 	}
 	// The list says whether a command finished out of sight, for the tabs' bell.
-	if status, body := terminalRequest(t, server, http.MethodGet, terminalShellsPath); status != http.StatusOK || !strings.Contains(body, `"command_finished":false`) {
+	if status, body := terminalRequest(t, server, http.MethodGet, terminalShellsPath); status != http.StatusOK || !strings.Contains(body, `"command_finished":false`) || !strings.Contains(body, `"running":false`) {
 		t.Errorf("the list does not say whether a command finished: status %d: %s", status, body)
 	}
 }

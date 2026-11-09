@@ -857,17 +857,20 @@ func TestTerminalMarksACommandFinishedOutOfSight(t *testing.T) {
 	e := terminalEnv(t)
 	base := e.StartWeb("--allow-terminal")
 	headers := http.Header{"X-Rotari-Token": {launchToken}}
+	running := false
 	finished := func() bool {
 		t.Helper()
 		status, body := terminalShellsRequest(t, http.MethodGet, base+"/_terminal/shells", headers)
 		var listed struct {
 			Shells []struct {
 				CommandFinished bool `json:"command_finished"`
+				Running         bool `json:"running"`
 			} `json:"shells"`
 		}
 		if err := json.Unmarshal(body, &listed); status != http.StatusOK || err != nil || len(listed.Shells) != 1 {
 			t.Fatalf("listing: status %d, %v: %s", status, err, body)
 		}
+		running = listed.Shells[0].Running
 		return listed.Shells[0].CommandFinished
 	}
 	page := openTerminalPage(t, base)
@@ -883,14 +886,17 @@ func TestTerminalMarksACommandFinishedOutOfSight(t *testing.T) {
 			t.Fatal("sleep never ran")
 		}
 	}
-	if finished() {
-		t.Error("a command still running counted as finished")
+	if finished() || !running {
+		t.Errorf("a command still running counted as finished, or not as running (running %v)", running)
 	}
 	_ = page.connection.Close(websocket.StatusNormalClosure, "")
 	for deadline := time.Now().Add(terminalWait); !finished(); time.Sleep(50 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatal("the command that ended out of sight never counted as finished")
 		}
+	}
+	if running {
+		t.Error("a shell back at its prompt counted as running a command")
 	}
 	again := openTerminalPage(t, base)
 	again.await("ready-2")

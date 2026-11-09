@@ -216,7 +216,8 @@ project, and gets them back after following a link.
 A tab you are not looking at is marked when it prints something, until you show it, and the list marks
 other projects the same way. When a command finishes in a tab you are not looking at, such as a build or a
 training run, the tab and its All shells card show a bell instead, until you show it; a command left running in
-the background with `&` does not count. When a shell in another tab ends, a note says so. These update every few
+the background with `&` does not count. When a shell in another tab ends, a note says so. Signing out ends every shell, so
+when a command is running in one, **Sign out** first lists those shells and what they run, and asks. These update every few
 seconds while the panel is open and the page is in view.
 
 Drag a tab to move it, or right-click it to move it, rename it, close the tabs to its right, close all of

@@ -2881,6 +2881,51 @@ async function copyJobsValue(button) {
       copy.after(send);
     }
   };
+  // Signing out ends every shell, so a page asks first when a command is running in one,
+  // naming each and what it runs. A page that cannot tell asks too, rather than ending
+  // them unasked.
+  let signingOut = false;
+  const confirmSignOut = async (form) => {
+    let problem = "";
+    let running = [];
+    try {
+      const response = await serverFetch(shellsPath);
+      if (response.ok) running = ((await response.json()).shells || []).filter((shell) => shell.running);
+      else problem = (await response.text()).trim() || "status " + response.status;
+    } catch {
+      problem = "the server did not answer";
+    }
+    if (problem) {
+      if (!confirm("Whether a command is running in a shell could not be checked: " + problem + ". Signing out ends every shell. Sign out anyway?")) return;
+    } else if (running.length) {
+      const lines = await Promise.all(
+        running.slice(0, 5).map(async (shell) => {
+          let command = "";
+          try {
+            const response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id) + "/preview");
+            if (response.ok) command = (await response.json()).command || "";
+          } catch {}
+          return "  " + shellName(shell) + (command ? ": " + command : "");
+        }),
+      );
+      if (running.length > 5) lines.push("  and " + (running.length - 5) + " more");
+      const head = running.length === 1 ? "A command is running in a shell" : "Commands are running in " + running.length + " shells";
+      if (!confirm(head + ":\n" + lines.join("\n") + "\nSigning out ends every shell, and what runs in it. Sign out anyway?")) return;
+    }
+    signingOut = true;
+    form.submit();
+  };
+  const guardSignOut = () =>
+    document.addEventListener(
+      "submit",
+      (event) => {
+        const form = event.target;
+        if (signingOut || !(form instanceof HTMLFormElement) || form.getAttribute("action") !== "/_auth/logout") return;
+        event.preventDefault();
+        confirmSignOut(form);
+      },
+      true,
+    );
   const sayAlive = async () => {
     try {
       await serverFetch("/_terminal/alive", { method: "POST" });
@@ -2889,7 +2934,10 @@ async function copyJobsValue(button) {
   document.addEventListener("DOMContentLoaded", () => {
     const offered = inWindow || document.getElementById("terminal-button");
     if (offered) {
-      if (!inWindow) addJobsSendButtons();
+      if (!inWindow) {
+        addJobsSendButtons();
+        guardSignOut();
+      }
       // The sidebar is drawn again with every refresh, without the marks.
       const sidebarList = document.getElementById("sidebar-basedirs");
       if (sidebarList) new MutationObserver(markSidebarProjects).observe(sidebarList, { childList: true, subtree: true });

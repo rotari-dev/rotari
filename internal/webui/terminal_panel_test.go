@@ -712,6 +712,56 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.deepEqual(['1', '2', '3'].map((id) => [bellCard(id).classList.contains('terminal-overview-finished'), bellCard(id).querySelector('.terminal-overview-state').textContent]), [[false, 'shown'], [true, 'command finished'], [false, 'new output']]);
   assert.match(webShellCSS, /\.terminal-tab-finished \[role="tab"\]::before,\s*\.terminal-overview-finished \.terminal-overview-name::before \{/);
 
+  // Signing out asks first when a command is running in a shell, naming each and what it
+  // runs; with none it signs out at once, and when it cannot tell it asks anyway.
+  const signingPage = load(process.argv[1], { shells: [{ ...inProject('1', 1, 'p1'), running: true, name: 'train' }, { ...inProject('2', 2, 'p1'), running: true }, inProject('3', 3, 'p1')] });
+  signingPage.server.commands = { 1: 'python train.py --epochs 90' };
+  await wait(50);
+  const signOutForm = signingPage.document.createElement('form');
+  signOutForm.setAttribute('action', '/_auth/logout');
+  signOutForm.setAttribute('method', 'post');
+  let signOutCount = 0;
+  signOutForm.submit = () => signOutCount++;
+  signingPage.document.body.append(signOutForm);
+  const signAsked = [];
+  const submitSignOut = async (answer) => {
+    signingPage.window.confirm = (text) => { signAsked.push(text); return answer; };
+    const event = new signingPage.window.Event('submit', { bubbles: true, cancelable: true });
+    signOutForm.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, true, 'the form went before asking');
+    await wait(30);
+  };
+  await submitSignOut(false);
+  assert.deepEqual(signAsked, ['Commands are running in 2 shells:\n  train of p1: python train.py --epochs 90\n  Shell 2 of p1\nSigning out ends every shell, and what runs in it. Sign out anyway?']);
+  assert.equal(signOutCount, 0, 'declining signed out');
+  await submitSignOut(true);
+  assert.equal(signOutCount, 1);
+  signingPage.server.shells = signingPage.server.shells.map((shell) => ({ ...shell, running: false }));
+  const quietSignOut = load(process.argv[1], { shells: [inProject('3', 3, 'p1')] });
+  await wait(50);
+  const quietForm = quietSignOut.document.createElement('form');
+  quietForm.setAttribute('action', '/_auth/logout');
+  let quietOut = 0;
+  quietForm.submit = () => quietOut++;
+  quietSignOut.document.body.append(quietForm);
+  quietSignOut.window.confirm = () => assert.fail('asked with nothing running');
+  quietForm.dispatchEvent(new quietSignOut.window.Event('submit', { bubbles: true, cancelable: true }));
+  await wait(30);
+  assert.equal(quietOut, 1);
+  let signStatus = 200;
+  const unsureSignOut = load(process.argv[1], { status: () => signStatus });
+  await wait(50);
+  signStatus = 503;
+  const unsureForm = unsureSignOut.document.createElement('form');
+  unsureForm.setAttribute('action', '/_auth/logout');
+  unsureForm.submit = () => {};
+  unsureSignOut.document.body.append(unsureForm);
+  const unsureAsked = [];
+  unsureSignOut.window.confirm = (text) => { unsureAsked.push(text); return false; };
+  unsureForm.dispatchEvent(new unsureSignOut.window.Event('submit', { bubbles: true, cancelable: true }));
+  await wait(30);
+  assert.deepEqual(unsureAsked, ['Whether a command is running in a shell could not be checked: refused. Signing out ends every shell. Sign out anyway?']);
+
   // Closing every project's shells ends them all, the shown one last, after asking in so many
   // words; with only this project's, it is off, since Close all tabs does that.
   const everyMenu = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1'), inProject('9', 1, 'p2')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
