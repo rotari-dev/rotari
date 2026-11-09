@@ -1320,11 +1320,15 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   only, never sent to the Webhook. A run whose coordinator is on another host
   or PID namespace counts as running and is not found; a run that stopped
   while no server ran is found by the next server's first pass; a record that
-  expired is recorded again if the run is still interrupted. A failing pass
-  is a warning on stderr when its error first appears or changes. Implemented
+  expired is recorded again if the run is still interrupted. A project
+  without a directory, such as the `default` project of a basedir that has
+  no state yet or whose directory is gone, has no run to find: a pass skips
+  it without a warning and creates nothing. A failing pass is a warning on
+  stderr when its error first appears or changes. Implemented
   in [runwatch](../internal/runwatch/runwatch.go) and
   `notificationlog.Log.AppendOnce`; covered by
-  `TestWebRecordsInterruptedRunsOnce`.
+  `TestWebRecordsInterruptedRunsOnce` and
+  `TestWebOnFreshBasedirDoesNotWarnAboutInterruptedRuns`.
 - Failure diagnosis is local and rule-based. It evaluates a failed job's
   recorded scheduler error and configured log against a fixed set of documented
   signatures after case, ANSI-escape, and whitespace normalization. It makes no

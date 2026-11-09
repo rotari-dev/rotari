@@ -7,6 +7,8 @@ package runwatch
 import (
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -65,9 +67,16 @@ func ReportInterrupted(log notificationlog.Log, baseDirs []string, now time.Time
 // interruptedRun reports the project's interrupted run, with its name and
 // start time when its lock or partial summary recorded them. It inspects the
 // project under the shared state lock, so a run that is starting or
-// finishing is never mistaken for an interrupted one.
+// finishing is never mistaken for an interrupted one. A project without a
+// directory, such as the default project of a basedir that has no state yet
+// or one deleted meanwhile, has no run.
 func interruptedRun(paths state.ProjectPaths) (model.RunSummary, bool, error) {
 	release, ok, err := state.TryAcquireStateReadLock(paths.StateLockFile)
+	if errors.Is(err, fs.ErrNotExist) {
+		if _, statErr := os.Stat(paths.ProjectDir); errors.Is(statErr, fs.ErrNotExist) {
+			return model.RunSummary{}, false, nil
+		}
+	}
 	if err != nil || !ok {
 		return model.RunSummary{}, false, err
 	}

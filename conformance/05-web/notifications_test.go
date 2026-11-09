@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -215,5 +216,59 @@ func TestWebRecordsInterruptedRunsOnce(t *testing.T) {
 	time.Sleep(time.Second)
 	if again := getInbox(t, e, other, id); len(again.Entries) != len(inbox.Entries) {
 		t.Fatalf("entries after another server = %+v, want %+v", again.Entries, inbox.Entries)
+	}
+}
+
+// rotari web on a basedir that has no projects yet has no interrupted run to
+// look for, so its passes warn about nothing and create no project.
+func TestWebOnFreshBasedirDoesNotWarnAboutInterruptedRuns(t *testing.T) {
+	covers(t, "NOT-4")
+	e := support.NewEnv(t)
+	var stderr strings.Builder
+	cmd := e.Command("web", "--port", "0")
+	cmd.Stderr = &stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+	listening := make(chan bool, 1)
+	go func() {
+		buffer := make([]byte, 4096)
+		var output strings.Builder
+		for {
+			n, err := stdout.Read(buffer)
+			output.Write(buffer[:n])
+			if strings.Contains(output.String(), "listening at http://") {
+				listening <- true
+				_, _ = io.Copy(io.Discard, stdout)
+				return
+			}
+			if err != nil {
+				listening <- false
+				return
+			}
+		}
+	}()
+	select {
+	case ok := <-listening:
+		if !ok {
+			t.Fatal("rotari web exited before listening")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("rotari web did not report its address")
+	}
+	// The first pass starts before the server listens; give it time to end.
+	time.Sleep(time.Second)
+	_ = cmd.Process.Kill()
+	_ = cmd.Wait()
+	if strings.Contains(stderr.String(), "cannot record interrupted runs") {
+		t.Fatalf("stderr:\n%s", stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(e.Base, "projects")); !os.IsNotExist(err) {
+		t.Fatalf("rotari web created %s/projects: %v", e.Base, err)
 	}
 }

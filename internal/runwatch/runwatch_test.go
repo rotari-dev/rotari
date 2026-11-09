@@ -84,3 +84,22 @@ func TestReportInterruptedRecordsEachInterruptedRunOnce(t *testing.T) {
 		t.Fatalf("lockless run not recorded: %#v", byRun)
 	}
 }
+
+// A basedir that has no projects yet, or whose directory is gone, has no
+// interrupted run: a pass records nothing, fails nothing, and creates no
+// project directory.
+func TestReportInterruptedSkipsBaseDirsWithoutProjects(t *testing.T) {
+	fresh := t.TempDir()
+	gone := filepath.Join(t.TempDir(), "gone")
+	log := notificationlog.Open(t.TempDir())
+
+	recorded, err := ReportInterrupted(log, []string{fresh, gone}, time.Now())
+	if err != nil || recorded != 0 {
+		t.Fatalf("recorded %d, %v; want 0, nil", recorded, err)
+	}
+	for _, baseDir := range []string{fresh, gone} {
+		if _, err := os.Stat(filepath.Join(baseDir, "projects")); !os.IsNotExist(err) {
+			t.Fatalf("%s/projects exists after a pass: %v", baseDir, err)
+		}
+	}
+}
