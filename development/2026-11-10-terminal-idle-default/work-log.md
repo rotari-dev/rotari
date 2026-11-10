@@ -2,7 +2,7 @@
 
 ## Step 1: the default and the tip
 
-**Commits:** None yet.
+**Commits:** 2026-11-10 16:34:33 `ab995ca7`.
 
 **Change:** `webTerminalIdleLimit` is `3 * time.Hour`; the flag's description says `default 3h`, regenerated into
 [CLI_REFERENCE.md](../../docs/CLI_REFERENCE.md) and [generated_cli.py](../../python/rotari/generated_cli.py) by the

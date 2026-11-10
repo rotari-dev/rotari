@@ -2,7 +2,7 @@
 
 ## Steps 1 and 2: the route and the heading line
 
-**Commits:** None yet.
+**Commits:** 2026-11-10 16:34:27 `9532482c`.
 
 **Change:** [terminal_projects.go](../../internal/webui/terminal_projects.go) serves `GET /_terminal/projects`: for
 each project with shells, its run count and its last run, chosen by `resolve.RunID` as `rotari show` chooses it,

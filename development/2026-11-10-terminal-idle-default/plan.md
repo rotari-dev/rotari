@@ -1,7 +1,7 @@
 # Plan: Shells last 3 hours without a page, and how to keep them longer
 
 Created: 2026-11-10
-Status: In progress. See the [work log](work-log.md). The user found 30 minutes short, compared it with VS Code's
+Status: Done in `ab995ca7`. See the [work log](work-log.md). The user found 30 minutes short, compared it with VS Code's
 remote server (which waits about 3 hours for a client to reconnect), and asked for a 3-hour default and a tip on
 keeping shells.
 

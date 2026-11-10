@@ -1,7 +1,7 @@
 # Plan: Each project's state in All shells
 
 Created: 2026-11-10
-Status: In progress. See the [work log](work-log.md). The user asked for All shells to tell what each project is
+Status: Done in `9532482c`, not yet tried by hand. See the [work log](work-log.md). The user asked for All shells to tell what each project is
 doing, and agreed to three job counts and the last run, on one line beside the project's name.
 
 ## Goal
