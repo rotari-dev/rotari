@@ -30,6 +30,7 @@ version.
 | 07 | The Web UI across projects, Activity | `docs/WEB.md` | `07_webui.sh` | done, 34 s |
 | 08 | Inspecting runs from a terminal: jobs, show, logs | `docs/INSPECT.md` | `08_terminal.sh` | done, 44 s |
 | 09 | Coding agents: what yours did, and why | `rotari guide`, `docs/MCP.md`, `docs/INSPECT.md` | `09_agents.sh` | done, 39 s |
+| 10 | The Web terminal: shells that belong to your experiments | `docs/WEB.md` (Terminal) | `10_terminal_web.sh` | rendered 2026-11-10, not yet reviewed |
 
 Video 03 accompanies the Artifacts section of `docs/WEB.md`.
 
@@ -154,6 +155,7 @@ scripts/promo-video/06_grid.sh            # out/06_grid.mp4
 scripts/promo-video/07_webui.sh           # out/07_webui.mp4
 scripts/promo-video/08_terminal.sh        # out/08_terminal.mp4
 scripts/promo-video/09_agents.sh          # out/09_agents.mp4
+scripts/promo-video/10_terminal_web.sh    # out/10_terminal_web.mp4
 scripts/promo-video/01_short.sh --with-slurm          # include the Slurm act
 scripts/promo-video/01_short.sh --voice am_michael    # another narrator
 scripts/promo-video/03_outputs.sh --preview 20 45     # PNGs in the work directory
@@ -244,6 +246,16 @@ so nothing outside `WORK` changes and nothing private reaches the screen:
   lines when the output is taller than the frame, as `submit4` is in
   landscape; the optional Slurm act stacks its two terminals in the frame's
   column there.
+- **Tools under /home:** the capture namespaces mount a tmpfs over `/home`
+  with only the fake `/home/me` in it, so a `PROMO_TOOLS` under the real
+  home (the default `~/.cache/rotari-promo` when `HOME` is in `/home`) is
+  not there for Playwright: it says Chrome is missing although `setup.sh`
+  installed it. Set `PROMO_TOOLS` to a directory under `/data`, `/opt`, or
+  `/tmp`, which `newroot.sh` binds.
+- **Launcher runtime directory:** `rotari web --allow-exec` makes it under
+  `os.TempDir()` and requires the user or root to own it; the host's `/tmp`
+  looks owned by nobody in the namespace, so a capture with launchers sets
+  `TMPDIR` under the fake home.
 - **Fonts:** the player's IBM Plex faces are embedded as data URIs, and
   `render.py` stops if any face fails to load instead of rendering in a
   fallback font. Chrome's `FontFace` API refuses `file://` font URLs.
@@ -460,6 +472,36 @@ and report (680×487 CSS px), and `cat AGENTS.md`, the one line that asks an
 agent to use rotari this way. An earlier version showed `rotari guide` and
 the commands an agent would run; it read as a list of commands any agent
 could already run (the user's feedback, 2026-10-25).
+
+### Web terminal (10)
+
+The message comes from the user (2026-11-10): what is unusual is that shells
+belong to projects; underneath they are only shells in a namespace per project,
+one proposal for managing parallel experiments rather than a tmux
+replacement, and All shells is a view they had not seen elsewhere. Launching
+TensorBoard where a shell is was the third point. The video asks "which tab
+was which?" and answers with the panel, All shells, and the launcher.
+
+Three projects (`fixture/terminal_web/`): asr's run finished, vision's last
+run failed, and tts's eight-seed sweep (`train.sh`, `OUTCOME=long`) is still
+training. Off camera, the browser starts tts's shells (`python train.py
+--workers 3`, from `workers.py`, so its card says four processes; and one in
+an earlier experiment's `outputs/exp0415`, written by `tts_train.py`) and
+vision's (`./eval.sh`, which ends while asr's page is shown, so its card has
+the bell). On camera: asr's panel opening where its last run started, the
+sidebar to tts, All shells with each project's last-run line, the process
+tree, the bell card taking the page to vision, and TensorBoard launched from
+tts's second card. The opening `tabs` scene runs the same programs in plain
+terminal sessions, each tab titled `bash`.
+
+- The Web UI is 1400×996 CSS px (the frame column's shape) with the panel at
+  230 px (`rotari-terminal-height` in localStorage): All shells keeps above
+  the panel, and at 1100×782 vision's card fell below its fold.
+- Following a link with the panel open starts no shell; `open_panel` presses
+  the panel's **Start a shell**. Hidden panes keep `.xterm` elements, so the
+  script waits for `.xterm:visible`.
+- The launch dialog says "Runs as root@workstation": the capture's user
+  namespace maps the user to root.
 
 ## Next steps
 
