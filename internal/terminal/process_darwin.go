@@ -60,3 +60,29 @@ func processCommand(pid int) (string, error) {
 	}
 	return command, nil
 }
+
+// processes lists this host's processes, each with its parent and command line, as ps
+// reports them.
+func processes() ([]Process, error) {
+	output, err := ask("/bin/ps", "-A", "-o", "pid=,ppid=,command=")
+	if err != nil {
+		return nil, err
+	}
+	var listed []Process
+	for line := range strings.SplitSeq(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		pid, err1 := strconv.Atoi(fields[0])
+		ppid, err2 := strconv.Atoi(fields[1])
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		command := strings.TrimSpace(line)
+		command = strings.TrimSpace(strings.TrimPrefix(command, fields[0]))
+		command = strings.TrimSpace(strings.TrimPrefix(command, fields[1]))
+		listed = append(listed, Process{PID: pid, PPID: ppid, Command: command})
+	}
+	return listed, nil
+}

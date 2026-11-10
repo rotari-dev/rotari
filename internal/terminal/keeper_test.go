@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -972,5 +973,39 @@ func TestShellTimesFollowItsActivity(t *testing.T) {
 	}
 	if got := keeper.Shells()[0].StartedAt; !got.Equal(shell.StartedAt) {
 		t.Errorf("the start moved to %v", got)
+	}
+}
+
+// Processes lists what a shell started, each child followed by its own, and leaves out a
+// process that left the shell's tree.
+func TestProcessesAreTheShellsTree(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	seen := watch(t, keeper)
+	id := keeper.Shells()[0].ID
+	seen.run(t, `echo "ready-$((1+1))"`, "ready-2")
+	if listed, err := keeper.Processes(id); err != nil || len(listed) != 0 {
+		t.Errorf("Processes() at the prompt = %+v, %v; want none", listed, err)
+	}
+	seen.run(t, `sleep 29 & sh -c 'sleep 28 & wait' & (sleep 27 &); echo "started-$((1+1))"`, "started-2")
+	want := []string{"1 sleep 29", "1 sh -c sleep 28 & wait", "2 sleep 28"}
+	var got []string
+	for deadline := time.Now().Add(testWait); ; time.Sleep(20 * time.Millisecond) {
+		listed, err := keeper.Processes(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got = got[:0]
+		for _, process := range listed {
+			got = append(got, strconv.Itoa(process.Depth)+" "+process.Command)
+		}
+		if slices.Equal(got, want) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Processes() = %q, want %q", got, want)
+		}
+	}
+	if _, err := keeper.Processes("nope"); !errors.Is(err, ErrNoShell) {
+		t.Errorf("Processes() of an unknown shell: %v, want ErrNoShell", err)
 	}
 }

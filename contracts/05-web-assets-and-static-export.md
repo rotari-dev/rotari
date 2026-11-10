@@ -1405,8 +1405,9 @@ shells on `GET` and starts one on `POST` with `rows` and `cols` (409 at the limi
 says where a shell is now and what it runs without connecting to it, so it takes the shell from no page and
 leaves its output unseen: `"cwd"`, the shell's own working directory, or `"cwd_error"` saying why it could not be
 found, and `"command"`, the command line of the program the shell runs in the foreground, absent while the shell
-is at its prompt, or `"command_error"` saying why it could not be found (404 if the shell is not running, 405 for
-other methods). `GET /_terminal/window`, followed by
+is at its prompt, or `"command_error"` saying why it could not be found, and `"processes"`, the processes below the shell with their
+`pid`, `ppid`, `depth` (1 for its children), and `command`, each child followed by its own, or `null` with
+`"processes_error"` saying why they could not be listed (404 if the shell is not running, 405 for other methods). `GET /_terminal/window`, followed by
 the path of a page such as `/project/p`, is the panel's page of its own (405 for other methods). `PUT /_terminal/order` with `{"ids":
 [...]}` arranges the project of the first running shell named, with others of it following and shells that have
 ended or are of another project ignored; the list then gives each project's shells in that order, with a new one
@@ -1494,9 +1495,11 @@ keeps from a menu in the panel's bar, with a tab for each
 shell of the page's project, or of no project on a page of none. A list names the projects with
 shells, and choosing one goes to its page. A tab not shown whose `command_finished` is set shows a bell in place of
 its unseen-output mark, as its All shells card does. A tab's tooltip and an All shells card say when the shell
-started and how long it has been idle, by the server's clock. Signing out from a page with the terminal first asks, naming
-each shell with a command `running` and what it runs, since signing out ends every shell; it asks too, saying why,
-when the shells cannot be listed, and signs out at once when nothing runs. **All shells** in the bar opens a dialog over the page, as a log's is,
+started and how long it has been idle, by the server's clock. A card's line of what runs also says how many
+processes the shell has started, background ones when nothing runs in its foreground, and opens into their tree. Signing out from a page with the terminal first asks, naming
+each shell with a command `running` or processes below it and what runs there, since signing out ends every shell;
+a shell whose processes cannot be listed is named as such, it asks too, saying why, when the shells cannot be
+listed, and signs out at once when nothing runs. **All shells** in the bar opens a dialog over the page, as a log's is,
 with the panel's room left to it: every running shell, grouped by project with the page's first, each with its tab
 name, its shell's working directory now, or where it started, said as such, when that cannot be found, and the
 command running in its foreground, if any, or that it is not known (WEB-34); it connects to none. Choosing one
@@ -1514,7 +1517,9 @@ It is a view of when it opened, or of **Refresh**, and Escape, **Close**, a clic
 closes it. Opening the panel with no shell there starts one, **+**
 starts another, and a run page's **Open a terminal here** button starts another, each where the page
 says (WEB-34); closing a tab asks, then ends that shell. A tab's menu also closes the tabs to its right, all
-of the project's tabs, and every shell of every project, each after one question saying how many and whose. A page loaded with the panel left open starts
+of the project's tabs, and every shell of every project, each after one question saying how many shells and whose.
+Every question to end shells, from a tab, its menu, or All shells, says how many processes run in them, naming up to
+three commands, or that nothing does, or why that is not known. A page loaded with the panel left open starts
 nothing, and offers to, so browsing leaves no shells behind. Shells live on the server: each page load
 lists them and attaches to the one this browser tab last showed for the project, or the first,
 replaying recent output, so following a link ends none of them. Up to four panes show the project's shells, as columns each holding rows. **Split right** adds a column of

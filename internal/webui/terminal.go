@@ -394,6 +394,18 @@ type terminalPreviewResponse struct {
 	CwdError     string `json:"cwd_error,omitempty"`
 	Command      string `json:"command,omitempty"`
 	CommandError string `json:"command_error,omitempty"`
+	// Processes are those below the shell, each child followed by its own; null when they
+	// could not be listed, which ProcessesError then says.
+	Processes      []terminalProcessResponse `json:"processes"`
+	ProcessesError string                    `json:"processes_error,omitempty"`
+}
+
+// terminalProcessResponse is a process below a shell; Depth is 1 for the shell's children.
+type terminalProcessResponse struct {
+	PID     int    `json:"pid"`
+	PPID    int    `json:"ppid"`
+	Depth   int    `json:"depth"`
+	Command string `json:"command"`
 }
 
 // serveTerminalPreview describes a shell on GET without attaching to it, so it takes the
@@ -424,6 +436,19 @@ func (s site) serveTerminalPreview(writer http.ResponseWriter, request *http.Req
 		preview.CommandError = err.Error()
 	}
 	preview.Command = command
+	below, err := s.Terminal.Processes(id)
+	switch {
+	case errors.Is(err, terminal.ErrNoShell):
+		http.Error(writer, err.Error(), http.StatusNotFound)
+		return
+	case err != nil:
+		preview.ProcessesError = err.Error()
+	default:
+		preview.Processes = make([]terminalProcessResponse, 0, len(below))
+		for _, process := range below {
+			preview.Processes = append(preview.Processes, terminalProcessResponse{PID: process.PID, PPID: process.PPID, Depth: process.Depth, Command: process.Command})
+		}
+	}
 	writeTerminalJSON(writer, http.StatusOK, preview)
 }
 

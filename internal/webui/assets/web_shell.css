@@ -1270,13 +1270,81 @@ html.terminal-open .output-panel.terminal-overview {
   gap: 6px;
 }
 /* Rename and End sit in the card's top corner, beside the button that chooses it. */
+/* The box is the item's, holding the button that chooses the shell, the line of what runs
+   in it, and that line's process tree. */
 .terminal-overview-item {
   position: relative;
   display: flex;
+  flex-direction: column;
   min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+}
+.terminal-overview-item:hover,
+.terminal-overview-item:focus-within {
+  border-color: color-mix(in oklab, var(--accent) 60%, var(--line));
+}
+.terminal-overview-item:has(.terminal-overview-current) {
+  box-shadow: inset 2px 0 0 var(--focus);
 }
 .terminal-overview-item > .terminal-overview-card {
-  flex: 1;
+  flex: none;
+}
+.terminal-overview-run {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 8px 6px;
+  font-size: 12px;
+}
+.terminal-overview-run[hidden],
+.terminal-overview-process-list[hidden],
+.terminal-overview-processes[hidden] {
+  display: none;
+}
+.terminal-overview-run .terminal-overview-command {
+  min-width: 0;
+}
+.terminal-overview-processes {
+  flex: none;
+  min-height: 0;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: 11px;
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+.terminal-overview-processes:hover:not(:disabled) {
+  color: var(--text);
+}
+.terminal-overview-processes[aria-expanded="true"] {
+  color: var(--text);
+}
+.terminal-overview-run .terminal-overview-command:not([hidden]) + .terminal-overview-processes::before {
+  content: "\00b7\00a0";
+}
+.terminal-overview-process-list {
+  margin: 0;
+  padding: 0 8px 8px;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.terminal-overview-process-list li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-overview-pid {
+  display: inline-block;
+  min-width: 6ch;
+  margin-right: 6px;
+  color: var(--muted);
+  text-align: right;
 }
 .terminal-overview-item .terminal-overview-top {
   padding-right: 66px;
@@ -1383,6 +1451,7 @@ html.terminal-open .output-panel.terminal-launch {
 .terminal-overview-problem[hidden] {
   display: none;
 }
+/* The button that chooses the shell; the box around it is its item's. */
 .terminal-overview-card {
   display: flex;
   flex-direction: column;
@@ -1391,20 +1460,16 @@ html.terminal-open .output-panel.terminal-launch {
   min-width: 0;
   min-height: 0;
   padding: 6px 8px;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: 4px;
-  background: var(--surface);
+  background: none;
   color: var(--text);
   font-size: 12px;
   text-align: left;
 }
 .terminal-overview-card:hover,
 .terminal-overview-card:focus-visible {
-  border-color: color-mix(in oklab, var(--accent) 60%, var(--line));
   background: var(--surface-2);
-}
-.terminal-overview-current {
-  box-shadow: inset 2px 0 0 var(--focus);
 }
 .terminal-overview-top {
   display: flex;

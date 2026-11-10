@@ -59,7 +59,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       if (!server.shells.some((shell) => shell.id === id) || server.endedSinceListed?.includes(id)) return refused(404, 'no such shell');
       const cwd = server.cwds?.[id];
       const command = server.commands?.[id];
-      return Promise.resolve({ ok: true, status: 200, json: async () => ({ ...(cwd ? { cwd } : { cwd_error: 'no such process' }), ...(command === '?' ? { command_error: 'no such group' } : command ? { command } : {}) }) });
+      const below = server.processes?.[id];
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ ...(cwd ? { cwd } : { cwd_error: 'no such process' }), ...(command === '?' ? { command_error: 'no such group' } : command ? { command } : {}), ...(below === '?' ? { processes: null, processes_error: 'no /proc' } : { processes: below || [] }) }) });
     }
     if (method === 'GET') return Promise.resolve({ ok: true, status: 200, json: async () => ({ shells: [...server.shells], limit: 32, group_limit: server.limit, ...(server.now ? { now: server.now } : {}) }) });
     if (method === 'POST') {
@@ -672,13 +673,14 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   openMenu(3);
   assert.equal(menuItem('Close tabs to the right').disabled, true);
   md.dispatchEvent(new mw.KeyboardEvent('keydown', { key: 'Escape' }));
-  // Declining the question ends nothing.
+  // Declining the question ends nothing. The question counts what runs in them, naming a few.
+  menuPage.server.processes = { 3: [{ pid: 31, ppid: 30, depth: 1, command: 'make' }, { pid: 32, ppid: 31, depth: 2, command: 'make' }, { pid: 33, ppid: 31, depth: 2, command: 'cc a.c' }], 4: [{ pid: 41, ppid: 40, depth: 1, command: 'tail -f log' }, { pid: 42, ppid: 40, depth: 1, command: 'sleep 9' }] };
   let asked = [];
   mw.confirm = (text) => { asked.push(text); return false; };
   openMenu(1);
   menuItem('Close tabs to the right').click();
   await wait(20);
-  assert.deepEqual(asked, ['End 2 shells, and anything running in them?']);
+  assert.deepEqual(asked, ['End 2 shells? 5 processes run in them: make, cc a.c, tail -f log, and others.']);
   assert.equal(menuPage.server.shells.length, 5, 'declining ended a shell');
   // Closing to the right of tab 2 ends 3 and the shown 4, 4 last, and moves to a neighbour.
   mw.confirm = () => true;
@@ -712,10 +714,16 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.deepEqual(['1', '2', '3'].map((id) => [bellCard(id).classList.contains('terminal-overview-finished'), bellCard(id).querySelector('.terminal-overview-state').textContent]), [[false, 'shown'], [true, 'command finished'], [false, 'new output']]);
   assert.match(webShellCSS, /\.terminal-tab-finished \[role="tab"\]::before,\s*\.terminal-overview-finished \.terminal-overview-name::before \{/);
 
-  // Signing out asks first when a command is running in a shell, naming each and what it
-  // runs; with none it signs out at once, and when it cannot tell it asks anyway.
-  const signingPage = load(process.argv[1], { shells: [{ ...inProject('1', 1, 'p1'), running: true, name: 'train' }, { ...inProject('2', 2, 'p1'), running: true }, inProject('3', 3, 'p1')] });
+  // Signing out asks first when anything runs in a shell, a command in front or processes
+  // left behind, naming each and what runs there; a shell it cannot look into counts too.
+  // With nothing running it signs out at once, and when it cannot list the shells it asks.
+  const signingPage = load(process.argv[1], { shells: [
+    { ...inProject('1', 1, 'p1'), running: true, name: 'train' }, { ...inProject('2', 2, 'p1'), running: true },
+    inProject('3', 3, 'p1'), inProject('4', 4, 'p1'), inProject('5', 5, 'p1'),
+  ] });
   signingPage.server.commands = { 1: 'python train.py --epochs 90' };
+  const bg = (pid, command) => ({ pid, ppid: 1, depth: 1, command });
+  signingPage.server.processes = { 1: [bg(11, 'python train.py --epochs 90'), bg(12, 'nvidia-smi')], 3: [bg(31, 'sleep 600'), bg(32, 'tail -f log'), bg(33, 'make'), bg(34, 'cc')], 5: '?' };
   await wait(50);
   const signOutForm = signingPage.document.createElement('form');
   signOutForm.setAttribute('action', '/_auth/logout');
@@ -732,7 +740,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     await wait(30);
   };
   await submitSignOut(false);
-  assert.deepEqual(signAsked, ['Commands are running in 2 shells:\n  train of p1: python train.py --epochs 90\n  Shell 2 of p1\nSigning out ends every shell, and what runs in it. Sign out anyway?']);
+  assert.deepEqual(signAsked, ['Something is running in 4 shells:\n  train of p1: python train.py --epochs 90 (2 processes)\n  Shell 2 of p1: a command\n  Shell 3 of p1: 4 background processes (sleep 600, tail -f log, make, ...)\n  Shell 5 of p1: its processes are not known (no /proc)\nSigning out ends every shell, and what runs in it. Sign out anyway?']);
   assert.equal(signOutCount, 0, 'declining signed out');
   await submitSignOut(true);
   assert.equal(signOutCount, 1);
@@ -760,7 +768,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   unsureSignOut.window.confirm = (text) => { unsureAsked.push(text); return false; };
   unsureForm.dispatchEvent(new unsureSignOut.window.Event('submit', { bubbles: true, cancelable: true }));
   await wait(30);
-  assert.deepEqual(unsureAsked, ['Whether a command is running in a shell could not be checked: refused. Signing out ends every shell. Sign out anyway?']);
+  assert.deepEqual(unsureAsked, ['Whether anything is running in a shell could not be checked: refused. Signing out ends every shell. Sign out anyway?']);
 
   // A card says when its shell started and how long it has been idle, by the server's clock,
   // and a tab's tooltip says so as the pointer reaches it.
@@ -793,7 +801,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   everyMenu.document.querySelector('.terminal-tab').dispatchEvent(new everyMenu.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
   everyItem('Close all shells of every project').click();
   await wait(50);
-  assert.deepEqual(everyAsked, ['End all 3 shells, of every project, and anything running in them?']);
+  assert.deepEqual(everyAsked, ['End all 3 shells, of every project? Nothing runs in them.']);
   assert.deepEqual(everyMenu.requests.filter((request) => request.startsWith('DELETE')), ['DELETE /_terminal/shells/2', 'DELETE /_terminal/shells/9', 'DELETE /_terminal/shells/1']);
   assert.deepEqual(everyMenu.server.shells, []);
   const onlyHere = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')] });
@@ -2352,6 +2360,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const touring = load(process.argv[1], { stored: '1', path: '/project/p2', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1'), inProject('3', 1, 'p2'), elsewhereShell] });
   touring.server.cwds = { 1: '/w/p1/src', 3: '/w/p2/deep', 4: '/c/p1' };
   touring.server.commands = { 1: 'vim notes.md', 2: '?' };
+  touring.server.processes = { 1: [{ pid: 41, ppid: 40, depth: 1, command: 'vim notes.md' }, { pid: 42, ppid: 41, depth: 2, command: 'sh -c make' }, { pid: 43, ppid: 42, depth: 3, command: 'make' }], 2: '?', 4: [{ pid: 51, ppid: 50, depth: 1, command: 'sleep 600' }] };
   await wait(50);
   const allShellsButton = (page) => [...page.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'All shells');
   const overviewButton = allShellsButton(touring);
@@ -2377,10 +2386,27 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   ]);
   assert.ok(card('2').querySelector('.terminal-overview-dir-unknown').title.includes('no such process'));
   // A card names what its shell runs, and nothing while the shell waits at its prompt.
-  const runningOf = (id) => { const line = card(id).querySelector('.terminal-overview-command'); return line.hidden ? null : [line.textContent, line.title, line.classList.contains('terminal-overview-command-unknown')]; };
+  const runningOf = (id) => { const line = card(id).parentElement.querySelector('.terminal-overview-command'); return line.hidden ? null : [line.textContent, line.title, line.classList.contains('terminal-overview-command-unknown')]; };
   assert.deepEqual(runningOf('1'), ['vim notes.md', 'Running vim notes.md', false]);
   assert.deepEqual(runningOf('2'), ['running program not known', 'no such group', true]);
   assert.equal(runningOf('3'), null);
+  // Beside it, how many processes the shell has started, which open into their tree; with
+  // nothing in the foreground, they are background ones.
+  assert.equal(card('3').parentElement.querySelector('.terminal-overview-run').hidden, true, 'a shell at rest has a line of what runs');
+  const countOf = (id) => card(id).parentElement.querySelector('.terminal-overview-processes');
+  const treeOf = (id) => card(id).parentElement.querySelector('.terminal-overview-process-list');
+  assert.deepEqual([countOf('1').textContent, countOf('1').hidden, countOf('1').getAttribute('aria-expanded'), treeOf('1').hidden], ['3 processes', false, 'false', true]);
+  assert.equal(countOf('1').parentElement.parentElement, card('1').parentElement, 'the count is not in the card\'s box');
+  assert.equal(countOf('1').closest('button.terminal-overview-card'), null);
+  countOf('1').click();
+  assert.deepEqual([countOf('1').getAttribute('aria-expanded'), treeOf('1').hidden], ['true', false]);
+  assert.deepEqual([...treeOf('1').querySelectorAll('li')].map((line) => [line.style.paddingLeft, line.querySelector('.terminal-overview-pid').textContent, line.textContent.slice(2)]), [['0px', '41', 'vim notes.md'], ['14px', '42', 'sh -c make'], ['28px', '43', 'make']]);
+  assert.notEqual(touring.document.querySelector('.terminal-overview'), null, 'opening the tree chose the shell');
+  countOf('1').click();
+  assert.equal(treeOf('1').hidden, true);
+  assert.deepEqual([countOf('4').textContent, countOf('4').title], ['1 background process', 'Show the processes this shell has started']);
+  assert.deepEqual([countOf('2').textContent, countOf('2').disabled, countOf('2').title], ['processes not known', true, 'no /proc']);
+  assert.match(webShellCSS, /\.terminal-overview-run \.terminal-overview-command:not\(\[hidden\]\) \+ \.terminal-overview-processes::before \{\s*content: "\\00b7\\00a0";/);
   assert.ok(card('3').classList.contains('terminal-overview-current'));
   assert.ok(card('4').classList.contains('terminal-overview-unseen'));
   assert.equal(touring.sockets.length, 1, 'the overview connected to a shell');
@@ -2466,7 +2492,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   touring.window.confirm = (text) => { endAsked.push(text); return true; };
   cardAction('2', 'End shell 2, logs').click();
   await wait(30);
-  assert.deepEqual(endAsked, ['End shell 2 of p1, and anything running in it?']);
+  assert.deepEqual(endAsked, ['End shell 2 of p1? What runs in it is not known: no /proc.']);
   assert.ok(touring.requests.includes('DELETE /_terminal/shells/2'));
   assert.equal(card('2'), undefined);
   assert.notEqual(tour(), null, 'ending closed the overview');
@@ -2475,7 +2501,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   touring.window.confirm = (text) => { endAsked.push(text); return false; };
   key('Delete');
   await wait(30);
-  assert.equal(endAsked.at(-1), 'End shell 1 of p1, and anything running in it?');
+  assert.equal(endAsked.at(-1), 'End shell 1 of p1? 1 process runs in it: sleep 600.');
   assert.ok(!touring.requests.includes('DELETE /_terminal/shells/4'), 'a declined question ended the shell');
   assert.notEqual(card('4'), undefined);
   // A refusal is told in the overview, not in a pane under it.
@@ -2553,7 +2579,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   endingAll.window.confirm = (text) => { endAllAsked.push(text); return true; };
   endTour().querySelector('[aria-label="End all shells of p1"]').click();
   await wait(50);
-  assert.deepEqual(endAllAsked, ['End the 2 shells of p1, and anything running in them?']);
+  assert.deepEqual(endAllAsked, ['End the 2 shells of p1? Nothing runs in them.']);
   assert.deepEqual(endingAll.requests.filter((request) => request.startsWith('DELETE')), ['DELETE /_terminal/shells/1', 'DELETE /_terminal/shells/2']);
   assert.notEqual(endTour(), null, 'ending closed the overview');
   assert.deepEqual([...endTour().querySelectorAll('h3 span')].map((item) => item.textContent), ['p2']);
@@ -2566,7 +2592,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   endingAll.server.refuse = '';
   endEveryButton().click();
   await wait(50);
-  assert.equal(endAllAsked.at(-1), 'End the one shell, of every project, and anything running in it?');
+  assert.equal(endAllAsked.at(-1), 'End the one shell, of every project? Nothing runs in it.');
   assert.deepEqual(endingAll.server.shells, []);
   endingAll.sockets[0].onclose({ code: 4002, reason: 'hangup' });
   await wait(30);

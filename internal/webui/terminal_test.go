@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -423,7 +424,7 @@ func TestTerminalPreviewSaysWhereTheShellIs(t *testing.T) {
 	client.await("moved-2")
 	status, body := terminalRequest(t, server, http.MethodGet, terminalShellsPath+"/"+id+"/"+terminalPreviewName)
 	var preview terminalPreviewResponse
-	if err := json.Unmarshal([]byte(body), &preview); status != http.StatusOK || err != nil || preview != (terminalPreviewResponse{Cwd: dir}) {
+	if err := json.Unmarshal([]byte(body), &preview); status != http.StatusOK || err != nil || !reflect.DeepEqual(preview, terminalPreviewResponse{Cwd: dir, Processes: []terminalProcessResponse{}}) {
 		t.Errorf("preview: status %d, %v: %s; want the directory %q", status, err, body, dir)
 	}
 	client.typeLine(`echo "still-$((1+1))"`)
@@ -433,7 +434,8 @@ func TestTerminalPreviewSaysWhereTheShellIs(t *testing.T) {
 	for deadline := time.Now().Add(15 * time.Second); ; time.Sleep(20 * time.Millisecond) {
 		status, body = terminalRequest(t, server, http.MethodGet, terminalShellsPath+"/"+id+"/"+terminalPreviewName)
 		preview = terminalPreviewResponse{}
-		if err := json.Unmarshal([]byte(body), &preview); status == http.StatusOK && err == nil && preview == (terminalPreviewResponse{Cwd: dir, Command: "sleep 30"}) {
+		if err := json.Unmarshal([]byte(body), &preview); status == http.StatusOK && err == nil && preview.Cwd == dir && preview.Command == "sleep 30" &&
+			len(preview.Processes) == 1 && preview.Processes[0].Command == "sleep 30" && preview.Processes[0].Depth == 1 {
 			break
 		}
 		if time.Now().After(deadline) {

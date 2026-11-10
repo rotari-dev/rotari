@@ -768,8 +768,7 @@ async function copyJobsValue(button) {
   const endShells = async (targets, { refused = paneRefusal, question } = {}) => {
     if (!targets.length) return false;
     const noun = targets.length === 1 ? "shell" : targets.length + " shells";
-    const running = targets.length === 1 ? "it" : "them";
-    if (!confirm(question || "End " + noun + ", and anything running in " + running + "?")) return false;
+    if (!(await askToEnd(targets, question || "End " + noun))) return false;
     const rank = (shell) => (shell.id === focused.shown ? 2 : paneShowing(shell.id) ? 1 : 0);
     const ordered = [...targets].sort((a, b) => rank(a) - rank(b));
     for (const shell of targets) endingHere.add(shell.id);
@@ -788,10 +787,37 @@ async function copyJobsValue(button) {
     return true;
   };
   // The questions for ending a project's shells, and every shell of the server.
-  const projectEndQuestion = (count, name) =>
-    "End " + (count === 1 ? "the shell" : "the " + count + " shells") + " of " + name + ", and anything running in " + (count === 1 ? "it" : "them") + "?";
-  const everyEndQuestion = (count) =>
-    "End " + (count === 1 ? "the one shell" : "all " + count + " shells") + ", of every project, and anything running in " + (count === 1 ? "it" : "them") + "?";
+  const projectEndQuestion = (count, name) => "End " + (count === 1 ? "the shell" : "the " + count + " shells") + " of " + name;
+  const everyEndQuestion = (count) => "End " + (count === 1 ? "the one shell" : "all " + count + " shells") + ", of every project";
+  // askToEnd asks whether to end shells, saying how many processes run in them and naming a
+  // few, as the shells' previews list them now; when it cannot look, it says so and asks.
+  const askToEnd = async (targets, question) => {
+    const pronoun = targets.length === 1 ? "it" : "them";
+    const previews = await Promise.all(
+      targets.map(async (shell) => {
+        try {
+          const response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id) + "/preview");
+          if (response.status === 404) return { processes: [] };
+          if (!response.ok) return { problem: (await response.text()).trim() || "status " + response.status };
+          const preview = await response.json();
+          return Array.isArray(preview.processes) ? preview : { problem: preview.processes_error || "the server did not say" };
+        } catch {
+          return { problem: "the server did not answer" };
+        }
+      }),
+    );
+    const problem = previews.find((preview) => preview.problem)?.problem;
+    const below = previews.flatMap((preview) => preview.processes || []);
+    let detail;
+    if (problem) detail = "What runs in " + pronoun + " is not known: " + problem + ".";
+    else if (!below.length) detail = "Nothing runs in " + pronoun + ".";
+    else {
+      const named = [...new Set(below.map((process) => process.command))].slice(0, 3);
+      detail =
+        below.length + (below.length === 1 ? " process runs" : " processes run") + " in " + pronoun + ": " + named.join(", ") + (below.length > named.length ? ", and others" : "") + ".";
+    }
+    return confirm(question + "? " + detail);
+  };
   // arrangeShells puts this project's shells in the order given, here at once and then on
   // the server, so that later pages and other browser tabs see it.
   const arrangeShells = async (arranged) => {
@@ -1528,8 +1554,26 @@ async function copyJobsValue(button) {
     when.className = "terminal-overview-times";
     when.hidden = !times;
     if (times) when.textContent = "started " + times.startedAgo + " \u00b7 " + (times.idle ? "idle " + times.idle : "active now");
-    card.append(top, dir, running, when);
+    card.append(top, dir, when);
     card.onclick = () => chooseFromOverview(shell);
+    // Under the card, outside its button: what runs in the foreground, and how many
+    // processes the shell has started, which open into their tree.
+    const run = document.createElement("div");
+    run.className = "terminal-overview-run";
+    run.hidden = true;
+    const count = document.createElement("button");
+    count.type = "button";
+    count.className = "terminal-overview-processes";
+    count.hidden = true;
+    count.setAttribute("aria-expanded", "false");
+    const tree = document.createElement("ul");
+    tree.className = "terminal-overview-process-list";
+    tree.hidden = true;
+    count.onclick = () => {
+      tree.hidden = !tree.hidden;
+      count.setAttribute("aria-expanded", String(!tree.hidden));
+    };
+    run.append(running, count);
     const label = shell.name ? "shell " + shell.number + ", " + shell.name : "shell " + shell.number;
     const rename = document.createElement("button");
     rename.type = "button";
@@ -1540,7 +1584,7 @@ async function copyJobsValue(button) {
     const end = document.createElement("button");
     end.type = "button";
     end.setAttribute("aria-label", "End " + label);
-    end.title = "End this shell, and anything running in it";
+    end.title = "End this shell, and the processes running in it";
     drawIcon(end, icons.endShell);
     end.onclick = () => endFromOverview(shell);
     const launchHere = document.createElement("button");
@@ -1554,7 +1598,7 @@ async function copyJobsValue(button) {
     actions.append(launchHere, rename, end);
     const item = document.createElement("div");
     item.className = "terminal-overview-item";
-    item.append(card, actions);
+    item.append(card, run, tree, actions);
     const started = (reason) => {
       if (serial !== overviewSerial) return;
       path.textContent = "started in " + shell.dir;
@@ -1579,6 +1623,34 @@ async function copyJobsValue(button) {
           running.classList.add("terminal-overview-command-unknown");
           running.title = preview.command_error;
         }
+        const below = preview.processes;
+        if (Array.isArray(below) && below.length) {
+          const noun = below.length === 1 ? " process" : " processes";
+          count.hidden = false;
+          // With nothing in the foreground, they run in the background.
+          count.textContent = running.hidden ? below.length + " background" + noun : below.length + noun;
+          count.title = "Show the processes this shell has started";
+          tree.replaceChildren(
+            ...below.map((process) => {
+              const line = document.createElement("li");
+              line.style.paddingLeft = (process.depth - 1) * 14 + "px";
+              const pid = document.createElement("span");
+              pid.className = "terminal-overview-pid";
+              pid.textContent = String(process.pid);
+              const command = document.createElement("span");
+              command.textContent = process.command;
+              line.title = process.command;
+              line.append(pid, command);
+              return line;
+            }),
+          );
+        } else if (preview.processes_error) {
+          count.hidden = false;
+          count.disabled = true;
+          count.textContent = "processes not known";
+          count.title = preview.processes_error;
+        }
+        run.hidden = running.hidden && count.hidden;
         if (!preview.cwd) {
           started(preview.cwd_error || "the server did not say");
           return;
@@ -2015,7 +2087,7 @@ async function copyJobsValue(button) {
     else closePane(pane); // The other panes have all there is. With none, this stays.
   };
   const endShell = async (shell, refused = paneRefusal) => {
-    if (!confirm("End " + (shell.project && !sameGroup(shell, here) ? "shell " + shell.number + " of " + shell.project : "shell " + shell.number) + ", and anything running in it?")) return false;
+    if (!(await askToEnd([shell], "End " + (shell.project && !sameGroup(shell, here) ? "shell " + shell.number + " of " + shell.project : "shell " + shell.number)))) return false;
     endingHere.add(shell.id);
     let response;
     try {
@@ -2926,36 +2998,51 @@ async function copyJobsValue(button) {
       copy.after(send);
     }
   };
-  // Signing out ends every shell, so a page asks first when a command is running in one,
-  // naming each and what it runs. A page that cannot tell asks too, rather than ending
-  // them unasked.
+  // Signing out ends every shell, so a page asks first when anything is running in one: a
+  // command in its foreground, or processes it left in the background. It names each such
+  // shell and what runs there. A shell it cannot look into counts too, saying so, and a page
+  // that cannot list the shells asks anyway, rather than ending them unasked.
   let signingOut = false;
+  const signOutLine = async (shell) => {
+    let preview;
+    try {
+      const response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id) + "/preview");
+      if (response.ok) preview = await response.json();
+      else return "  " + shellName(shell) + ": what runs is not known (" + ((await response.text()).trim() || "status " + response.status) + ")";
+    } catch {
+      return "  " + shellName(shell) + ": what runs is not known (the server did not answer)";
+    }
+    const below = Array.isArray(preview.processes) ? preview.processes : [];
+    const command = preview.command || (shell.running ? "a command" : "");
+    if (!command && !below.length) {
+      if (preview.processes_error) return "  " + shellName(shell) + ": its processes are not known (" + preview.processes_error + ")";
+      return null;
+    }
+    const noun = below.length === 1 ? " process" : " processes";
+    if (command) return "  " + shellName(shell) + ": " + command + (below.length ? " (" + below.length + noun + ")" : "");
+    const named = below.slice(0, 3).map((process) => process.command).join(", ");
+    return "  " + shellName(shell) + ": " + below.length + " background" + noun + " (" + named + (below.length > 3 ? ", ..." : "") + ")";
+  };
   const confirmSignOut = async (form) => {
     let problem = "";
-    let running = [];
+    let listed = [];
     try {
       const response = await serverFetch(shellsPath);
-      if (response.ok) running = ((await response.json()).shells || []).filter((shell) => shell.running);
+      if (response.ok) listed = (await response.json()).shells || [];
       else problem = (await response.text()).trim() || "status " + response.status;
     } catch {
       problem = "the server did not answer";
     }
     if (problem) {
-      if (!confirm("Whether a command is running in a shell could not be checked: " + problem + ". Signing out ends every shell. Sign out anyway?")) return;
-    } else if (running.length) {
-      const lines = await Promise.all(
-        running.slice(0, 5).map(async (shell) => {
-          let command = "";
-          try {
-            const response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id) + "/preview");
-            if (response.ok) command = (await response.json()).command || "";
-          } catch {}
-          return "  " + shellName(shell) + (command ? ": " + command : "");
-        }),
-      );
-      if (running.length > 5) lines.push("  and " + (running.length - 5) + " more");
-      const head = running.length === 1 ? "A command is running in a shell" : "Commands are running in " + running.length + " shells";
-      if (!confirm(head + ":\n" + lines.join("\n") + "\nSigning out ends every shell, and what runs in it. Sign out anyway?")) return;
+      if (!confirm("Whether anything is running in a shell could not be checked: " + problem + ". Signing out ends every shell. Sign out anyway?")) return;
+    } else {
+      const lines = (await Promise.all(listed.map(signOutLine))).filter(Boolean);
+      if (lines.length) {
+        const shown = lines.slice(0, 5);
+        if (lines.length > 5) shown.push("  and " + (lines.length - 5) + " more");
+        const head = lines.length === 1 ? "Something is running in a shell" : "Something is running in " + lines.length + " shells";
+        if (!confirm(head + ":\n" + shown.join("\n") + "\nSigning out ends every shell, and what runs in it. Sign out anyway?")) return;
+      }
     }
     signingOut = true;
     form.submit();

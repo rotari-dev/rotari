@@ -154,7 +154,10 @@ in the sidebar with a shell running has a terminal icon; point at it to see how 
 The **All shells** icon beside **+** opens a dialog over the page, as a log does, listing every running shell,
 grouped by project with the page's first. Each card shows its tab name, the directory its shell is in now, and
 the command running in it, if any, and when it started and how long it has been idle (no output and no
-typing); a tab's tooltip says the same. Choose one with a click, or with the arrow keys and Enter, to close the dialog
+typing); a tab's tooltip says the same. Next to the command, the card says how many processes the shell has
+started, as `▶ make · 3 processes`, or `2 background processes` when nothing runs in front; click it to see each
+one's process ID and command, indented under its parent. A process that left the shell, such as one started with
+`nohup` or `setsid`, is not counted. Choose one with a click, or with the arrow keys and Enter, to close the dialog
 and show that shell in the pane with the keys; one of another project takes the page there, as the project list
 does. The pencil on a card renames its tab and the cross ends its shell, after asking; **F2** and **Delete** do
 the same for the card with the keys, and the dialog stays open for the next one. **End all** beside a project's
@@ -218,7 +221,9 @@ A tab you are not looking at is marked when it prints something, until you show 
 other projects the same way. When a command finishes in a tab you are not looking at, such as a build or a
 training run, the tab and its All shells card show a bell instead, until you show it; a command left running in
 the background with `&` does not count. When a shell in another tab ends, a note says so. Signing out ends every shell, so
-when a command is running in one, **Sign out** first lists those shells and what they run, and asks. These update every few
+when anything runs in one, a command in front or processes left in the background, **Sign out** first lists those
+shells and what they run, and asks. Closing a tab, or ending shells from All shells or a tab's menu, says how many
+processes run in them and names a few before asking. These update every few
 seconds while the panel is open and the page is in view.
 
 Drag a tab to move it, or right-click it to move it, rename it, close the tabs to its right, close all of

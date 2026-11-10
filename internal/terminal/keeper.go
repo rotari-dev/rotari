@@ -555,6 +555,18 @@ func (keeper *Keeper) Foreground(id string) (string, error) {
 	return shell.session.Foreground()
 }
 
+// Processes are the processes below a shell, as Session.Descendants lists them. As Dir,
+// it attaches nothing, and returns ErrNoShell for a shell that is not running.
+func (keeper *Keeper) Processes(id string) ([]Process, error) {
+	keeper.mu.Lock()
+	shell := keeper.find(id)
+	keeper.mu.Unlock()
+	if shell == nil {
+		return nil, ErrNoShell
+	}
+	return shell.session.Descendants()
+}
+
 // Rename sets a shell's name, which means nothing to the Keeper.
 func (keeper *Keeper) Rename(id, name string) (ShellInfo, error) {
 	keeper.mu.Lock()

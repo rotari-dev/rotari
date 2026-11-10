@@ -179,6 +179,46 @@ func (session *Session) Foreground() (string, error) {
 	return processCommand(group)
 }
 
+// Process is a process a shell started, directly or through others.
+type Process struct {
+	PID, PPID int
+	// Depth is how far below the shell it is: 1 for the shell's own children.
+	Depth   int
+	Command string
+}
+
+// Descendants are the processes below the shell, its children first, each followed by
+// its own. A process that left the shell's tree, as a daemon does, is not among them.
+func (session *Session) Descendants() ([]Process, error) {
+	select {
+	case <-session.done:
+		return nil, errors.New("the shell has exited")
+	default:
+	}
+	all, err := processes()
+	if err != nil {
+		return nil, err
+	}
+	children := map[int][]Process{}
+	for _, process := range all {
+		children[process.PPID] = append(children[process.PPID], process)
+	}
+	var below []Process
+	var walk func(pid, depth int)
+	walk = func(pid, depth int) {
+		for _, child := range children[pid] {
+			if child.PID == pid {
+				continue
+			}
+			child.Depth = depth
+			below = append(below, child)
+			walk(child.PID, depth+1)
+		}
+	}
+	walk(session.command.Process.Pid, 1)
+	return below, nil
+}
+
 // busy says something other than the shell holds the terminal's foreground: a command
 // it runs, as opposed to its prompt.
 func (session *Session) busy() (bool, error) {

@@ -943,3 +943,35 @@ func TestTerminalListsWhenShellsStartedAndWereActive(t *testing.T) {
 		t.Errorf("activity did not move, or the start did: %+v then %+v", first, second)
 	}
 }
+
+// TestTerminalPreviewListsTheShellsProcesses checks that a shell's preview lists the
+// processes it started, a background one included, each with its depth below the shell.
+func TestTerminalPreviewListsTheShellsProcesses(t *testing.T) {
+	covers(t, "WEB-34")
+	e := terminalEnv(t)
+	base := e.StartWeb("--allow-terminal")
+	headers := http.Header{"X-Rotari-Token": {launchToken}}
+	page := openTerminalPage(t, base)
+	page.typeLine(`sleep 26 & echo "started-$((1+1))"`)
+	page.await("started-2")
+	id := listTerminalShells(t, base, headers)[0].ID
+	var preview struct {
+		Processes []struct {
+			PID     int    `json:"pid"`
+			Depth   int    `json:"depth"`
+			Command string `json:"command"`
+		} `json:"processes"`
+	}
+	for deadline := time.Now().Add(terminalWait); ; time.Sleep(20 * time.Millisecond) {
+		status, body := terminalShellsRequest(t, http.MethodGet, base+"/_terminal/shells/"+id+"/preview", headers)
+		if err := json.Unmarshal(body, &preview); status != http.StatusOK || err != nil {
+			t.Fatalf("preview: status %d, %v: %s", status, err, body)
+		}
+		if len(preview.Processes) == 1 && preview.Processes[0].Command == "sleep 26" && preview.Processes[0].Depth == 1 && preview.Processes[0].PID > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the preview lists %+v, want sleep 26 alone", preview.Processes)
+		}
+	}
+}
