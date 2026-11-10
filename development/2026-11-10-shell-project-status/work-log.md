@@ -37,7 +37,7 @@ runs).
 
 ## Follow-up: an ended run says when it ended
 
-**Commits:** None yet.
+**Commits:** 2026-11-10 17:46:58 `9d6967f3`.
 
 **Change:** Recording the promo video showed `Last run finished, finished just now`. In
 [web_shell.js](../../internal/webui/assets/web_shell.js), `projectStateButton` now says when an ended run ended,
