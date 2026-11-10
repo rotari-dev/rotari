@@ -131,6 +131,8 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 
 ## Terminal
 
+<iframe src="https://www.youtube-nocookie.com/embed/nObEULGw63k" title="Shells that belong to your experiments" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
+
 `rotari web --allow-terminal` adds a **Terminal** button to the top bar, which opens a shell in
 a panel along the bottom of the page, so you can type while watching jobs or reading a log. Drag
 the panel's top edge to change its height. The **Panel position** icon in its bar moves it down the left or

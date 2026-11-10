@@ -30,7 +30,7 @@ version.
 | 07 | The Web UI across projects, Activity | `docs/WEB.md` | `07_webui.sh` | done, 34 s |
 | 08 | Inspecting runs from a terminal: jobs, show, logs | `docs/INSPECT.md` | `08_terminal.sh` | done, 44 s |
 | 09 | Coding agents: what yours did, and why | `rotari guide`, `docs/MCP.md`, `docs/INSPECT.md` | `09_agents.sh` | done, 39 s |
-| 10 | The Web terminal: shells that belong to your experiments | `docs/WEB.md` (Terminal) | `10_terminal_web.sh` | rendered 2026-11-10, not yet reviewed |
+| 10 | The Web terminal: shells that belong to your experiments | `docs/WEB.md` (Terminal) | `10_terminal_web.sh` | done, 61 s ([YouTube](https://www.youtube.com/watch?v=nObEULGw63k)) |
 
 Video 03 accompanies the Artifacts section of `docs/WEB.md`.
 

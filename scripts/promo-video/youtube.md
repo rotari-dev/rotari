@@ -209,3 +209,29 @@ GitHub: https://github.com/rotari-dev/rotari
 Narration is synthesized with Kokoro TTS.
 
 #AIAgents #MachineLearning #rotari
+
+## 10_terminal_web
+
+Title: Shells that belong to your experiments: the Web terminal | rotari
+
+Run experiments in parallel and the terminal tabs pile up, every one called
+bash. In rotari's Web UI, shells belong to your projects: open the terminal on
+a project's page and the shell starts where its last run started, and moving
+to another project shows that project's shells. All shells puts every shell of
+every project on one screen: where each one is, what it runs and how many
+processes it started, which command finished while you were away, and how each
+project's last run is doing. Pick one to go straight to it, or launch
+TensorBoard right where a shell is.
+
+0:00 Which tab was which?
+0:10 Shells that follow your projects
+0:24 All shells, at a glance
+0:42 Launch TensorBoard where a shell is
+
+Web terminal: https://rotari-dev.github.io/rotari/docs/WEB/#terminal
+GitHub: https://github.com/rotari-dev/rotari
+
+Everything on screen comes from real runs of rotari. Narration is synthesized
+with Kokoro TTS.
+
+#MachineLearning #Terminal #rotari
