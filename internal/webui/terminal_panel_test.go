@@ -2109,7 +2109,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(tightItems[1].getAttribute('aria-checked'), 'true');
   // At a side the tabs have a row of their own, and maximized there is room for one row.
   assert.match(webShellCSS, /\[data-terminal-place\]:not\(\.terminal-maximized\) \.terminal-bar \{\s*flex-wrap: wrap;/);
-  assert.match(webShellCSS, /\[data-terminal-place\]:not\(\.terminal-maximized\) \.terminal-tabs \{\s*order: 1;\s*flex: 1 0 100%;/);
+  assert.match(webShellCSS, /\[data-terminal-place\]:not\(\.terminal-maximized\)\s+\.terminal-tabs \{\s*order: 1;\s*flex: 1 0 100%;/);
 
   // A window of its own opens at once on the project its path names, fills itself, has
   // nothing to resize, maximize, hide, or move, and leaves the pages' panel as it was.
@@ -2432,7 +2432,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(treeOf('1').hidden, true);
   assert.deepEqual([countOf('4').textContent, countOf('4').title], ['1 background process', 'Show the processes this shell has started']);
   assert.deepEqual([countOf('2').textContent, countOf('2').disabled, countOf('2').title], ['processes not known', true, 'no /proc']);
-  assert.match(webShellCSS, /\.terminal-overview-run \.terminal-overview-command:not\(\[hidden\]\) \+ \.terminal-overview-processes::before \{\s*content: "\\00b7\\00a0";/);
+  assert.match(webShellCSS, /\.terminal-overview-run\s+\.terminal-overview-command:not\(\[hidden\]\)\s+\+ \.terminal-overview-processes::before \{\s*content: "\\00b7\\00a0";/);
   assert.ok(card('3').classList.contains('terminal-overview-current'));
   assert.ok(card('4').classList.contains('terminal-overview-unseen'));
   assert.equal(touring.sockets.length, 1, 'the overview connected to a shell');

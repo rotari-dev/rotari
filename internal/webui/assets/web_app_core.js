@@ -1777,7 +1777,8 @@ function renderRun(q, runID) {
     if (attemptID) selectJobAttemptFields(job, attemptID);
   });
   const latest = latestRun(q.runs);
-  const goToRun = run.cwd && run.cwd !== "-" ? ["cd " + shellQuote(run.cwd)] : [];
+  const goToRun =
+    run.cwd && run.cwd !== "-" ? ["cd " + shellQuote(run.cwd)] : [];
   const retry =
     "# To retry failed or unfinished jobs from this run\n" +
     (goToRun.length ? goToRun[0] + "\n" : "") +
@@ -1788,7 +1789,10 @@ function renderRun(q, runID) {
       : "\nrotari retry -r " + shellQuote(runID) + " --job-id JOB_ID");
   document.getElementById("app").innerHTML =
     runNotesHTML(run) +
-    commandGuideHTML(retry, [...goToRun, "rotari retry -r " + shellQuote(runID)]) +
+    commandGuideHTML(retry, [
+      ...goToRun,
+      "rotari retry -r " + shellQuote(runID),
+    ]) +
     runCardsHTML(run) +
     ((run.jobs || []).length
       ? runJobsHTML(q, run, runID)
@@ -2142,7 +2146,13 @@ function runJobCells(q, run, runID, j) {
               '<button type="button" class="' +
               (attempt.id === j.attempt_id ? "selected" : "") +
               '" ' +
-              actionAttributes("selectJobAttempt", q.project_name, runID, j.id, attempt.id) +
+              actionAttributes(
+                "selectJobAttempt",
+                q.project_name,
+                runID,
+                j.id,
+                attempt.id,
+              ) +
               ">" +
               (index === 0 ? "Latest: " : "") +
               esc(attempt.id) +
@@ -2255,7 +2265,7 @@ function runJobActions(q, run, runID, j) {
       esc(j.log_mode || "") +
       '"' +
       (started ? "" : ' disabled title="Job has not started yet"') +
-      " data-action=\"showLog\">Log</button>";
+      ' data-action="showLog">Log</button>';
   const diagnoses = (result && result.diagnoses) || [];
   const diagnosisStatus = (result && result.diagnosis_status) || "";
   const failed = !!(result && result.exit_code !== 0);
@@ -2288,7 +2298,13 @@ function runJobActions(q, run, runID, j) {
   const notStarted = ' disabled title="Job has not started yet"';
   const artifacts = artifactsReady
     ? '<button class="view-artifacts" ' +
-      actionAttributes("showArtifacts", q.project_name, logRun, logJob, artifactAttemptID) +
+      actionAttributes(
+        "showArtifacts",
+        q.project_name,
+        logRun,
+        logJob,
+        artifactAttemptID,
+      ) +
       ">Artifacts</button>"
     : '<button class="view-artifacts"' + notStarted + ">Artifacts</button>";
   return actionsCell([
@@ -2437,7 +2453,8 @@ const copyIconSVG =
 // what its send button types, joined into one line: a line break would run what came
 // before it, and only the person may do that. They leave out comments and alternatives.
 function commandGuideHTML(text, sendCommands) {
-  const sendable = sendCommands?.length && document.getElementById("terminal-button");
+  const sendable =
+    sendCommands?.length && document.getElementById("terminal-button");
   return (
     '<pre class="command-guide execution-guide command-example" data-copy-text="' +
     esc(text) +
@@ -2578,9 +2595,7 @@ function copyIconForValue(value, label) {
 // terminal. A static export has none.
 function terminalHereIcon() {
   if (!document.getElementById("terminal-button")) return "";
-  return (
-    '<button class="command-guide-copy identity-copy" type="button" title="Open a terminal here" aria-label="Open a terminal here" data-action="openTerminalHere"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 5 4-5 4"></path><path d="M12 17h7"></path></svg></button>'
-  );
+  return '<button class="command-guide-copy identity-copy" type="button" title="Open a terminal here" aria-label="Open a terminal here" data-action="openTerminalHere"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 5 4-5 4"></path><path d="M12 17h7"></path></svg></button>';
 }
 async function copyIdentityValue(button) {
   try {
@@ -2642,7 +2657,7 @@ function queueJobActions(queue, j) {
       : "",
     '<button class="save-job"' +
       jobData +
-      " disabled data-action=\"saveQueueJob\">Save</button>",
+      ' disabled data-action="saveQueueJob">Save</button>',
     '<button class="remove-job"' +
       jobData +
       ' data-label="' +
@@ -2756,7 +2771,8 @@ function renderQueueCommands(queue) {
       commands.map((job) => job.origin && job.origin.cwd).filter(Boolean),
     ),
   ];
-  const goToQueue = directories.length === 1 ? ["cd " + shellQuote(directories[0])] : [];
+  const goToQueue =
+    directories.length === 1 ? ["cd " + shellQuote(directories[0])] : [];
   const runQueue =
     "rotari run" +
     (state && state.base_dir ? " -b " + shellQuote(state.base_dir) : " ") +

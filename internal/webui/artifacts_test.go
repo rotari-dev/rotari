@@ -7,8 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/rotari-dev/rotari/internal/artifact"
@@ -143,7 +143,8 @@ for (const [got, want] of checks) {
 	if output, err := exec.Command("node", path).CombinedOutput(); err != nil {
 		t.Fatalf("artifact formatting: %v\n%s", err, output)
 	}
-	if !strings.Contains(webAppCoreJS, `actionAttributes("showArtifacts"`) {
+	// Prettier may break the call across lines.
+	if !regexp.MustCompile(`actionAttributes\(\s*"showArtifacts"`).MatchString(webAppCoreJS) {
 		t.Fatal("the job table has no Artifacts button")
 	}
 }

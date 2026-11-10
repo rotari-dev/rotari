@@ -358,7 +358,7 @@ async function startArtifactLaunch(index, child, name, newInstance) {
       show(body.id) +
       '<button type="button" ' +
       actionAttributes("startArtifactLaunch", index, child, name, true) +
-      '>Start another instance</button></div>';
+      ">Start another instance</button></div>";
     return;
   }
   if (body.mode === "service") return followServiceStart(body.id, name);

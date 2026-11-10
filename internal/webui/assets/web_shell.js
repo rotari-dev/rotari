@@ -21,7 +21,8 @@
     copyJobsValue: (el) => copyJobsValue(el),
     copyLogTail: (el) => copyLogTail(el),
     copyModalOutput: (el) => copyModalOutput(el),
-    copySelectedJobs: (el, args) => copySelectedJobs(el.dataset.project, el.dataset.run, ...args),
+    copySelectedJobs: (el, args) =>
+      copySelectedJobs(el.dataset.project, el.dataset.run, ...args),
     deleteProject: (el) => deleteProject(el.dataset.project),
     deleteRun: (el) => deleteRun(el.dataset.project, el.dataset.run),
     focusMatrixJob: (_, args) => focusMatrixJob(...args),
@@ -35,18 +36,28 @@
     historySearchRemoveScope: (el) => historySearchRemoveScope(el),
     historySearchToggleCustomRange: (el) => historySearchToggleCustomRange(el),
     historySearchUpdateTarget: (el) => historySearchUpdateTarget(el),
-    historySearchUpdateValueControl: (el) => historySearchUpdateValueControl(el),
+    historySearchUpdateValueControl: (el) =>
+      historySearchUpdateValueControl(el),
     loadArtifactDirectory: (_, args) => loadArtifactDirectory(...args),
     loadArtifactText: (_, args) => loadArtifactText(...args),
-    log: (el) => log(el.dataset.project, el.dataset.logRun, el.dataset.logJob, el.dataset.attempt, el.dataset.logMode),
+    log: (el) =>
+      log(
+        el.dataset.project,
+        el.dataset.logRun,
+        el.dataset.logJob,
+        el.dataset.attempt,
+        el.dataset.logMode,
+      ),
     moreArtifactTable: () => moreArtifactTable(),
     moreArtifactText: () => moreArtifactText(),
     openArtifact: (_, args) => openArtifact(...args),
     openMatrixCell: (el) => openMatrixCell(el),
     popupMenuToggled: (el) => popupMenuToggled(el),
     refreshWithBasedirs: () => refreshWithBasedirs(),
-    removeQueueJob: (el) => removeQueueJob(el.dataset.project, el.dataset.job, el.dataset.label),
-    saveQueueJob: (el) => saveQueueJob(el.dataset.project, el.dataset.job, el.closest("tr")),
+    removeQueueJob: (el) =>
+      removeQueueJob(el.dataset.project, el.dataset.job, el.dataset.label),
+    saveQueueJob: (el) =>
+      saveQueueJob(el.dataset.project, el.dataset.job, el.closest("tr")),
     selectAllRunJobs: () => selectAllRunJobs(),
     selectFailedJobs: () => selectFailedJobs(),
     selectFailedUnfinishedJobs: () => selectFailedUnfinishedJobs(),
@@ -59,17 +70,27 @@
     showJobReport: (el) => showJobReport(el),
     showLaunchLog: (_, args) => showLaunchLog(...args),
     showLaunches: (_, args) => showLaunches(...args),
-    showLog: (el) => showLog(el.dataset.project, el.dataset.run, el.dataset.job, el.dataset.attempt, "stdout", el.dataset.logMode),
+    showLog: (el) =>
+      showLog(
+        el.dataset.project,
+        el.dataset.run,
+        el.dataset.job,
+        el.dataset.attempt,
+        "stdout",
+        el.dataset.logMode,
+      ),
     showNotes: (el) => showNotes(el),
     showNotificationConfig: () => showNotificationConfig(),
-    showOriginalOutput: (el) => showOriginalOutput(el.dataset.run, el.dataset.job, el),
+    showOriginalOutput: (el) =>
+      showOriginalOutput(el.dataset.run, el.dataset.job, el),
     showPath: (el) => showPath(el.dataset.path),
     showRecoverRun: (el) => showRecoverRun(el.dataset.project, el.dataset.run),
     showRunFiles: (_, args) => showRunFiles(...args),
     showRunReport: (el) => showRunReport(el),
     startArtifactLaunch: (_, args) => startArtifactLaunch(...args),
     stopLaunch: (_, args) => stopLaunch(...args),
-    toggleAllJobsNotificationBasedirs: (el) => toggleAllJobsNotificationBasedirs(el),
+    toggleAllJobsNotificationBasedirs: (el) =>
+      toggleAllJobsNotificationBasedirs(el),
     toggleAllNotificationBasedirs: (el) => toggleAllNotificationBasedirs(el),
     toggleArtifactMarkdown: () => toggleArtifactMarkdown(),
     toggleDrawer: () => toggleDrawer(),
@@ -185,20 +206,42 @@ async function copyJobsValue(button) {
   // The panel can have a window of its own, whose page holds nothing else. Its path is
   // windowPath and then the path of a page of the project it shows.
   const windowPath = "/_terminal/window";
-  const inWindow = document.documentElement.hasAttribute("data-terminal-window");
+  const inWindow = document.documentElement.hasAttribute(
+    "data-terminal-window",
+  );
   const openKey = "rotari-terminal-open";
   const heightKey = "rotari-terminal-height";
   const widthKey = "rotari-terminal-width";
   const placeKey = "rotari-terminal-place";
   // The line that marks where the panel is, in a picture of the window.
-  const placeLines = { bottom: "M1.5 9.5h13", left: "M5.5 2.5v11", right: "M10.5 2.5v11" };
+  const placeLines = {
+    bottom: "M1.5 9.5h13",
+    left: "M5.5 2.5v11",
+    right: "M10.5 2.5v11",
+  };
   // The bar's pictures, drawn in a 16 by 16 box: a string is a path, and an object a rectangle.
   const paneFrame = { x: 1.5, y: 2.5, width: 13, height: 11, rx: 1.5 };
   const icons = {
-    clear: ["M2.5 4.5h8", "M2.5 8h8", "M2.5 11.5h4.5", "M10 10l3.5 3.5", "M13.5 10L10 13.5"],
+    clear: [
+      "M2.5 4.5h8",
+      "M2.5 8h8",
+      "M2.5 11.5h4.5",
+      "M10 10l3.5 3.5",
+      "M13.5 10L10 13.5",
+    ],
     closePane: [paneFrame, "M6 6l4 4", "M10 6l-4 4"],
-    maximize: ["M9.5 2.5h4v4", "M13.5 2.5L9 7", "M6.5 13.5h-4v-4", "M2.5 13.5L7 9"],
-    restore: ["M13.5 2.5L9.5 6.5", "M9.5 3v3.5H13", "M2.5 13.5l4-4", "M6.5 13V9.5H3"],
+    maximize: [
+      "M9.5 2.5h4v4",
+      "M13.5 2.5L9 7",
+      "M6.5 13.5h-4v-4",
+      "M2.5 13.5L7 9",
+    ],
+    restore: [
+      "M13.5 2.5L9.5 6.5",
+      "M9.5 3v3.5H13",
+      "M2.5 13.5l4-4",
+      "M6.5 13V9.5H3",
+    ],
     hide: ["M3.5 12.5h9"],
     rename: ["M10 3.5l2.5 2.5L6 12.5H3.5V10z", "M8.5 5l2.5 2.5"],
     endShell: ["M4.5 4.5l7 7", "M11.5 4.5l-7 7"],
@@ -219,9 +262,14 @@ async function copyJobsValue(button) {
     icon.setAttribute("viewBox", "0 0 16 16");
     icon.setAttribute("aria-hidden", "true");
     for (const shape of shapes) {
-      const element = document.createElementNS(svgNS, typeof shape === "string" ? "path" : "rect");
+      const element = document.createElementNS(
+        svgNS,
+        typeof shape === "string" ? "path" : "rect",
+      );
       if (typeof shape === "string") element.setAttribute("d", shape);
-      else for (const [name, value] of Object.entries(shape)) element.setAttribute(name, String(value));
+      else
+        for (const [name, value] of Object.entries(shape))
+          element.setAttribute(name, String(value));
       icon.append(element);
     }
     button.classList.add("terminal-icon");
@@ -231,7 +279,8 @@ async function copyJobsValue(button) {
   const layoutKey = "rotari-terminal-layout";
   // What a browser tab's panes showed for each project, which goes to its window and back.
   const isPaneKey = (key) =>
-    typeof key === "string" && (key.startsWith(shownKey + ":") || key.startsWith(layoutKey + ":"));
+    typeof key === "string" &&
+    (key.startsWith(shownKey + ":") || key.startsWith(layoutKey + ":"));
   // A browser tab whose panel is in a window says so here, so that following a link finds
   // the window again rather than taking its shells.
   const windowedKey = "rotari-terminal-windowed";
@@ -248,7 +297,8 @@ async function copyJobsValue(button) {
     try {
       const handover = JSON.parse(decodeURIComponent(location.hash.slice(1)));
       for (const [key, value] of Object.entries(handover)) {
-        if (isPaneKey(key) && typeof value === "string") sessionStorage.setItem(key, value);
+        if (isPaneKey(key) && typeof value === "string")
+          sessionStorage.setItem(key, value);
       }
     } catch {}
     history.replaceState(null, "", location.pathname + location.search);
@@ -313,7 +363,17 @@ async function copyJobsValue(button) {
   // This script runs first.
   const rootFetch = window.fetch;
   const serverFetch = (...args) => rootFetch.apply(window, args);
-  let panel, panesBox, groups, tabs, add, launchButton, splitRightButton, splitDownButton, closePaneButton, placeButton, maximize;
+  let panel,
+    panesBox,
+    groups,
+    tabs,
+    add,
+    launchButton,
+    splitRightButton,
+    splitDownButton,
+    closePaneButton,
+    placeButton,
+    maximize;
   let shells = [];
   let shellLimit = 0;
   let groupLimit = 0;
@@ -364,7 +424,8 @@ async function copyJobsValue(button) {
   // Where they are: columns side by side, each holding panes one above another. A share
   // is a part of what holds it, and the shares of its neighbors add up to one.
   let columns = [{ share: 1, rows: [{ share: 1, pane: focused }] }];
-  const readingOrder = () => columns.flatMap((column) => column.rows.map((row) => row.pane));
+  const readingOrder = () =>
+    columns.flatMap((column) => column.rows.map((row) => row.pane));
   const handles = [];
   // A panel too narrow for screens side by side stacks everything, and the columns stay as
   // they are for when it has room. At the bottom, its width is the window's.
@@ -388,12 +449,19 @@ async function copyJobsValue(button) {
   };
   // The page cannot lose all its room to the panel, nor the panel all of its own.
   const clampHeight = (height) =>
-    Math.max(minHeight, Math.min(height, Math.max(minHeight, innerHeight - minHeight)));
+    Math.max(
+      minHeight,
+      Math.min(height, Math.max(minHeight, innerHeight - minHeight)),
+    );
   // The page beside a panel needs its sidebar, which someone can resize, and room for the
   // rest. Before the page exists there is no sidebar to measure, so this runs again then.
-  const pageWidthNeeded = () => (document.querySelector(".sidebar")?.offsetWidth || 0) + minContentWidth;
+  const pageWidthNeeded = () =>
+    (document.querySelector(".sidebar")?.offsetWidth || 0) + minContentWidth;
   const clampWidth = (width) =>
-    Math.max(minWidth, Math.min(width, Math.max(minWidth, innerWidth - pageWidthNeeded())));
+    Math.max(
+      minWidth,
+      Math.min(width, Math.max(minWidth, innerWidth - pageWidthNeeded())),
+    );
   const root = document.documentElement;
   const rememberedMaximized = () => {
     try {
@@ -407,7 +475,9 @@ async function copyJobsValue(button) {
     if (!maximize) return;
     const label = maximized ? "Restore" : "Maximize";
     drawIcon(maximize, maximized ? icons.restore : icons.maximize);
-    maximize.title = maximized ? "Restore the panel's size" : "Give the panel the whole window";
+    maximize.title = maximized
+      ? "Restore the panel's size"
+      : "Give the panel the whole window";
     maximize.setAttribute("aria-label", label);
     maximize.setAttribute("aria-pressed", String(maximized));
   };
@@ -423,7 +493,8 @@ async function copyJobsValue(button) {
   const savedFontSize = () => {
     try {
       const size = Number(localStorage.getItem(fontSizeKey));
-      if (Number.isInteger(size) && size >= minFontSize && size <= maxFontSize) return size;
+      if (Number.isInteger(size) && size >= minFontSize && size <= maxFontSize)
+        return size;
     } catch {}
     return defaultFontSize;
   };
@@ -462,15 +533,27 @@ async function copyJobsValue(button) {
   // A page narrower than its layouts expect is the danger of a panel at a side, and the
   // sidebar of a narrow window needs the left edge. The choice stays for a wider window.
   const wideWindow = window.matchMedia?.("(min-width: 1000px)");
-  const panelPlace = () => (inWindow || wideWindow?.matches === false ? "bottom" : chosen);
+  const panelPlace = () =>
+    inWindow || wideWindow?.matches === false ? "bottom" : chosen;
   const panelSizes = {
-    height: { key: heightKey, variable: "--terminal-saved-height", clamp: clampHeight },
-    width: { key: widthKey, variable: "--terminal-saved-width", clamp: clampWidth },
+    height: {
+      key: heightKey,
+      variable: "--terminal-saved-height",
+      clamp: clampHeight,
+    },
+    width: {
+      key: widthKey,
+      variable: "--terminal-saved-width",
+      clamp: clampWidth,
+    },
   };
   const panelAxis = () => (panelPlace() === "bottom" ? "height" : "width");
   const applySize = (axis, size) => {
     // Only an open panel takes room, which web_shell.css decides from this.
-    root.style.setProperty(panelSizes[axis].variable, panelSizes[axis].clamp(size) + "px");
+    root.style.setProperty(
+      panelSizes[axis].variable,
+      panelSizes[axis].clamp(size) + "px",
+    );
   };
   const savedSize = (axis) => {
     try {
@@ -479,10 +562,14 @@ async function copyJobsValue(button) {
       return 0;
     }
   };
-  const currentSize = (axis) => panel?.getBoundingClientRect()[axis] || savedSize(axis);
+  const currentSize = (axis) =>
+    panel?.getBoundingClientRect()[axis] || savedSize(axis);
   const saveSize = (axis) => {
     try {
-      localStorage.setItem(panelSizes[axis].key, String(Math.round(currentSize(axis))));
+      localStorage.setItem(
+        panelSizes[axis].key,
+        String(Math.round(currentSize(axis))),
+      );
     } catch {}
   };
   // applyPlace puts the panel where it goes, which web_shell.css decides from this. Every
@@ -492,7 +579,12 @@ async function copyJobsValue(button) {
     if (place === "bottom") delete root.dataset.terminalPlace;
     else root.dataset.terminalPlace = place;
     if (!panel) return;
-    panel.querySelector(".terminal-resizer")?.setAttribute("aria-orientation", place === "bottom" ? "horizontal" : "vertical");
+    panel
+      .querySelector(".terminal-resizer")
+      ?.setAttribute(
+        "aria-orientation",
+        place === "bottom" ? "horizontal" : "vertical",
+      );
     placeButton.querySelector("path").setAttribute("d", placeLines[place]);
     applyLayout();
   };
@@ -522,7 +614,8 @@ async function copyJobsValue(button) {
     for (const pane of panes) if (pane.term) pane.term.options.theme = theme();
   };
   const fontFamily = () =>
-    getComputedStyle(root).getPropertyValue("--font-mono").trim() || "monospace";
+    getComputedStyle(root).getPropertyValue("--font-mono").trim() ||
+    "monospace";
   const buildResizer = () => {
     const resizer = document.createElement("div");
     resizer.className = "terminal-resizer";
@@ -538,11 +631,18 @@ async function copyJobsValue(button) {
       const start = currentSize(axis);
       const { clientX: startX, clientY: startY } = event;
       resizer.onpointermove = ({ clientX: x, clientY: y }) => {
-        const moved = { bottom: () => startY - y, left: () => x - startX, right: () => startX - x }[place]();
+        const moved = {
+          bottom: () => startY - y,
+          left: () => x - startX,
+          right: () => startX - x,
+        }[place]();
         applySize(axis, start + moved);
       };
       resizer.onpointerup = resizer.onpointercancel = () => {
-        resizer.onpointermove = resizer.onpointerup = resizer.onpointercancel = null;
+        resizer.onpointermove =
+          resizer.onpointerup =
+          resizer.onpointercancel =
+            null;
         saveSize(axis);
       };
     };
@@ -580,7 +680,8 @@ async function copyJobsValue(button) {
     loaded = (async () => {
       if (!window.Terminal) await loadScript("/_terminal/xterm.js");
       if (!window.FitAddon) await loadScript("/_terminal/xterm-addon-fit.js");
-      if (!window.WebLinksAddon) await loadScript("/_terminal/xterm-addon-web-links.js");
+      if (!window.WebLinksAddon)
+        await loadScript("/_terminal/xterm-addon-web-links.js");
     })();
     return loaded;
   };
@@ -594,7 +695,8 @@ async function copyJobsValue(button) {
     button.textContent = action || "";
     button.hidden = !action;
     button.onclick = handler || null;
-    pane.element.querySelector(".terminal-pane-status").hidden = !message && !action;
+    pane.element.querySelector(".terminal-pane-status").hidden =
+      !message && !action;
   };
   const fitPanes = () => {
     for (const pane of panes) pane.fit.fit();
@@ -603,20 +705,26 @@ async function copyJobsValue(button) {
     if (pane.socket?.readyState === WebSocket.OPEN) pane.socket.send(data);
   };
   // Each project keeps its own last tab and panes, for this browser tab alone.
-  const shownStorageKey = () => shownKey + ":" + here.basedir + ":" + here.project;
-  const layoutStorageKey = () => layoutKey + ":" + here.basedir + ":" + here.project;
+  const shownStorageKey = () =>
+    shownKey + ":" + here.basedir + ":" + here.project;
+  const layoutStorageKey = () =>
+    layoutKey + ":" + here.basedir + ":" + here.project;
   // While the panel is in a window, the window decides what the panes are.
   const rememberLayout = () => {
     if (terminalWindow || awaitingWindow) return;
     try {
-      if (panes[0].shown !== null) sessionStorage.setItem(shownStorageKey(), panes[0].shown);
+      if (panes[0].shown !== null)
+        sessionStorage.setItem(shownStorageKey(), panes[0].shown);
       if (panes.length > 1) {
         sessionStorage.setItem(
           layoutStorageKey(),
           JSON.stringify({
             columns: columns.map((column) => ({
               share: column.share,
-              rows: column.rows.map((row) => ({ share: row.share, shell: row.pane.shown })),
+              rows: column.rows.map((row) => ({
+                share: row.share,
+                shell: row.pane.shown,
+              })),
             })),
             focused: focused.shown,
           }),
@@ -646,7 +754,9 @@ async function copyJobsValue(button) {
   // not make a pane vanish.
   const evenShares = (items) => {
     const shares = items.map(({ share }) =>
-      Number.isFinite(share) && share > 0 ? Math.max(0.1, Math.min(share, 1)) : 1 / items.length,
+      Number.isFinite(share) && share > 0
+        ? Math.max(0.1, Math.min(share, 1))
+        : 1 / items.length,
     );
     const whole = shares.reduce((sum, share) => sum + share, 0);
     items.forEach((item, index) => (item.share = shares[index] / whole));
@@ -680,14 +790,20 @@ async function copyJobsValue(button) {
       .filter((column) => Array.isArray(column?.rows) && column.rows.length)
       .map((column) => ({
         share: column.share,
-        rows: column.rows.filter(Boolean).map((row) => ({ share: row.share, shell: row.shell })),
+        rows: column.rows
+          .filter(Boolean)
+          .map((row) => ({ share: row.share, shell: row.shell })),
       }))
       .filter((column) => column.rows.length);
     evenShares(layout);
     layout.forEach((column) => evenShares(column.rows));
     const seen = new Set();
     for (const row of layout.flatMap((column) => column.rows)) {
-      if (available.some((shell) => shell.id === row.shell) && !seen.has(row.shell) && seen.size < maxPanes) {
+      if (
+        available.some((shell) => shell.id === row.shell) &&
+        !seen.has(row.shell) &&
+        seen.size < maxPanes
+      ) {
         seen.add(row.shell);
       } else {
         removeRow(layout, row);
@@ -697,7 +813,11 @@ async function copyJobsValue(button) {
   };
   // The page's basedir ID, project, and run, as it would ask for them in a query. The
   // parts are still percent-encoded, so they go in as they are.
-  const pagePlace = () => placeOverride || placeOfPath(inWindow ? location.pathname.slice(windowPath.length) : location.pathname);
+  const pagePlace = () =>
+    placeOverride ||
+    placeOfPath(
+      inWindow ? location.pathname.slice(windowPath.length) : location.pathname,
+    );
   // placeOfPath is a page path's place: a shell's link gives its project's.
   const placeOfPath = (path) => {
     const parts = path.split("/").filter(Boolean);
@@ -718,7 +838,10 @@ async function copyJobsValue(button) {
   const projectName = (group) => group.project || "No project";
   // inBasedir tells apart projects of the same name in different basedirs.
   const inBasedir = (entry, entries) =>
-    entry.basedir && entries.some((item) => item !== entry && item.project === entry.project) ? " in " + entry.basedir : "";
+    entry.basedir &&
+    entries.some((item) => item !== entry && item.project === entry.project)
+      ? " in " + entry.basedir
+      : "";
   const refreshHere = async () => {
     const response = await serverFetch("/_terminal/here?" + pagePlace());
     if (!response.ok) return response;
@@ -749,14 +872,22 @@ async function copyJobsValue(button) {
       }
     }
     const label = (entry) =>
-      (entry.unseen ? "\u2022 " : "") + projectName(entry) + inBasedir(entry, entries) + " (" + entry.count + ")";
-    const drawn = JSON.stringify(entries.map((entry) => [label(entry), entry.link]));
+      (entry.unseen ? "\u2022 " : "") +
+      projectName(entry) +
+      inBasedir(entry, entries) +
+      " (" +
+      entry.count +
+      ")";
+    const drawn = JSON.stringify(
+      entries.map((entry) => [label(entry), entry.link]),
+    );
     if (drawn === groupsDrawn) return;
     groupsDrawn = drawn;
     groups.replaceChildren(
       ...entries.map((entry) => {
         const option = document.createElement("option");
-        option.value = inWindow && entry.link ? windowPath + entry.link : entry.link;
+        option.value =
+          inWindow && entry.link ? windowPath + entry.link : entry.link;
         option.textContent = label(entry);
         return option;
       }),
@@ -766,21 +897,30 @@ async function copyJobsValue(button) {
   // endShells ends several shells after asking once, in the words given or its own, and
   // says whether it did; a refusal is told as renameShell's is. Those shown go last and the
   // focused pane's last of all, so that moving on from one does not land on one about to end.
-  const endShells = async (targets, { refused = paneRefusal, question } = {}) => {
+  const endShells = async (
+    targets,
+    { refused = paneRefusal, question } = {},
+  ) => {
     if (!targets.length) return false;
     const noun = targets.length === 1 ? "shell" : targets.length + " shells";
     if (!(await askToEnd(targets, question || "End " + noun))) return false;
-    const rank = (shell) => (shell.id === focused.shown ? 2 : paneShowing(shell.id) ? 1 : 0);
+    const rank = (shell) =>
+      shell.id === focused.shown ? 2 : paneShowing(shell.id) ? 1 : 0;
     const ordered = [...targets].sort((a, b) => rank(a) - rank(b));
     for (const shell of targets) endingHere.add(shell.id);
     for (const shell of ordered) {
       if (paneShowing(shell.id)) await refreshShells();
       let response;
       try {
-        response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), { method: "DELETE" });
+        response = await serverFetch(
+          shellsPath + "/" + encodeURIComponent(shell.id),
+          { method: "DELETE" },
+        );
       } catch {}
       if (!response?.ok && response?.status !== 404) {
-        await refused(response, "The shell did not end", () => endShells(targets, { refused, question }));
+        await refused(response, "The shell did not end", () =>
+          endShells(targets, { refused, question }),
+        );
         return false;
       }
     }
@@ -788,8 +928,15 @@ async function copyJobsValue(button) {
     return true;
   };
   // The questions for ending a project's shells, and every shell of the server.
-  const projectEndQuestion = (count, name) => "End " + (count === 1 ? "the shell" : "the " + count + " shells") + " of " + name;
-  const everyEndQuestion = (count) => "End " + (count === 1 ? "the one shell" : "all " + count + " shells") + ", of every project";
+  const projectEndQuestion = (count, name) =>
+    "End " +
+    (count === 1 ? "the shell" : "the " + count + " shells") +
+    " of " +
+    name;
+  const everyEndQuestion = (count) =>
+    "End " +
+    (count === 1 ? "the one shell" : "all " + count + " shells") +
+    ", of every project";
   // askToEnd asks whether to end shells, saying how many processes run in them and naming a
   // few, as the shells' previews list them now; when it cannot look, it says so and asks.
   const askToEnd = async (targets, question) => {
@@ -797,11 +944,19 @@ async function copyJobsValue(button) {
     const previews = await Promise.all(
       targets.map(async (shell) => {
         try {
-          const response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id) + "/preview");
+          const response = await serverFetch(
+            shellsPath + "/" + encodeURIComponent(shell.id) + "/preview",
+          );
           if (response.status === 404) return { processes: [] };
-          if (!response.ok) return { problem: (await response.text()).trim() || "status " + response.status };
+          if (!response.ok)
+            return {
+              problem:
+                (await response.text()).trim() || "status " + response.status,
+            };
           const preview = await response.json();
-          return Array.isArray(preview.processes) ? preview : { problem: preview.processes_error || "the server did not say" };
+          return Array.isArray(preview.processes)
+            ? preview
+            : { problem: preview.processes_error || "the server did not say" };
         } catch {
           return { problem: "the server did not answer" };
         }
@@ -810,12 +965,23 @@ async function copyJobsValue(button) {
     const problem = previews.find((preview) => preview.problem)?.problem;
     const below = previews.flatMap((preview) => preview.processes || []);
     let detail;
-    if (problem) detail = "What runs in " + pronoun + " is not known: " + problem + ".";
+    if (problem)
+      detail = "What runs in " + pronoun + " is not known: " + problem + ".";
     else if (!below.length) detail = "Nothing runs in " + pronoun + ".";
     else {
-      const named = [...new Set(below.map((process) => process.command))].slice(0, 3);
+      const named = [...new Set(below.map((process) => process.command))].slice(
+        0,
+        3,
+      );
       detail =
-        below.length + (below.length === 1 ? " process runs" : " processes run") + " in " + pronoun + ": " + named.join(", ") + (below.length > named.length ? ", and others" : "") + ".";
+        below.length +
+        (below.length === 1 ? " process runs" : " processes run") +
+        " in " +
+        pronoun +
+        ": " +
+        named.join(", ") +
+        (below.length > named.length ? ", and others" : "") +
+        ".";
     }
     return confirm(question + "? " + detail);
   };
@@ -835,7 +1001,9 @@ async function copyJobsValue(button) {
       });
     } catch {}
     if (!response?.ok) {
-      await refusal(focused, response, "The tabs were not rearranged", () => arrangeShells(arranged));
+      await refusal(focused, response, "The tabs were not rearranged", () =>
+        arrangeShells(arranged),
+      );
       await refreshShells();
     }
   };
@@ -847,7 +1015,8 @@ async function copyJobsValue(button) {
   // draggingShell is the tab being dragged. Drawing the tabs again would end the drag.
   let draggingShell = null;
   const clearDropMarks = () => {
-    for (const tab of tabs.children) tab.classList.remove("terminal-drop-before", "terminal-drop-after");
+    for (const tab of tabs.children)
+      tab.classList.remove("terminal-drop-before", "terminal-drop-after");
   };
   const dropsAfter = (event, tab) => {
     const box = tab.getBoundingClientRect();
@@ -860,14 +1029,19 @@ async function copyJobsValue(button) {
       if (event.dataTransfer) {
         event.dataTransfer.effectAllowed = "move";
         // Some browsers start no drag without data.
-        event.dataTransfer.setData("text/plain", shell.name || String(shell.number));
+        event.dataTransfer.setData(
+          "text/plain",
+          shell.name || String(shell.number),
+        );
       }
     };
     tab.ondragover = (event) => {
       if (!draggingShell) return;
       event.preventDefault();
       clearDropMarks();
-      tab.classList.add(dropsAfter(event, tab) ? "terminal-drop-after" : "terminal-drop-before");
+      tab.classList.add(
+        dropsAfter(event, tab) ? "terminal-drop-after" : "terminal-drop-before",
+      );
     };
     tab.ondrop = (event) => {
       event.preventDefault();
@@ -878,7 +1052,11 @@ async function copyJobsValue(button) {
       clearDropMarks();
       if (dragged.id === shell.id) return;
       const arranged = shellsHere().filter((item) => item.id !== dragged.id);
-      arranged.splice(arranged.findIndex((item) => item.id === shell.id) + (after ? 1 : 0), 0, dragged);
+      arranged.splice(
+        arranged.findIndex((item) => item.id === shell.id) + (after ? 1 : 0),
+        0,
+        dragged,
+      );
       arrangeShells(arranged);
     };
     tab.ondragend = () => {
@@ -889,20 +1067,29 @@ async function copyJobsValue(button) {
   };
   // renameShell and endShell say whether they did it. A refusal is told in the pane with
   // the keys, or as the caller says, with a way to try again.
-  const paneRefusal = (response, what, retry) => refusal(focused, response, what, retry);
+  const paneRefusal = (response, what, retry) =>
+    refusal(focused, response, what, retry);
   const renameShell = async (shell, refused = paneRefusal) => {
-    const name = prompt("Name for shell " + shell.number + " (empty for its number):", shell.name || "");
+    const name = prompt(
+      "Name for shell " + shell.number + " (empty for its number):",
+      shell.name || "",
+    );
     if (name === null) return false;
     let response;
     try {
-      response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
+      response = await serverFetch(
+        shellsPath + "/" + encodeURIComponent(shell.id),
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        },
+      );
     } catch {}
     if (!response?.ok) {
-      await refused(response, "The tab was not renamed", () => renameShell(shell, refused));
+      await refused(response, "The tab was not renamed", () =>
+        renameShell(shell, refused),
+      );
       return false;
     }
     await refreshShells();
@@ -925,8 +1112,12 @@ async function copyJobsValue(button) {
     for (const [label, action, enabled, current] of choices) {
       const item = document.createElement("button");
       item.type = "button";
-      item.setAttribute("role", current === undefined ? "menuitem" : "menuitemradio");
-      if (current !== undefined) item.setAttribute("aria-checked", String(current));
+      item.setAttribute(
+        "role",
+        current === undefined ? "menuitem" : "menuitemradio",
+      );
+      if (current !== undefined)
+        item.setAttribute("aria-checked", String(current));
       item.textContent = label;
       item.disabled = !enabled;
       item.onclick = () => {
@@ -940,8 +1131,10 @@ async function copyJobsValue(button) {
     const size = panelMenu.getBoundingClientRect();
     const x = event.clientX || anchor.left;
     const y = event.clientY || anchor.bottom;
-    panelMenu.style.left = Math.max(0, Math.min(x, innerWidth - size.width)) + "px";
-    panelMenu.style.top = Math.max(0, Math.min(y, innerHeight - size.height)) + "px";
+    panelMenu.style.left =
+      Math.max(0, Math.min(x, innerWidth - size.width)) + "px";
+    panelMenu.style.top =
+      Math.max(0, Math.min(y, innerHeight - size.height)) + "px";
     panelMenu.querySelector("button:not(:disabled)").focus();
   };
   const openTabMenu = (event, shell) => {
@@ -954,7 +1147,11 @@ async function copyJobsValue(button) {
       ["Move right", () => moveShell(shell, place + 1), right.length > 0],
       ["Close tabs to the right", () => endShells(right), right.length > 0],
       ["Close all tabs", () => endShells(inGroup), true],
-      ["Close all shells of every project", () => endShells(shells, { question: everyEndQuestion(shells.length) }), shells.length > inGroup.length],
+      [
+        "Close all shells of every project",
+        () => endShells(shells, { question: everyEndQuestion(shells.length) }),
+        shells.length > inGroup.length,
+      ],
     ]);
   };
   // A narrow window has only the bottom to offer, and the menu says why. A window of the
@@ -971,12 +1168,16 @@ async function copyJobsValue(button) {
         ["Bottom", "bottom"],
         ["Left", "left"],
         ["Right", "right"],
-      ].map(([label, place]) => [
-        place === "bottom" || wide ? label : label + " (needs a wider window)",
-        () => choosePlace(place),
-        place === "bottom" || wide,
-        chosen === place,
-      ]).concat([["Window", popOut, true, false]]),
+      ]
+        .map(([label, place]) => [
+          place === "bottom" || wide
+            ? label
+            : label + " (needs a wider window)",
+          () => choosePlace(place),
+          place === "bottom" || wide,
+          chosen === place,
+        ])
+        .concat([["Window", popOut, true, false]]),
     );
   };
   document.addEventListener("pointerdown", (event) => {
@@ -1012,7 +1213,10 @@ async function copyJobsValue(button) {
   // no answer from the server it shows none, rather than one that may be out of date.
   const showShellCount = (known = true) => {
     const button = document.getElementById("terminal-button");
-    if (button) button.textContent = known ? "Terminal (" + shells.length + ")" : "Terminal";
+    if (button)
+      button.textContent = known
+        ? "Terminal (" + shells.length + ")"
+        : "Terminal";
   };
   const renderTabs = () => {
     showShellCount();
@@ -1021,7 +1225,14 @@ async function copyJobsValue(button) {
     add.disabled = inGroup.length >= groupLimit || shells.length >= shellLimit;
     updatePaneButtons();
     const drawn = JSON.stringify([
-      inGroup.map((shell) => [shell.id, shell.number, shell.name, shell.dir, shell.unseen_output, shell.command_finished]),
+      inGroup.map((shell) => [
+        shell.id,
+        shell.number,
+        shell.name,
+        shell.dir,
+        shell.unseen_output,
+        shell.command_finished,
+      ]),
       panes.map((pane) => pane.shown),
       panes.indexOf(focused),
     ]);
@@ -1048,17 +1259,30 @@ async function copyJobsValue(button) {
         label.setAttribute("aria-selected", String(shell.id === focused.shown));
         label.setAttribute(
           "aria-label",
-          "Shell " + shell.number + (shell.name ? ", " + shell.name : "") + (finished ? ", command finished" : unseen ? ", new output" : "") + (elsewhere ? ", in another pane" : ""),
+          "Shell " +
+            shell.number +
+            (shell.name ? ", " + shell.name : "") +
+            (finished ? ", command finished" : unseen ? ", new output" : "") +
+            (elsewhere ? ", in another pane" : ""),
         );
         // The times are worded as the pointer arrives: the list's refresh redraws no tab.
         const titled = () => {
-          const times = shellTimes(shells.find((item) => item.id === shell.id) || shell);
+          const times = shellTimes(
+            shells.find((item) => item.id === shell.id) || shell,
+          );
           label.title =
             (finished ? "A command finished. " : unseen ? "New output. " : "") +
             (elsewhere ? "In another pane. " : "") +
             "Started in " +
             shell.dir +
-            (times ? " at " + times.startedAt + ", " + times.startedAgo + ". " + (times.idle ? "Idle " + times.idle + "." : "Active now.") : "");
+            (times
+              ? " at " +
+                times.startedAt +
+                ", " +
+                times.startedAgo +
+                ". " +
+                (times.idle ? "Idle " + times.idle + "." : "Active now.")
+              : "");
         };
         titled();
         label.onpointerenter = titled;
@@ -1080,12 +1304,16 @@ async function copyJobsValue(button) {
   // A sign-in that has gone cannot be retried away.
   const signInGone = (pane, response) => {
     if (response?.status !== 401 && response?.status !== 403) return false;
-    showStatus(pane, "Sign in again to use the terminal.", "Reload", () => location.reload());
+    showStatus(pane, "Sign in again to use the terminal.", "Reload", () =>
+      location.reload(),
+    );
     return true;
   };
   const refusal = async (pane, response, what, handler) => {
     if (signInGone(pane, response)) return;
-    const reason = response ? (await response.text()).trim() : "the server did not answer";
+    const reason = response
+      ? (await response.text()).trim()
+      : "the server did not answer";
     showStatus(pane, what + ": " + reason, "Try again", handler);
   };
   const shellName = (shell) => {
@@ -1102,14 +1330,20 @@ async function copyJobsValue(button) {
         !now.some((other) => other.id === shell.id),
     );
     if (!ended.length) return;
-    showNote((ended.length === 1 ? shellName(ended[0]) : ended.length + " shells") + " ended.", 6000);
+    showNote(
+      (ended.length === 1 ? shellName(ended[0]) : ended.length + " shells") +
+        " ended.",
+      6000,
+    );
   };
   // markSidebarProjects marks each project in the sidebar that has shells, which
   // web_shell.css draws as an icon on its row. Links are compared decoded, since the
   // server and the page encode a project's name differently.
   const linkPath = (href) => {
     try {
-      return decodeURIComponent(new URL(href, location.origin).pathname).replace(/\/$/, "");
+      return decodeURIComponent(
+        new URL(href, location.origin).pathname,
+      ).replace(/\/$/, "");
     } catch {
       return "";
     }
@@ -1121,7 +1355,9 @@ async function copyJobsValue(button) {
       const path = linkPath(shell.link);
       counts.set(path, (counts.get(path) || 0) + 1);
     }
-    for (const link of document.querySelectorAll("#sidebar-basedirs .sidebar-project-link")) {
+    for (const link of document.querySelectorAll(
+      "#sidebar-basedirs .sidebar-project-link",
+    )) {
       const row = link.closest(".sidebar-project-row");
       if (!row || row.classList.contains("basedir-row")) continue;
       const count = counts.get(linkPath(link.getAttribute("href") || "")) || 0;
@@ -1129,7 +1365,8 @@ async function copyJobsValue(button) {
       if (marked === (count ? String(count) : "")) continue;
       if (count) {
         row.dataset.terminalShells = String(count);
-        row.title = count + (count === 1 ? " shell" : " shells") + " in the terminal";
+        row.title =
+          count + (count === 1 ? " shell" : " shells") + " in the terminal";
       } else {
         delete row.dataset.terminalShells;
         row.removeAttribute("title");
@@ -1195,19 +1432,35 @@ async function copyJobsValue(button) {
       let launch;
       try {
         const response = await serverFetch("/api/launches");
-        launch = ((await response.json()).launches || []).find((item) => item.id === id);
+        launch = ((await response.json()).launches || []).find(
+          (item) => item.id === id,
+        );
       } catch (error) {
-        if (serial === launchSerial) launchProblem(body, "Cannot follow " + name + ": " + error.message);
+        if (serial === launchSerial)
+          launchProblem(body, "Cannot follow " + name + ": " + error.message);
         return;
       }
       if (serial !== launchSerial || !launch) return;
       if (launch.state === "starting") {
-        body.replaceChildren(makeElement("p", "", "Starting " + name + "; waiting for it to answer..."), launchButtons(showInLaunches(id)));
+        body.replaceChildren(
+          makeElement(
+            "p",
+            "",
+            "Starting " + name + "; waiting for it to answer...",
+          ),
+          launchButtons(showInLaunches(id)),
+        );
         await new Promise((resolve) => setTimeout(resolve, 500));
         continue;
       }
       body.replaceChildren(
-        makeElement("p", launch.state === "running" ? "" : "terminal-launch-problem", launch.state === "running" ? name + " is ready." : name + " has " + launch.state + "."),
+        makeElement(
+          "p",
+          launch.state === "running" ? "" : "terminal-launch-problem",
+          launch.state === "running"
+            ? name + " is ready."
+            : name + " has " + launch.state + ".",
+        ),
         launchButtons(launchOpen(launch), showInLaunches(id)),
       );
       return;
@@ -1220,20 +1473,31 @@ async function copyJobsValue(button) {
       response = await serverFetch("/api/launch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shell: shell.id, name, new_instance: newInstance }),
+        body: JSON.stringify({
+          shell: shell.id,
+          name,
+          new_instance: newInstance,
+        }),
       });
     } catch {}
     const answer = await answerOf(response);
     if (serial !== launchSerial) return;
     if (!response?.ok) {
       launchProblem(body, answer.error, answer.hint);
-      if (answer.launch) body.append(launchButtons(showInLaunches(answer.launch.id)));
+      if (answer.launch)
+        body.append(launchButtons(showInLaunches(answer.launch.id)));
       return;
     }
     if (answer.reused) {
       body.replaceChildren(
         makeElement("p", "", name + " is already running here."),
-        launchButtons(launchOpen(answer), showInLaunches(answer.id), textButton("Start another instance", () => startShellLaunch(serial, body, shell, name, true))),
+        launchButtons(
+          launchOpen(answer),
+          showInLaunches(answer.id),
+          textButton("Start another instance", () =>
+            startShellLaunch(serial, body, shell, name, true),
+          ),
+        ),
       );
       return;
     }
@@ -1241,13 +1505,21 @@ async function copyJobsValue(button) {
       await followLaunch(serial, body, answer.id, name);
       return;
     }
-    body.replaceChildren(makeElement("p", "", "Started " + name + "."), launchButtons(showInLaunches(answer.id)));
+    body.replaceChildren(
+      makeElement("p", "", "Started " + name + "."),
+      launchButtons(showInLaunches(answer.id)),
+    );
   };
   const previewShellLaunch = async (serial, body, shell, name, back) => {
     body.replaceChildren(makeElement("p", "", "Loading..."));
     let response;
     try {
-      response = await serverFetch("/api/launch-preview?shell=" + encodeURIComponent(shell.id) + "&name=" + encodeURIComponent(name));
+      response = await serverFetch(
+        "/api/launch-preview?shell=" +
+          encodeURIComponent(shell.id) +
+          "&name=" +
+          encodeURIComponent(name),
+      );
     } catch {}
     const answer = await answerOf(response);
     if (serial !== launchSerial) return;
@@ -1264,16 +1536,35 @@ async function copyJobsValue(button) {
       ["Working directory", answer.cwd],
       ["Mode", answer.mode],
       ["Runs as", answer.user + "@" + answer.host],
-      ["From", (labels.project ? "project " + labels.project + ", " : "") + "shell " + labels.shell],
+      [
+        "From",
+        (labels.project ? "project " + labels.project + ", " : "") +
+          "shell " +
+          labels.shell,
+      ],
     ]) {
-      details.append(makeElement("dt", "", label), makeElement("dd", "", value));
+      details.append(
+        makeElement("dt", "", label),
+        makeElement("dd", "", value),
+      );
     }
     const runs = makeElement("dd");
-    runs.append(makeElement("pre", "terminal-launch-command", answer.shell + " -c " + answer.command));
+    runs.append(
+      makeElement(
+        "pre",
+        "terminal-launch-command",
+        answer.shell + " -c " + answer.command,
+      ),
+    );
     details.append(makeElement("dt", "", "Runs"), runs);
-    const confirmButton = textButton("Launch", () => startShellLaunch(serial, body, shell, name, false));
+    const confirmButton = textButton("Launch", () =>
+      startShellLaunch(serial, body, shell, name, false),
+    );
     confirmButton.className = "terminal-launch-confirm";
-    body.replaceChildren(details, launchButtons(confirmButton, textButton("Back", back)));
+    body.replaceChildren(
+      details,
+      launchButtons(confirmButton, textButton("Back", back)),
+    );
     confirmButton.focus();
   };
   const openLaunchDialog = async (shell) => {
@@ -1298,29 +1589,49 @@ async function copyJobsValue(button) {
     };
     const box = makeElement("div", "output-panel terminal-launch");
     const head = makeElement("header");
-    const title = makeElement("strong", "", "Launch in " + (shell.name || "shell " + shell.number));
+    const title = makeElement(
+      "strong",
+      "",
+      "Launch in " + (shell.name || "shell " + shell.number),
+    );
     title.id = "terminal-launch-title";
     const actions = makeElement("div", "modal-actions");
     actions.append(textButton("Close", done));
     head.append(title, actions);
-    const body = makeElement("div", "terminal-launch-body", "Finding where the shell is...");
+    const body = makeElement(
+      "div",
+      "terminal-launch-body",
+      "Finding where the shell is...",
+    );
     box.append(head, body);
     launchDialog.append(box);
     document.body.append(launchDialog);
     actions.firstElementChild.focus();
     let response;
     try {
-      response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id) + "/preview");
+      response = await serverFetch(
+        shellsPath + "/" + encodeURIComponent(shell.id) + "/preview",
+      );
     } catch {}
     if (serial !== launchSerial) return;
     if (!response?.ok) {
-      launchProblem(body, "Where the shell is could not be found: " + (response ? (await response.text()).trim() : "the server did not answer"));
+      launchProblem(
+        body,
+        "Where the shell is could not be found: " +
+          (response
+            ? (await response.text()).trim()
+            : "the server did not answer"),
+      );
       return;
     }
     const where = await response.json();
     if (serial !== launchSerial) return;
     if (!where.cwd) {
-      launchProblem(body, "Where the shell is now is not known: " + (where.cwd_error || "the server did not say"));
+      launchProblem(
+        body,
+        "Where the shell is now is not known: " +
+          (where.cwd_error || "the server did not say"),
+      );
       return;
     }
     title.textContent = "Launch in " + where.cwd;
@@ -1329,7 +1640,12 @@ async function copyJobsValue(button) {
       let answer;
       let listing;
       try {
-        listing = await serverFetch("/api/launchers?kind=directory&name=" + encodeURIComponent(where.cwd.split("/").filter(Boolean).pop() || "/"));
+        listing = await serverFetch(
+          "/api/launchers?kind=directory&name=" +
+            encodeURIComponent(
+              where.cwd.split("/").filter(Boolean).pop() || "/",
+            ),
+        );
       } catch {}
       answer = await answerOf(listing);
       if (serial !== launchSerial) return;
@@ -1339,17 +1655,35 @@ async function copyJobsValue(button) {
       }
       const commands = answer.commands || [];
       if (!commands.length) {
-        launchProblem(body, (answer.unmatched || {}).directory || "No registered command accepts a directory.");
+        launchProblem(
+          body,
+          (answer.unmatched || {}).directory ||
+            "No registered command accepts a directory.",
+        );
         return;
       }
       const list = makeElement("div", "terminal-launch-commands");
       for (const command of commands) {
-        const button = textButton(command.name, () => previewShellLaunch(serial, body, shell, command.name, listCommands));
+        const button = textButton(command.name, () =>
+          previewShellLaunch(serial, body, shell, command.name, listCommands),
+        );
         button.disabled = Boolean(command.unavailable);
-        if (command.unavailable) button.title = "Not installed: " + command.unavailable;
+        if (command.unavailable)
+          button.title = "Not installed: " + command.unavailable;
         list.append(button);
       }
-      body.replaceChildren(makeElement("p", "terminal-launch-intro", "Run a registered command on this directory, as you, on " + (answer.user || "this user") + "@" + (answer.host || "this host") + ":"), list);
+      body.replaceChildren(
+        makeElement(
+          "p",
+          "terminal-launch-intro",
+          "Run a registered command on this directory, as you, on " +
+            (answer.user || "this user") +
+            "@" +
+            (answer.host || "this host") +
+            ":",
+        ),
+        list,
+      );
       list.querySelector("button:not(:disabled)")?.focus();
     };
     await listCommands();
@@ -1376,11 +1710,14 @@ async function copyJobsValue(button) {
       sessionStorage.setItem(shownKey + suffix, shell.id);
       const saved = JSON.parse(sessionStorage.getItem(layoutKey + suffix));
       const rows = Array.isArray(saved?.columns)
-        ? saved.columns.flatMap((column) => (Array.isArray(column?.rows) ? column.rows.filter(Boolean) : []))
+        ? saved.columns.flatMap((column) =>
+            Array.isArray(column?.rows) ? column.rows.filter(Boolean) : [],
+          )
         : [];
       if (!rows.length) return;
       if (!rows.some((row) => row.shell === shell.id)) {
-        (rows.find((row) => row.shell === saved.focused) || rows[0]).shell = shell.id;
+        (rows.find((row) => row.shell === saved.focused) || rows[0]).shell =
+          shell.id;
       }
       saved.focused = shell.id;
       sessionStorage.setItem(layoutKey + suffix, JSON.stringify(saved));
@@ -1408,10 +1745,13 @@ async function copyJobsValue(button) {
   // pane under the dialog.
   let overviewProblem = null;
   const overviewRefusal = async (response, what) => {
-    const reason = response ? (await response.text()).trim() : "the server did not answer";
+    const reason = response
+      ? (await response.text()).trim()
+      : "the server did not answer";
     if (!overviewProblem) return;
     overviewProblem.hidden = false;
-    overviewProblem.textContent = what + ": " + (reason || "status " + response.status);
+    overviewProblem.textContent =
+      what + ": " + (reason || "status " + response.status);
   };
   // Renaming keeps the card with the keys; ending moves them to the card after it.
   const renameFromOverview = async (shell) => {
@@ -1424,7 +1764,12 @@ async function copyJobsValue(button) {
     try {
       const place = placeOfPath(entry.link);
       response = await serverFetch(
-        shellsPath + "?rows=" + (focused.term?.rows || 24) + "&cols=" + (focused.term?.cols || 80) + (place && "&" + place),
+        shellsPath +
+          "?rows=" +
+          (focused.term?.rows || 24) +
+          "&cols=" +
+          (focused.term?.cols || 80) +
+          (place && "&" + place),
         { method: "POST" },
       );
     } catch {}
@@ -1456,14 +1801,18 @@ async function copyJobsValue(button) {
     said.textContent = "Listing the projects...";
     row.append(label, start, said);
     overview?.firstElementChild.append(row);
-    const reason = async (response) => (response ? (await response.text()).trim() || "status " + response.status : "the server did not answer");
+    const reason = async (response) =>
+      response
+        ? (await response.text()).trim() || "status " + response.status
+        : "the server did not answer";
     let response;
     try {
       response = await serverFetch("/api/basedirs");
     } catch {}
     if (serial !== overviewSerial) return;
     if (!response?.ok) {
-      said.textContent = "The projects could not be listed: " + (await reason(response));
+      said.textContent =
+        "The projects could not be listed: " + (await reason(response));
       return;
     }
     const basedirs = (await response.json()).basedirs || [];
@@ -1471,13 +1820,20 @@ async function copyJobsValue(button) {
       basedirs.map(async (basedir) => {
         let answer;
         try {
-          answer = await serverFetch("/api/projects?basedir_id=" + encodeURIComponent(basedir.id));
+          answer = await serverFetch(
+            "/api/projects?basedir_id=" + encodeURIComponent(basedir.id),
+          );
         } catch {}
-        return answer?.ok ? { basedir, projects: (await answer.json()).projects || [] } : { basedir, problem: await reason(answer) };
+        return answer?.ok
+          ? { basedir, projects: (await answer.json()).projects || [] }
+          : { basedir, problem: await reason(answer) };
       }),
     );
     if (serial !== overviewSerial) return;
-    const hasShells = (basedir, project) => listed.some((entry) => entry.basedir === basedir && entry.project === project);
+    const hasShells = (basedir, project) =>
+      listed.some(
+        (entry) => entry.basedir === basedir && entry.project === project,
+      );
     const option = (text, link) => {
       const item = document.createElement("option");
       item.value = link;
@@ -1485,12 +1841,20 @@ async function copyJobsValue(button) {
       return item;
     };
     const options = [];
-    if (!hasShells("", "")) options.push(option("No project (home directory)", "/"));
+    if (!hasShells("", ""))
+      options.push(option("No project (home directory)", "/"));
     for (const { basedir, projects } of lists) {
-      const free = (projects || []).filter((project) => !hasShells(basedir.path, project));
+      const free = (projects || []).filter(
+        (project) => !hasShells(basedir.path, project),
+      );
       if (!free.length) continue;
       const items = free.map((project) =>
-        option(project, (basedir.current ? "" : "/_basedir/" + basedir.id) + "/project/" + encodeURIComponent(project)),
+        option(
+          project,
+          (basedir.current ? "" : "/_basedir/" + basedir.id) +
+            "/project/" +
+            encodeURIComponent(project),
+        ),
       );
       if (basedirs.length > 1) {
         const group = document.createElement("optgroup");
@@ -1499,13 +1863,20 @@ async function copyJobsValue(button) {
         options.push(group);
       } else options.push(...items);
     }
-    const problems = lists.filter((item) => item.problem).map((item) => item.basedir.path + ": " + item.problem);
+    const problems = lists
+      .filter((item) => item.problem)
+      .map((item) => item.basedir.path + ": " + item.problem);
     choice.replaceChildren(...options);
-    const full = shells.length >= shellLimit ? "at most " + shellLimit + " shells can run at once" : "";
+    const full =
+      shells.length >= shellLimit
+        ? "at most " + shellLimit + " shells can run at once"
+        : "";
     choice.disabled = !options.length;
     start.disabled = !options.length || Boolean(full);
     said.textContent = [
-      !options.length && !problems.length ? "Every project has a shell; use its + for another." : "",
+      !options.length && !problems.length
+        ? "Every project has a shell; use its + for another."
+        : "",
       full ? "No more: " + full + "." : "",
       problems.length ? "Not listed: " + problems.join("; ") : "",
     ]
@@ -1514,10 +1885,13 @@ async function copyJobsValue(button) {
     start.onclick = () => startFromOverview({ link: choice.value });
   };
   const endFromOverview = async (shell) => {
-    const cards = [...(overview?.querySelectorAll(".terminal-overview-card") || [])];
+    const cards = [
+      ...(overview?.querySelectorAll(".terminal-overview-card") || []),
+    ];
     const at = cards.findIndex((item) => item.dataset.shell === shell.id);
     const next = cards[at + 1] || cards[at - 1];
-    if (await endShell(shell, overviewRefusal)) drawOverview(next?.dataset.shell);
+    if (await endShell(shell, overviewRefusal))
+      drawOverview(next?.dataset.shell);
   };
   const overviewCard = (shell, serial) => {
     const card = document.createElement("button");
@@ -1527,8 +1901,10 @@ async function copyJobsValue(button) {
     const ours = sameGroup(shell, here);
     const current = ours && focused.shown === shell.id;
     const elsewhere = ours && !current && Boolean(paneShowing(shell.id));
-    const unseen = Boolean(shell.unseen_output) && !(ours && paneShowing(shell.id));
-    const finished = Boolean(shell.command_finished) && !(ours && paneShowing(shell.id));
+    const unseen =
+      Boolean(shell.unseen_output) && !(ours && paneShowing(shell.id));
+    const finished =
+      Boolean(shell.command_finished) && !(ours && paneShowing(shell.id));
     card.classList.toggle("terminal-overview-current", current);
     card.classList.toggle("terminal-overview-unseen", unseen && !finished);
     card.classList.toggle("terminal-overview-finished", finished);
@@ -1537,7 +1913,13 @@ async function copyJobsValue(button) {
     name.textContent = shell.name || "Shell " + shell.number;
     const state = document.createElement("span");
     state.className = "terminal-overview-state";
-    state.textContent = [current && "shown", elsewhere && "in another pane", finished ? "command finished" : unseen && "new output"].filter(Boolean).join(", ");
+    state.textContent = [
+      current && "shown",
+      elsewhere && "in another pane",
+      finished ? "command finished" : unseen && "new output",
+    ]
+      .filter(Boolean)
+      .join(", ");
     const top = document.createElement("span");
     top.className = "terminal-overview-top";
     top.append(name, state);
@@ -1554,7 +1936,12 @@ async function copyJobsValue(button) {
     const when = document.createElement("span");
     when.className = "terminal-overview-times";
     when.hidden = !times;
-    if (times) when.textContent = "started " + times.startedAgo + " \u00b7 " + (times.idle ? "idle " + times.idle : "active now");
+    if (times)
+      when.textContent =
+        "started " +
+        times.startedAgo +
+        " \u00b7 " +
+        (times.idle ? "idle " + times.idle : "active now");
     card.append(top, dir, when);
     card.onclick = () => chooseFromOverview(shell);
     // Under the card, outside its button: what runs in the foreground, and how many
@@ -1575,7 +1962,9 @@ async function copyJobsValue(button) {
       count.setAttribute("aria-expanded", String(!tree.hidden));
     };
     run.append(running, count);
-    const label = shell.name ? "shell " + shell.number + ", " + shell.name : "shell " + shell.number;
+    const label = shell.name
+      ? "shell " + shell.number + ", " + shell.name
+      : "shell " + shell.number;
     const rename = document.createElement("button");
     rename.type = "button";
     rename.setAttribute("aria-label", "Rename " + label);
@@ -1591,7 +1980,8 @@ async function copyJobsValue(button) {
     const launchHere = document.createElement("button");
     launchHere.type = "button";
     launchHere.setAttribute("aria-label", "Launch in " + label);
-    launchHere.title = "Launch a registered command, such as TensorBoard, in the directory this shell is in now";
+    launchHere.title =
+      "Launch a registered command, such as TensorBoard, in the directory this shell is in now";
     drawIcon(launchHere, icons.launch);
     launchHere.onclick = () => openLaunchDialog(shell);
     const actions = document.createElement("span");
@@ -1609,7 +1999,9 @@ async function copyJobsValue(button) {
     serverFetch(shellsPath + "/" + encodeURIComponent(shell.id) + "/preview")
       .then(async (response) => {
         if (!response.ok) {
-          started((await response.text()).trim() || "status " + response.status);
+          started(
+            (await response.text()).trim() || "status " + response.status,
+          );
           return;
         }
         const preview = await response.json();
@@ -1629,7 +2021,9 @@ async function copyJobsValue(button) {
           const noun = below.length === 1 ? " process" : " processes";
           count.hidden = false;
           // With nothing in the foreground, they run in the background.
-          count.textContent = running.hidden ? below.length + " background" + noun : below.length + noun;
+          count.textContent = running.hidden
+            ? below.length + " background" + noun
+            : below.length + noun;
           count.title = "Show the processes this shell has started";
           tree.replaceChildren(
             ...below.map((process) => {
@@ -1673,7 +2067,9 @@ async function copyJobsValue(button) {
     ["bad", "failed"],
   ];
   const drawProjectStates = async (serial, body) => {
-    const lines = [...body.querySelectorAll(".terminal-overview-project-state")].filter((line) => !line.hidden);
+    const lines = [
+      ...body.querySelectorAll(".terminal-overview-project-state"),
+    ].filter((line) => !line.hidden);
     if (!lines.length) return;
     let response;
     try {
@@ -1681,7 +2077,9 @@ async function copyJobsValue(button) {
     } catch {}
     if (serial !== overviewSerial) return;
     if (!response?.ok) {
-      const reason = response ? (await response.text()).trim() || "status " + response.status : "the server did not answer";
+      const reason = response
+        ? (await response.text()).trim() || "status " + response.status
+        : "the server did not answer";
       if (serial !== overviewSerial) return;
       for (const line of lines) {
         line.classList.add("terminal-overview-project-state-error");
@@ -1691,16 +2089,23 @@ async function copyJobsValue(button) {
     }
     const listed = await response.json();
     if (serial !== overviewSerial) return;
-    if (Number.isFinite(Date.parse(listed.now))) serverClock = Date.parse(listed.now) - Date.now();
+    if (Number.isFinite(Date.parse(listed.now)))
+      serverClock = Date.parse(listed.now) - Date.now();
     for (const line of lines) {
-      const project = listed.projects.find((item) => item.basedir === line.dataset.basedir && item.project === line.dataset.project);
+      const project = listed.projects.find(
+        (item) =>
+          item.basedir === line.dataset.basedir &&
+          item.project === line.dataset.project,
+      );
       line.replaceChildren();
       if (!project) {
         line.classList.add("terminal-overview-project-state-error");
-        line.textContent = "Its state could not be read: the server did not list it";
+        line.textContent =
+          "Its state could not be read: the server did not list it";
       } else if (project.status_error) {
         line.classList.add("terminal-overview-project-state-error");
-        line.textContent = "Its state could not be read: " + project.status_error;
+        line.textContent =
+          "Its state could not be read: " + project.status_error;
       } else if (!project.last_run) {
         line.textContent = "No runs yet";
       } else {
@@ -1714,35 +2119,54 @@ async function copyJobsValue(button) {
     const opens = link.includes("/project/");
     const button = document.createElement(opens ? "button" : "span");
     if (opens) button.type = "button";
-    button.className = "terminal-overview-project-state-run tone-" + (run.tone || "off");
+    button.className =
+      "terminal-overview-project-state-run tone-" + (run.tone || "off");
     // An ended run says when it ended, "Last run failed 2h ago"; one still going says
     // when it started, "Last run running, started 12m ago".
     const ago = (stamp) => {
       const age = ageOf(stamp);
-      return age === null ? "" : age < 60000 ? "just now" : spanText(age) + " ago";
+      return age === null
+        ? ""
+        : age < 60000
+          ? "just now"
+          : spanText(age) + " ago";
     };
     const ended = ago(run.finished_at);
     const started = ago(run.started_at);
     const lifecycle = document.createElement("span");
     lifecycle.className = "terminal-overview-project-state-lifecycle";
-    lifecycle.textContent = "Last run " + run.lifecycle + (ended ? " " + ended : started ? ", started " + started : "");
+    lifecycle.textContent =
+      "Last run " +
+      run.lifecycle +
+      (ended ? " " + ended : started ? ", started " + started : "");
     button.append(lifecycle);
     const counts = [];
     for (const [group, label] of projectJobGroups) {
       const count = (run.jobs && run.jobs[group]) || 0;
       const part = document.createElement("span");
-      part.className = "terminal-overview-project-state-count" + (count ? " tone-" + group : " terminal-overview-project-state-none");
+      part.className =
+        "terminal-overview-project-state-count" +
+        (count ? " tone-" + group : " terminal-overview-project-state-none");
       part.textContent = count + " " + label;
       button.append(" \u00b7 ", part);
       counts.push(part.textContent);
     }
-    const runName = run.run_name ? run.run_name + " (" + run.run_id + ")" : run.run_id;
+    const runName = run.run_name
+      ? run.run_name + " (" + run.run_id + ")"
+      : run.run_id;
     if (!opens) {
       button.title = "Run " + runName;
       return button;
     }
     button.title = "Open run " + runName;
-    button.setAttribute("aria-label", lifecycle.textContent + ", " + counts.join(", ") + ". Open run " + runName);
+    button.setAttribute(
+      "aria-label",
+      lifecycle.textContent +
+        ", " +
+        counts.join(", ") +
+        ". Open run " +
+        runName,
+    );
     button.onclick = () => {
       const path = link + "/run/" + encodeURIComponent(run.run_id);
       closeOverview();
@@ -1781,7 +2205,13 @@ async function copyJobsValue(button) {
     endEvery.disabled = true;
     endEvery.onclick = async () => {
       const every = [...shells];
-      if (await endShells(every, { refused: overviewRefusal, question: everyEndQuestion(every.length) })) drawOverview();
+      if (
+        await endShells(every, {
+          refused: overviewRefusal,
+          question: everyEndQuestion(every.length),
+        })
+      )
+        drawOverview();
     };
     actions.append(endEvery, refresh, close);
     head.append(title, actions);
@@ -1796,14 +2226,25 @@ async function copyJobsValue(button) {
     const { ok, response } = await refreshShells();
     if (serial !== overviewSerial) return;
     if (!ok) {
-      const reason = response ? (await response.text()).trim() : "the server did not answer";
-      if (serial === overviewSerial) body.textContent = "The shells could not be listed: " + reason;
+      const reason = response
+        ? (await response.text()).trim()
+        : "the server did not answer";
+      if (serial === overviewSerial)
+        body.textContent = "The shells could not be listed: " + reason;
       return;
     }
     const entries = [{ ...here, shells: [] }];
     for (const shell of shells) {
       let entry = entries.find((item) => sameGroup(item, shell));
-      if (!entry) entries.push((entry = { basedir: shell.basedir, project: shell.project, link: shell.link, shells: [] }));
+      if (!entry)
+        entries.push(
+          (entry = {
+            basedir: shell.basedir,
+            project: shell.project,
+            link: shell.link,
+            shells: [],
+          }),
+        );
       entry.link = shell.link;
       entry.shells.push(shell);
     }
@@ -1827,9 +2268,16 @@ async function copyJobsValue(button) {
         more.className = "terminal-overview-add";
         more.setAttribute("aria-label", "New shell in " + name);
         more.textContent = "+";
-        const full = entry.shells.length >= groupLimit ? "at most " + groupLimit + " shells can run for one project" : shells.length >= shellLimit ? "at most " + shellLimit + " shells can run at once" : "";
+        const full =
+          entry.shells.length >= groupLimit
+            ? "at most " + groupLimit + " shells can run for one project"
+            : shells.length >= shellLimit
+              ? "at most " + shellLimit + " shells can run at once"
+              : "";
         more.disabled = Boolean(full);
-        more.title = full ? "No more: " + full : "Start another shell here, where its page would, without showing it";
+        more.title = full
+          ? "No more: " + full
+          : "Start another shell here, where its page would, without showing it";
         more.onclick = () => startFromOverview(entry);
         const endAll = document.createElement("button");
         endAll.type = "button";
@@ -1838,7 +2286,13 @@ async function copyJobsValue(button) {
         endAll.setAttribute("aria-label", "End all shells of " + name);
         endAll.title = "End every shell of " + name + ", after asking";
         endAll.onclick = async () => {
-          if (await endShells(entry.shells, { refused: overviewRefusal, question: projectEndQuestion(entry.shells.length, name) })) drawOverview();
+          if (
+            await endShells(entry.shells, {
+              refused: overviewRefusal,
+              question: projectEndQuestion(entry.shells.length, name),
+            })
+          )
+            drawOverview();
         };
         heading.append(named, more, endAll);
         // What the project's last run is doing, filled in by drawProjectStates. Shells
@@ -1852,7 +2306,9 @@ async function copyJobsValue(button) {
         if (entry.project) projectState.textContent = "Reading its runs...";
         const cards = document.createElement("div");
         cards.className = "terminal-overview-cards";
-        cards.append(...entry.shells.map((shell) => overviewCard(shell, serial)));
+        cards.append(
+          ...entry.shells.map((shell) => overviewCard(shell, serial)),
+        );
         group.setAttribute("aria-label", name);
         group.append(heading, projectState, cards);
         return group;
@@ -1861,7 +2317,11 @@ async function copyJobsValue(button) {
     drawOverviewNew(serial, listed);
     drawProjectStates(serial, body);
     const cardList = [...body.querySelectorAll(".terminal-overview-card")];
-    (cardList.find((item) => item.dataset.shell === focusOn) || body.querySelector(".terminal-overview-current") || cardList[0])?.focus();
+    (
+      cardList.find((item) => item.dataset.shell === focusOn) ||
+      body.querySelector(".terminal-overview-current") ||
+      cardList[0]
+    )?.focus();
   };
   // Arrows move between cards, up and down to the nearest card of the next row; Enter
   // chooses, as a button does, and Escape goes back to the shell.
@@ -1933,7 +2393,9 @@ async function copyJobsValue(button) {
   let serverClock = 0;
   const ageOf = (stamp) => {
     const at = Date.parse(stamp);
-    return Number.isFinite(at) ? Math.max(0, Date.now() + serverClock - at) : null;
+    return Number.isFinite(at)
+      ? Math.max(0, Date.now() + serverClock - at)
+      : null;
   };
   const spanText = (milliseconds) => {
     const minutes = Math.floor(milliseconds / 60000);
@@ -1952,7 +2414,10 @@ async function copyJobsValue(button) {
     const at = new Date(Date.parse(shell.started_at));
     return {
       startedAgo: started < 60000 ? "just now" : spanText(started) + " ago",
-      startedAt: String(at.getHours()).padStart(2, "0") + ":" + String(at.getMinutes()).padStart(2, "0"),
+      startedAt:
+        String(at.getHours()).padStart(2, "0") +
+        ":" +
+        String(at.getMinutes()).padStart(2, "0"),
       idle: idle < 60000 ? null : spanText(idle),
     };
   };
@@ -1972,7 +2437,8 @@ async function copyJobsValue(button) {
     if (serial === listSerial) {
       if (panel && !terminalWindow) noteEndedShells(listed.shells);
       shells = listed.shells;
-      if (Number.isFinite(Date.parse(listed.now))) serverClock = Date.parse(listed.now) - Date.now();
+      if (Number.isFinite(Date.parse(listed.now)))
+        serverClock = Date.parse(listed.now) - Date.now();
       shellLimit = listed.limit;
       groupLimit = listed.group_limit;
       showShellCount();
@@ -2008,7 +2474,16 @@ async function copyJobsValue(button) {
     term.reset();
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
     const current = new WebSocket(
-      scheme + "//" + location.host + "/_terminal/ws?shell=" + encodeURIComponent(pane.shown) + "&rows=" + term.rows + "&cols=" + term.cols + (takeOver ? "" : "&takeover=0"),
+      scheme +
+        "//" +
+        location.host +
+        "/_terminal/ws?shell=" +
+        encodeURIComponent(pane.shown) +
+        "&rows=" +
+        term.rows +
+        "&cols=" +
+        term.cols +
+        (takeOver ? "" : "&takeover=0"),
     );
     pane.socket = current;
     current.binaryType = "arraybuffer";
@@ -2023,7 +2498,10 @@ async function copyJobsValue(button) {
       if (pane.socket !== current) return;
       showStatus(pane, "");
       // After the replay, so that it lands at the end of what is on screen.
-      term.write(new Uint8Array(event.data), pane.pendingSend ? () => deliverSend(pane) : undefined);
+      term.write(
+        new Uint8Array(event.data),
+        pane.pendingSend ? () => deliverSend(pane) : undefined,
+      );
     };
     current.onclose = (event) => {
       if (pane.socket !== current) return;
@@ -2035,13 +2513,20 @@ async function copyJobsValue(button) {
           : "The terminal lost its connection, so nothing was sent.",
       );
       if (event.code === closeTakenOver) {
-        showStatus(pane, "Another tab has this terminal.", "Use it here", () => connect(pane));
+        showStatus(pane, "Another tab has this terminal.", "Use it here", () =>
+          connect(pane),
+        );
       } else if (event.code === closeExited) {
         shellGone(pane, "The shell ended: " + event.reason + ".");
       } else if (event.code === closeNoShell) {
         shellGone(pane, "The shell has ended.");
       } else if (event.code === closeFailed) {
-        showStatus(pane, "The shell could not be shown: " + event.reason, "Try again", () => connect(pane));
+        showStatus(
+          pane,
+          "The shell could not be shown: " + event.reason,
+          "Try again",
+          () => connect(pane),
+        );
       } else {
         reconnect(pane);
       }
@@ -2061,7 +2546,15 @@ async function copyJobsValue(button) {
     try {
       const place = pagePlace();
       placeOverride = "";
-      response = await serverFetch(shellsPath + "?rows=" + pane.term.rows + "&cols=" + pane.term.cols + (place && "&" + place), { method: "POST" });
+      response = await serverFetch(
+        shellsPath +
+          "?rows=" +
+          pane.term.rows +
+          "&cols=" +
+          pane.term.cols +
+          (place && "&" + place),
+        { method: "POST" },
+      );
     } catch {}
     if (!response?.ok) {
       await refusal(pane, response, "The shell did not start", again);
@@ -2096,7 +2589,9 @@ async function copyJobsValue(button) {
     pane.observer.disconnect();
     pane.term.dispose();
     pane.element.remove();
-    const row = columns.flatMap((column) => column.rows).find((item) => item.pane === pane);
+    const row = columns
+      .flatMap((column) => column.rows)
+      .find((item) => item.pane === pane);
     const neighbor = removeRow(columns, row);
     panes = readingOrder();
     if (focused === pane) {
@@ -2110,13 +2605,21 @@ async function copyJobsValue(button) {
   // withSplit is the layout after splitting a pane, with a row for the new one. Right makes
   // a column of the whole height, beside the pane's column; this goes no deeper.
   const withSplit = (pane, right) => {
-    const layout = columns.map((column) => ({ ...column, rows: column.rows.map((row) => ({ ...row })) }));
-    const column = layout.find((item) => item.rows.some((row) => row.pane === pane));
+    const layout = columns.map((column) => ({
+      ...column,
+      rows: column.rows.map((row) => ({ ...row })),
+    }));
+    const column = layout.find((item) =>
+      item.rows.some((row) => row.pane === pane),
+    );
     const row = column.rows.find((item) => item.pane === pane);
     if (right) {
       const added = { share: 1, pane: null };
       column.share /= 2;
-      layout.splice(layout.indexOf(column) + 1, 0, { share: column.share, rows: [added] });
+      layout.splice(layout.indexOf(column) + 1, 0, {
+        share: column.share,
+        rows: [added],
+      });
       return { layout, added };
     }
     const added = { share: row.share / 2, pane: null };
@@ -2129,7 +2632,8 @@ async function copyJobsValue(button) {
     const { width, height } = panesBox.getBoundingClientRect();
     if (!width || !height) return true;
     return layoutGeometry(layout, isStacked()).places.every(
-      ({ box }) => box.w * width >= minPaneWidth && box.h * height >= minPaneHeight,
+      ({ box }) =>
+        box.w * width >= minPaneWidth && box.h * height >= minPaneHeight,
     );
   };
   let splitting = false;
@@ -2145,10 +2649,14 @@ async function copyJobsValue(button) {
     const inGroup = shellsHere();
     const place = inGroup.findIndex((shell) => shell.id === pane.shown);
     const free = inGroup.filter((shell) => !paneShowing(shell.id));
-    let shell = inGroup.slice(place + 1).find((item) => !paneShowing(item.id)) || free[0];
+    let shell =
+      inGroup.slice(place + 1).find((item) => !paneShowing(item.id)) || free[0];
     if (!shell) {
       if (inGroup.length >= groupLimit || shells.length >= shellLimit) {
-        showBriefly(pane, "No more shells can start here, so there is nothing to split with.");
+        showBriefly(
+          pane,
+          "No more shells can start here, so there is nothing to split with.",
+        );
         return;
       }
       splitting = true;
@@ -2191,14 +2699,28 @@ async function copyJobsValue(button) {
     else closePane(pane); // The other panes have all there is. With none, this stays.
   };
   const endShell = async (shell, refused = paneRefusal) => {
-    if (!(await askToEnd([shell], "End " + (shell.project && !sameGroup(shell, here) ? "shell " + shell.number + " of " + shell.project : "shell " + shell.number)))) return false;
+    if (
+      !(await askToEnd(
+        [shell],
+        "End " +
+          (shell.project && !sameGroup(shell, here)
+            ? "shell " + shell.number + " of " + shell.project
+            : "shell " + shell.number),
+      ))
+    )
+      return false;
     endingHere.add(shell.id);
     let response;
     try {
-      response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id), { method: "DELETE" });
+      response = await serverFetch(
+        shellsPath + "/" + encodeURIComponent(shell.id),
+        { method: "DELETE" },
+      );
     } catch {}
     if (!response?.ok && response?.status !== 404) {
-      await refused(response, "The shell did not end", () => endShell(shell, refused));
+      await refused(response, "The shell did not end", () =>
+        endShell(shell, refused),
+      );
       return false;
     }
     // A shown shell's connection closes, which moves on to another.
@@ -2235,7 +2757,14 @@ async function copyJobsValue(button) {
     pane.pendingSend = {
       text,
       resolve,
-      timer: setTimeout(() => settleSend(pane, "The terminal did not connect, so nothing was sent."), 15000),
+      timer: setTimeout(
+        () =>
+          settleSend(
+            pane,
+            "The terminal did not connect, so nothing was sent.",
+          ),
+        15000,
+      ),
     };
   };
   const moveSend = (from, to) => {
@@ -2257,7 +2786,8 @@ async function copyJobsValue(button) {
     });
     columns = layout;
     panes = readingOrder();
-    const chosen = rows.find((row) => shellOf.get(row) === wanted)?.pane || pane;
+    const chosen =
+      rows.find((row) => shellOf.get(row) === wanted)?.pane || pane;
     if (chosen !== pane) moveSend(pane, chosen);
     focused = chosen;
     applyLayout();
@@ -2275,7 +2805,9 @@ async function copyJobsValue(button) {
     if (pane.pendingSend) takeOver = false;
     const listFailed = (response) => {
       settleSend(pane, "The shells could not be listed, so nothing was sent.");
-      return refusal(pane, response, "The shells could not be listed", () => begin());
+      return refusal(pane, response, "The shells could not be listed", () =>
+        begin(),
+      );
     };
     let refused;
     try {
@@ -2302,7 +2834,9 @@ async function copyJobsValue(button) {
     }
     // Other panes are there only when this runs again on a panel in use.
     const others = panes.length > 1;
-    const inGroup = shellsHere().filter((item) => item.id === pane.shown || !paneShowing(item.id));
+    const inGroup = shellsHere().filter(
+      (item) => item.id === pane.shown || !paneShowing(item.id),
+    );
     const saved = others ? null : rememberedLayout(inGroup);
     const wanted = saved?.layout[0].rows[0].shell ?? rememberedShown();
     const shell = inGroup.find((item) => item.id === wanted) || inGroup[0];
@@ -2317,7 +2851,9 @@ async function copyJobsValue(button) {
       panel.classList.add("terminal-empty");
       showStatus(
         pane,
-        here.project ? "No shell for " + here.project + " yet." : "No shell here yet.",
+        here.project
+          ? "No shell for " + here.project + " yet."
+          : "No shell here yet.",
         "Start a shell",
         () => newShell(pane),
       );
@@ -2335,7 +2871,9 @@ async function copyJobsValue(button) {
       // the server restarts the sign-in is gone, and retrying can never succeed.
       let response;
       try {
-        response = await serverFetch("/_terminal/xterm-license.txt", { method: "HEAD" });
+        response = await serverFetch("/_terminal/xterm-license.txt", {
+          method: "HEAD",
+        });
       } catch {}
       if (!panes.includes(pane) || signInGone(pane, response)) return;
       if (document.hidden) reconnect(pane);
@@ -2356,8 +2894,10 @@ async function copyJobsValue(button) {
   // percent writes a part of the panel for a style, and place sets where an element goes,
   // keeping half a handle clear of each edge that has a neighbor.
   const percent = (part) => Math.round(part * 1e6) / 1e4 + "%";
-  const inset = (start, hasBefore) => (hasBefore ? "calc(" + percent(start) + " + 3px)" : percent(start));
-  const span = (size, edges) => (edges ? "calc(" + percent(size) + " - " + edges * 3 + "px)" : percent(size));
+  const inset = (start, hasBefore) =>
+    hasBefore ? "calc(" + percent(start) + " + 3px)" : percent(start);
+  const span = (size, edges) =>
+    edges ? "calc(" + percent(size) + " - " + edges * 3 + "px)" : percent(size);
   const place = (element, box, before, after) => {
     element.style.left = inset(box.x, before.x);
     element.style.top = inset(box.y, before.y);
@@ -2381,10 +2921,19 @@ async function copyJobsValue(button) {
         places.push({
           row,
           box: stacked
-            ? { x: 0, y: across + down * column.share, w: 1, h: row.share * column.share }
+            ? {
+                x: 0,
+                y: across + down * column.share,
+                w: 1,
+                h: row.share * column.share,
+              }
             : { x: across, y: down, w: column.share, h: row.share },
-          before: stacked ? { x: 0, y: Number(c > 0 || r > 0) } : { x: Number(c > 0), y: Number(r > 0) },
-          after: stacked ? { x: 0, y: Number(!lastColumn || !lastRow) } : { x: Number(!lastColumn), y: Number(!lastRow) },
+          before: stacked
+            ? { x: 0, y: Number(c > 0 || r > 0) }
+            : { x: Number(c > 0), y: Number(r > 0) },
+          after: stacked
+            ? { x: 0, y: Number(!lastColumn || !lastRow) }
+            : { x: Number(!lastColumn), y: Number(!lastRow) },
         });
         if (!lastRow) {
           const scale = stacked ? column.share : 1;
@@ -2432,7 +2981,10 @@ async function copyJobsValue(button) {
     const { places, boundaries } = layoutGeometry(columns, laidStacked);
     for (const { row, box, before, after } of places) {
       place(row.pane.element, box, before, after);
-      row.pane.element.classList.toggle("terminal-pane-focused", row.pane === focused);
+      row.pane.element.classList.toggle(
+        "terminal-pane-focused",
+        row.pane === focused,
+      );
     }
     panesBox.classList.toggle("terminal-panes-split", panes.length > 1);
     while (handles.length > boundaries.length) handles.pop().remove();
@@ -2443,14 +2995,29 @@ async function copyJobsValue(button) {
       }
       const handle = handles[index];
       handle.boundary = boundary;
-      handle.classList.toggle("terminal-split-handle-rows", boundary.horizontal);
-      handle.setAttribute("aria-orientation", boundary.horizontal ? "horizontal" : "vertical");
-      handle.setAttribute("aria-valuenow", String(Math.round((boundary.a.share / (boundary.a.share + boundary.b.share)) * 100)));
+      handle.classList.toggle(
+        "terminal-split-handle-rows",
+        boundary.horizontal,
+      );
+      handle.setAttribute(
+        "aria-orientation",
+        boundary.horizontal ? "horizontal" : "vertical",
+      );
+      handle.setAttribute(
+        "aria-valuenow",
+        String(
+          Math.round(
+            (boundary.a.share / (boundary.a.share + boundary.b.share)) * 100,
+          ),
+        ),
+      );
       const line = "calc(" + percent(boundary.at) + " - 3px)";
       handle.style.left = boundary.horizontal ? percent(boundary.from) : line;
       handle.style.top = boundary.horizontal ? line : percent(boundary.from);
       handle.style.width = boundary.horizontal ? percent(boundary.size) : "6px";
-      handle.style.height = boundary.horizontal ? "6px" : percent(boundary.size);
+      handle.style.height = boundary.horizontal
+        ? "6px"
+        : percent(boundary.size);
     });
     updatePaneButtons();
   };
@@ -2467,7 +3034,9 @@ async function copyJobsValue(button) {
     const both = a.share + b.share;
     const { width, height } = panesBox.getBoundingClientRect();
     const room = (horizontal ? height : width) * scale;
-    const smallest = room ? (horizontal ? minPaneHeight : minPaneWidth) / room : 0.05;
+    const smallest = room
+      ? (horizontal ? minPaneHeight : minPaneWidth) / room
+      : 0.05;
     const least = Math.min(smallest, both / 2);
     a.share = Math.max(least, Math.min(share, both - least));
     b.share = both - a.share;
@@ -2485,17 +3054,28 @@ async function copyJobsValue(button) {
       handle.onpointermove = (move) => {
         const box = panesBox.getBoundingClientRect();
         const { boundary } = handle;
-        const part = boundary.horizontal ? (move.clientY - box.top) / box.height : (move.clientX - box.left) / box.width;
-        if (Number.isFinite(part)) moveBoundary(boundary, (part - boundary.start) / boundary.scale);
+        const part = boundary.horizontal
+          ? (move.clientY - box.top) / box.height
+          : (move.clientX - box.left) / box.width;
+        if (Number.isFinite(part))
+          moveBoundary(boundary, (part - boundary.start) / boundary.scale);
       };
       handle.onpointerup = handle.onpointercancel = () => {
-        handle.onpointermove = handle.onpointerup = handle.onpointercancel = null;
+        handle.onpointermove =
+          handle.onpointerup =
+          handle.onpointercancel =
+            null;
         rememberLayout();
         focused.term.focus();
       };
     };
     handle.onkeydown = (event) => {
-      const step = { ArrowLeft: -0.05, ArrowUp: -0.05, ArrowRight: 0.05, ArrowDown: 0.05 }[event.key];
+      const step = {
+        ArrowLeft: -0.05,
+        ArrowUp: -0.05,
+        ArrowRight: 0.05,
+        ArrowDown: 0.05,
+      }[event.key];
       if (!step) return;
       event.preventDefault();
       moveBoundary(handle.boundary, handle.boundary.a.share + step);
@@ -2547,7 +3127,11 @@ async function copyJobsValue(button) {
     groups.onchange = () => {
       if (!groups.value) return;
       // A window takes the page that opened it along, as the panel goes to the page.
-      if (inWindow) tellOpener({ type: "rotari-terminal-go", path: groups.value.slice(windowPath.length) });
+      if (inWindow)
+        tellOpener({
+          type: "rotari-terminal-go",
+          path: groups.value.slice(windowPath.length),
+        });
       location.assign(groups.value);
     };
     tabs = document.createElement("div");
@@ -2567,7 +3151,8 @@ async function copyJobsValue(button) {
     clear.type = "button";
     drawIcon(clear, icons.clear);
     clear.setAttribute("aria-label", "Clear");
-    clear.title = "Clear this shell's screen and scrollback, here and on the server";
+    clear.title =
+      "Clear this shell's screen and scrollback, here and on the server";
     clear.onclick = () => {
       const pane = focused;
       const { term, socket } = pane;
@@ -2598,9 +3183,17 @@ async function copyJobsValue(button) {
       return button;
     };
     // The split and place pictures are the Table viewer's panes, for the same choices.
-    splitRightButton = iconButton("Split right", [paneFrame, "M8 2.5v11"], () => splitPane(true));
-    splitDownButton = iconButton("Split down", [paneFrame, "M1.5 8h13"], () => splitPane(false));
-    placeButton = iconButton("Panel position", [paneFrame, placeLines.bottom], openPlaceMenu);
+    splitRightButton = iconButton("Split right", [paneFrame, "M8 2.5v11"], () =>
+      splitPane(true),
+    );
+    splitDownButton = iconButton("Split down", [paneFrame, "M1.5 8h13"], () =>
+      splitPane(false),
+    );
+    placeButton = iconButton(
+      "Panel position",
+      [paneFrame, placeLines.bottom],
+      openPlaceMenu,
+    );
     placeButton.disabled = false;
     launchButton = iconButton(
       "Launch here",
@@ -2611,7 +3204,12 @@ async function copyJobsValue(button) {
       },
       "Launch a registered command, such as TensorBoard, in the directory this pane's shell is in now",
     );
-    overviewButton = iconButton("All shells", icons.overview, toggleOverview, "All shells, of every project, to choose one");
+    overviewButton = iconButton(
+      "All shells",
+      icons.overview,
+      toggleOverview,
+      "All shells, of every project, to choose one",
+    );
     overviewButton.disabled = false;
     overviewButton.setAttribute("aria-pressed", "false");
     closePaneButton = iconButton(
@@ -2682,13 +3280,18 @@ async function copyJobsValue(button) {
     term.loadAddon(fit);
     // A link is only text a program printed, so the new tab gets no hold on this page.
     term.loadAddon(
-      new window.WebLinksAddon.WebLinksAddon((_, uri) => window.open(uri, "_blank", "noopener")),
+      new window.WebLinksAddon.WebLinksAddon((_, uri) =>
+        window.open(uri, "_blank", "noopener"),
+      ),
     );
     term.open(viewport);
     fit.fit();
     term.onData((data) => send(pane, new TextEncoder().encode(data)));
     term.onBinary((data) =>
-      send(pane, Uint8Array.from(data, (character) => character.charCodeAt(0))),
+      send(
+        pane,
+        Uint8Array.from(data, (character) => character.charCodeAt(0)),
+      ),
     );
     term.onResize(({ rows, cols }) =>
       send(pane, JSON.stringify({ type: "resize", rows, cols })),
@@ -2715,7 +3318,10 @@ async function copyJobsValue(button) {
       attributes: true,
       attributeFilter: ["data-theme"],
     });
-    matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", applyTheme);
+    matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.(
+      "change",
+      applyTheme,
+    );
     // A font that arrives late changes the size of every cell.
     document.fonts?.ready.then(() => {
       for (const pane of panes) pane.term.options.fontFamily = fontFamily();
@@ -2758,7 +3364,8 @@ async function copyJobsValue(button) {
   // still this server's.
   const tellOpener = (message) => {
     try {
-      if (window.opener && !window.opener.closed) window.opener.postMessage(message, location.origin);
+      if (window.opener && !window.opener.closed)
+        window.opener.postMessage(message, location.origin);
     } catch {}
   };
   // The page's path as far as its project, which a window opens on. A run's page gives
@@ -2780,11 +3387,16 @@ async function copyJobsValue(button) {
       const { socket } = pane;
       pane.socket = null;
       socket?.close();
-      settleSend(pane, "The terminal moved to its own window, so nothing was sent.");
+      settleSend(
+        pane,
+        "The terminal moved to its own window, so nothing was sent.",
+      );
     }
     closeOverview();
     root.classList.remove("terminal-open");
-    document.getElementById("terminal-button")?.setAttribute("aria-pressed", "false");
+    document
+      .getElementById("terminal-button")
+      ?.setAttribute("aria-pressed", "false");
     if (panel) panel.hidden = true;
   };
   // A closed window sends no word, so the page looks.
@@ -2822,7 +3434,10 @@ async function copyJobsValue(button) {
     const path = projectPath();
     if (!path.includes("/project/") || path === followed()) return;
     rememberFollowed(path);
-    terminalWindow.postMessage({ type: "rotari-terminal-follow", path }, location.origin);
+    terminalWindow.postMessage(
+      { type: "rotari-terminal-follow", path },
+      location.origin,
+    );
   };
   // popOut moves the panel to a window of its own, with the panes this browser tab has for
   // each project. It opens the window before anything else, since a browser allows one only
@@ -2836,10 +3451,17 @@ async function copyJobsValue(button) {
         if (isPaneKey(key)) handover[key] = sessionStorage.getItem(key);
       }
     } catch {}
-    const address = windowPath + projectPath() + "#" + encodeURIComponent(JSON.stringify(handover));
+    const address =
+      windowPath +
+      projectPath() +
+      "#" +
+      encodeURIComponent(JSON.stringify(handover));
     const opened = window.open(address, "", "popup,width=900,height=600");
     if (!opened) {
-      showBriefly(focused, "The browser blocked the window. Allow pop-ups for this site to use it.");
+      showBriefly(
+        focused,
+        "The browser blocked the window. Allow pop-ups for this site to use it.",
+      );
       focused.term?.focus();
       return;
     }
@@ -2868,7 +3490,10 @@ async function copyJobsValue(button) {
   // Back to page closes the window, and the page that opened it shows the panel again.
   const backToPage = () => {
     if (!window.opener || window.opener.closed) {
-      showBriefly(focused, "The page that opened this window is gone, so the terminal stays here.");
+      showBriefly(
+        focused,
+        "The page that opened this window is gone, so the terminal stays here.",
+      );
       return;
     }
     tellOpener({ type: "rotari-terminal-back" });
@@ -2893,40 +3518,77 @@ async function copyJobsValue(button) {
         resolve(reply);
       });
     });
-    terminalWindow.postMessage({ type: "rotari-terminal-send", id, text, path: projectPath() }, location.origin);
+    terminalWindow.postMessage(
+      { type: "rotari-terminal-send", id, text, path: projectPath() },
+      location.origin,
+    );
     terminalWindow.focus();
     return answer;
   };
   // In the window, only the page that opened it sends, from this server.
   addEventListener("message", async (event) => {
-    if (!inWindow || event.origin !== location.origin || !window.opener || event.source !== window.opener) return;
+    if (
+      !inWindow ||
+      event.origin !== location.origin ||
+      !window.opener ||
+      event.source !== window.opener
+    )
+      return;
     const { type, id, text, path, place } = event.data || {};
     if (type === "rotari-terminal-send" && typeof text === "string") {
       const problem = await sendToPane(focused, text);
-      const elsewhere = !problem && typeof path === "string" && projectPath(path) !== projectPath(location.pathname.slice(windowPath.length));
-      tellOpener({ type: "rotari-terminal-sent", id, problem, project: elsewhere ? projectName(here) : "" });
+      const elsewhere =
+        !problem &&
+        typeof path === "string" &&
+        projectPath(path) !==
+          projectPath(location.pathname.slice(windowPath.length));
+      tellOpener({
+        type: "rotari-terminal-sent",
+        id,
+        problem,
+        project: elsewhere ? projectName(here) : "",
+      });
     } else if (type === "rotari-terminal-follow" && typeof path === "string") {
       if (!path.startsWith("/") || path.startsWith("//")) return;
-      if (projectPath(path) !== projectPath(location.pathname.slice(windowPath.length))) {
+      if (
+        projectPath(path) !==
+        projectPath(location.pathname.slice(windowPath.length))
+      ) {
         location.assign(windowPath + projectPath(path));
       }
-    } else if (type === "rotari-terminal-here" && typeof path === "string" && typeof place === "string") {
+    } else if (
+      type === "rotari-terminal-here" &&
+      typeof path === "string" &&
+      typeof place === "string"
+    ) {
       // Only a path on this server: one starting // would be another.
       if (!path.startsWith("/") || path.startsWith("//")) return;
       window.focus();
-      if (projectPath(path) === projectPath(location.pathname.slice(windowPath.length))) {
+      if (
+        projectPath(path) ===
+        projectPath(location.pathname.slice(windowPath.length))
+      ) {
         placeOverride = place;
         newAsked = true;
         begin();
       } else {
-        location.assign(windowPath + projectPath(path) + (place ? "?start=" + encodeURIComponent(place) : ""));
+        location.assign(
+          windowPath +
+            projectPath(path) +
+            (place ? "?start=" + encodeURIComponent(place) : ""),
+        );
       }
     }
   });
   // Only this server's pages, and only the window this page opened, have a say. A page
   // loaded while the panel was in a window takes the first that says it is there.
   addEventListener("message", (event) => {
-    if (inWindow || event.origin !== location.origin || typeof event.data?.type !== "string") return;
+    if (
+      inWindow ||
+      event.origin !== location.origin ||
+      typeof event.data?.type !== "string"
+    )
+      return;
     const { type } = event.data;
     if (type === "rotari-terminal-window" && awaitingWindow && event.source) {
       useWindow(event.source);
@@ -2947,14 +3609,23 @@ async function copyJobsValue(button) {
     } else if (type === "rotari-terminal-go") {
       // Only a path on this server: one starting // would be another.
       const { path } = event.data;
-      if (typeof path === "string" && path.startsWith("/") && !path.startsWith("//")) {
+      if (
+        typeof path === "string" &&
+        path.startsWith("/") &&
+        !path.startsWith("//")
+      ) {
         rememberFollowed(projectPath(path));
         location.assign(path);
       }
-    } else if (type === "rotari-terminal-sent" && sendsWaiting.has(event.data.id)) {
+    } else if (
+      type === "rotari-terminal-sent" &&
+      sendsWaiting.has(event.data.id)
+    ) {
       const { problem, project } = event.data;
       if (!problem && typeof project === "string") sentToProject = project;
-      sendsWaiting.get(event.data.id)(typeof problem === "string" ? problem : null);
+      sendsWaiting.get(event.data.id)(
+        typeof problem === "string" ? problem : null,
+      );
     }
   });
   window.toggleTerminalPanel = () => {
@@ -2971,7 +3642,14 @@ async function copyJobsValue(button) {
   // openTerminalHere starts a new shell in this page's place, such as the run's directory.
   window.openTerminalHere = () => {
     if (terminalWindow) {
-      terminalWindow.postMessage({ type: "rotari-terminal-here", path: projectPath(), place: pagePlace() }, location.origin);
+      terminalWindow.postMessage(
+        {
+          type: "rotari-terminal-here",
+          path: projectPath(),
+          place: pagePlace(),
+        },
+        location.origin,
+      );
       terminalWindow.focus();
       return;
     }
@@ -3003,7 +3681,8 @@ async function copyJobsValue(button) {
   window.sendToTerminal = async (text, { pasted = false } = {}) => {
     if (pasted) {
       text = pastableText(text);
-      if (text.length > pasteLimit) return "This is too long to send, so nothing was sent.";
+      if (text.length > pasteLimit)
+        return "This is too long to send, so nothing was sent.";
     } else if (/[\u0000-\u001f\u007f-\u009f]/.test(text)) {
       // A line break would run what came before it, and other control characters, from a
       // value in the state, could do anything a keyboard can.
@@ -3011,7 +3690,8 @@ async function copyJobsValue(button) {
     }
     if (!text) return "There is nothing to send.";
     if (terminalWindow) return sendToWindow(text);
-    if (awaitingWindow) return "The terminal's window has not answered yet, so nothing was sent.";
+    if (awaitingWindow)
+      return "The terminal's window has not answered yet, so nothing was sent.";
     return sendToPane(focused, text);
   };
   const sendToPane = async (pane, text) => {
@@ -3029,7 +3709,8 @@ async function copyJobsValue(button) {
     }
     const inGroup = shellsHere();
     if (!inGroup.length) return noShellMessage();
-    const showing = pane.term && inGroup.some((shell) => shell.id === pane.shown);
+    const showing =
+      pane.term && inGroup.some((shell) => shell.id === pane.shown);
     // Between connect and open, it is only waiting for the old output to finish.
     if (showing && !pane.socket && !pane.waitingToOpen) {
       setOpen(true);
@@ -3053,7 +3734,9 @@ async function copyJobsValue(button) {
   };
   // A value goes in as one word of a command, so one that needs quoting gets it.
   const asWord = (value) =>
-    /^[A-Za-z0-9_\/.:=@%+,-]+$/.test(value) ? value : "'" + value.replace(/'/g, "'\\''") + "'";
+    /^[A-Za-z0-9_\/.:=@%+,-]+$/.test(value)
+      ? value
+      : "'" + value.replace(/'/g, "'\\''") + "'";
   let sendNote, sendNoteTimer;
   const showNote = (message, duration) => {
     if (!sendNote) {
@@ -3067,23 +3750,35 @@ async function copyJobsValue(button) {
     clearTimeout(sendNoteTimer);
     sendNoteTimer = setTimeout(() => (sendNote.hidden = true), duration);
   };
-  window.sendToTerminalAndSay = async (text, { word = false, pasted = false } = {}) => {
+  window.sendToTerminalAndSay = async (
+    text,
+    { word = false, pasted = false } = {},
+  ) => {
     sentToProject = "";
-    const problem = await window.sendToTerminal(word ? asWord(text) : text, { pasted });
+    const problem = await window.sendToTerminal(word ? asWord(text) : text, {
+      pasted,
+    });
     const sent = sentToProject
-      ? "Sent to the terminal's window, in " + sentToProject + ". Nothing runs until you press Enter there."
+      ? "Sent to the terminal's window, in " +
+        sentToProject +
+        ". Nothing runs until you press Enter there."
       : "Sent. Nothing runs until you press Enter in the terminal.";
     showNote(problem || sent, problem ? 6000 : sentToProject ? 4000 : 2500);
   };
   window.sendButtonPressed = (button) => {
     const { sendText, sendValue } = button.dataset;
-    return window.sendToTerminalAndSay(sendText ?? (sendValue || ""), { word: sendText === undefined });
+    return window.sendToTerminalAndSay(sendText ?? (sendValue || ""), {
+      word: sendText === undefined,
+    });
   };
   // The Recent jobs page is drawn on the server, which leaves its copy buttons plain.
   const addJobsSendButtons = () => {
     for (const copy of document.querySelectorAll(".jobs-copy")) {
       const send = copy.cloneNode(true);
-      const label = (copy.getAttribute("aria-label") || "").replace(/^Copy /, "");
+      const label = (copy.getAttribute("aria-label") || "").replace(
+        /^Copy /,
+        "",
+      );
       send.classList.add("terminal-send");
       send.title = "Send " + label + " to the terminal";
       send.setAttribute("aria-label", send.title);
@@ -3095,7 +3790,10 @@ async function copyJobsValue(button) {
       const icon = send.querySelector("svg");
       icon.replaceChildren();
       for (const shape of ["M4 12h15", "m13 6 6 6-6 6"]) {
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        const path = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "path",
+        );
         path.setAttribute("d", shape);
         icon.append(path);
       }
@@ -3110,22 +3808,63 @@ async function copyJobsValue(button) {
   const signOutLine = async (shell) => {
     let preview;
     try {
-      const response = await serverFetch(shellsPath + "/" + encodeURIComponent(shell.id) + "/preview");
+      const response = await serverFetch(
+        shellsPath + "/" + encodeURIComponent(shell.id) + "/preview",
+      );
       if (response.ok) preview = await response.json();
-      else return "  " + shellName(shell) + ": what runs is not known (" + ((await response.text()).trim() || "status " + response.status) + ")";
+      else
+        return (
+          "  " +
+          shellName(shell) +
+          ": what runs is not known (" +
+          ((await response.text()).trim() || "status " + response.status) +
+          ")"
+        );
     } catch {
-      return "  " + shellName(shell) + ": what runs is not known (the server did not answer)";
+      return (
+        "  " +
+        shellName(shell) +
+        ": what runs is not known (the server did not answer)"
+      );
     }
     const below = Array.isArray(preview.processes) ? preview.processes : [];
     const command = preview.command || (shell.running ? "a command" : "");
     if (!command && !below.length) {
-      if (preview.processes_error) return "  " + shellName(shell) + ": its processes are not known (" + preview.processes_error + ")";
+      if (preview.processes_error)
+        return (
+          "  " +
+          shellName(shell) +
+          ": its processes are not known (" +
+          preview.processes_error +
+          ")"
+        );
       return null;
     }
     const noun = below.length === 1 ? " process" : " processes";
-    if (command) return "  " + shellName(shell) + ": " + command + (below.length ? " (" + below.length + noun + ")" : "");
-    const named = below.slice(0, 3).map((process) => process.command).join(", ");
-    return "  " + shellName(shell) + ": " + below.length + " background" + noun + " (" + named + (below.length > 3 ? ", ..." : "") + ")";
+    if (command)
+      return (
+        "  " +
+        shellName(shell) +
+        ": " +
+        command +
+        (below.length ? " (" + below.length + noun + ")" : "")
+      );
+    const named = below
+      .slice(0, 3)
+      .map((process) => process.command)
+      .join(", ");
+    return (
+      "  " +
+      shellName(shell) +
+      ": " +
+      below.length +
+      " background" +
+      noun +
+      " (" +
+      named +
+      (below.length > 3 ? ", ..." : "") +
+      ")"
+    );
   };
   const confirmSignOut = async (form) => {
     let problem = "";
@@ -3133,19 +3872,41 @@ async function copyJobsValue(button) {
     try {
       const response = await serverFetch(shellsPath);
       if (response.ok) listed = (await response.json()).shells || [];
-      else problem = (await response.text()).trim() || "status " + response.status;
+      else
+        problem = (await response.text()).trim() || "status " + response.status;
     } catch {
       problem = "the server did not answer";
     }
     if (problem) {
-      if (!confirm("Whether anything is running in a shell could not be checked: " + problem + ". Signing out ends every shell. Sign out anyway?")) return;
+      if (
+        !confirm(
+          "Whether anything is running in a shell could not be checked: " +
+            problem +
+            ". Signing out ends every shell. Sign out anyway?",
+        )
+      )
+        return;
     } else {
-      const lines = (await Promise.all(listed.map(signOutLine))).filter(Boolean);
+      const lines = (await Promise.all(listed.map(signOutLine))).filter(
+        Boolean,
+      );
       if (lines.length) {
         const shown = lines.slice(0, 5);
-        if (lines.length > 5) shown.push("  and " + (lines.length - 5) + " more");
-        const head = lines.length === 1 ? "Something is running in a shell" : "Something is running in " + lines.length + " shells";
-        if (!confirm(head + ":\n" + shown.join("\n") + "\nSigning out ends every shell, and what runs in it. Sign out anyway?")) return;
+        if (lines.length > 5)
+          shown.push("  and " + (lines.length - 5) + " more");
+        const head =
+          lines.length === 1
+            ? "Something is running in a shell"
+            : "Something is running in " + lines.length + " shells";
+        if (
+          !confirm(
+            head +
+              ":\n" +
+              shown.join("\n") +
+              "\nSigning out ends every shell, and what runs in it. Sign out anyway?",
+          )
+        )
+          return;
       }
     }
     signingOut = true;
@@ -3156,7 +3917,12 @@ async function copyJobsValue(button) {
       "submit",
       (event) => {
         const form = event.target;
-        if (signingOut || !(form instanceof HTMLFormElement) || form.getAttribute("action") !== "/_auth/logout") return;
+        if (
+          signingOut ||
+          !(form instanceof HTMLFormElement) ||
+          form.getAttribute("action") !== "/_auth/logout"
+        )
+          return;
         event.preventDefault();
         confirmSignOut(form);
       },
@@ -3176,7 +3942,11 @@ async function copyJobsValue(button) {
       }
       // The sidebar is drawn again with every refresh, without the marks.
       const sidebarList = document.getElementById("sidebar-basedirs");
-      if (sidebarList) new MutationObserver(markSidebarProjects).observe(sidebarList, { childList: true, subtree: true });
+      if (sidebarList)
+        new MutationObserver(markSidebarProjects).observe(sidebarList, {
+          childList: true,
+          subtree: true,
+        });
       sayAlive();
       setInterval(sayAlive, aliveInterval);
       applySavedSizes();
@@ -3192,7 +3962,8 @@ async function copyJobsValue(button) {
         }).observe(sidebar);
       }
       setInterval(() => {
-        if (!document.hidden && !panes.some((pane) => pane.whenVisible)) refreshShells();
+        if (!document.hidden && !panes.some((pane) => pane.whenVisible))
+          refreshShells();
       }, shellsRefresh);
     }
     // Opening a window asks for a shell, as opening the panel does.

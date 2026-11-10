@@ -36,7 +36,9 @@ def timeline():
             "kind": "tabs",
             "dur": 6.0,
             "tabs": [{"title": "bash", "events": t["events"]} for t in terms],
-            "captions": [[0, "Experiments in parallel.<br><em>Which tab was which?</em>"]],
+            "captions": [
+                [0, "Experiments in parallel.<br><em>Which tab was which?</em>"]
+            ],
             "say": "Run experiments in parallel, and the terminal tabs pile up. "
             "Which one was the TTS sweep?",
         },
@@ -51,7 +53,10 @@ def timeline():
         },
         webscene(
             "asr_open",
-            [[0, "Open a project's terminal…"], [2.8, "…where its<br><em>last run started.</em>"]],
+            [
+                [0, "Open a project's terminal…"],
+                [2.8, "…where its<br><em>last run started.</em>"],
+            ],
             say="Open the terminal on a project's page, and the shell starts where its last run started.",
         ),
         webscene(

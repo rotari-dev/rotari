@@ -176,7 +176,7 @@ function renderArtifactListing() {
       const path = open
         ? '<button type="button" class="artifact-open" ' +
           actionAttributes("openArtifact", index, "", entry.type) +
-          '>' +
+          ">" +
           esc(entry.display_path) +
           "</button>"
         : esc(entry.display_path);
@@ -668,7 +668,7 @@ async function loadArtifactDirectory(index, child, offset) {
           ? esc(entry.name)
           : '<button type="button" class="artifact-open" ' +
             actionAttributes("openArtifact", index, path, type) +
-            '>' +
+            ">" +
             esc(entry.name) +
             "</button>";
       return (
@@ -705,7 +705,7 @@ async function loadArtifactDirectory(index, child, offset) {
       (end < page.total
         ? '<button type="button" ' +
           actionAttributes("loadArtifactDirectory", index, child, end) +
-          '>More</button>'
+          ">More</button>"
         : ""),
   );
 }

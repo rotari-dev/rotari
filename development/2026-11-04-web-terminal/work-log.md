@@ -113,4 +113,3 @@ See [plan.md](plan.md) for current scope and status.
 **Validation:** Go CI, including `go` with the browser required and `race`, and the other workflows passed at `d695a186` on the `web-csp` branch. CI logs were not read; the browser tests' run is inferred from the required setting and the job's success. After rebasing onto `main`, `go vet ./...` and `tsc` passed, and `go test ./...` passed except `TestSSHJobReadsAsRunning`, the flaky test already in `ISSUES.md`, which then passed ten repetitions and a package rerun. The browser tests skipped locally because Chrome is absent. `go test -race ./...` passed before the rebase. `pre-commit` is not installed.
 
 **Remaining:** Static exports and launched services' own pages have no policy. A value that became markup could still run a listed action.
-

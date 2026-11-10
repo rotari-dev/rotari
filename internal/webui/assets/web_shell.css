@@ -984,7 +984,8 @@ html.terminal-open[data-terminal-place="right"] .terminal-resizer {
 html.terminal-open[data-terminal-place]:not(.terminal-maximized) .terminal-bar {
   flex-wrap: wrap;
 }
-html.terminal-open[data-terminal-place]:not(.terminal-maximized) .terminal-tabs {
+html.terminal-open[data-terminal-place]:not(.terminal-maximized)
+  .terminal-tabs {
   order: 1;
   flex: 1 0 100%;
 }
@@ -1059,8 +1060,10 @@ html.terminal-open[data-terminal-place]:not(.terminal-maximized) .terminal-tabs 
   margin-right: 4px;
   vertical-align: -1px;
   background: var(--s-ok);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/%3E%3C/svg%3E") center / contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/%3E%3C/svg%3E")
+    center / contain no-repeat;
 }
 .terminal-tab [role="tab"] {
   max-width: 160px;
@@ -1324,7 +1327,9 @@ html.terminal-open .output-panel.terminal-overview {
 .terminal-overview-processes[aria-expanded="true"] {
   color: var(--text);
 }
-.terminal-overview-run .terminal-overview-command:not([hidden]) + .terminal-overview-processes::before {
+.terminal-overview-run
+  .terminal-overview-command:not([hidden])
+  + .terminal-overview-processes::before {
   content: "\00b7\00a0";
 }
 .terminal-overview-process-list {
@@ -1606,28 +1611,38 @@ html.terminal-open .output-panel.terminal-launch {
 .terminal-overview button.terminal-overview-project-state-run {
   cursor: pointer;
 }
-.terminal-overview button.terminal-overview-project-state-run:hover .terminal-overview-project-state-lifecycle,
-.terminal-overview button.terminal-overview-project-state-run:focus-visible .terminal-overview-project-state-lifecycle {
+.terminal-overview
+  button.terminal-overview-project-state-run:hover
+  .terminal-overview-project-state-lifecycle,
+.terminal-overview
+  button.terminal-overview-project-state-run:focus-visible
+  .terminal-overview-project-state-lifecycle {
   text-decoration: underline;
 }
-.terminal-overview-project-state-run .terminal-overview-project-state-lifecycle::before {
+.terminal-overview-project-state-run
+  .terminal-overview-project-state-lifecycle::before {
   content: "\25cf\00a0";
 }
-.terminal-overview-project-state-run.tone-ok .terminal-overview-project-state-lifecycle::before {
+.terminal-overview-project-state-run.tone-ok
+  .terminal-overview-project-state-lifecycle::before {
   color: var(--s-ok);
 }
-.terminal-overview-project-state-run.tone-bad .terminal-overview-project-state-lifecycle::before,
+.terminal-overview-project-state-run.tone-bad
+  .terminal-overview-project-state-lifecycle::before,
 .terminal-overview-project-state-count.tone-bad {
   color: var(--s-bad);
 }
-.terminal-overview-project-state-run.tone-run .terminal-overview-project-state-lifecycle::before,
+.terminal-overview-project-state-run.tone-run
+  .terminal-overview-project-state-lifecycle::before,
 .terminal-overview-project-state-count.tone-run {
   color: var(--s-run);
 }
-.terminal-overview-project-state-run.tone-warn .terminal-overview-project-state-lifecycle::before {
+.terminal-overview-project-state-run.tone-warn
+  .terminal-overview-project-state-lifecycle::before {
   color: var(--s-warn);
 }
-.terminal-overview-project-state-run.tone-off .terminal-overview-project-state-lifecycle::before {
+.terminal-overview-project-state-run.tone-off
+  .terminal-overview-project-state-lifecycle::before {
   color: var(--muted);
 }
 .terminal-overview-project-state-none {

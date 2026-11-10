@@ -312,7 +312,7 @@ function laneRowsHTML(entries, rowHeight) {
         esc(entry.name) +
         ' in the table" ' +
         actionAttributes("focusMatrixJob", entry.lane.job_id) +
-        '>' +
+        ">" +
         esc(entry.name) +
         '</button><div class="lane-track">' +
         track +
@@ -797,7 +797,8 @@ function failureCausesSection(run, runID, latest) {
     item.append(members);
     if (latest && !run.running) {
       const command = document.createElement("div");
-      const goToRun = run.cwd && run.cwd !== "-" ? ["cd " + shellQuote(run.cwd)] : [];
+      const goToRun =
+        run.cwd && run.cwd !== "-" ? ["cd " + shellQuote(run.cwd)] : [];
       const retry =
         "rotari retry -r " +
         shellQuote(runID) +
