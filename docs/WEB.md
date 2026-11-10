@@ -153,7 +153,8 @@ in the sidebar with a shell running has a terminal icon; point at it to see how 
 
 The **All shells** icon beside **+** opens a dialog over the page, as a log does, listing every running shell,
 grouped by project with the page's first. Each card shows its tab name, the directory its shell is in now, and
-the command running in it, if any. Choose one with a click, or with the arrow keys and Enter, to close the dialog
+the command running in it, if any, and when it started and how long it has been idle (no output and no
+typing); a tab's tooltip says the same. Choose one with a click, or with the arrow keys and Enter, to close the dialog
 and show that shell in the pane with the keys; one of another project takes the page there, as the project list
 does. The pencil on a card renames its tab and the cross ends its shell, after asking; **F2** and **Delete** do
 the same for the card with the keys, and the dialog stays open for the next one. **End all** beside a project's

@@ -242,12 +242,16 @@ type terminalShellResponse struct {
 	CommandFinished bool `json:"command_finished"`
 	// Running is a command running in the shell's foreground now, which signing out asks about.
 	Running bool `json:"running"`
+	// StartedAt is when the shell started, and ActiveAt when it last printed or was typed
+	// into; the list's now dates them by the server's clock.
+	StartedAt time.Time `json:"started_at"`
+	ActiveAt  time.Time `json:"active_at"`
 	// Link is the page that shows this shell's tabs.
 	Link string `json:"link"`
 }
 
 func (s site) terminalShellResponse(shell terminal.ShellInfo) terminalShellResponse {
-	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Name: shell.Name, Dir: shell.Dir, UnseenOutput: shell.UnseenOutput, CommandFinished: shell.CommandFinished, Running: shell.Running, Link: "/"}
+	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Name: shell.Name, Dir: shell.Dir, UnseenOutput: shell.UnseenOutput, CommandFinished: shell.CommandFinished, Running: shell.Running, StartedAt: shell.StartedAt, ActiveAt: shell.ActiveAt, Link: "/"}
 	baseDir, project, ok := strings.Cut(shell.Group, "\x00")
 	if !ok {
 		return response
@@ -317,7 +321,7 @@ func (s site) serveTerminalShells(writer http.ResponseWriter, request *http.Requ
 		for _, shell := range s.Terminal.Shells() {
 			shells = append(shells, s.terminalShellResponse(shell))
 		}
-		writeTerminalJSON(writer, http.StatusOK, map[string]any{"shells": shells, "limit": shellLimit, "group_limit": groupLimit})
+		writeTerminalJSON(writer, http.StatusOK, map[string]any{"shells": shells, "limit": shellLimit, "group_limit": groupLimit, "now": time.Now()})
 	case http.MethodPost:
 		rows, cols, ok := terminalSize(writer, request)
 		if !ok {

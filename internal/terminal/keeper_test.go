@@ -941,3 +941,36 @@ func TestCommandFinishedIsAnEndNoAttachmentShowed(t *testing.T) {
 		t.Error("a background job's output counted as a command finishing")
 	}
 }
+
+// A shell knows when it started, and its activity moves with its output and its input.
+func TestShellTimesFollowItsActivity(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	before := time.Now()
+	shell, err := keeper.Start(StartOptions{Rows: 24, Cols: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shell.StartedAt.Before(before) || shell.StartedAt.After(time.Now()) || shell.ActiveAt.Before(shell.StartedAt) {
+		t.Errorf("started %v, active %v; want both just now", shell.StartedAt, shell.ActiveAt)
+	}
+	seen := watchShell(t, keeper, shell.ID)
+	// With echo off, what is typed next prints nothing, so only the input can move it.
+	seen.run(t, `stty -echo; echo "quiet-$((1+1))"`, "quiet-2")
+	time.Sleep(100 * time.Millisecond) // The prompt after it.
+	settled := keeper.Shells()[0].ActiveAt
+	if !settled.After(shell.StartedAt) {
+		t.Errorf("output left the shell active at %v, its start", settled)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if _, err := seen.Write([]byte(" ")); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(testWait); !keeper.Shells()[0].ActiveAt.After(settled); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("input never moved the shell's activity")
+		}
+	}
+	if got := keeper.Shells()[0].StartedAt; !got.Equal(shell.StartedAt) {
+		t.Errorf("the start moved to %v", got)
+	}
+}

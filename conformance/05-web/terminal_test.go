@@ -904,3 +904,42 @@ func TestTerminalMarksACommandFinishedOutOfSight(t *testing.T) {
 		t.Error("showing the shell again left its command finished")
 	}
 }
+
+// TestTerminalListsWhenShellsStartedAndWereActive checks that the shell list dates each
+// shell's start and last activity by the server's clock, and that output moves the latter.
+func TestTerminalListsWhenShellsStartedAndWereActive(t *testing.T) {
+	covers(t, "WEB-34")
+	e := terminalEnv(t)
+	base := e.StartWeb("--allow-terminal")
+	headers := http.Header{"X-Rotari-Token": {launchToken}}
+	type listing struct {
+		Now    time.Time `json:"now"`
+		Shells []struct {
+			StartedAt time.Time `json:"started_at"`
+			ActiveAt  time.Time `json:"active_at"`
+		} `json:"shells"`
+	}
+	list := func() listing {
+		t.Helper()
+		status, body := terminalShellsRequest(t, http.MethodGet, base+"/_terminal/shells", headers)
+		var listed listing
+		if err := json.Unmarshal(body, &listed); status != http.StatusOK || err != nil || len(listed.Shells) != 1 {
+			t.Fatalf("listing: status %d, %v: %s", status, err, body)
+		}
+		return listed
+	}
+	page := openTerminalPage(t, base)
+	page.typeLine(`echo "ready-$((1+1))"`)
+	page.await("ready-2")
+	first := list()
+	shell := first.Shells[0]
+	if shell.StartedAt.IsZero() || shell.ActiveAt.Before(shell.StartedAt) || first.Now.Before(shell.ActiveAt) {
+		t.Fatalf("the times do not hold together: %+v", first)
+	}
+	time.Sleep(50 * time.Millisecond)
+	page.typeLine(`echo "later-$((1+1))"`)
+	page.await("later-2")
+	if second := list(); !second.Shells[0].ActiveAt.After(shell.ActiveAt) || !second.Shells[0].StartedAt.Equal(shell.StartedAt) {
+		t.Errorf("activity did not move, or the start did: %+v then %+v", first, second)
+	}
+}

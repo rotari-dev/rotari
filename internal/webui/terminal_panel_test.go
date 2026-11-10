@@ -61,7 +61,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       const command = server.commands?.[id];
       return Promise.resolve({ ok: true, status: 200, json: async () => ({ ...(cwd ? { cwd } : { cwd_error: 'no such process' }), ...(command === '?' ? { command_error: 'no such group' } : command ? { command } : {}) }) });
     }
-    if (method === 'GET') return Promise.resolve({ ok: true, status: 200, json: async () => ({ shells: [...server.shells], limit: 32, group_limit: server.limit }) });
+    if (method === 'GET') return Promise.resolve({ ok: true, status: 200, json: async () => ({ shells: [...server.shells], limit: 32, group_limit: server.limit, ...(server.now ? { now: server.now } : {}) }) });
     if (method === 'POST') {
       if (server.startError) return refused(500, server.startError);
       const project = decodeURIComponent(/project=([^&]*)/.exec(url)?.[1] || '');
@@ -761,6 +761,27 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   unsureForm.dispatchEvent(new unsureSignOut.window.Event('submit', { bubbles: true, cancelable: true }));
   await wait(30);
   assert.deepEqual(unsureAsked, ['Whether a command is running in a shell could not be checked: refused. Signing out ends every shell. Sign out anyway?']);
+
+  // A card says when its shell started and how long it has been idle, by the server's clock,
+  // and a tab's tooltip says so as the pointer reaches it.
+  const timed = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [
+    { ...inProject('1', 1, 'p1'), started_at: '2026-11-10T09:55:00Z', active_at: '2026-11-10T11:45:00Z' },
+    { ...inProject('2', 2, 'p1'), started_at: '2026-11-08T11:59:30Z', active_at: '2026-11-10T11:59:40Z' },
+    inProject('3', 3, 'p1'),
+  ], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  timed.server.now = '2026-11-10T12:00:00Z';
+  await wait(50);
+  await timed.polls[0]();
+  const timedTabs = [...timed.document.querySelectorAll('.terminal-tab [role=tab]')];
+  timedTabs[1].dispatchEvent(new timed.window.Event('pointerenter'));
+  assert.match(timedTabs[1].title, /^Started in \/w\/p1 at \d\d:\d\d, 2d 0h ago\. Active now\.$/);
+  timedTabs[0].dispatchEvent(new timed.window.Event('pointerenter'));
+  assert.match(timedTabs[0].title, /, 2h 5m ago\. Idle 15m\.$/);
+  assert.equal(timedTabs[2].title, 'Started in /w/p1', 'a shell with no times was given some');
+  [...timed.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'All shells').click();
+  await wait(30);
+  const timesOf = (id) => { const line = timed.document.querySelector('.terminal-overview-card[data-shell="' + id + '"] .terminal-overview-times'); return line.hidden ? null : line.textContent; };
+  assert.deepEqual(['1', '2', '3'].map(timesOf), ['started 2h 5m ago \u00b7 idle 15m', 'started 2d 0h ago \u00b7 active now', null]);
 
   // Closing every project's shells ends them all, the shown one last, after asking in so many
   // words; with only this project's, it is off, since Close all tabs does that.

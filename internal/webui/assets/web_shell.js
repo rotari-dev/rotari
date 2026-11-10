@@ -1023,7 +1023,18 @@ async function copyJobsValue(button) {
           "aria-label",
           "Shell " + shell.number + (shell.name ? ", " + shell.name : "") + (finished ? ", command finished" : unseen ? ", new output" : "") + (elsewhere ? ", in another pane" : ""),
         );
-        label.title = (finished ? "A command finished. " : unseen ? "New output. " : "") + (elsewhere ? "In another pane. " : "") + "Started in " + shell.dir;
+        // The times are worded as the pointer arrives: the list's refresh redraws no tab.
+        const titled = () => {
+          const times = shellTimes(shells.find((item) => item.id === shell.id) || shell);
+          label.title =
+            (finished ? "A command finished. " : unseen ? "New output. " : "") +
+            (elsewhere ? "In another pane. " : "") +
+            "Started in " +
+            shell.dir +
+            (times ? " at " + times.startedAt + ", " + times.startedAgo + ". " + (times.idle ? "Idle " + times.idle + "." : "Active now.") : "");
+        };
+        titled();
+        label.onpointerenter = titled;
         label.textContent = shell.name || String(shell.number);
         label.onclick = () => chooseTab(shell.id);
         const close = document.createElement("button");
@@ -1512,7 +1523,12 @@ async function copyJobsValue(button) {
     const running = document.createElement("span");
     running.className = "terminal-overview-command";
     running.hidden = true;
-    card.append(top, dir, running);
+    const times = shellTimes(shell);
+    const when = document.createElement("span");
+    when.className = "terminal-overview-times";
+    when.hidden = !times;
+    if (times) when.textContent = "started " + times.startedAgo + " \u00b7 " + (times.idle ? "idle " + times.idle : "active now");
+    card.append(top, dir, running, when);
     card.onclick = () => chooseFromOverview(shell);
     const label = shell.name ? "shell " + shell.number + ", " + shell.name : "shell " + shell.number;
     const rename = document.createElement("button");
@@ -1736,6 +1752,34 @@ async function copyJobsValue(button) {
     overviewButton.setAttribute("aria-pressed", "true");
     drawOverview();
   };
+  // A shell's times are the server's, so a page dates them by the server's clock: the list
+  // says what time it is there, and serverClock is how far that is from this browser's.
+  let serverClock = 0;
+  const ageOf = (stamp) => {
+    const at = Date.parse(stamp);
+    return Number.isFinite(at) ? Math.max(0, Date.now() + serverClock - at) : null;
+  };
+  const spanText = (milliseconds) => {
+    const minutes = Math.floor(milliseconds / 60000);
+    const days = Math.floor(minutes / 1440);
+    const hours = Math.floor((minutes % 1440) / 60);
+    if (days) return days + "d " + hours + "h";
+    if (hours) return hours + "h " + (minutes % 60) + "m";
+    return minutes + "m";
+  };
+  // shellTimes words when a shell started and how long it has been idle, or is null when
+  // the list did not say.
+  const shellTimes = (shell) => {
+    const started = ageOf(shell.started_at);
+    const idle = ageOf(shell.active_at);
+    if (started === null || idle === null) return null;
+    const at = new Date(Date.parse(shell.started_at));
+    return {
+      startedAgo: started < 60000 ? "just now" : spanText(started) + " ago",
+      startedAt: String(at.getHours()).padStart(2, "0") + ":" + String(at.getMinutes()).padStart(2, "0"),
+      idle: idle < 60000 ? null : spanText(idle),
+    };
+  };
   // refreshShells updates the tabs, and returns whether it could. A newer change here
   // wins over an older answer, which may not have heard of it.
   const refreshShells = async () => {
@@ -1752,6 +1796,7 @@ async function copyJobsValue(button) {
     if (serial === listSerial) {
       if (panel && !terminalWindow) noteEndedShells(listed.shells);
       shells = listed.shells;
+      if (Number.isFinite(Date.parse(listed.now))) serverClock = Date.parse(listed.now) - Date.now();
       shellLimit = listed.limit;
       groupLimit = listed.group_limit;
       showShellCount();

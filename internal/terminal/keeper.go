@@ -114,6 +114,9 @@ type ShellInfo struct {
 	// Running says a command holds the shell's foreground as Shells looks, rather than
 	// its prompt; false when that cannot be told.
 	Running bool
+	// StartedAt is when the shell started, and ActiveAt when it last printed something or
+	// was typed into, or started; the time since ActiveAt is how long it has been idle.
+	StartedAt, ActiveAt time.Time
 }
 
 // Keeper holds shells, which outlive the attachments that show them: callers come
@@ -197,6 +200,7 @@ func (keeper *Keeper) Start(start StartOptions) (ShellInfo, error) {
 	if err != nil {
 		return ShellInfo{}, err
 	}
+	now := time.Now()
 	keeper.lastID++
 	used := make(map[int]bool)
 	for _, shell := range keeper.shells {
@@ -209,7 +213,7 @@ func (keeper *Keeper) Start(start StartOptions) (ShellInfo, error) {
 		number++
 	}
 	shell := &keptShell{
-		info:     ShellInfo{ID: strconv.Itoa(keeper.lastID), Number: number, Group: start.Group, Dir: options.Dir},
+		info:     ShellInfo{ID: strconv.Itoa(keeper.lastID), Number: number, Group: start.Group, Dir: options.Dir, StartedAt: now, ActiveAt: now},
 		session:  session,
 		ring:     outputRing{limit: keeper.options.RingSize},
 		finished: make(chan struct{}),
@@ -362,6 +366,7 @@ func (keeper *Keeper) deliver(shell *keptShell, output []byte) {
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
 	shell.ring.write(output)
+	shell.info.ActiveAt = time.Now()
 	attachment := shell.attached
 	busy, err := shell.session.busy()
 	if attachment == nil {
@@ -675,6 +680,9 @@ func (attachment *Attachment) Write(input []byte) (int, error) {
 	if !attachment.current() {
 		return 0, ErrDetached
 	}
+	attachment.keeper.mu.Lock()
+	attachment.shell.info.ActiveAt = time.Now()
+	attachment.keeper.mu.Unlock()
 	return attachment.shell.session.Write(input)
 }
 

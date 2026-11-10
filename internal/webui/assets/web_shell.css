@@ -1456,6 +1456,13 @@ html.terminal-open .output-panel.terminal-launch {
 .terminal-overview-command[hidden] {
   display: none;
 }
+.terminal-overview-times {
+  color: var(--muted);
+  font-size: 11px;
+}
+.terminal-overview-times[hidden] {
+  display: none;
+}
 .terminal-overview-command-unknown {
   color: var(--muted);
   font-style: italic;

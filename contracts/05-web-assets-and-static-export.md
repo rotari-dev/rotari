@@ -1425,7 +1425,8 @@ before the server starts. `--allow-terminal`, `--allowed-host`, and these option
 a config, as WEB-36 says. A shell's `unseen_output` says it has printed something since a connection last showed it, and starts false
 until one has; its `command_finished` says a command it ran in its foreground ended, back at its prompt, while no
 connection showed it, and a connection showing it clears it; its `running` says a command holds its foreground as
-the list is made. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
+the list is made; its `started_at` is when it started and its `active_at` when it last printed or was typed into,
+which the list's `now` dates by the server's clock. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
 use in its project when it started, and its `link` is the page that shows it. A connection names its shell with
 `shell`, and never starts one: a shell not running closes it with 4005. A shell outlives its
 connections and replays recent output to the next, except what came before a `clear` message. A new connection to it takes it over, closing
@@ -1492,7 +1493,8 @@ shows no number. Each project row in the sidebar whose project has shells is mar
 keeps from a menu in the panel's bar, with a tab for each
 shell of the page's project, or of no project on a page of none. A list names the projects with
 shells, and choosing one goes to its page. A tab not shown whose `command_finished` is set shows a bell in place of
-its unseen-output mark, as its All shells card does. Signing out from a page with the terminal first asks, naming
+its unseen-output mark, as its All shells card does. A tab's tooltip and an All shells card say when the shell
+started and how long it has been idle, by the server's clock. Signing out from a page with the terminal first asks, naming
 each shell with a command `running` and what it runs, since signing out ends every shell; it asks too, saying why,
 when the shells cannot be listed, and signs out at once when nothing runs. **All shells** in the bar opens a dialog over the page, as a log's is,
 with the panel's room left to it: every running shell, grouped by project with the page's first, each with its tab

@@ -396,6 +396,18 @@ func TestTerminalShellRoutes(t *testing.T) {
 			t.Errorf("the list's %s is %q, want true or false: %s", field, value, body)
 		}
 	}
+	// And when the shell started and was last active, with the server's time to date them by.
+	var times struct {
+		Now    time.Time `json:"now"`
+		Shells []struct {
+			StartedAt time.Time `json:"started_at"`
+			ActiveAt  time.Time `json:"active_at"`
+		} `json:"shells"`
+	}
+	if err := json.Unmarshal([]byte(body), &times); err != nil || times.Now.IsZero() || times.Shells[0].StartedAt.IsZero() ||
+		times.Shells[0].ActiveAt.Before(times.Shells[0].StartedAt) || times.Now.Before(times.Shells[0].ActiveAt) {
+		t.Errorf("the list's times do not hold together: %v: %s", err, body)
+	}
 }
 
 // A preview says where the shell is now, without taking it from the page showing it.
