@@ -14,7 +14,7 @@ var terminalWindowHTML string
 func composeTerminalWindow(nonce string) string {
 	page := strings.NewReplacer("__ROTARI_SHELL_SCRIPT__", webShellJS).Replace(terminalWindowHTML)
 	return strings.NewReplacer(
-		scriptNoncePlaceholder, scriptNonceAttribute(nonce),
+		scriptNonceSlot, scriptNonceAttribute(nonce),
 		"__ROTARI_ICON_DARK__", faviconDataURL(webFaviconDarkSVG),
 		"__ROTARI_ICON_LIGHT__", faviconDataURL(webFaviconLightSVG),
 	).Replace(page)

@@ -6,11 +6,18 @@ import (
 	"net/http"
 )
 
-// scriptNoncePlaceholder stands in a page template's script tags. It is filled
-// in the same pass as the page's values, so a value holding its text cannot
-// obtain the nonce.
+// scriptNoncePlaceholder stands in a page template's script tags as an
+// attribute, `<script __ROTARI_SCRIPT_NONCE__ ...>`, which keeps the template
+// valid HTML for prettier. It is filled in the same pass as the page's values,
+// so a value holding its text cannot obtain the nonce.
 const scriptNoncePlaceholder = "__ROTARI_SCRIPT_NONCE__"
 
+// scriptNonceSlot is the placeholder with the space before it, which the
+// replacement takes too, so that a page without a nonce has plain `<script>`.
+const scriptNonceSlot = " " + scriptNoncePlaceholder
+
+// scriptNonceAttribute fills scriptNonceSlot: the nonce attribute, or nothing
+// for a page without a policy, such as a static export.
 func scriptNonceAttribute(nonce string) string {
 	if nonce == "" {
 		return ""

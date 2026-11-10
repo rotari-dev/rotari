@@ -244,7 +244,7 @@ func tableViewPage(stylesheets []string, scripts, nonce string) string {
 		links.WriteString(`<link rel="stylesheet" href="` + html.EscapeString(href) + `" />`)
 	}
 	return strings.NewReplacer(
-		scriptNoncePlaceholder, scriptNonceAttribute(nonce),
+		scriptNonceSlot, scriptNonceAttribute(nonce),
 		"__ROTARI_STYLESHEETS__", links.String(),
 		"__ROTARI_STATIC_SCRIPTS__", scripts,
 	).Replace(tableViewHTML)

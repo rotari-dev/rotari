@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>rotari Recent jobs</title>
     __ROTARI_FAVICON_LINKS__
-    <script__ROTARI_SCRIPT_NONCE__>
+    <script __ROTARI_SCRIPT_NONCE__>
       __ROTARI_SHELL_SCRIPT__;
     </script>
     <style>
@@ -68,7 +68,8 @@
             __ROTARI_JOBS_CRUMBS__
           </nav>
           <div class="toolbar">
-            __ROTARI_TERMINAL_CONTROL__ __ROTARI_JOBS_NOTIFICATION_CONTROL__ __ROTARI_JOBS_TOOLBAR__
+            __ROTARI_TERMINAL_CONTROL__ __ROTARI_JOBS_NOTIFICATION_CONTROL__
+            __ROTARI_JOBS_TOOLBAR__
             <div class="settings-menu">
               <button
                 id="settings-button"
@@ -100,7 +101,7 @@
         __ROTARI_CONTENT__
       </div>
     </main>
-    <script__ROTARI_SCRIPT_NONCE__>
+    <script __ROTARI_SCRIPT_NONCE__>
       const jobsSidebar = document.querySelector(".sidebar");
       const jobsSidebarScrollKey =
         "rotari-sidebar-scroll:" + "__ROTARI_BASEDIR_SCROLL_KEY__";

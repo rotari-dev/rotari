@@ -217,7 +217,7 @@ func composeWebPage(page livePage, executors []string, notifications bool, boots
 	// text of a placeholder stays as written.
 	template := strings.NewReplacer("__ROTARI_SHELL_SCRIPT__", webShellJS, "__ROTARI_WEB_APP__", webAppJS).Replace(webTemplateHTML)
 	return strings.NewReplacer(
-		scriptNoncePlaceholder, scriptNonceAttribute(page.nonce),
+		scriptNonceSlot, scriptNonceAttribute(page.nonce),
 		"__ROTARI_TERMINAL_CONTROL__", page.terminalControl(),
 		"__ROTARI_ABOUT__", page.aboutSection(),
 		"__ROTARI_BASEDIRS__", string(basedirJSON),
@@ -333,7 +333,7 @@ func jobsPage(page livePage, homePath string, projects []string, rows []joblist.
 	}
 	crumbs.WriteString(`<span class="crumb-here">Recent jobs</span>`)
 	values := []string{
-		scriptNoncePlaceholder, scriptNonceAttribute(page.nonce),
+		scriptNonceSlot, scriptNonceAttribute(page.nonce),
 		"__ROTARI_TERMINAL_CONTROL__", page.terminalControl(),
 		"__ROTARI_ABOUT__", page.aboutSection(),
 		"__ROTARI_JOBS_PROJECTS__", sidebar.String(),
