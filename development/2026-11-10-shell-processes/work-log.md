@@ -2,7 +2,7 @@
 
 ## Steps 1 and 2: the processes, and the card
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-10 14:37:07 `2aed49d3`, which holds steps 1 to 4 together.
 
 **Change:** `processes` in [process_linux.go](../../internal/terminal/process_linux.go) reads every process's parent
 from `/proc/<pid>/stat` (after the last `)`, since the name may hold anything) and its command line, or its name in
@@ -34,7 +34,7 @@ freebsd; the macOS path was not run.
 
 ## Steps 3 and 4: signing out and ending shells count the processes
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-10 14:37:07 `2aed49d3`, which holds steps 1 to 4 together.
 
 **Change:** In [web_shell.js](../../internal/webui/assets/web_shell.js), `confirmSignOut` looks at every shell's
 preview through `signOutLine`: a shell counts when a command runs in front or any process runs below it, its line

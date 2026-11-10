@@ -1,7 +1,7 @@
 # Plan: The processes a shell has started
 
 Created: 2026-11-10
-Status: Done, not yet committed or tried by hand. See the [work log](work-log.md).
+Status: Done in `2aed49d3`, not yet tried by hand. See the [work log](work-log.md).
 
 ## Goal
 

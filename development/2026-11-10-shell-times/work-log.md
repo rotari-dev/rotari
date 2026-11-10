@@ -2,7 +2,7 @@
 
 ## Steps 1 and 2: the times, and where they show
 
-**Commits:** Not yet committed.
+**Commits:** 2026-11-10 14:36:46 `cc556a57`.
 
 **Change:** `ShellInfo` in [keeper.go](../../internal/terminal/keeper.go) has `StartedAt` and `ActiveAt`, both set
 by `Start`; `deliver` moves `ActiveAt` with each output and `Attachment.Write` with each input.

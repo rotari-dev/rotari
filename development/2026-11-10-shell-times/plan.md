@@ -1,7 +1,7 @@
 # Plan: When each shell started, and how long it has been idle
 
 Created: 2026-11-10
-Status: Done, not yet committed or tried by hand. See the [work log](work-log.md). The user asked whether the terminal could show start and idle times, and chose per-shell times,
+Status: Done in `cc556a57`, not yet tried by hand. See the [work log](work-log.md). The user asked whether the terminal could show start and idle times, and chose per-shell times,
 as tmux's session list shows them, over the time left before the idle limit ends every shell.
 
 ## Goal
