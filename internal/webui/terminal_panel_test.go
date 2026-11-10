@@ -2712,7 +2712,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   await wait(30);
   const stateLines = [...stateWin.document.querySelectorAll('.terminal-overview-project-state')];
   assert.deepEqual(stateLines.map((line) => [line.parentElement.getAttribute('aria-label'), line.hidden]), [['p2', false], ['p1', false], ['No project', true]]);
-  assert.match(stateLines[1].textContent, /^Last run failed, finished 2d 1h ago \u00b7 0 in progress \u00b7 0 pending \u00b7 2 failed$/);
+  assert.match(stateLines[1].textContent, /^Last run failed 2d 1h ago \u00b7 0 in progress \u00b7 0 pending \u00b7 2 failed$/);
   stateLines[1].querySelector('button').click();
   assert.equal(stateWin.document.querySelector('.terminal-overview'), null, 'opening the run left the overview open');
   assert.deepEqual(toldState.filter(([message]) => message.type === 'rotari-terminal-go'), [[{ type: 'rotari-terminal-go', path: '/project/p1/run/r%201' }, origin]]);

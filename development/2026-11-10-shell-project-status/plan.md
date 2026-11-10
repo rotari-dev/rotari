@@ -34,7 +34,7 @@ chosen. The run page has the details; the line links to it.
    `status_error` when its runs cannot be read. It is read once each time the overview is drawn (opening, Refresh, and
    after the overview's own actions), not with the five-second list, since reading runs is far heavier than listing
    shells.
-4. **The heading line** reads `Last run running, started 12m ago · 3 in progress · 5 pending · 2 failed`, in the
+4. **The heading line** reads `Last run running, started 12m ago · 3 in progress · 5 pending · 2 failed`, or for an ended run `Last run failed 2h ago · …`, in the
    run's tone, with zero counts dimmed; `No runs yet` for a project without runs, and `Its state could not be read:
    …` on an error. Clicking it opens the run's page and closes the overview, as choosing a shell of that project
    would. Shells without a project have no line.

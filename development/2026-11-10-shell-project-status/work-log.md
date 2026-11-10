@@ -34,3 +34,20 @@ error from the route, a hidden line for no project, and the window's click telli
 runs).
 
 **Remaining:** Trying it by hand; the browser test was not extended.
+
+## Follow-up: an ended run says when it ended
+
+**Commits:** None yet.
+
+**Change:** Recording the promo video showed `Last run finished, finished just now`. In
+[web_shell.js](../../internal/webui/assets/web_shell.js), `projectStateButton` now says when an ended run ended,
+`Last run failed 2h ago`, and when one still going started, `Last run running, started 12m ago`. WEB-33 and the plan
+say so.
+
+**Reason:** The word repeated the lifecycle for finished runs.
+
+**Plan impact:** Proposal 4 gives the ended-run form.
+
+**Validation:** `TestTerminalPanel` (`Last run failed 2d 1h ago`), and the promo capture's frames.
+
+**Remaining:** None.

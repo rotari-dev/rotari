@@ -1509,7 +1509,7 @@ listed, and signs out at once when nothing runs. **All shells** in the bar opens
 with the panel's room left to it: every running shell, grouped by project with the page's first, each with its tab
 name, its shell's working directory now, or where it started, said as such, when that cannot be found, and the
 command running in its foreground, if any, or that it is not known (WEB-34); it connects to none. Under each
-project's name a line says what its last run is doing (WEB-34): its lifecycle, when it started or finished, and its
+project's name a line says what its last run is doing (WEB-34): its lifecycle, when it ended or, while it goes on, when it started, and its
 jobs in progress, pending, and failed, as its run page's Jobs card counts them, or that it has no runs, or why it
 could not be read; choosing the line closes the dialog and opens that run's page, a window taking its page along.
 The projects are read each time the dialog is drawn, not with the list of shells. Choosing one

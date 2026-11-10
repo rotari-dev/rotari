@@ -1715,13 +1715,17 @@ async function copyJobsValue(button) {
     const button = document.createElement(opens ? "button" : "span");
     if (opens) button.type = "button";
     button.className = "terminal-overview-project-state-run tone-" + (run.tone || "off");
-    const when = (verb, stamp) => {
+    // An ended run says when it ended, "Last run failed 2h ago"; one still going says
+    // when it started, "Last run running, started 12m ago".
+    const ago = (stamp) => {
       const age = ageOf(stamp);
-      return age === null ? "" : ", " + verb + " " + (age < 60000 ? "just now" : spanText(age) + " ago");
+      return age === null ? "" : age < 60000 ? "just now" : spanText(age) + " ago";
     };
+    const ended = ago(run.finished_at);
+    const started = ago(run.started_at);
     const lifecycle = document.createElement("span");
     lifecycle.className = "terminal-overview-project-state-lifecycle";
-    lifecycle.textContent = "Last run " + run.lifecycle + (run.finished_at ? when("finished", run.finished_at) : when("started", run.started_at));
+    lifecycle.textContent = "Last run " + run.lifecycle + (ended ? " " + ended : started ? ", started " + started : "");
     button.append(lifecycle);
     const counts = [];
     for (const [group, label] of projectJobGroups) {
