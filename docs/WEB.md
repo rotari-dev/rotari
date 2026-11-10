@@ -263,17 +263,18 @@ rotari web --allow-terminal
   so and offers to take it back.
 - **When a shell ends:** with its tab's **×** or `exit`, which moves to a neighboring tab of the
   project.
-- **When all of them end:** when you sign out, when `rotari web` stops, or **30 minutes after the
+- **When all of them end:** when you sign out, when `rotari web` stops, or **3 hours after the
   last `rotari web` page closes**, which also ends what is running in their foregrounds. Any open page
   keeps them, even in the background with its panel closed. A computer that sleeps counts as closing
   its pages, and so does a sign-in that has expired. Use `rotari run` or `tmux` for long work: a run
-  started in the terminal carries on regardless.
+  started in the terminal carries on regardless. To keep shells through a disconnect, see
+  [below](#keeping-shells-through-a-disconnect).
 - **Changing the limits,** on the command line, in a config, or in the environment (see
   [above](#setting-them-in-a-config-or-the-environment)):
 
   | Flag | Default | |
   | --- | --- | --- |
-  | `--terminal-idle-timeout` | `30m` | How long the shells last after the last page closes. At least `2m`. |
+  | `--terminal-idle-timeout` | `3h` | How long the shells last after the last page closes. At least `2m`. |
   | `--terminal-max-shells` | `32` | Shells at once. |
   | `--terminal-max-shells-per-project` | `8` | Shells of one project at once. |
   | `--terminal-replay-size` | `256KiB` | Recent output kept per shell, up to `64MiB`. More uses more memory. |
@@ -281,6 +282,30 @@ rotari web --allow-terminal
 
 - **Keys:** a browser keeps some keys for itself, such as Ctrl-W, which do not reach the shell.
 - **Behind a reverse proxy:** the proxy must pass WebSocket connections to `/_terminal/ws`.
+
+### Keeping shells through a disconnect
+
+The shells belong to the `rotari web` process, not to your browser. To have them, and what runs in them,
+outlast a closed laptop, a dropped connection, or a night away, keep that process alive and give it time:
+
+1. **Run `rotari web` where it outlives your login,** such as in `tmux` or `screen` on the host. If you
+   start it in an SSH session, it stops when that session ends, and every shell ends with it.
+
+   ```sh
+   tmux new -s rotari-web            # on the host; later, tmux attach -t rotari-web
+   rotari web --allow-terminal --terminal-idle-timeout 24h
+   ```
+
+   Detach with Ctrl-B D and close the SSH session; the server, and its shells, keep running. Reach it
+   again through your usual SSH forward.
+2. **Make `--terminal-idle-timeout` longer than you will be away.** It counts from the last page closing,
+   so a laptop that sleeps overnight needs more than the 3-hour default. It can also go under `[web]` in a
+   config as `terminal-idle-timeout = "24h"`, or in `ROTARI_WEB_TERMINAL_IDLE_TIMEOUT` (see
+   [above](#setting-them-in-a-config-or-the-environment)).
+
+Even so, signing out, stopping `rotari web`, or restarting the host ends every shell, and a shell shows only
+its last 256 KiB of output (`--terminal-replay-size`) when you come back. For work that must survive those,
+run it with `rotari run`, or in `tmux` inside the shell.
 
 ## Artifacts
 

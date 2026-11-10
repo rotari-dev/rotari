@@ -13,7 +13,7 @@ import (
 
 // Defaults of the Web UI's shells.
 const (
-	webTerminalIdleLimit  = 30 * time.Minute
+	webTerminalIdleLimit  = 3 * time.Hour
 	webTerminalRingSize   = "256KiB"
 	webTerminalShellLimit = 32
 	webTerminalGroupLimit = 8

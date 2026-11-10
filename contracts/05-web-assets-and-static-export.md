@@ -1440,10 +1440,10 @@ connections and replays recent output to the next, except what came before a `cl
 the last with code 4001; one with `takeover=0`, which a page reconnecting by itself sends, gets 4001
 itself when another connection has that shell. Connections to different shells do not disturb each
 other. A shell ends with its own exit or `DELETE` (4002 with how it ended). All of them end on
-signing out, the server stopping (4004) or being killed, or thirty minutes with no connection to any
+signing out, the server stopping (4004) or being killed, or three hours with no connection to any
 shell and no `POST` to `/_terminal/alive`, which every open page offering the terminal sends each
 minute, whatever its panel shows and whether or not it is in view (`TestTerminalPanel`).
-`--terminal-idle-timeout` changes those minutes, to no fewer than two. The limit is checked at the package
+`--terminal-idle-timeout` changes those three hours, to no fewer than two minutes. The limit is checked at the package
 level by `TestIdleLimitAppliesToTheShellsTogether` and
 `TestKeepAliveHoldsTheIdleLimitOff`. A process that left its session or ignores the hangup,
 including a run started in a shell, goes on. Covered by the tests in
