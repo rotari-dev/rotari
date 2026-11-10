@@ -481,7 +481,7 @@ Yes. The `python/` package is a thin subprocess wrapper around the `rotari` exec
 
 No. The Web UI is a separate process and closing it does not affect runs.
 It does stop the commands it launched on artifacts with `--allow-exec`, even
-when it is killed.
+when it is killed, and it ends the shells of its terminal (`--allow-terminal`).
 
 ### Can I start a run from the Web UI?
 
@@ -506,6 +506,32 @@ Markdown or script file, PDF, or directory opens in the built-in **Table viewer*
 from the same menu even without `--allow-exec`, and `rotari tableview PATH`
 opens one directly; see
 [Viewing tables](WEB.md#viewing-tables).
+
+### Why does a job runner have a terminal?
+
+Running experiments is more than running jobs. Between runs you read logs, edit a script, `cd` into
+an output, and run `rotari retry`, usually in a pile of terminal tabs, one or more per experiment.
+`rotari web --allow-terminal` keeps those shells beside the jobs they are about: each shell belongs
+to a project, starts where its last run started, and has `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME`
+set, so `rotari` commands in it need no `-p`. A project's page shows its shells, and **All shells**
+lists every project's shells with what each runs and how each project's last run is doing.
+
+The shells themselves are ordinary: rotari does not run jobs through them or log what you type,
+and jobs run the same with or without them. The terminal is off unless you pass `--allow-terminal`,
+and it does not replace `tmux` or your terminal emulator. See [Terminal](WEB.md#terminal).
+
+### Do my Web terminal shells survive closing or reloading the browser tab?
+
+Yes. The shells run in the `rotari web` process on the host, not in the browser. Reloading the page,
+following links, closing the tab, or opening the page in another tab or browser connects to the same
+shells, which show their last 256 KiB of output again; programs in them, such as `vim`, keep running.
+
+They all end, with what runs in their foregrounds, when you sign out, when `rotari web` stops, or
+3 hours (`--terminal-idle-timeout`) after the last `rotari web` page closes. A computer that sleeps
+counts as closing its pages, and so does a sign-in that has expired. A `rotari run` started in a shell
+carries on regardless. To keep shells overnight or through a dropped SSH connection, run `rotari web`
+in `tmux` and make the timeout longer; see
+[Keeping shells through a disconnect](WEB.md#keeping-shells-through-a-disconnect).
 
 ### What does the Recent jobs link show?
 
