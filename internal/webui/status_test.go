@@ -54,3 +54,43 @@ func TestStatusToneMatchesInGoAndJS(t *testing.T) {
 		t.Error("a carried result's pill is not marked carried")
 	}
 }
+
+// All shells counts a project's last run in Go as the run page's Jobs card counts it in
+// JS, so the two never disagree.
+func TestJobCountGroupMatchesInGoAndJS(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not installed")
+	}
+	labels := []string{
+		"success", "success (accepted)", "success (carried)", "failed", "failed (carried)",
+		"running (recorded)", "blocked", "pending", "waiting (recorded)", "suspended (recorded)",
+		"cancelled", "unknown", "something new",
+	}
+	toneStart := strings.Index(webAppCoreJS, "const statusTones = __ROTARI_STATUS_TONES__;")
+	toneEnd := strings.Index(webAppCoreJS, "function statusPill(")
+	groupStart := strings.Index(webAppCoreJS, "function jobCountGroup(")
+	groupEnd := strings.Index(webAppCoreJS, "// runCardsHTML")
+	if toneStart < 0 || toneEnd <= toneStart || groupStart < 0 || groupEnd <= groupStart {
+		t.Fatal("statusTone or jobCountGroup was not found in web_app_core.js")
+	}
+	input, _ := json.Marshal(labels)
+	script := strings.Replace(webAppCoreJS[toneStart:toneEnd], "__ROTARI_STATUS_TONES__", statusTonesJSON(), 1) +
+		webAppCoreJS[groupStart:groupEnd] +
+		"\nconsole.log(JSON.stringify(" + string(input) + ".map(jobCountGroup)));"
+	output, err := exec.Command("node", "-e", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("node failed: %v\n%s", err, output)
+	}
+	var got []string
+	if err := json.Unmarshal(output, &got); err != nil {
+		t.Fatalf("decode %q: %v", output, err)
+	}
+	for index, label := range labels {
+		if want := jobCountGroup(label); got[index] != want {
+			t.Errorf("%q: JS gives %q, Go gives %q", label, got[index], want)
+		}
+	}
+	if jobCountGroup("waiting (recorded)") != "pending" || jobCountGroup("running (recorded)") != "run" || jobCountGroup("failed (carried)") != "bad" {
+		t.Error("jobCountGroup does not group waiting, running, and failed jobs as the Jobs card does")
+	}
+}

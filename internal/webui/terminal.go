@@ -126,6 +126,8 @@ func (s site) serveTerminal(writer http.ResponseWriter, request *http.Request) {
 		s.serveTerminalAlive(writer, request)
 	case path == terminalOrderPath:
 		s.serveTerminalOrder(writer, request)
+	case path == terminalProjectsPath:
+		s.serveTerminalProjects(writer, request)
 	case path == terminalWindowPath || strings.HasPrefix(path, terminalWindowPath+"/"):
 		serveTerminalWindow(writer, request)
 	case strings.HasPrefix(path, terminalShellsPath+"/"):

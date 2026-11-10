@@ -1407,7 +1407,13 @@ leaves its output unseen: `"cwd"`, the shell's own working directory, or `"cwd_e
 found, and `"command"`, the command line of the program the shell runs in the foreground, absent while the shell
 is at its prompt, or `"command_error"` saying why it could not be found, and `"processes"`, the processes below the shell with their
 `pid`, `ppid`, `depth` (1 for its children), and `command`, each child followed by its own, or `null` with
-`"processes_error"` saying why they could not be listed (404 if the shell is not running, 405 for other methods). `GET /_terminal/window`, followed by
+`"processes_error"` saying why they could not be listed (404 if the shell is not running, 405 for other methods).
+`GET /_terminal/projects` lists each project with shells once, with `basedir` and `project`: `runs`, how many runs it
+has, and `last_run`, the run `rotari show` reads when given none (the last one started), with `run_id`, `run_name`, `lifecycle` as the run page labels
+it, `tone`, its status colour, `started_at` and `finished_at` when its files say, and `jobs`, its jobs counted by the
+run page's Jobs card groups (`run` in progress, `pending`, `bad` failed, `ok`, `warn` blocked, `off` other); or
+`status_error` saying why its runs could not be read (405 for other methods). Shells with no project are not listed.
+`GET /_terminal/window`, followed by
 the path of a page such as `/project/p`, is the panel's page of its own (405 for other methods). `PUT /_terminal/order` with `{"ids":
 [...]}` arranges the project of the first running shell named, with others of it following and shells that have
 ended or are of another project ignored; the list then gives each project's shells in that order, with a new one
@@ -1502,7 +1508,11 @@ a shell whose processes cannot be listed is named as such, it asks too, saying w
 listed, and signs out at once when nothing runs. **All shells** in the bar opens a dialog over the page, as a log's is,
 with the panel's room left to it: every running shell, grouped by project with the page's first, each with its tab
 name, its shell's working directory now, or where it started, said as such, when that cannot be found, and the
-command running in its foreground, if any, or that it is not known (WEB-34); it connects to none. Choosing one
+command running in its foreground, if any, or that it is not known (WEB-34); it connects to none. Under each
+project's name a line says what its last run is doing (WEB-34): its lifecycle, when it started or finished, and its
+jobs in progress, pending, and failed, as its run page's Jobs card counts them, or that it has no runs, or why it
+could not be read; choosing the line closes the dialog and opens that run's page, a window taking its page along.
+The projects are read each time the dialog is drawn, not with the list of shells. Choosing one
 closes the dialog and shows the shell in the pane with the keys, as its tab would, or for another project has that
 project's page show it in the pane with the keys and goes there, as the list does, a window taking its page along.
 Each card also renames its tab and ends its shell, after asking and naming another project's shell by its project,

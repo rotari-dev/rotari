@@ -2359,7 +2359,9 @@ const jobCountGroups = [
   ["off", "other"],
 ];
 // jobCountGroup groups a job's displayed status (jobDisplayStatus) by its
-// tone, telling jobs waiting to start from the rest of the "off" tone.
+// tone, telling jobs waiting to start from the rest of the "off" tone. All
+// shells counts a project's last run with its Go twin (status.go), and
+// TestJobCountGroupMatchesInGoAndJS keeps the two in step.
 function jobCountGroup(status) {
   const tone = statusTone(status);
   if (tone !== "off") return tone;

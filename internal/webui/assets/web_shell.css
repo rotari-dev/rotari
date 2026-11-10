@@ -1580,3 +1580,57 @@ html.terminal-open .output-panel.terminal-launch {
   padding: 4px 0 0 6px;
   background: var(--terminal-background);
 }
+/* A project's last run, under its name in All shells: its lifecycle in the run's tone, and
+   its jobs in progress, pending, and failed, a zero dimmed. */
+.terminal-overview-project-state {
+  margin: -4px 0 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.terminal-overview-project-state[hidden] {
+  display: none;
+}
+.terminal-overview-project-state-error {
+  color: var(--s-bad);
+}
+.terminal-overview .terminal-overview-project-state-run {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  text-align: left;
+  white-space: normal;
+}
+.terminal-overview button.terminal-overview-project-state-run {
+  cursor: pointer;
+}
+.terminal-overview button.terminal-overview-project-state-run:hover .terminal-overview-project-state-lifecycle,
+.terminal-overview button.terminal-overview-project-state-run:focus-visible .terminal-overview-project-state-lifecycle {
+  text-decoration: underline;
+}
+.terminal-overview-project-state-run .terminal-overview-project-state-lifecycle::before {
+  content: "\25cf\00a0";
+}
+.terminal-overview-project-state-run.tone-ok .terminal-overview-project-state-lifecycle::before {
+  color: var(--s-ok);
+}
+.terminal-overview-project-state-run.tone-bad .terminal-overview-project-state-lifecycle::before,
+.terminal-overview-project-state-count.tone-bad {
+  color: var(--s-bad);
+}
+.terminal-overview-project-state-run.tone-run .terminal-overview-project-state-lifecycle::before,
+.terminal-overview-project-state-count.tone-run {
+  color: var(--s-run);
+}
+.terminal-overview-project-state-run.tone-warn .terminal-overview-project-state-lifecycle::before {
+  color: var(--s-warn);
+}
+.terminal-overview-project-state-run.tone-off .terminal-overview-project-state-lifecycle::before {
+  color: var(--muted);
+}
+.terminal-overview-project-state-none {
+  color: var(--muted);
+  opacity: 0.7;
+}

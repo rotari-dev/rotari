@@ -152,7 +152,9 @@ projects, as **Terminal (3)**, so you can see what is left running with the pane
 in the sidebar with a shell running has a terminal icon; point at it to see how many.
 
 The **All shells** icon beside **+** opens a dialog over the page, as a log does, listing every running shell,
-grouped by project with the page's first. Each card shows its tab name, the directory its shell is in now, and
+grouped by project with the page's first. Under each project's name, a line says what its last run (the one
+`rotari show` shows) is doing, such as `Last run running, started 12m ago · 3 in progress · 5 pending · 0 failed`,
+counted as the run page's Jobs card counts them; click it to open that run. Each card shows its tab name, the directory its shell is in now, and
 the command running in it, if any, and when it started and how long it has been idle (no output and no
 typing); a tab's tooltip says the same. Next to the command, the card says how many processes the shell has
 started, as `▶ make · 3 processes`, or `2 background processes` when nothing runs in front; click it to see each

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -973,5 +974,66 @@ func TestTerminalPreviewListsTheShellsProcesses(t *testing.T) {
 		if time.Now().After(deadline) {
 			t.Fatalf("the preview lists %+v, want sleep 26 alone", preview.Processes)
 		}
+	}
+}
+
+// /_terminal/projects says what each project with shells last ran: a project whose
+// second run fixed the first's failure counts none, one whose last run failed counts
+// its failure, and one with no runs says so.
+func TestTerminalProjectsSayWhatTheirLastRunDid(t *testing.T) {
+	covers(t, "WEB-34")
+	e := terminalEnv(t)
+	// Each project's job fails or succeeds by whether its marker exists, and its first
+	// run makes the marker, so its second run does the other.
+	for project, script := range map[string]string{
+		"fixed": `test -e "$1" || { touch "$1"; exit 1; }`,
+		"broke": `test -e "$1" && exit 1; touch "$1"`,
+	} {
+		for range 2 {
+			e.MustRotari("add", "-p", project, "--", "sh", "-c", script, "sh", filepath.Join(e.Root, project+"-marker"))
+			e.Rotari("run", "-p", project, "--quiet")
+		}
+	}
+	base := e.StartWeb("--allow-terminal")
+	headers := http.Header{"X-Rotari-Token": {launchToken}}
+	for _, project := range []string{"fixed", "broke", "fresh"} {
+		if status, body := terminalShellsRequest(t, http.MethodPost, base+"/_terminal/shells?rows=24&cols=80&project="+project, headers); status != http.StatusCreated {
+			t.Fatalf("starting a shell in %s: status %d: %s", project, status, body)
+		}
+	}
+	status, body := terminalShellsRequest(t, http.MethodGet, base+"/_terminal/projects", headers)
+	var listed struct {
+		Projects []struct {
+			Project string `json:"project"`
+			Runs    int    `json:"runs"`
+			LastRun *struct {
+				Lifecycle string         `json:"lifecycle"`
+				StartedAt string         `json:"started_at"`
+				Jobs      map[string]int `json:"jobs"`
+			} `json:"last_run"`
+			StatusError string `json:"status_error"`
+		} `json:"projects"`
+	}
+	if err := json.Unmarshal(body, &listed); status != http.StatusOK || err != nil {
+		t.Fatalf("projects: status %d, %v: %s", status, err, body)
+	}
+	got := map[string]string{}
+	for _, project := range listed.Projects {
+		summary := fmt.Sprintf("runs %d", project.Runs)
+		if project.LastRun != nil {
+			summary += fmt.Sprintf(", %s, %v, started %t", project.LastRun.Lifecycle, project.LastRun.Jobs, project.LastRun.StartedAt != "")
+		}
+		if project.StatusError != "" {
+			summary += ", error " + project.StatusError
+		}
+		got[project.Project] = summary
+	}
+	want := map[string]string{
+		"fixed": "runs 2, finished, map[ok:1], started true",
+		"broke": "runs 2, failed, map[bad:1], started true",
+		"fresh": "runs 0",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("projects:\n got %v\nwant %v\n%s", got, want, body)
 	}
 }

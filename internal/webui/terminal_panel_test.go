@@ -115,6 +115,12 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           return Promise.resolve({ ok: true, status: 204 });
         }
         if (address.startsWith('/_terminal/shells')) return fakeShells(address, init.method || 'GET', init.body);
+        if (address === '/_terminal/projects') {
+          requests.push('GET ' + address);
+          if (server.projectStates === undefined) return new Promise(() => {});
+          if (typeof server.projectStates === 'number') return Promise.resolve({ ok: false, status: server.projectStates, text: async () => 'refused' });
+          return Promise.resolve({ ok: true, status: 200, json: async () => server.projectStates });
+        }
         if (address.startsWith('/api/launchers?')) {
           requests.push('GET ' + address);
           return Promise.resolve({ ok: true, status: 200, json: async () => server.launchers || { available: false, reason: 'Launching is disabled on this server.', hint: 'Restart with rotari web --allow-exec.' } });
@@ -2368,8 +2374,28 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const tour = () => touring.document.querySelector('.terminal-overview');
   const cards = () => [...touring.document.querySelectorAll('.terminal-overview-card')];
   const card = (id) => cards().find((item) => item.dataset.shell === id);
+  // Under each project's name, what its last run is doing, read once for the overview.
+  const stateNow = Date.parse('2026-11-10T12:00:00Z');
+  touring.server.projectStates = { now: new Date(stateNow).toISOString(), projects: [
+    { basedir: '/b', project: 'p2', runs: 3, last_run: { run_id: 'r-3', run_name: 'nightly', lifecycle: 'running', tone: 'run', started_at: new Date(stateNow - 12.5 * 60000).toISOString(), jobs: { run: 3, pending: 5, ok: 2 } } },
+    { basedir: '/b', project: 'p1', runs: 0 },
+    { basedir: '/c', project: 'p1', status_error: 'permission denied' },
+  ] };
   overviewButton.click();
   await wait(30);
+  const projectLines = () => [...tour().querySelectorAll('.terminal-overview-project-state')];
+  assert.deepEqual(projectLines().map((line) => line.textContent), ['Last run running, started 12m ago \u00b7 3 in progress \u00b7 5 pending \u00b7 0 failed', 'No runs yet', 'Its state could not be read: permission denied']);
+  assert.deepEqual(projectLines().map((line) => line.previousElementSibling.tagName), ['H3', 'H3', 'H3'], 'a project\'s state is not under its name');
+  const runLine = projectLines()[0].querySelector('button.terminal-overview-project-state-run');
+  assert.ok(runLine.classList.contains('tone-run'));
+  assert.equal(runLine.title, 'Open run nightly (r-3)');
+  assert.deepEqual([...runLine.querySelectorAll('.terminal-overview-project-state-count')].map((part) => part.className), ['terminal-overview-project-state-count tone-run', 'terminal-overview-project-state-count tone-pending', 'terminal-overview-project-state-count terminal-overview-project-state-none']);
+  assert.ok(projectLines()[2].classList.contains('terminal-overview-project-state-error'));
+  assert.equal(touring.requests.filter((request) => request === 'GET /_terminal/projects').length, 1, 'the projects were not read once for the overview');
+  touring.polls.forEach((poll) => poll());
+  await wait(20);
+  assert.equal(touring.requests.filter((request) => request === 'GET /_terminal/projects').length, 1, 'the five-second list read the projects');
+  assert.match(webShellCSS, /\.terminal-overview-project-state-count\.tone-bad \{\s*color: var\(--s-bad\);/);
   assert.equal(overviewButton.getAttribute('aria-pressed'), 'true');
   const tourDialog = tour().parentElement;
   assert.equal(tourDialog.parentElement, touring.document.body, 'the overview is not the page\'s dialog');
@@ -2438,6 +2464,11 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   [...tour().querySelectorAll('button')].find((item) => item.textContent === 'Refresh').click();
   await wait(30);
   assert.deepEqual(cards().map((item) => item.dataset.shell), ['3', '5', '1', '2', '4']);
+  // When the projects cannot be read, each line says why.
+  touring.server.projectStates = 500;
+  [...tour().querySelectorAll('button')].find((item) => item.textContent === 'Refresh').click();
+  await wait(30);
+  assert.deepEqual(projectLines().map((line) => line.textContent), ['Its state could not be read: refused', 'Its state could not be read: refused', 'Its state could not be read: refused']);
   card('5').click();
   await wait(20);
   assert.equal(tour(), null);
@@ -2671,6 +2702,20 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   [...tourWin.document.querySelectorAll('.terminal-overview-card')].find((item) => item.dataset.shell === '1').click();
   assert.deepEqual(toldTour.filter(([message]) => message.type === 'rotari-terminal-go'), [[{ type: 'rotari-terminal-go', path: '/project/p1' }, origin]]);
   assert.equal(tourWin.window.sessionStorage.getItem('rotari-terminal-shell:/b:p1'), '1');
+  // A project's line opens its last run's page, taking the page that opened the window
+  // along; shells without a project have no line.
+  const toldState = [];
+  const stateWin = load(process.argv[6], { path: '/_terminal/window/project/p2', shells: [inProject('1', 1, 'p1'), plain('9', 1)], opener: { closed: false, postMessage: (message, target) => toldState.push(JSON.parse(JSON.stringify([message, target]))) } });
+  stateWin.server.projectStates = { now: '2026-11-12T10:05:00Z', projects: [{ basedir: '/b', project: 'p2', runs: 0 }, { basedir: '/b', project: 'p1', runs: 1, last_run: { run_id: 'r 1', lifecycle: 'failed', tone: 'bad', started_at: '2026-11-10T09:00:00Z', finished_at: '2026-11-10T09:05:00Z', jobs: { bad: 2, ok: 4 } } }] };
+  await wait(50);
+  [...stateWin.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'All shells').click();
+  await wait(30);
+  const stateLines = [...stateWin.document.querySelectorAll('.terminal-overview-project-state')];
+  assert.deepEqual(stateLines.map((line) => [line.parentElement.getAttribute('aria-label'), line.hidden]), [['p2', false], ['p1', false], ['No project', true]]);
+  assert.match(stateLines[1].textContent, /^Last run failed, finished 2d 1h ago \u00b7 0 in progress \u00b7 0 pending \u00b7 2 failed$/);
+  stateLines[1].querySelector('button').click();
+  assert.equal(stateWin.document.querySelector('.terminal-overview'), null, 'opening the run left the overview open');
+  assert.deepEqual(toldState.filter(([message]) => message.type === 'rotari-terminal-go'), [[{ type: 'rotari-terminal-go', path: '/project/p1/run/r%201' }, origin]]);
   // With no list, it says why.
   let tourStatus = 200;
   const tourless = load(process.argv[1], { stored: '1', path: '/project/p2', shells: [inProject('3', 1, 'p2')], status: () => tourStatus });

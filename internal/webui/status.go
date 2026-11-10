@@ -68,3 +68,18 @@ func statusTonesJSON() string {
 	data, _ := json.Marshal(statusTones)
 	return string(data)
 }
+
+// jobCountGroup groups a job's displayed status as the run page's Jobs card
+// does (jobCountGroup in web_app_core.js): by its tone, telling jobs waiting to
+// start from the rest of the "off" tone. TestJobCountGroupMatchesInGoAndJS
+// keeps the two in step.
+func jobCountGroup(status string) string {
+	tone := statusTone(status)
+	if tone != "off" {
+		return tone
+	}
+	if base := statusBase(status); base == "pending" || base == "waiting" {
+		return "pending"
+	}
+	return "off"
+}

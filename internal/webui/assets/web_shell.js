@@ -266,6 +266,7 @@ async function copyJobsValue(button) {
   const minFontSize = 8;
   const maxFontSize = 32;
   const shellsPath = "/_terminal/shells";
+  const projectsPath = "/_terminal/projects";
   // How often a page in view picks up shells started or ended from elsewhere, for its tabs
   // and the count on the Terminal button, with the panel open or not.
   const shellsRefresh = 5000;
@@ -1661,6 +1662,95 @@ async function copyJobsValue(button) {
       .catch(() => started("the server did not answer"));
     return item;
   };
+  // drawProjectStates says under each project's name what its last run is doing: its
+  // lifecycle, when, and its jobs in progress, pending, and failed, counted as its run
+  // page's Jobs card counts them. The line opens that run's page. The projects are read
+  // once each time the overview is drawn, not with the list of shells: reading runs is
+  // far heavier.
+  const projectJobGroups = [
+    ["run", "in progress"],
+    ["pending", "pending"],
+    ["bad", "failed"],
+  ];
+  const drawProjectStates = async (serial, body) => {
+    const lines = [...body.querySelectorAll(".terminal-overview-project-state")].filter((line) => !line.hidden);
+    if (!lines.length) return;
+    let response;
+    try {
+      response = await serverFetch(projectsPath);
+    } catch {}
+    if (serial !== overviewSerial) return;
+    if (!response?.ok) {
+      const reason = response ? (await response.text()).trim() || "status " + response.status : "the server did not answer";
+      if (serial !== overviewSerial) return;
+      for (const line of lines) {
+        line.classList.add("terminal-overview-project-state-error");
+        line.textContent = "Its state could not be read: " + reason;
+      }
+      return;
+    }
+    const listed = await response.json();
+    if (serial !== overviewSerial) return;
+    if (Number.isFinite(Date.parse(listed.now))) serverClock = Date.parse(listed.now) - Date.now();
+    for (const line of lines) {
+      const project = listed.projects.find((item) => item.basedir === line.dataset.basedir && item.project === line.dataset.project);
+      line.replaceChildren();
+      if (!project) {
+        line.classList.add("terminal-overview-project-state-error");
+        line.textContent = "Its state could not be read: the server did not list it";
+      } else if (project.status_error) {
+        line.classList.add("terminal-overview-project-state-error");
+        line.textContent = "Its state could not be read: " + project.status_error;
+      } else if (!project.last_run) {
+        line.textContent = "No runs yet";
+      } else {
+        line.append(projectStateButton(project.last_run, line.dataset.link));
+      }
+    }
+  };
+  // The line is a button when the project has a page to go to: a shell of a basedir no
+  // longer registered has none, and its line only tells.
+  const projectStateButton = (run, link) => {
+    const opens = link.includes("/project/");
+    const button = document.createElement(opens ? "button" : "span");
+    if (opens) button.type = "button";
+    button.className = "terminal-overview-project-state-run tone-" + (run.tone || "off");
+    const when = (verb, stamp) => {
+      const age = ageOf(stamp);
+      return age === null ? "" : ", " + verb + " " + (age < 60000 ? "just now" : spanText(age) + " ago");
+    };
+    const lifecycle = document.createElement("span");
+    lifecycle.className = "terminal-overview-project-state-lifecycle";
+    lifecycle.textContent = "Last run " + run.lifecycle + (run.finished_at ? when("finished", run.finished_at) : when("started", run.started_at));
+    button.append(lifecycle);
+    const counts = [];
+    for (const [group, label] of projectJobGroups) {
+      const count = (run.jobs && run.jobs[group]) || 0;
+      const part = document.createElement("span");
+      part.className = "terminal-overview-project-state-count" + (count ? " tone-" + group : " terminal-overview-project-state-none");
+      part.textContent = count + " " + label;
+      button.append(" \u00b7 ", part);
+      counts.push(part.textContent);
+    }
+    const runName = run.run_name ? run.run_name + " (" + run.run_id + ")" : run.run_id;
+    if (!opens) {
+      button.title = "Run " + runName;
+      return button;
+    }
+    button.title = "Open run " + runName;
+    button.setAttribute("aria-label", lifecycle.textContent + ", " + counts.join(", ") + ". Open run " + runName);
+    button.onclick = () => {
+      const path = link + "/run/" + encodeURIComponent(run.run_id);
+      closeOverview();
+      if (inWindow) {
+        tellOpener({ type: "rotari-terminal-go", path });
+        location.assign(windowPath + path);
+      } else {
+        location.assign(path);
+      }
+    };
+    return button;
+  };
   const drawOverview = async (focusOn) => {
     const serial = ++overviewSerial;
     const head = document.createElement("header");
@@ -1747,15 +1837,25 @@ async function copyJobsValue(button) {
           if (await endShells(entry.shells, { refused: overviewRefusal, question: projectEndQuestion(entry.shells.length, name) })) drawOverview();
         };
         heading.append(named, more, endAll);
+        // What the project's last run is doing, filled in by drawProjectStates. Shells
+        // without a project have none.
+        const projectState = document.createElement("div");
+        projectState.className = "terminal-overview-project-state";
+        projectState.dataset.basedir = entry.basedir || "";
+        projectState.dataset.project = entry.project || "";
+        projectState.dataset.link = entry.link || "";
+        projectState.hidden = !entry.project;
+        if (entry.project) projectState.textContent = "Reading its runs...";
         const cards = document.createElement("div");
         cards.className = "terminal-overview-cards";
         cards.append(...entry.shells.map((shell) => overviewCard(shell, serial)));
         group.setAttribute("aria-label", name);
-        group.append(heading, cards);
+        group.append(heading, projectState, cards);
         return group;
       }),
     );
     drawOverviewNew(serial, listed);
+    drawProjectStates(serial, body);
     const cardList = [...body.querySelectorAll(".terminal-overview-card")];
     (cardList.find((item) => item.dataset.shell === focusOn) || body.querySelector(".terminal-overview-current") || cardList[0])?.focus();
   };
