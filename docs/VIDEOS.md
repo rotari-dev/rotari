@@ -64,16 +64,6 @@ through your whole history.
 
 See [Web UI](WEB.md).
 
-## Shells that belong to your experiments
-
-The Web UI's terminal: shells that start where a project's last run started,
-All shells with every project's shells and last run, and TensorBoard launched
-where a shell is.
-
-<iframe src="https://www.youtube-nocookie.com/embed/nObEULGw63k" title="Shells that belong to your experiments" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
-
-See [Web UI: Terminal](WEB.md#terminal).
-
 ## Inspect your runs from the terminal
 
 No browser: `rotari jobs`, `rotari show`, every job's last log line, and a
@@ -91,3 +81,13 @@ its results.
 <iframe src="https://www.youtube-nocookie.com/embed/spA3-LQAJXk" title="What did your AI coding agent run, and why?" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
 See [Notes on runs](INSPECT.md#notes-on-runs) and [MCP server](MCP.md).
+
+## Shells that belong to your experiments
+
+The Web UI's terminal: shells that start where a project's last run started,
+All shells with every project's shells and last run, and TensorBoard launched
+where a shell is.
+
+<iframe src="https://www.youtube-nocookie.com/embed/nObEULGw63k" title="Shells that belong to your experiments" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
+
+See [Web UI: Terminal](WEB.md#terminal).
