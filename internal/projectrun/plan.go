@@ -235,7 +235,7 @@ func (runner Runner) OmittedFailedOrUnfinished(paths state.ProjectPaths, queue m
 		for _, job := range model.QueueToJobs([]model.QueuedCommand{command}) {
 			origin := command.Origin
 			if command.Array != nil {
-				origin = run.TaskOrigin(command, *job.ArrayTaskID)
+				origin = model.TaskOrigin(command, *job.ArrayTaskID)
 			}
 			if origin == nil {
 				included[job.ID] = true

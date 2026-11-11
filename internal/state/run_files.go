@@ -25,14 +25,15 @@ func FinalizeRun(meta model.Meta, runID string, exitCode int, now time.Time) (mo
 }
 
 // LoadRunOrigin returns jobID's origin from the run's commands.json snapshot,
-// or nil when the job has none or the snapshot cannot be read; see
-// model.Queue.OriginOf.
-func LoadRunOrigin(runDir, jobID string) *model.JobOrigin {
-	queue, err := LoadQueue(filepath.Join(runDir, "commands.json"))
+// nil when the job has none (model.Queue.OriginOf), or the error when the
+// snapshot cannot be read.
+func LoadRunOrigin(runDir, jobID string) (*model.JobOrigin, error) {
+	path := filepath.Join(runDir, "commands.json")
+	queue, err := LoadQueue(path)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to read the origin of job %q from %s: %w", jobID, path, err)
 	}
-	return queue.OriginOf(jobID)
+	return queue.OriginOf(jobID), nil
 }
 
 // CheckRunVersions returns ErrNewerStateVersion when the run's commands.json

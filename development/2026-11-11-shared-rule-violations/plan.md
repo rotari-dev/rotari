@@ -2,7 +2,8 @@
 
 Created 2026-11-11. Status: in progress; decisions D1 to D3 settled with
 the user on 2026-11-11, each with the recommended option. Phase 1 (survey)
-done the same day, Phase 2 (run order) on 2026-11-12; Phase 3 is next.
+done the same day, Phases 2 (run order) and 3 (task origins) on
+2026-11-12; Phase 4 is next.
 
 ## Purpose
 
@@ -165,7 +166,7 @@ and basedir.
 2. **Run order (item 1).** Done 2026-11-12 (RES-29). Implement D1, move the five rules onto it, and
    consolidate the run ID format. A sixth rule, the Web page's own latest
    run, was found and moved too; see the work log.
-3. **Task origins (item 2).** Implement D2 with the per-caller behavior
+3. **Task origins (item 2).** Done 2026-11-12 (RES-30); see the work log. Implement D2 with the per-caller behavior
    recorded in Phase 1 kept or deliberately changed.
 4. **PID identity (item 3).** Implement D3. Extend COORD-1 to another
    namespace.

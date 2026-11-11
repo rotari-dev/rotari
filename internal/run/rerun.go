@@ -195,7 +195,7 @@ func (resolver *originResolver) selectsCommand(filter jobfilter.Filter, selectio
 	tasks := make([]jobfilter.Job, 0)
 	for _, task := range model.ArrayTaskIDs(command.Array) {
 		id := taskID(command.ID, task)
-		origin := TaskOrigin(command, task)
+		origin := model.TaskOrigin(command, task)
 		taskResult, taskFinished, err := resolver.jobResult(command, origin, id)
 		if err != nil {
 			return false, err
@@ -226,7 +226,7 @@ func (resolver *originResolver) commandResult(command model.QueuedCommand) (mode
 	results := make(map[string]model.JobResult)
 	for _, task := range model.ArrayTaskIDs(command.Array) {
 		id := taskID(command.ID, task)
-		result, finished, err := resolver.jobResult(command, TaskOrigin(command, task), id)
+		result, finished, err := resolver.jobResult(command, model.TaskOrigin(command, task), id)
 		if err != nil {
 			return model.JobResult{}, false, err
 		}
@@ -266,7 +266,7 @@ func planByOrigin(queue model.Queue, selection string, jobIDs []string, inScope 
 		if command.Array != nil && (matchTasks || requestedTask) && !requested[command.ID] {
 			for _, task := range model.ArrayTaskIDs(command.Array) {
 				id := taskID(command.ID, task)
-				origin := TaskOrigin(command, task)
+				origin := model.TaskOrigin(command, task)
 				result, finished, err := resolver.jobResult(command, origin, id)
 				if err != nil {
 					return Plan{}, err
@@ -320,7 +320,7 @@ func planByOrigin(queue model.Queue, selection string, jobIDs []string, inScope 
 		}
 		for _, task := range model.ArrayTaskIDs(command.Array) {
 			id := taskID(command.ID, task)
-			origin := TaskOrigin(command, task)
+			origin := model.TaskOrigin(command, task)
 			taskResult, taskFinished, err := resolver.jobResult(command, origin, id)
 			if err != nil {
 				return Plan{}, err
@@ -346,12 +346,6 @@ func planByOrigin(queue model.Queue, selection string, jobIDs []string, inScope 
 		return Plan{}, fmt.Errorf("job IDs not found in queue: %s", joinStrings(missing, ", "))
 	}
 	return plan, nil
-}
-
-// TaskOrigin returns the origin of one task of an array command: its own
-// task origin, or the command's origin narrowed to the task.
-func TaskOrigin(command model.QueuedCommand, task int) *model.JobOrigin {
-	return model.TaskOrigin(command, task)
 }
 
 func taskID(commandID string, task int) string {

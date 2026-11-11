@@ -299,9 +299,13 @@ func reportIncludesLog(label string) bool {
 }
 
 // readReportLog reads the log of the attempt that produced job's result,
-// following a carried job to the run it was carried from.
+// following a carried job to the run it was carried from. A carry that
+// cannot be read is said in place of the log.
 func readReportLog(paths state.ProjectPaths, runID string, job webprojection.Job) string {
-	dir := jobstatus.ResultAttemptDir(paths.RunsDir, model.JobOrigin{RunID: runID, JobID: job.ID, AttemptID: job.AttemptID})
+	dir, err := jobstatus.ResultAttemptDir(paths.RunsDir, model.JobOrigin{RunID: runID, JobID: job.ID, AttemptID: job.AttemptID})
+	if err != nil {
+		return fmt.Sprintf("rotari: cannot find this job's log: %v\n", err)
+	}
 	if dir == "" {
 		return ""
 	}

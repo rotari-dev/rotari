@@ -84,7 +84,7 @@ flowchart LR
   It never replays `projectrun.Runner` callbacks. Unknown executions require
   explicit attestation for repair; terminal records are not termination
   evidence. Expanded array origins use `model.TaskOrigin`, the same
-  domain rule to which run planning delegates; pinned and unpinned origins
+  domain rule that run planning and `model.Queue.OriginOf` use; pinned and unpinned origins
   keep their respective attempt semantics. `project.AssessExecutions` reuses
   the repair inventory's job/attempt/origin traversal for read-only `info`.
   Executor-owned `ExecutionProber` classifies local groups, fresh scheduler

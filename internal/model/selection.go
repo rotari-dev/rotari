@@ -65,6 +65,8 @@ func ResultsByID(results []JobResult) map[string]JobResult {
 	return byID
 }
 
+// QueueOriginsByJobID is OriginOf for every job of queue that has an origin:
+// each command ID, and each task of an array.
 func QueueOriginsByJobID(queue Queue) map[string]*JobOrigin {
 	origins := make(map[string]*JobOrigin)
 	for _, command := range queue.Commands {
@@ -72,7 +74,14 @@ func QueueOriginsByJobID(queue Queue) map[string]*JobOrigin {
 			origins[command.ID] = command.Origin
 		}
 		for taskID, origin := range command.TaskOrigins {
-			origins[taskID] = origin
+			if origin != nil {
+				origins[taskID] = origin
+			}
+		}
+		for _, task := range ArrayTaskIDs(command.Array) {
+			if origin := TaskOrigin(command, task); origin != nil {
+				origins[fmt.Sprintf("%s-%d", command.ID, task)] = origin
+			}
 		}
 	}
 	return origins

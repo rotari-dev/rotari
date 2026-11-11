@@ -149,6 +149,7 @@ the IDs, this table, and those calls disagree.
 | RES-27 | A carried job shows the log of the attempt that produced its result, however many carries back, in `show`, `--logs`, `--follow`, `/api/log`, the word cloud, and the run page | conformance | `TestCarriedJobLogsFollowEveryCarry` |
 | RES-28 | A missing basedir is told apart from an empty one: given to a read-only command it is a warning naming its source; registered and gone it is a warning, and missing in the Web UI; the implicit default before its first run is empty | conformance | `TestMissingGivenBasedirIsSaid`, `TestRemovedRegisteredBasedirIsReported` |
 | RES-29 | One run order (`last_run_id`, then the start in the run ID, then the coordinator's start for runs in the same second) for history without a run, `latest`, the last run after a delete, and the Web index and pages | conformance | `TestOneRunOrder` |
+| RES-30 | An array task without its own origin inherits the array's, narrowed to the task, in every reader; an unreadable `commands.json` is an error where the reader can report one | conformance | `TestArrayTasksInheritTheArrayOrigin` |
 | DUR-1 | Every executor runs jobs through the self-reporting wrapper | partial | `TestJobOutlivesKilledSupervisor`, `TestSSHJobReadsAsRunning` |
 | DUR-2 | The wrapper records status independently of its launcher | partial | `TestJobOutlivesKilledSupervisor` |
 | DUR-3 | An orphaned local job still records its own status | conformance | `TestJobOutlivesKilledSupervisor` |

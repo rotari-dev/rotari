@@ -471,9 +471,9 @@
   `Origin` is recorded in `QueuedCommand.TaskOrigins`, keyed by task ID such as
   `id-1`, separately from the whole-command `Origin` field. This is needed
   because one array command can have some tasks freshly executed and others
-  carried in the same run. `model.Queue.OriginOf`, which `state.LoadRunOrigin`
-  applies for `show` and `web`, checks both `Origin` and
-  `TaskOrigins` when resolving where a job's output lives. `--partial-array=false`
+  carried in the same run. A task's origin is decided once, by
+  `model.TaskOrigin`: its own `TaskOrigins` entry, or else the array's
+  `Origin` narrowed to the same task (RES-30). `--partial-array=false`
   restores the older whole-array behavior: any match re-executes every task,
   using only the whole-command `Origin`.
 - A run-exported workflow manifest records compact status and attempt

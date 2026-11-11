@@ -443,13 +443,6 @@ func (inventory *repairInventory) origin(job model.JobSpec, result model.JobResu
 }
 
 func repairJobOrigin(queue model.Queue, job model.JobSpec) *model.JobOrigin {
-	if job.ArrayTaskID != nil {
-		for _, command := range queue.Commands {
-			if command.ID == job.ArrayGroup {
-				return model.TaskOrigin(command, *job.ArrayTaskID)
-			}
-		}
-	}
 	return queue.OriginOf(job.ID)
 }
 

@@ -2019,8 +2019,16 @@ func webLogJobDir(runsDir, runID, jobID string) (string, error) {
 	if attemptID, err := stateinternal.LatestAttemptID(runDir, jobID); err == nil && attemptID != "" {
 		return stateinternal.LatestAttemptJobDir(runDir, jobID)
 	}
-	if origin := stateinternal.LoadRunOrigin(runDir, jobID); origin != nil {
-		if dir := jobstatus.ResultAttemptDir(runsDir, *origin); dir != "" {
+	origin, err := stateinternal.LoadRunOrigin(runDir, jobID)
+	if err != nil {
+		return "", err
+	}
+	if origin != nil {
+		dir, err := jobstatus.ResultAttemptDir(runsDir, *origin)
+		if err != nil {
+			return "", err
+		}
+		if dir != "" {
 			return dir, nil
 		}
 	}

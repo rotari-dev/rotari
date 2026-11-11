@@ -1948,7 +1948,11 @@ func printCarriedForwardOutput(writer io.Writer, paths state.ProjectPaths, id, n
 		fmt.Fprintf(writer, "Working directory: %s\n", workingDirectory)
 	}
 	fmt.Fprintf(writer, "Command: %s\n", strings.Join(command, " "))
-	originDir := jobstatus.ResultAttemptDir(paths.RunsDir, *origin)
+	originDir, err := jobstatus.ResultAttemptDir(paths.RunsDir, *origin)
+	if err != nil {
+		printErrorf("cannot find the log of job %s: %v", origin.JobID, err)
+		return
+	}
 	if originDir == "" {
 		return
 	}
@@ -1977,9 +1981,19 @@ func followJobLog(writer io.Writer, paths state.ProjectPaths, runID, jobID, atte
 	}
 	latestAttemptID, attemptErr := state.LatestAttemptID(runDir, jobID)
 	if attemptID == "" && (attemptErr != nil || latestAttemptID == "") {
-		if origin := state.LoadRunOrigin(runDir, jobID); origin != nil {
+		origin, err := state.LoadRunOrigin(runDir, jobID)
+		if err != nil {
+			printErrorf("%v", err)
+			return 1
+		}
+		if origin != nil {
 			fmt.Fprintf(writer, "%s carried forward from run %s (no re-execution)\n\n", cyan("Note:"), origin.RunID)
-			if originDir := jobstatus.ResultAttemptDir(paths.RunsDir, *origin); originDir != "" {
+			originDir, err := jobstatus.ResultAttemptDir(paths.RunsDir, *origin)
+			if err != nil {
+				printErrorf("%v", err)
+				return 1
+			}
+			if originDir != "" {
 				if path, err := followLogPath(originDir, stream); err == nil {
 					if originOutput, readErr := os.ReadFile(path); readErr == nil {
 						_, _ = writer.Write(originOutput)

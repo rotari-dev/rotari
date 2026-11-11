@@ -1,6 +1,7 @@
 package jobstatus
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -29,7 +30,9 @@ func FilterJob(store state.Store, runsDir string, origin model.JobOrigin, id str
 	var carries []model.JobOrigin
 	locate := func() string {
 		if !located {
-			attemptDir, carries = locateAttempt(runsDir, origin, 0)
+			// Filters cannot report an error; an attempt whose carry
+			// cannot be read reads as not found, like its other files.
+			attemptDir, carries, _ = locateAttempt(runsDir, origin, 0)
 			located = true
 		}
 		return attemptDir
@@ -81,10 +84,10 @@ func AttemptAttributes(store state.Store, attemptDir string, now time.Time) jobf
 // ResultAttemptDir returns the directory of the attempt that produced the
 // result origin names: that attempt, or for a job carried into origin's run,
 // the attempt it was carried from, as FilterJob reads it. It is "" when no
-// such directory exists.
-func ResultAttemptDir(runsDir string, origin model.JobOrigin) string {
-	dir, _ := locateAttempt(runsDir, origin, 0)
-	return dir
+// such directory exists, and an error when a carry cannot be read.
+func ResultAttemptDir(runsDir string, origin model.JobOrigin) (string, error) {
+	dir, _, err := locateAttempt(runsDir, origin, 0)
+	return dir, err
 }
 
 // ReadLog returns the log of an attempt for diagnosis: its merged output, or
@@ -104,30 +107,38 @@ func ReadLog(attemptDir string) (string, error) {
 
 // locateAttempt returns the directory of the attempt origin names, following
 // the origins of carried jobs, and the carries it followed; "" when none is
-// found.
-func locateAttempt(runsDir string, origin model.JobOrigin, depth int) (string, []model.JobOrigin) {
+// found, and an error when a run's commands.json, which records a carry,
+// cannot be read.
+func locateAttempt(runsDir string, origin model.JobOrigin, depth int) (string, []model.JobOrigin, error) {
 	if origin.AttemptID != "" {
 		if payload, err := state.DecodeAttemptID(origin.AttemptID); err == nil {
 			if runDir, err := state.SafeJoin(runsDir, payload.RunID); err == nil {
 				if dir, err := state.SpecificAttemptJobDir(runDir, payload.JobID, origin.AttemptID); err == nil && isDir(dir) {
-					return dir, nil
+					return dir, nil, nil
 				}
 			}
 		}
 	}
 	runDir, err := state.SafeJoin(runsDir, origin.RunID)
 	if err != nil {
-		return "", nil
+		return "", nil, nil
 	}
 	if dir, err := state.LatestAttemptJobDir(runDir, origin.JobID); err == nil && isDir(dir) {
-		return dir, nil
+		return dir, nil, nil
 	}
-	carried := state.LoadRunOrigin(runDir, origin.JobID)
+	if !isDir(runDir) {
+		// The run was deleted: its attempt is gone, which is not an error.
+		return "", nil, nil
+	}
+	carried, err := state.LoadRunOrigin(runDir, origin.JobID)
+	if err != nil {
+		return "", nil, fmt.Errorf("run %q: %w", origin.RunID, err)
+	}
 	if carried == nil || depth >= maxCarryDepth {
-		return "", nil
+		return "", nil, nil
 	}
-	dir, carries := locateAttempt(runsDir, *carried, depth+1)
-	return dir, append([]model.JobOrigin{*carried}, carries...)
+	dir, carries, err := locateAttempt(runsDir, *carried, depth+1)
+	return dir, append([]model.JobOrigin{*carried}, carries...), err
 }
 
 func isDir(path string) bool {

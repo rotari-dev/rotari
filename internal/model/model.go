@@ -30,18 +30,41 @@ type Queue struct {
 }
 
 // OriginOf returns where jobID's carried or marked result came from: the
-// whole command's Origin, or an array task's entry in TaskOrigins. It returns
-// nil for a job that executes in this run.
+// whole command's Origin for a command ID, or for a task of an array its
+// TaskOrigin. It returns nil for a job that executes in this run.
 func (queue Queue) OriginOf(jobID string) *JobOrigin {
 	for _, command := range queue.Commands {
 		if command.ID == jobID {
 			return command.Origin
 		}
-		if origin, ok := command.TaskOrigins[jobID]; ok {
+		if origin := command.TaskOrigins[jobID]; origin != nil {
 			return origin
 		}
 	}
+	for _, command := range queue.Commands {
+		if task, ok := arrayTaskOf(command, jobID); ok {
+			return TaskOrigin(command, task)
+		}
+	}
 	return nil
+}
+
+// arrayTaskOf reports which task of the array command jobID names.
+func arrayTaskOf(command QueuedCommand, jobID string) (int, bool) {
+	prefix := command.ID + "-"
+	if command.Array == nil || !strings.HasPrefix(jobID, prefix) {
+		return 0, false
+	}
+	task, err := strconv.Atoi(jobID[len(prefix):])
+	if err != nil || fmt.Sprintf("%s%d", prefix, task) != jobID {
+		return 0, false
+	}
+	for _, candidate := range ArrayTaskIDs(command.Array) {
+		if candidate == task {
+			return task, true
+		}
+	}
+	return 0, false
 }
 
 // TaskOrigin resolves a task's own origin or the corresponding task of its

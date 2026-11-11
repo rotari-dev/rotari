@@ -142,6 +142,25 @@ tests: [unit](../internal/state/run_order_test.go) and
 `runs` lists runs across projects by their recorded start time;
 for a run whose start it cannot read, it uses the start in the run ID.
 
+**RES-30** A job's origin, where its carried or marked result came from,
+is decided once by `model.Queue.OriginOf`: a command's `Origin` for its ID,
+and for a task of an array its own `TaskOrigins` entry, or else the array's
+`Origin` narrowed to the same task (`model.TaskOrigin`, which run planning
+uses too). `model.QueueOriginsByJobID` is the same rule for every job of a
+run. A task of an array whose run records only the array's origin therefore
+reads as carried in `show`, `jobs`, the Web run view, and their logs, as
+it is selected by `--failed` and the other filters. `state.LoadRunOrigin`
+returns an error when the run's `commands.json` cannot be read, and each
+reader says what that means: `show --follow`, `show` of a carried job, the
+run report, and `/api/log` report it; filter facts and artifact discovery,
+which have no way to report an error, read the attempt as not found, as
+for their other files. A carry from a deleted run is not an error.
+Implementation: [model.go](../internal/model/model.go),
+[run_files.go](../internal/state/run_files.go),
+[facts.go](../internal/jobstatus/facts.go); tests:
+[unit](../internal/model/origin_test.go) and
+[built-binary conformance](../conformance/01-resolution/task_origin_test.go).
+
 **RES-28** A basedir that does not exist is told apart from one that exists
 without projects, once, by `state.ProjectNames`; each reader decides what a
 missing basedir means for it:

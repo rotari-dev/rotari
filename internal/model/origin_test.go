@@ -34,3 +34,39 @@ func TestTaskOrigin(t *testing.T) {
 		})
 	}
 }
+
+func TestOriginOfArrayTasks(t *testing.T) {
+	arrayOrigin := &JobOrigin{RunID: "source", JobID: "src", Status: "failed"}
+	own := &JobOrigin{RunID: "other", JobID: "x-2", AttemptID: "att"}
+	plain := &JobOrigin{RunID: "source", JobID: "plain"}
+	queue := Queue{Commands: []QueuedCommand{
+		{ID: "x", Array: &ArraySpec{First: 1, Last: 3}, Origin: arrayOrigin, TaskOrigins: map[string]*JobOrigin{"x-2": own, "x-3": nil}},
+		{ID: "y", Array: &ArraySpec{Tasks: []int{5}}},
+		{ID: "p", Origin: plain},
+	}}
+	narrowed := func(task string) *JobOrigin {
+		origin := *arrayOrigin
+		origin.JobID = "src-" + task
+		return &origin
+	}
+	for jobID, want := range map[string]*JobOrigin{
+		"x":    arrayOrigin,
+		"x-1":  narrowed("1"),
+		"x-2":  own,
+		"x-3":  narrowed("3"),
+		"x-4":  nil, // not a task of the array
+		"x-01": nil,
+		"x-":   nil,
+		"y-5":  nil, // an array without an origin
+		"p":    plain,
+		"q":    nil,
+	} {
+		if got := queue.OriginOf(jobID); !reflect.DeepEqual(got, want) {
+			t.Errorf("OriginOf(%q) = %+v, want %+v", jobID, got, want)
+		}
+	}
+	want := map[string]*JobOrigin{"x": arrayOrigin, "x-1": narrowed("1"), "x-2": own, "x-3": narrowed("3"), "p": plain}
+	if got := QueueOriginsByJobID(queue); !reflect.DeepEqual(got, want) {
+		t.Errorf("QueueOriginsByJobID = %+v, want %+v", got, want)
+	}
+}

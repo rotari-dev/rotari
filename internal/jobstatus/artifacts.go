@@ -17,7 +17,9 @@ import (
 // existed or for an attempt that never started: discovery information is
 // unavailable, which does not mean the job had no associated files.
 func Artifacts(store state.Store, runsDir string, origin model.JobOrigin) (artifact.Record, bool) {
-	attemptDir, _ := locateAttempt(runsDir, origin, 0)
+	// An attempt whose carry cannot be read has no discovery information
+	// here, like one without the record; ok says so.
+	attemptDir, _, _ := locateAttempt(runsDir, origin, 0)
 	if attemptDir == "" {
 		return artifact.Record{}, false
 	}

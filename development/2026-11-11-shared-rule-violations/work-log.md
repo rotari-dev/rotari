@@ -43,7 +43,7 @@ Commit: `17cb01ea` (2026-11-11, plan and work log only).
 
 ## Phase 2: run order
 
-Commit: recorded with this entry (2026-11-12).
+Commit: `8c122ccd` (2026-11-12).
 
 - **Change:**
   - Added `state.RunsNewestFirst` and `state.NewestRunID`
@@ -86,3 +86,52 @@ Commit: recorded with this entry (2026-11-12).
   - The ISSUES.md `bug-report` check was not run. It needs an independent
     agent, which the user has not asked for in this session.
 - **Remaining:** Phases 3 and 4, each with its contracts and docs.
+
+## Phase 3: task origins
+
+Commit: recorded with this entry (2026-11-12).
+
+- **Change:**
+  - `model.Queue.OriginOf` gives a task of an array its `TaskOrigin`: its
+    own entry, or the array's origin narrowed to the task.
+  - A second copy of the lookup, found in this phase, does the same:
+    `model.QueueOriginsByJobID`, used by `show --json`, the Web run view, and
+    `runview`. This is why `/api/run` lost origins in Phase 1.
+  - Removed the `run.TaskOrigin` wrapper. The planner and `rerun.go` call
+    `model.TaskOrigin`, and `repair.go` uses `OriginOf`.
+  - `state.LoadRunOrigin` returns an error naming `commands.json` when it
+    cannot be read. `locateAttempt` and `jobstatus.ResultAttemptDir` pass
+    that error on; a carry from a deleted run is still "not found".
+  - What each reader does with the error:
+    - `show --follow` fails.
+    - `show` of a carried job prints the error.
+    - The run report says it in place of the log.
+    - `/api/log` answers with it.
+    - `FilterJob` and `jobstatus.Artifacts` keep "not found", with a
+      comment: filters have no way to report an error.
+- **Reason:** Phase 3 of the plan, item 2.
+- **Plan impact:**
+  - Phase 1's per-caller differences in `show`, `jobs`, and `/api/run` are
+    now deliberately changed to carried. Selection was the same before and
+    is the same now.
+  - Added RES-30, and updated the `TaskOrigins` note in the run-lifecycle
+    contract and ARCHITECTURE.md.
+  - Moved the ISSUES.md item to Resolved, and opened one: job filters cannot
+    report a state file they fail to read.
+  - No user guide describes the inherited case, so no guide changed.
+- **Validation:**
+  - `TestOriginOfArrayTasks` (unit), added beside the existing
+    `TestTaskOrigin`. A first version of the commit overwrote that file and
+    lost `TestTaskOrigin`; it was restored before the commit was final. Its
+    fixture showed that a `nil` `TaskOrigins` entry inherits in
+    `TaskOrigin`, while `OriginOf` returned `nil` for it. `OriginOf` and
+    `QueueOriginsByJobID` now skip `nil` entries, as `TaskOrigin` does.
+  - `TestArrayTasksInheritTheArrayOrigin` (conformance, RES-30) fails on
+    `8c122ccd` with all six checks, and passes now.
+  - A first version of the test followed a second retry through an
+    unreadable first retry and passed on both versions. A carried task's
+    origin records the producing attempt ID, so the chain is never read.
+    The test now corrupts the shown run's own `commands.json`.
+  - `go vet ./...`, `tsc`, `go test ./...`, `go test -race ./...`.
+  - The ISSUES.md `bug-report` check was not run, as in Phase 2.
+- **Remaining:** Phase 4.
