@@ -69,23 +69,19 @@ func collect(baseDirs []string, projectFilter string, bounds *window) ([]Run, er
 	runs := make([]Run, 0)
 	hasProjects, foundProject := false, false
 	for _, baseDir := range baseDirs {
-		entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
-		if os.IsNotExist(err) {
-			continue
-		}
+		// The caller has reported a missing basedir it was given; one it was
+		// not, such as the default before its first run, has no runs.
+		names, err := state.ProjectNamesOrNone(baseDir)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list projects in %q: %w", baseDir, err)
+			return nil, err
 		}
-		for _, entry := range entries {
-			if !entry.IsDir() || !state.IsValidPathElement(entry.Name()) {
-				continue
-			}
+		for _, name := range names {
 			hasProjects = true
-			if projectFilter != "" && entry.Name() != projectFilter {
+			if projectFilter != "" && name != projectFilter {
 				continue
 			}
 			foundProject = true
-			projectRuns, err := collectProject(baseDir, entry.Name(), bounds)
+			projectRuns, err := collectProject(baseDir, name, bounds)
 			if err != nil {
 				return nil, err
 			}
@@ -343,15 +339,12 @@ func RunIDStart(runID string) (time.Time, bool) {
 // false when there is none.
 func LatestStart(baseDirs []string, now time.Time) (latest time.Time, ok bool) {
 	for _, baseDir := range baseDirs {
-		projects, err := os.ReadDir(filepath.Join(baseDir, "projects"))
+		projects, err := state.ProjectNames(baseDir)
 		if err != nil {
 			continue
 		}
-		for _, projectEntry := range projects {
-			if !projectEntry.IsDir() || !state.IsValidPathElement(projectEntry.Name()) {
-				continue
-			}
-			runs, err := os.ReadDir(filepath.Join(baseDir, "projects", projectEntry.Name(), "runs"))
+		for _, projectName := range projects {
+			runs, err := os.ReadDir(filepath.Join(baseDir, "projects", projectName, "runs"))
 			if err != nil {
 				continue
 			}

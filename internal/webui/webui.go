@@ -289,9 +289,34 @@ func (s site) basedirEntries() []webBaseDir {
 	currentDir, currentErr := filepath.Abs(rootBaseDir)
 	currentDir = filepath.Clean(currentDir)
 	for _, path := range paths {
-		entries = append(entries, newWebBaseDir(basedirID(path), path, currentErr == nil && path == currentDir))
+		entry := newWebBaseDir(basedirID(path), path, currentErr == nil && path == currentDir)
+		// The server's own basedir may not exist before its first run.
+		entry.Missing = !entry.Current && stateinternal.RequireBaseDir(path) != nil
+		entries = append(entries, entry)
 	}
 	return entries
+}
+
+// projectNames lists a basedir's projects for the Web UI. The server's own
+// basedir may not exist before its first run and then has its default
+// project, as on the command line; any other basedir that does not exist is
+// an error naming it, and the sidebar marks it missing.
+func (s site) projectNames(baseDir string) ([]string, error) {
+	projects, err := joblist.Projects(baseDir, "")
+	if errors.Is(err, stateinternal.ErrBaseDirMissing) && s.isRootBaseDir(baseDir) {
+		return []string{stateinternal.DefaultProjectName}, nil
+	}
+	return projects, err
+}
+
+func (s site) isRootBaseDir(baseDir string) bool {
+	root := s.RootBaseDir
+	if root == "" {
+		root = s.BaseDir
+	}
+	rootPath, rootErr := filepath.Abs(root)
+	path, err := filepath.Abs(baseDir)
+	return rootErr == nil && err == nil && filepath.Clean(rootPath) == filepath.Clean(path)
 }
 
 func basedirID(path string) string {
@@ -374,7 +399,7 @@ func (s site) baseHandler() http.Handler {
 			writeWebError(writer, err)
 			return
 		}
-		projects, err := joblist.Projects(baseDir, "")
+		projects, err := s.projectNames(baseDir)
 		if err != nil {
 			writeWebError(writer, err)
 			return
@@ -1103,7 +1128,11 @@ func (s site) handleWebProjects(writer http.ResponseWriter, request *http.Reques
 			return
 		}
 	}
-	projects, err := joblist.Projects(targetBaseDir, "")
+	projects, err := s.projectNames(targetBaseDir)
+	if errors.Is(err, stateinternal.ErrBaseDirMissing) {
+		http.Error(writer, err.Error(), http.StatusNotFound)
+		return
+	}
 	if err != nil {
 		writeWebError(writer, err)
 		return
@@ -1450,15 +1479,14 @@ func (s site) loadWebIndex(baseDir string) (webprojection.State, error) {
 	for index := range state.Environments {
 		_, state.Environments[index].Set = os.LookupEnv(state.Environments[index].Name)
 	}
-	entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
-	if err != nil && !os.IsNotExist(err) {
+	// A missing basedir is marked in the sidebar (basedirEntries); its page is
+	// empty, as is the server's own basedir before its first run.
+	names, err := stateinternal.ProjectNamesOrNone(baseDir)
+	if err != nil {
 		return webprojection.State{}, err
 	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		project, projectErr := s.loadWebIndexProject(baseDir, entry.Name())
+	for _, name := range names {
+		project, projectErr := s.loadWebIndexProject(baseDir, name)
 		if projectErr != nil {
 			return webprojection.State{}, projectErr
 		}
@@ -1536,17 +1564,10 @@ func (s site) loadWebState(baseDir string) (webprojection.State, error) {
 		// Only expose whether the variable is set, never its value: it may hold secrets (API keys, tokens).
 		_, state.Environments[index].Set = os.LookupEnv(state.Environments[index].Name)
 	}
-	queueNames := []string{}
-	entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
-	if err != nil && !os.IsNotExist(err) {
+	queueNames, err := stateinternal.ProjectNamesOrNone(baseDir)
+	if err != nil {
 		return webprojection.State{}, err
 	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			queueNames = append(queueNames, entry.Name())
-		}
-	}
-	sort.Strings(queueNames)
 	for _, queueName := range queueNames {
 		paths, err := stateinternal.ResolveProjectPaths(baseDir, queueName)
 		if err != nil {
@@ -1908,7 +1929,7 @@ func (s site) generateStaticWeb(outputDir string) error {
 	if err := writeStaticStylesheet(outputDir, activityPath); err != nil {
 		return err
 	}
-	projects, err := joblist.Projects(baseDir, "")
+	projects, err := s.projectNames(baseDir)
 	if err != nil {
 		return err
 	}

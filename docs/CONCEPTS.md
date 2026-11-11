@@ -272,6 +272,16 @@ state. Workspace discovery never searches parents. Normal config values merge
 global → workspace → basedir → project; location keys are restricted to avoid
 cycles. See [Configuration](CONFIGURATION.md#configuration-files).
 
+When a basedir that you name with `--basedir`, `ROTARI_BASEDIR`, or a config
+`basedir` does not exist, commands that only read state, such as `check`,
+`show`, `jobs`, and `projects`, warn that it does not exist and say where it
+came from, so a mistyped path does not look like an empty basedir. They
+otherwise treat it as empty, since a basedir exists only after its first
+run; commands that write state, such as `add`, create it. The default
+location reads as empty before your first run, without a warning. Commands that list every registered basedir warn about one
+whose directory was removed and list the rest; `rotari gc` removes it from
+the registry, and the Web UI marks it **missing** until then.
+
 These rules apply consistently to commands that do not identify an existing
 run through its run registry. Use `--basedir/-b` and `--project-name/-p` when a
 command must target a specific location explicitly.

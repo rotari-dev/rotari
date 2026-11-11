@@ -191,11 +191,12 @@ func cmdRuns(args []string) int {
 		printErrorf("invalid --since duration %q", *since)
 		return 1
 	}
-	baseDirs, err := jobsBaseDirs(valueIfSet(fs, "basedir", *basedir), *masterdir)
+	baseDirs, missingBaseDirs, err := jobsBaseDirs(valueIfSet(fs, "basedir", *basedir), *masterdir)
 	if err != nil {
 		printError(err)
 		return 1
 	}
+	warnMissingBaseDirs(missingBaseDirs)
 	runs, err := runlist.Collect(baseDirs, projectFilter)
 	if err != nil {
 		printError(err)

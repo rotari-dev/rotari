@@ -1,8 +1,8 @@
 # No silent fallbacks for configured values and missing basedirs
 
 Created 2026-11-11. Status: decisions settled with the user on 2026-11-11;
-Phases 1 (survey) and 2 (configured values, with its contract CLI-30
-and documentation) done the same day; Phase 3 is next.
+Phases 1 (survey), 2 (configured values, contract CLI-30), and 3 (missing
+basedir, contract RES-28) done the same day; Phase 4 is next.
 
 ## Purpose
 
@@ -93,6 +93,11 @@ None created the directory. The cause is structural: ten places read
 `internal/state` owns the basedir layout and `IsValidPathElement`, so the
 shared listing belongs there.
 
+Correction found in Phase 3: there were sixteen such readers, not ten. The
+Phase 1 search cut its output short; the others were in `cmd/rotari`
+(`server.go`, `completion.go` twice, `info.go`, `show.go`, and `wait.go`
+twice).
+
 ### Static export and `auth-token` (item 3)
 
 `staticServerOptions` in [cmd/rotari/web.go](../../cmd/rotari/web.go)
@@ -129,10 +134,29 @@ recommended option.
   from "it exists but has no projects", once, in the package that owns project
   listing. Read-only commands (`check`, `show`,
   `jobs`, listing commands, `/api/projects`, the Web index for registered
-  basedirs) report the basedir as missing: an error from the CLI, and a
-  visible missing state in the Web UI. Commands that create state (`add`,
+  basedirs) report the basedir as missing: on the command line as D6a and
+  D6b refine it, and as a visible missing state in the Web UI. Commands that create state (`add`,
   `run`, `init`) keep creating it. The two NOT-4 special cases then use the
   shared rule.
+- **D6a. Which missing basedirs are errors.** Settled with the user on
+  2026-11-11 while starting Phase 3, then revised the same day (below). A
+  basedir given on the command line, in `ROTARI_BASEDIR`, or in config was
+  to be an error for read-only commands. The
+  implicit default stays empty before its first run, as that is the normal
+  state for a new user. A registered basedir whose directory is gone is a
+  warning that points to `rotari gc`; the other basedirs are still listed,
+  and the Web UI marks it missing. Rejected: an error in every case, which
+  breaks first use and every aggregate view when one basedir is gone; and
+  explicit basedirs only, which leaves removed registered ones silent.
+- **D6b. A given basedir that does not exist is a warning, not an error.**
+  Revised with the user on 2026-11-11 after the full test run: making it an
+  error broke RES-3, RES-16, and RES-24, because a basedir named in
+  `ROTARI_BASEDIR` or written by `rotari init` exists only after its first
+  run, and it hid the "project is in another basedir" and registry-mismatch
+  messages. Read-only commands now warn, naming the basedir and its source,
+  and otherwise keep their output and exit status. `wait` stays silent
+  without a selector (RES-16). Rejected: an error for `--basedir` only, which
+  still changed `check -b NEWDIR` and lost the project hint.
 - **D7. Static export and `auth-token`.** A static export ignores
   `auth-token` from config and the environment, and still refuses it on the
   command line; the contract says so. A token in config means "protect my
@@ -151,7 +175,8 @@ recommended option.
    a list or table. Move `readWebConfigured` onto the collector without
    changing WEB-36's messages. Error format:
    `invalid OPTION "VALUE" in SOURCE: REASON`, as WEB-36 uses now.
-3. **Missing basedir (item 2).** Add one project listing to `internal/state`
+3. **Missing basedir (item 2).** Done 2026-11-11; see the work log. Add one
+   project listing to `internal/state`
    that returns a distinct error for a missing basedir and an empty list for a
    basedir without projects. Move the ten listings onto it. Keep the
    lower-level read unexported so callers cannot bypass the rule. Callers

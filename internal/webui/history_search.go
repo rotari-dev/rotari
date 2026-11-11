@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -225,13 +224,14 @@ func (s site) handleHistorySearch(writer http.ResponseWriter, request *http.Requ
 }
 
 // historySearchProjects lists a registered basedir's projects. A registered
-// basedir can outlive its directory, and joblist.Projects reads a missing
-// directory as an empty state, so absence is checked first.
+// basedir can outlive its directory, which is a reason it is not searched.
 func historySearchProjects(entry webBaseDir) ([]string, error) {
-	if _, err := os.Stat(entry.Path); errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("basedir does not exist")
+	projects, err := joblist.Projects(entry.Path, "")
+	if errors.Is(err, stateinternal.ErrBaseDirMissing) {
+		// The path is shown beside the reason.
+		return nil, stateinternal.ErrBaseDirMissing
 	}
-	return joblist.Projects(entry.Path, "")
+	return projects, err
 }
 
 func (s site) loadHistorySearchRecords(entry webBaseDir, projectName, runID string) ([]webprojection.HistorySearchRecord, error) {

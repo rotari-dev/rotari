@@ -155,18 +155,7 @@ func buildInfoReport(baseDir, masterDir, selectedProject string) (infoReport, er
 }
 
 func infoProjects(baseDir string) ([]string, error) {
-	entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-	projects := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() && state.IsValidPathElement(entry.Name()) {
-			projects = append(projects, entry.Name())
-		}
-	}
-	sort.Strings(projects)
-	return projects, nil
+	return state.ProjectNamesOrNone(baseDir)
 }
 
 func containsInfoProject(projects []string, name string) bool {

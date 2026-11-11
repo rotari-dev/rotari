@@ -65,6 +65,7 @@ func dispatch(args []string) int {
 			printErrorf("failed to load config: %v", err)
 			return 1
 		}
+		warnMissingGivenBaseDir(args[0], args[1:])
 	}
 	if args[0] == "--version" || args[0] == "version" {
 		printVersion()

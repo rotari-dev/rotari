@@ -109,7 +109,9 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 - **Runs and jobs:** state, attempts, logs, and reports for a run or selected
   jobs. A report is never sent anywhere; see the
   [FAQ](FAQ.md#does-the-web-ui-send-run-details-to-an-ai-service).
-- **Several projects and state directories:** switch from the sidebar.
+- **Several projects and state directories:** switch from the sidebar. A
+  registered state directory whose directory was removed is marked
+  **missing**; `rotari gc` removes it from the registry.
   **Activity** shows runs across every state directory on a calendar;
   **Recent jobs** lists unfinished jobs and jobs finished in the last hours or
   in a range you drag on a timeline of runs;

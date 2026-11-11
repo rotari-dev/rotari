@@ -33,6 +33,11 @@ func ReportInterrupted(log notificationlog.Log, baseDirs []string, now time.Time
 	var errs []error
 	for _, baseDir := range baseDirs {
 		projects, err := joblist.Projects(baseDir, "")
+		if errors.Is(err, state.ErrBaseDirMissing) {
+			// A basedir that is gone has no runs to report, and the Web UI
+			// marks it missing; one that has not run yet has none either.
+			continue
+		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("list projects in %s: %w", baseDir, err))
 			continue

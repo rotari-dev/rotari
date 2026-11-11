@@ -139,15 +139,9 @@ func cmdComplete(args []string) int {
 		return 1
 	}
 	if args[0] == "project-name" {
-		entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
+		values, err := state.ProjectNames(baseDir)
 		if err != nil {
 			return 0
-		}
-		values := make([]string, 0, len(entries))
-		for _, entry := range entries {
-			if entry.IsDir() {
-				values = append(values, entry.Name())
-			}
 		}
 		if len(values) > 0 {
 			fmt.Println(strings.Join(values, "\n"))
@@ -208,7 +202,7 @@ func cmdComplete(args []string) int {
 }
 
 func completeListing(kind, command, basedir, projectName string) int {
-	baseDirs, err := jobsBaseDirs(basedir, configString("masterdir", ""))
+	baseDirs, _, err := jobsBaseDirs(basedir, configString("masterdir", ""))
 	if err != nil {
 		return 1
 	}
@@ -217,25 +211,22 @@ func completeListing(kind, command, basedir, projectName string) int {
 	}
 	values := make(map[string]struct{})
 	for _, baseDir := range baseDirs {
-		projects, err := os.ReadDir(filepath.Join(baseDir, "projects"))
+		projects, err := state.ProjectNames(baseDir)
 		if err != nil {
 			continue
 		}
 		for _, project := range projects {
-			if !project.IsDir() {
-				continue
-			}
 			if kind == "project-name" {
-				values[project.Name()] = struct{}{}
+				values[project] = struct{}{}
 				continue
 			}
-			if projectName != "" && project.Name() != projectName {
+			if projectName != "" && project != projectName {
 				continue
 			}
 			if command == "jobs" && kind == "job-id" {
-				addQueueJobIDs(values, filepath.Join(baseDir, "projects", project.Name(), "queue.json"))
+				addQueueJobIDs(values, filepath.Join(baseDir, "projects", project, "queue.json"))
 			}
-			addListingRunIDs(values, kind, filepath.Join(baseDir, "projects", project.Name(), "runs"))
+			addListingRunIDs(values, kind, filepath.Join(baseDir, "projects", project, "runs"))
 		}
 	}
 	result := make([]string, 0, len(values))

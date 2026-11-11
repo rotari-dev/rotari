@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -672,20 +671,14 @@ func resolveActiveWaitTargets(cliBaseDir, cliProjectName string, origin *model.L
 	if err != nil {
 		return nil, 0, err
 	}
-	entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
+	names, err := state.ProjectNamesOrNone(baseDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, 0, nil
-		}
 		return nil, 0, err
 	}
 	active := make([]resolve.Run, 0)
 	others := 0
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		paths, pathErr := state.ResolveProjectPaths(baseDir, entry.Name())
+	for _, name := range names {
+		paths, pathErr := state.ResolveProjectPaths(baseDir, name)
 		if pathErr != nil {
 			return nil, 0, pathErr
 		}
@@ -701,7 +694,7 @@ func resolveActiveWaitTargets(cliBaseDir, cliProjectName string, origin *model.L
 			others++
 			continue
 		}
-		active = append(active, resolve.Run{BaseDir: baseDir, ProjectName: entry.Name(), RunID: lock.RunID})
+		active = append(active, resolve.Run{BaseDir: baseDir, ProjectName: name, RunID: lock.RunID})
 	}
 	sort.Slice(active, func(i, j int) bool { return active[i].ProjectName < active[j].ProjectName })
 	return active, others, nil
@@ -715,18 +708,12 @@ func warnInterruptedWaitRuns(cliBaseDir string, origin *model.LaunchOrigin) erro
 	if err != nil {
 		return err
 	}
-	entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
+	names, err := state.ProjectNamesOrNone(baseDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
 		return err
 	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		paths, err := state.ResolveProjectPaths(baseDir, entry.Name())
+	for _, name := range names {
+		paths, err := state.ResolveProjectPaths(baseDir, name)
 		if err != nil {
 			return err
 		}

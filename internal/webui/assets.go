@@ -102,6 +102,8 @@ type webBaseDir struct {
 	// share a name such as .rotari-state.
 	Parent string `json:"parent"`
 	Name   string `json:"name"`
+	// Missing is set for a registered basedir whose directory is gone.
+	Missing bool `json:"missing,omitempty"`
 }
 
 // newWebBaseDir describes a registered basedir, with its label.
@@ -118,11 +120,19 @@ func newWebBaseDir(id, path string, current bool) webBaseDir {
 // own name. The JS sidebar builds the same markup from Parent and Name.
 func basedirLabelHTML(entry webBaseDir) string {
 	name := html.EscapeString(entry.Name)
-	if entry.Parent == "" {
-		return `<span class="basedir-name">` + name + `</span>`
+	label := `<span class="basedir-name">` + name + `</span>`
+	if entry.Parent != "" {
+		label = `<span class="basedir-parent">` + html.EscapeString(entry.Parent) + `</span><span class="basedir-name">/` + name + `</span>`
 	}
-	return `<span class="basedir-parent">` + html.EscapeString(entry.Parent) + `</span><span class="basedir-name">/` + name + `</span>`
+	if entry.Missing {
+		label += basedirMissingHTML
+	}
+	return label
 }
+
+// basedirMissingHTML marks a registered basedir whose directory is gone. The
+// Web UI's script writes the same mark (basedirLabelHTML in web_app_core.js).
+const basedirMissingHTML = ` <span class="basedir-missing" title="This basedir does not exist; rotari gc removes it from the registry">missing</span>`
 
 // basedirBellHTML is the switch that notifies about runs in one basedir. It
 // is a checkbox drawn as a bell; action names the page's handler.

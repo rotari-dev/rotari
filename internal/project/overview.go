@@ -30,36 +30,30 @@ type LastRun struct {
 
 // Overviews lists the projects of baseDir, inspecting each as Inspect does.
 func Overviews(baseDir string) ([]Overview, error) {
-	entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to read projects directory %q: %w", baseDir, err)
+	names, err := state.ProjectNames(baseDir)
+	if err != nil || names == nil {
+		return nil, err
 	}
-	overviews := make([]Overview, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() || !state.IsValidPathElement(entry.Name()) {
-			continue
-		}
-		paths, err := state.ResolveProjectPaths(baseDir, entry.Name())
+	overviews := make([]Overview, 0, len(names))
+	for _, name := range names {
+		paths, err := state.ResolveProjectPaths(baseDir, name)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve project %q: %w", entry.Name(), err)
+			return nil, fmt.Errorf("failed to resolve project %q: %w", name, err)
 		}
 		queue, err := state.LoadQueue(paths.QueueFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load queue for project %q: %w", entry.Name(), err)
+			return nil, fmt.Errorf("failed to load queue for project %q: %w", name, err)
 		}
 		inspection, err := Inspect(paths)
 		if err != nil {
-			return nil, fmt.Errorf("failed to check project %q state: %w", entry.Name(), err)
+			return nil, fmt.Errorf("failed to check project %q state: %w", name, err)
 		}
 		meta, err := state.LoadMeta(paths.MetaFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load project %q metadata: %w", entry.Name(), err)
+			return nil, fmt.Errorf("failed to load project %q metadata: %w", name, err)
 		}
 		overviews = append(overviews, Overview{
-			BaseDir: baseDir, Name: entry.Name(), Queued: len(queue.Commands), Runs: CountRuns(paths),
+			BaseDir: baseDir, Name: name, Queued: len(queue.Commands), Runs: CountRuns(paths),
 			State: inspection.State, LastRun: lastRun(paths, meta.LastRunID),
 		})
 	}

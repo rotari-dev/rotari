@@ -171,20 +171,17 @@ func ListPaths(baseDir, projectName string, additionalNames ...string) (common [
 		}
 		return common, projects
 	}
-	entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
+	names, err := state.ProjectNames(baseDir)
 	if err != nil {
 		return common, projects
 	}
-	for _, entry := range entries {
-		if !entry.IsDir() || !state.IsValidPathElement(entry.Name()) {
-			continue
-		}
-		projectDir, err := state.SafeJoin(filepath.Join(baseDir, "projects"), entry.Name())
+	for _, name := range names {
+		projectDir, err := state.SafeJoin(filepath.Join(baseDir, "projects"), name)
 		if err != nil {
 			continue
 		}
 		if paths := listDirectoryPaths(projectDir, additionalNames); len(paths) > 0 {
-			projects[entry.Name()] = paths
+			projects[name] = paths
 		}
 	}
 	return common, projects

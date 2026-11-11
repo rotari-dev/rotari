@@ -507,20 +507,8 @@ func cmdShow(args []string) int {
 const wideJobError = "--wide cannot be combined with one job's view; it applies to the run and queue tables"
 
 func hasMultipleProjects(baseDir string) (bool, error) {
-	entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	projectCount := 0
-	for _, entry := range entries {
-		if entry.IsDir() {
-			projectCount++
-		}
-	}
-	return projectCount > 1, nil
+	projects, err := state.ProjectNamesOrNone(baseDir)
+	return len(projects) > 1, err
 }
 
 type showJSON struct {

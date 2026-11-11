@@ -504,13 +504,18 @@ function basedirLabelText(entry) {
 }
 function basedirLabelHTML(entry) {
   const name = esc(entry.name || entry.path);
-  return entry.parent
+  const label = entry.parent
     ? '<span class="basedir-parent">' +
-        esc(entry.parent) +
-        '</span><span class="basedir-name">/' +
-        name +
-        "</span>"
+      esc(entry.parent) +
+      '</span><span class="basedir-name">/' +
+      name +
+      "</span>"
     : '<span class="basedir-name">' + name + "</span>";
+  // A registered basedir whose directory is gone (basedirMissingHTML in assets.go).
+  return entry.missing
+    ? label +
+        ' <span class="basedir-missing" title="This basedir does not exist; rotari gc removes it from the registry">missing</span>'
+    : label;
 }
 const bellIconSVG =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg>';

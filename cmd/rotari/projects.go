@@ -1,10 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 
 	"github.com/rotari-dev/rotari/internal/project"
@@ -12,39 +12,12 @@ import (
 )
 
 func showAllProjects(cliBaseDir, cliMasterDir string) int {
-	if cliBaseDir != "" {
-		baseDir, _, err := state.ResolveBaseDir(cliBaseDir)
-		if err != nil {
-			printErrorf("failed to resolve state directory: %v", err)
-			return 1
-		}
-		return showProjectsForBaseDirs([]string{baseDir})
-	}
-	masterDir, err := state.ResolveMasterDir(cliMasterDir)
+	baseDirs, missing, err := jobsBaseDirs(cliBaseDir, cliMasterDir)
 	if err != nil {
-		printErrorf("failed to resolve master directory: %v", err)
+		printError(err)
 		return 1
 	}
-	servers, err := listServers(masterDir)
-	if err != nil {
-		printErrorf("failed to list servers: %v", err)
-		return 1
-	}
-	known, err := listKnownBaseDirs(masterDir, servers)
-	if err != nil {
-		printErrorf("failed to list known state directories: %v", err)
-		return 1
-	}
-	baseDirs := make([]string, 0, len(known)+1)
-	seen := make(map[string]bool, len(known)+1)
-	for _, item := range known {
-		seen[item.BaseDir] = true
-		baseDirs = append(baseDirs, item.BaseDir)
-	}
-	if current, err := state.ResolveBaseDirDefault(); err == nil && !seen[current] {
-		baseDirs = append(baseDirs, current)
-	}
-	sort.Strings(baseDirs)
+	warnMissingBaseDirs(missing)
 	return showProjectsForBaseDirs(baseDirs)
 }
 
@@ -63,6 +36,10 @@ func showProjectsForBaseDirs(baseDirs []string) int {
 	projects := make([]projectInfo, 0)
 	for _, baseDir := range baseDirs {
 		overviews, err := project.Overviews(baseDir)
+		if errors.Is(err, state.ErrBaseDirMissing) {
+			// The default basedir before its first run.
+			continue
+		}
 		if err != nil {
 			printError(err)
 			return 1

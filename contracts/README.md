@@ -147,6 +147,7 @@ the IDs, this table, and those calls disagree.
 | RES-25 | Runs save immutable canonical merged file values, separate from runtime overrides and source metadata | partial | `TestMergedFileConfigSnapshotAndScopeValidation`, `TestWebWorkspaceSourceSelectionAndRunSnapshot` |
 | RES-26 | List commands ignore implicit location defaults; jobs/runs/projects scan known basedirs by default, and show requires a uniquely selected detail target | conformance | `TestAggregateCommandsIgnoreImplicitLocationDefaults` |
 | RES-27 | A carried job shows the log of the attempt that produced its result, however many carries back, in `show`, `--logs`, `--follow`, `/api/log`, the word cloud, and the run page | conformance | `TestCarriedJobLogsFollowEveryCarry` |
+| RES-28 | A missing basedir is told apart from an empty one: given to a read-only command it is a warning naming its source; registered and gone it is a warning, and missing in the Web UI; the implicit default before its first run is empty | conformance | `TestMissingGivenBasedirIsSaid`, `TestRemovedRegisteredBasedirIsReported` |
 | DUR-1 | Every executor runs jobs through the self-reporting wrapper | partial | `TestJobOutlivesKilledSupervisor`, `TestSSHJobReadsAsRunning` |
 | DUR-2 | The wrapper records status independently of its launcher | partial | `TestJobOutlivesKilledSupervisor` |
 | DUR-3 | An orphaned local job still records its own status | conformance | `TestJobOutlivesKilledSupervisor` |

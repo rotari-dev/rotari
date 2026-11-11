@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -75,11 +76,12 @@ func cmdJobs(args []string) int {
 		return 1
 	}
 	requestedBaseDir := valueIfSet(fs, "basedir", *basedir)
-	baseDirs, err := jobsBaseDirs(requestedBaseDir, *masterdir)
+	baseDirs, missingBaseDirs, err := jobsBaseDirs(requestedBaseDir, *masterdir)
 	if err != nil {
 		printError(err)
 		return 1
 	}
+	warnMissingBaseDirs(missingBaseDirs)
 	if projectFilter != "" {
 		found := false
 		for _, baseDir := range baseDirs {
@@ -360,38 +362,48 @@ func colorJobsState(value string) string {
 	}
 }
 
-func jobsBaseDirs(requested, masterdir string) ([]string, error) {
+// jobsBaseDirs returns the basedirs an aggregate command reads: requested,
+// or else every registered basedir and the implicit default. A registered
+// basedir whose directory is gone is left out and returned in missing, for
+// the caller to report; the default may not exist before its first run.
+func jobsBaseDirs(requested, masterdir string) (baseDirs, missing []string, err error) {
 	if requested != "" {
 		baseDir, _, err := state.ResolveBaseDir(requested)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve state directory: %w", err)
+			return nil, nil, fmt.Errorf("failed to resolve state directory: %w", err)
 		}
 		baseDir, err = filepath.Abs(baseDir)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve state directory: %w", err)
+			return nil, nil, fmt.Errorf("failed to resolve state directory: %w", err)
 		}
-		return []string{baseDir}, nil
+		return []string{baseDir}, nil, nil
 	}
 	masterDir, err := state.ResolveMasterDir(masterdir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve master directory: %w", err)
+		return nil, nil, fmt.Errorf("failed to resolve master directory: %w", err)
 	}
 	servers, err := listServers(masterDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list servers: %w", err)
+		return nil, nil, fmt.Errorf("failed to list servers: %w", err)
 	}
 	known, err := listKnownBaseDirs(masterDir, servers)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list known state directories: %w", err)
+		return nil, nil, fmt.Errorf("failed to list known state directories: %w", err)
 	}
-	baseDirs := make([]string, 0, len(known)+1)
+	baseDirs = make([]string, 0, len(known)+1)
 	seen := make(map[string]bool, len(known)+1)
 	for _, item := range known {
 		baseDir, err := filepath.Abs(item.BaseDir)
-		if err == nil {
-			seen[filepath.Clean(baseDir)] = true
-			baseDirs = append(baseDirs, filepath.Clean(baseDir))
+		if err != nil {
+			continue
 		}
+		baseDir = filepath.Clean(baseDir)
+		seen[baseDir] = true
+		if state.RequireBaseDir(baseDir) != nil {
+			missing = append(missing, baseDir)
+			continue
+		}
+		baseDirs = append(baseDirs, baseDir)
 	}
 	if current, err := state.ResolveBaseDirDefault(); err == nil {
 		current, absErr := filepath.Abs(current)
@@ -400,13 +412,18 @@ func jobsBaseDirs(requested, masterdir string) ([]string, error) {
 		}
 	}
 	sort.Strings(baseDirs)
-	return baseDirs, nil
+	return baseDirs, missing, nil
 }
 
 func collectJobsAcrossBaseDirs(baseDirs []string, project string, now time.Time, window time.Duration) ([]joblist.Row, error) {
 	rows := make([]joblist.Row, 0)
 	for _, baseDir := range baseDirs {
 		projects, err := joblist.Projects(baseDir, project)
+		if errors.Is(err, state.ErrBaseDirMissing) {
+			// The default basedir before its first run; a registered basedir
+			// that is gone has been reported and left out by jobsBaseDirs.
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -431,4 +448,12 @@ func shortenJobsPath(path string) string {
 		return path
 	}
 	return ".../" + filepath.Base(filepath.Dir(path)) + "/" + filepath.Base(path)
+}
+
+// warnMissingBaseDirs reports registered basedirs whose directories are gone.
+// An aggregate command still lists the others.
+func warnMissingBaseDirs(missing []string) {
+	for _, baseDir := range missing {
+		printWarningf("WARNING: registered basedir %s does not exist; 'rotari gc' removes it from the registry", baseDir)
+	}
 }

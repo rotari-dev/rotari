@@ -117,6 +117,41 @@ scope; a separate `--all-basedirs` switch is not needed. Implementation:
 [built-binary conformance](../conformance/01-resolution/aggregate_target_defaults_test.go).
 
 Other non-location option defaults remain applicable to aggregate views.
+
+**RES-28** A basedir that does not exist is told apart from one that exists
+without projects, once, by `state.ProjectNames`; each reader decides what a
+missing basedir means for it:
+
+- A command that only reads state (`check`, `show`, `export`, `jobs`,
+  `runs`, `notifications`, `projects`, `lineage`) warns on stderr
+  `basedir PATH does not exist (from SOURCE); nothing has run there yet` when
+  the basedir given to it on the command line, in `ROTARI_BASEDIR`, or in
+  config does not exist; SOURCE is `--basedir`, the variable, or the config
+  scope and path. It otherwise behaves, with the same exit status, as for an
+  existing basedir without state: a basedir named in a shell profile or by
+  `rotari init` (RES-24) exists only after its first run, and RES-3 still
+  applies. `wait` without a selector stays silent (RES-16), and `--help` does
+  not warn. Commands that write state, such as `add`, `import`, and `run`,
+  create the basedir they are given.
+- The implicit default basedir (RES-1 steps 4 to 6) may not exist before its
+  first run; readers find it empty, as they find an existing basedir without
+  projects.
+- Commands that read every registered basedir (`jobs`, `runs`,
+  `notifications`, `projects` without `--basedir`) warn on stderr of each
+  registered basedir whose directory is gone, pointing to `rotari gc`, and
+  list the others.
+- The Web UI marks such a basedir `missing` in `/api/basedirs` and in the
+  sidebar; `/api/projects` for it answers 404 naming it, and the history
+  search reports it as not searched. The server's own basedir before its
+  first run lists its `default` project. The interrupted-run pass (NOT-4)
+  finds no runs in a missing basedir.
+
+Implemented by [internal/state/project_names.go](../internal/state/project_names.go),
+`warnMissingGivenBaseDir` in [cmd/rotari/config.go](../cmd/rotari/config.go),
+`jobsBaseDirs` in [cmd/rotari/jobs.go](../cmd/rotari/jobs.go), and
+`projectNames` and `basedirEntries` in
+[internal/webui/webui.go](../internal/webui/webui.go). Tested by
+[built-binary conformance](../conformance/01-resolution/missing_basedir_test.go).
 - **RES-9** Project names and job IDs are single path elements, never relative or
   absolute paths.
 - **RES-10** Empty values, `.`, `..`, absolute paths, and values containing `/` or `\`

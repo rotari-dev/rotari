@@ -63,10 +63,15 @@ func loadCLIConfig(args []string) error {
 	cliConfigPath = ""
 	cliLocationDefaults = nil
 	cliLocatedBaseDir = ""
+	cliGivenBaseDir = givenBaseDir{}
 	cliFileConfig = config.Loaded{Values: map[string]any{}}
 	cliConfigLayers = nil
 	baseDir, projectName := configLocationArgs(args)
 	cliBaseDirGiven := baseDir != ""
+	baseDirFrom := ""
+	if cliBaseDirGiven {
+		baseDirFrom = "--basedir"
+	}
 	invocationOptions, positional := configInvocationOptions(args)
 	aggregate := aggregateCommandInvocation(cliConfigCommand, invocationOptions, positional)
 	cliIgnoreImplicitLocationDefaults = ignoredImplicitLocationDefaults(cliConfigCommand, aggregate)
@@ -97,7 +102,18 @@ func loadCLIConfig(args []string) error {
 		}
 		cliFileConfig = config.Loaded{Values: config.Merge(nil, values), Sources: []config.Source{{Scope: "explicit", Path: cliConfigPath}}}
 		cliConfigLayers = []config.Loaded{cliFileConfig}
-		return rememberConfigLocations()
+		if err := rememberConfigLocations(); err != nil {
+			return err
+		}
+		if baseDirFrom == "" && !cliIgnoreImplicitLocationDefaults["basedir"] {
+			if baseDir, baseDirFrom = os.Getenv(envBaseDir), envBaseDir; baseDir == "" {
+				if baseDir, err = configLocation("basedir"); err != nil {
+					return err
+				}
+				baseDirFrom = configuredFromConfig("basedir").from
+			}
+		}
+		return rememberGivenBaseDir(baseDir, baseDirFrom)
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -125,7 +141,7 @@ func loadCLIConfig(args []string) error {
 	}
 	if baseDir == "" {
 		if !cliIgnoreImplicitLocationDefaults["basedir"] {
-			baseDir = os.Getenv(envBaseDir)
+			baseDir, baseDirFrom = os.Getenv(envBaseDir), envBaseDir
 		}
 	}
 	explicitProject := projectName
@@ -155,6 +171,7 @@ func loadCLIConfig(args []string) error {
 			if baseDir, err = configLocation("basedir"); err != nil {
 				return err
 			}
+			baseDirFrom = configuredFromConfig("basedir").from
 		}
 	}
 	var resolvedBaseDir string
@@ -165,6 +182,9 @@ func loadCLIConfig(args []string) error {
 	}
 	if err != nil {
 		return err
+	}
+	if baseDir != "" && baseDirFrom != "" {
+		cliGivenBaseDir = givenBaseDir{path: resolvedBaseDir, from: baseDirFrom}
 	}
 	_, projectFlagGiven := invocationOptions["project-name"]
 	if !projectFlagGiven && len(positional) > 0 && (cliConfigCommand == "show" || cliConfigCommand == "export" || cliConfigCommand == "wait") {
@@ -317,6 +337,48 @@ func rememberConfigLocations() error {
 	return nil
 }
 
+// givenBaseDir is the basedir an invocation named, on the command line, in
+// ROTARI_BASEDIR, or in config, and where; it is empty for the implicit
+// default and for a basedir found from a run or project.
+type givenBaseDir struct {
+	path, from string
+}
+
+var cliGivenBaseDir givenBaseDir
+
+func rememberGivenBaseDir(value, from string) error {
+	if value == "" {
+		return nil
+	}
+	path, _, err := state.ResolveBaseDir(value)
+	if err != nil {
+		return err
+	}
+	cliGivenBaseDir = givenBaseDir{path: path, from: from}
+	return nil
+}
+
+// warnMissingGivenBaseDir says, for a command that only reads state, that the
+// basedir it was given does not exist, so a mistyped path does not read as an
+// empty basedir without a word (RES-28). It is not an error: a basedir named
+// in ROTARI_BASEDIR or by rotari init exists only after its first run.
+func warnMissingGivenBaseDir(command string, args []string) {
+	if !readOnlyCommands[command] || cliGivenBaseDir.path == "" || commandHelpRequested(command, args) {
+		return
+	}
+	if err := state.RequireBaseDir(cliGivenBaseDir.path); err != nil {
+		printWarningf("WARNING: %v (from %s); nothing has run there yet", err, cliGivenBaseDir.from)
+	}
+}
+
+// readOnlyCommands only read state, so they say when the basedir given to
+// them does not exist. wait is left out: without a selector it is silent,
+// like a shell's wait (RES-16).
+var readOnlyCommands = map[string]bool{
+	"check": true, "show": true, "export": true, "jobs": true, "runs": true, "notifications": true,
+	"projects": true, "lineage": true,
+}
+
 // configLocation returns the config value of basedir or project-name, read
 // before any option is defined. A list or table is an error, not a path.
 func configLocation(name string) (string, error) {
@@ -356,15 +418,10 @@ func configProjectName(baseDir, requested string) (string, error) {
 		}
 		return value, nil
 	}
-	entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
+	// Without a single project to choose, the config is the basedir's alone.
+	projects, err := state.ProjectNames(baseDir)
 	if err != nil {
 		return "", nil
-	}
-	var projects []string
-	for _, entry := range entries {
-		if entry.IsDir() {
-			projects = append(projects, entry.Name())
-		}
 	}
 	if len(projects) == 1 {
 		return projects[0], nil
@@ -869,11 +926,9 @@ func chooseConfigOutputNamed(reader io.Reader, writer io.Writer, baseDir, projec
 		if projectDir, err := state.SafeJoin(filepath.Join(baseDir, "projects"), projectName); err == nil {
 			candidates = append(candidates, candidate{label: "project " + projectName, path: filepath.Join(projectDir, fileName)})
 		}
-	} else if entries, err := os.ReadDir(filepath.Join(baseDir, "projects")); err == nil {
-		for _, entry := range entries {
-			if entry.IsDir() && state.IsValidPathElement(entry.Name()) {
-				candidates = append(candidates, candidate{label: "project " + entry.Name(), path: filepath.Join(baseDir, "projects", entry.Name(), fileName)})
-			}
+	} else if names, err := state.ProjectNames(baseDir); err == nil {
+		for _, name := range names {
+			candidates = append(candidates, candidate{label: "project " + name, path: filepath.Join(baseDir, "projects", name, fileName)})
 		}
 	}
 	fmt.Fprintln(writer, "Config resolution priority (highest to lowest):")

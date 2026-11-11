@@ -155,20 +155,14 @@ func Projects(baseDir, requested string) ([]string, error) {
 		}
 		return []string{requested}, nil
 	}
-	entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
+	projects, err := state.ProjectNames(baseDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []string{state.DefaultProjectName}, nil
-		}
-		return nil, fmt.Errorf("failed to read projects: %w", err)
+		return nil, err
 	}
-	projects := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() && state.IsValidPathElement(entry.Name()) {
-			projects = append(projects, entry.Name())
-		}
+	if projects == nil {
+		// A basedir in which nothing has run yet has only its default project.
+		return []string{state.DefaultProjectName}, nil
 	}
-	sort.Strings(projects)
 	return projects, nil
 }
 

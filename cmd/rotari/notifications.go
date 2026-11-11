@@ -52,11 +52,12 @@ func cmdNotifications(args []string) int {
 		printErrorf("invalid --since duration %q", *since)
 		return 1
 	}
-	baseDirs, err := jobsBaseDirs(valueIfSet(fs, "basedir", *basedir), *masterdir)
+	baseDirs, missingBaseDirs, err := jobsBaseDirs(valueIfSet(fs, "basedir", *basedir), *masterdir)
 	if err != nil {
 		printError(err)
 		return 1
 	}
+	warnMissingBaseDirs(missingBaseDirs)
 	masterDir, err := state.ResolveMasterDir(*masterdir)
 	if err != nil {
 		printErrorf("failed to resolve master directory: %v", err)

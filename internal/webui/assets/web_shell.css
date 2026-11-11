@@ -248,6 +248,15 @@ main {
 .basedir-name {
   color: var(--muted);
 }
+/* A registered basedir whose directory is gone. */
+.basedir-missing {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--s-warn-bg);
+  color: var(--s-warn);
+  font-family: var(--font-sans);
+  font-size: 11px;
+}
 
 /* The bell is a checkbox: notify about runs in this basedir. */
 .basedir-bell {

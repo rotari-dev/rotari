@@ -82,19 +82,13 @@ type runningSupervisor struct {
 // runningSupervisors returns the supervisors of baseDir's projects that
 // hold their lease, in project order.
 func runningSupervisors(baseDir string) ([]runningSupervisor, error) {
-	entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
+	names, err := state.ProjectNamesOrNone(baseDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	var supervisors []runningSupervisor
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		paths, err := state.ResolveProjectPaths(baseDir, entry.Name())
+	for _, name := range names {
+		paths, err := state.ResolveProjectPaths(baseDir, name)
 		if err != nil {
 			continue
 		}

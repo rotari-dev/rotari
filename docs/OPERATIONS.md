@@ -96,7 +96,9 @@ rotari gc --dry-run
 ```
 
 The candidates and their locations are printed. This includes basedir
-registry records whose basedir directory no longer exists. Existing basedir
+registry records whose basedir directory no longer exists; until they are
+removed, `jobs`, `runs`, `notifications`, and `projects` warn about them, and
+the Web UI marks them **missing** in its sidebar. Existing basedir
 directories, including empty ones, are retained. Malformed or invalid
 registry files are listed and left untouched; inspect their run data and
 repair or remove them manually. To remove the candidates:

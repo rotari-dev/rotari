@@ -492,21 +492,7 @@ func ProjectNames(baseDir, cliProjectName string) ([]string, error) {
 // intentionally does not consult ROTARI_PROJECT_NAME or choose the default
 // project, which aggregate views use when finding project candidates.
 func ExistingProjectNames(baseDir string) ([]string, error) {
-	entries, err := os.ReadDir(filepath.Join(baseDir, "projects"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	projects := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() && state.IsValidPathElement(entry.Name()) {
-			projects = append(projects, entry.Name())
-		}
-	}
-	sort.Strings(projects)
-	return projects, nil
+	return state.ProjectNamesOrNone(baseDir)
 }
 
 // AmbiguousError reports that selector, described by what (such as "job
