@@ -211,3 +211,36 @@ Commit: `95ebe62e` (2026-11-11 19:05:42 +0900)
   source of later `--env`-style validation errors is not named (Phase 2),
   and other live-server options from config still refuse a static export by
   design.
+
+## Regression fix: command sections read as option values
+
+Commit: `fbed25f0` (2026-11-11 21:01:08 +0900)
+
+- **Change:** `configValue` in [cmd/rotari/config.go](../../cmd/rotari/config.go)
+  no longer returns a top-level table named after a command
+  (`isConfigCommandSection`) as an option value. `configSettingIn` in
+  `web_config.go` skips such a table at the top level the same way. CLI-30
+  says so. `TestBadConfiguredValuesAreErrors` runs `run --help`,
+  `cancel --help`, `retry --help`, and a real `run` in a workspace made by
+  `rotari init`.
+- **Reason:** found on 2026-11-11 during the shared-rule-violations plan's
+  Phase 1, from a warning in this repository's own `.rotari.toml`. Phase 2
+  (`23bdc89a`) made `run` fail with `invalid retry {}` and `cancel` with
+  `invalid wait {}` in every workspace from `rotari init`. The template has a
+  table for every command, and the lookup's top-level fallback read `[retry]`
+  and `[wait]` as values of `run --retry` and `cancel --wait`. Before Phase 2
+  the table was dropped silently, so the ambiguity had no effect. The
+  colliding command and option names are `retry`, `wait`, `env`, `note`,
+  `notifications`, and `config`.
+- **Plan impact:** a regression in Phase 2 that its tests missed: they used
+  hand-written configs, never the generated template. No other decision
+  changes.
+- **Validation:**
+  - The new check fails with the Phase 2 code (restored temporarily for the
+    test) and passes with the fix.
+  - With a scratch binary in a workspace from `rotari init`: `run` exits 0,
+    and `cancel` gives its usual "not running" message.
+  - A full run of the `scripts/check.sh` steps passed: `go vet ./...`,
+    `tsc -p internal/webui/tsconfig.json` (run directly), `go test ./...`, and
+    `go test -race ./...`.
+- **Remaining:** None.

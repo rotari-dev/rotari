@@ -1,7 +1,8 @@
 # Shared-rule violations: run order, task origins, and PID identity
 
 Created 2026-11-11. Status: planned; decisions D1 to D3 settled with the
-user on 2026-11-11, each with the recommended option. Phase 1 is next.
+user on 2026-11-11, each with the recommended option. Phase 1 (survey) done
+the same day; Phase 2 is next.
 
 ## Purpose
 
@@ -39,9 +40,11 @@ Read from the code on 2026-11-11; Phase 1 reproduces each with the binary.
 A run ID is `YYYYMMDD-HHMMSS-XXXXXXXX`: the start second, then a random
 tail. Name order is therefore wrong for two runs begun in the same second.
 A directory's mtime changes whenever an entry is added or removed in it, so
-mtime orders by last activity, not by start. The run's `started_at` in its
-summary is written with nanoseconds (`projectrun.Runner.now`,
-`RFC3339Nano`). The run ID format is also defined three times:
+mtime orders by last activity, not by start. The summary's `started_at` has
+only second precision. The coordinator's `recorded_at` in the run's
+`context.json` is written with nanoseconds when the run starts
+(`projectrun.Runner.timestampNano`); Phase 1 corrected the plan's first
+reading on this. The run ID format is also defined three times:
 `runIDLength` in `internal/state/attempts.go`, `runIDLen` in
 `cmd/rotari/main.go`, and the layout string in `runlist.RunIDStart`.
 
@@ -86,7 +89,8 @@ another namespace.
 - **D1. One run order.** The newest run is `meta.LastRunID` when it names
   a run directory. Otherwise, and for every other position, runs are ordered
   by the start second in the run ID. Runs that share a second are ordered by
-  their recorded `started_at`, which is read only for those runs. mtime is no
+  the coordinator's `recorded_at` in `context.json`, read only for those
+  runs; a run without it, from an earlier rotari, sorts by its ID among them. mtime is no
   longer used. The order and the run ID format live in `internal/state`, next
   to the run directory layout. `resolve` keeps the "latest settled" rule on
   top of it. The Web index shows the two newest runs in this order.
@@ -107,9 +111,51 @@ another namespace.
   - A record without a namespace, from an earlier rotari, keeps today's
     behavior.
 
+### Phase 1 results (2026-11-11)
+
+Reproduced with the binary at `d9512117`, in an isolated `HOME`, config,
+and basedir.
+
+- **Run order.** Three real runs were renamed so that runs 1 and 2 share a
+  second, with name order opposite to start order:
+  `20260101-000000-ffffffff` (started :17), `-00000000` (:18), and
+  `20260101-000001-aaaaaaaa` (:20). Run 1's directory was given the newest
+  mtime.
+  - The Web index (`/api/state`) listed `aaaaaaaa` and `ffffffff`; the two
+    newest are `aaaaaaaa` and `00000000`.
+  - With `last_run_id` cleared, `show` and `show latest` both chose
+    `ffffffff`, the oldest run, by mtime.
+  - After `delete` of the newest run, `meta.json` named `ffffffff` as the
+    last run instead of `00000000`.
+  - `show` with `last_run_id` set chose correctly.
+- **Task origins.** An array of three tasks with task 2 failing was run and
+  then retried; the retry's `commands.json` has explicit `task_origins`.
+  Removing them, leaving the array-level origin, changed:
+  - `show -j TASK --json` and `show -r RUN --json`: a carried task lost
+    `success (carried)`, `carried`, and its recorded working directory.
+  - `show --success`: carried tasks lost their status suffix and finish time.
+  - `jobs`: carried tasks showed `success` instead of `success (carried)`.
+  - `/api/run`: tasks lost `origin`, `carried`, and the origin's times.
+  - `show --failed` and `show --success` selected the same tasks either way,
+    so selection, which goes through the planner rule, was not affected.
+- **PID identity.** `unshare --user --map-root-user --pid --fork
+  --mount-proc` works unprivileged on this machine. With a local
+  `sleep 117` job started outside (namespace `pid:[4026531836]`, recorded in
+  `job.json`), from inside a new namespace:
+  - `suspend` and `resume` said "job is not running".
+  - `cancel` reported the job cancelled and wrote `cancelled`, but the
+    process kept running.
+  - `show` read `running (recorded)` from the run lock, so it was not wrong
+    here, contrary to the ISSUES entry.
+  - The client-attachment case was not reproduced.
+- **Found outside the scope:** the no-silent-fallbacks Phase 2 change made
+  `run` and `cancel` fail in a workspace from `rotari init`, whose `[retry]`
+  and `[wait]` sections were read as option values. It was fixed separately;
+  see that plan's work log.
+
 ## Phases
 
-1. **Survey and reproduce.** Reproduce item 1 with two runs in the same
+1. **Survey and reproduce.** Done 2026-11-11; results above. Reproduce item 1 with two runs in the same
    second, and show which callers give different answers. Reproduce item 2
    with a snapshot that has only an array-level origin, for each caller of
    `OriginOf` and `LoadRunOrigin`, and record what each shows and filters.
