@@ -254,7 +254,9 @@ does not promise to detect a lost remote client.
   fails even when a later source or the command line gives the option, and is
   never run with the built-in default in its place. A command reports only
   the options it has, so a root config value fails only the commands that
-  read it. An empty variable leaves an option with typed values (boolean,
+  read it. A top-level table named after a command, such as `[retry]` or
+  `[wait]` in the template `rotari init` writes, is that command's section,
+  not a value of another command's option of the same name. An empty variable leaves an option with typed values (boolean,
   number, duration, or choices) unset; a plain string option takes the empty
   string. `--help` still shows, with each problem as a warning on stderr and
   the built-in default in its place; a basedir or project name that cannot be

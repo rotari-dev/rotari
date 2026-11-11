@@ -53,7 +53,7 @@ func configSettingIn(layers []config.Loaded, command, name string) configSetting
 				}
 				values = section
 			}
-			if value, ok := values[name]; ok && value != nil && len(layers[index].Sources) > 0 {
+			if value, ok := values[name]; ok && value != nil && len(layers[index].Sources) > 0 && (inSection || !isConfigCommandSection(name, value)) {
 				return configSetting{value: value, source: layers[index].Sources[0], found: true}
 			}
 		}

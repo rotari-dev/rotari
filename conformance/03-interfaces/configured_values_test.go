@@ -107,6 +107,25 @@ func TestBadConfiguredValuesAreErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The template rotari init writes has a section for every command, such as
+	// [retry] and [wait]. A section named like an option of another command is
+	// that command's section, not a value of the option.
+	initialized := filepath.Join(e.Root, "initialized")
+	if err := os.MkdirAll(initialized, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	inWorkspace := e.Without("ROTARI_BASEDIR").In(initialized)
+	inWorkspace.MustRotari("init")
+	for _, args := range [][]string{{"run", "--help"}, {"cancel", "--help"}, {"retry", "--help"}} {
+		if got := inWorkspace.Rotari(args...); got.Code != 0 || strings.Contains(got.Stderr, "invalid") {
+			t.Errorf("%v in a workspace from rotari init: %s", args, got)
+		}
+	}
+	inWorkspace.MustRotari("add", "--", "true")
+	if got := inWorkspace.Rotari("run", "--quiet"); got.Code != 0 || strings.Contains(got.Stderr, "invalid") {
+		t.Errorf("run in a workspace from rotari init: %s", got)
+	}
+
 	// An empty variable leaves a typed option unset.
 	if got := e.WithVar("ROTARI_RUN_RETRY", "").Rotari("run", "--help"); got.Code != 0 || got.Stderr != "" {
 		t.Errorf("an empty ROTARI_RUN_RETRY must count as unset: %s", got)

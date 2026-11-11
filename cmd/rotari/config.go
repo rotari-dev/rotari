@@ -511,7 +511,27 @@ func configValue(name string) (any, bool) {
 		}
 	}
 	value, ok := cliConfig[name]
+	if ok && isConfigCommandSection(name, value) {
+		// A top-level table named after a command, such as [retry] or
+		// [wait] in the generated template, is that command's section, not
+		// a value of the option of the same name.
+		return nil, false
+	}
 	return value, ok && value != nil
+}
+
+// isConfigCommandSection reports whether a top-level config value is a
+// command's section rather than an option value.
+func isConfigCommandSection(name string, value any) bool {
+	if _, table := value.(map[string]any); !table {
+		return false
+	}
+	for _, command := range cliCommandSpecs {
+		if command.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func configString(name, defaultValue string) string {
