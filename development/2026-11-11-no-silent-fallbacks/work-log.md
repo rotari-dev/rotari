@@ -21,7 +21,7 @@ Commit: `1b6b6efa` (2026-11-11 15:48:42 +0900)
 
 ## Phase 1: survey and reproduce
 
-Commit: recorded with this entry (plan and work log only).
+Commit: `c9462df6` (2026-11-11 15:54:06 +0900)
 
 - **Change:** Updated the findings in [plan.md](plan.md) with reproduced
   behavior, the list of project-listing implementations, and the owning
@@ -49,3 +49,55 @@ Commit: recorded with this entry (plan and work log only).
   `/api/projects` behavior was not rerun; it is taken from the ISSUES.md entry
   of 2026-11-04.
 - **Remaining:** Phases 2 to 5.
+
+## Phase 2: configured option values
+
+Commit: `23bdc89a` (2026-11-11 16:22:45 +0900)
+
+- **Change:**
+  - New [cmd/rotari/configured_value.go](../../cmd/rotari/configured_value.go)
+    holds the value type that `web_config.go` used (`webValue`, now
+    `configuredValue`), its parsers, and a collector of problems per flag set.
+  - `cliBool`, `cliInt`, `cliDuration`, `cliString` (through
+    `configuredString`), and `cliValue` (through `configuredRepeated`) in
+    `cli_spec.go` read config and then the environment through it.
+    `parseCLIFlagSet` reports the problems after a successful parse, or warns
+    under `--help`. `configBool`, `configInt`, and `configStrings` were
+    removed; tests keep test-only `configInt`/`configBool` accessors that
+    panic on a bad value.
+  - `loadCLIConfig` reads `basedir` and `project-name` through
+    `configLocation`, so a list or table is a config error (CLI-17) before
+    any path is made from it.
+  - `readWebConfigured` takes the flag set and reports through the
+    collector. It now checks the config value and the variable separately,
+    so a bad config value is reported even when the environment replaces it.
+  - Contract CLI-30 (note and status row, CLI-17 row lists the new test),
+    [docs/CONFIGURATION.md](../../docs/CONFIGURATION.md),
+    [docs/ENVIRONMENT_VARIABLES.md](../../docs/ENVIRONMENT_VARIABLES.md), and
+    the ISSUES.md entry moved to Resolved.
+- **Reason:** Phase 2, implementing D1 to D5.
+- **Plan impact:**
+  - Item 1 is done. Phase 5's contract work for item 1 was done here as
+    CLI-30 rather than as an extension of CLI-3.
+  - Found while testing: a list for `basedir` made `add` create a directory
+    named `[a b]`, because location values are read before any flag set
+    exists. Hence `configLocation`.
+  - `jobs` ignores a configured `basedir` by design, so it does not report
+    one, which follows D2.
+  - Repeated values whose content is validated by the command later, such as
+    `--env` without `=`, still name the flag and not the source: their flag
+    values accept any text in `Set`.
+- **Validation:**
+  - New `TestBadConfiguredValuesAreErrors` (11 cases across bool, integer,
+    duration, choice, table, and basedir, from variables, global, and
+    workspace configs, each with `--help`; plus D2 and D4 checks) passes.
+  - Added a WEB-36 case for a bad config value under a valid variable.
+  - `go test ./conformance` (contract status table) passes.
+  - Full run of the `scripts/check.sh` steps: `go vet ./...`, `tsc -p
+    internal/webui/tsconfig.json` (run directly, as `npm` is broken on this
+    machine), `go test ./...`, and `go test -race ./...`, all passing with
+    go1.25.8 and Node v24. pre-commit is not installed; `gofmt -l` is clean.
+  - Rebuilt the scratch binary and reran the Phase 1 reproductions; each now
+    fails with the source named.
+- **Remaining:** Phases 3 to 5. The source of later `--env`-style
+  validation errors is not named (see above).
