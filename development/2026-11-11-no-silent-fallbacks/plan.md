@@ -1,7 +1,7 @@
 # No silent fallbacks for configured values and missing basedirs
 
-Created 2026-11-11. Status: planned; decisions settled with the user on
-2026-11-11. Phase 1 is next.
+Created 2026-11-11. Status: decisions settled with the user on 2026-11-11;
+Phase 1 (survey) done the same day; Phase 2 is next.
 
 ## Purpose
 
@@ -31,18 +31,22 @@ array origin lookup, PID namespaces) and test-suite flakiness.
 Option defaults are read while each command defines its flag set, in
 [cmd/rotari/cli_spec.go](../../cmd/rotari/cli_spec.go) and
 [cmd/rotari/config.go](../../cmd/rotari/config.go). These helpers return a
-pointer and have no error path, so every parse failure falls back silently:
+pointer and have no error path. Phase 1 checked each row with the built
+binary (`--help` shows the resulting default) on 2026-11-11:
 
 | Helper | Config value | Environment value |
 | --- | --- | --- |
-| `cliBool` / `configBool` | a non-bool, or a string `ParseBool` rejects, is dropped | `ParseBool` failure is dropped (including `ROTARI_QUIET`) |
-| `cliInt` / `configInt` | a non-number or non-integer string is dropped; a float such as `1.5` is truncated to `1` | `Atoi` failure is dropped |
-| `cliDuration` | `ParseDuration` failure is dropped | `ParseDuration` failure is dropped |
-| `cliString` with `Values` (choices) | assigned to the target without checking the choices | assigned without checking |
-| `cliValue` (repeated and custom values) | `Set` errors are discarded; a value that is neither a string nor a list (for example a table) is dropped by `configStrings` | `Set` error is discarded |
+| `cliBool` / `configBool` | a non-bool, or a string `ParseBool` rejects, is dropped | `ParseBool` failure is dropped: `ROTARI_ADD_QUIET=yes` leaves `--quiet` off, with no message |
+| `cliInt` / `configInt` | `retry = "lots"` is dropped; `retry = 1.5` becomes `1` | `ROTARI_RUN_RETRY=lots` is dropped |
+| `cliDuration` | `slurm-submit-interval = "soon"` becomes `0s` | `ROTARI_RUN_SLURM_SUBMIT_INTERVAL=soon` becomes `0s` |
+| `cliString` with `Values` (choices) | not checked here, but the command rejects it later: `invalid disconnect action "explode"`, `unsupported config format "xml"`. `export` prints only its usage line. None names the source | same |
+| `cliValue` (repeated and custom values) | a table such as `env = {A = 1}` is dropped by `configStrings`, and the job is added without it; a bad list entry is rejected later as `invalid --env`, which names the flag, not the source | rejected later as `invalid --env`, without the source |
+| `configString` (string options, `basedir`, `project-name`) | a list or table becomes its `fmt.Sprint` text, such as `[a b]` | not applicable |
 
 The flags themselves already reject bad command-line values through the flag
-package. Only the environment and config paths are silent.
+package. Only the environment and config paths are silent. Where a command
+validates a value later, the error points to `--option` even when the value
+came from a variable or a file. Phase 2 reports the source for these as well.
 
 `rotari web`'s terminal and launch options already follow the rule (WEB-36):
 `readWebConfigured` in
@@ -52,11 +56,12 @@ problems while the flag set is defined. `runWebCommand` reports them after
 `invalid terminal-max-shells "lots" in global config`. This plan makes that
 the behavior of every option and keeps one implementation.
 
-Other readers of `configValue` / `cliConfig` (11 call sites outside the
-helpers, including webhook and launcher sections) are not option defaults.
-Phase 1 lists them and states which ones parse leniently. Any that do are
-fixed in this plan if they are option-like, or recorded in ISSUES.md if they
-need their own decision.
+Every reader of `configValue` / `cliConfig` in `cmd/rotari` goes through
+these helpers or checks only presence (`web_config.go`, `web.go`), so fixing
+the helpers covers them. Notification settings are parsed separately by
+[internal/notification/config.go](../../internal/notification/config.go),
+which already rejects unknown keys and invalid values. Nothing outside the
+scope was found.
 
 ### Missing basedir (item 2)
 
@@ -66,6 +71,26 @@ basedir that does not exist at all, or for a registered basedir whose
 directory was removed. Since 2026-11-09, the history search and `rotari web`'s
 interrupted-run pass check for absence themselves (NOT-4), so the rule is now
 decided in more than one caller instead of once.
+
+Phase 1 ran the read-only commands with `-b` set to a directory that does
+not exist, and then to an existing empty directory. The output was identical:
+
+| Command | Missing and fresh basedir both give |
+| --- | --- |
+| `check` | `project=default state=empty runnable=false`, exit 1 |
+| `projects` | `No projects found.`, exit 0 |
+| `jobs`, `runs`, `notifications` | "No ... found in state directory ...", exit 0 |
+| `wait` | no output, exit 0 |
+| `show`, `export` | `project "default" does not exist`, exit 1 |
+| `lineage` | `no projects found in ...`, exit 1 |
+
+None created the directory. The cause is structural: ten places read
+`<basedir>/projects` themselves and treat "not found" as empty, in
+`internal/joblist`, `internal/project` (`Overviews`), `internal/config`,
+`internal/resolve`, `internal/runlist` (twice), `internal/webui` (twice), and
+`cmd/rotari/config.go` (twice). The history search adds its own `os.Stat`.
+`internal/state` owns the basedir layout and `IsValidPathElement`, so the
+shared listing belongs there.
 
 ### Static export and `auth-token` (item 3)
 
@@ -117,15 +142,19 @@ recommended option.
 
 ## Phases
 
-1. **Survey and reproduce.** Use the built binary to confirm each row of the
-   findings table with one example per helper. List the other `configValue`
-   readers and their parsing. Check which commands treat a missing basedir as
-   empty. Record anything outside scope in ISSUES.md.
-2. **Collector and typed helpers (item 1).** Implement D1 to D5 in `cmd/rotari`. Move `readWebConfigured` onto the
-   collector without changing WEB-36's messages. Error format:
+1. **Survey and reproduce.** Done 2026-11-11; results are in the findings
+   tables above. Nothing outside the scope was found.
+2. **Collector and typed helpers (item 1).** Implement D1 to D5 in
+   `cmd/rotari`, including choices, repeated values, and string options given
+   a list or table. Move `readWebConfigured` onto the collector without
+   changing WEB-36's messages. Error format:
    `invalid OPTION "VALUE" in SOURCE: REASON`, as WEB-36 uses now.
-3. **Missing basedir (item 2).** Implement D6 in the owning package
-   (`internal/joblist` or `internal/project`; Phase 1 decides), and switch
+3. **Missing basedir (item 2).** Add one project listing to `internal/state`
+   that returns a distinct error for a missing basedir and an empty list for a
+   basedir without projects. Move the ten listings onto it. Keep the
+   lower-level read unexported so callers cannot bypass the rule. Callers
+   that create state, or that read config before a first run, handle the
+   missing-basedir error explicitly instead of getting an empty list. Switch
    `check`, the listing commands, `/api/projects`, the Web index, and the
    NOT-4 callers to it. Python client: check that `rotari` errors surface as
    exceptions and are not swallowed.
