@@ -172,3 +172,42 @@ Commit: `28a3f1cb` (2026-11-11 18:47:12 +0900)
     behavior.
 - **Remaining:** Phases 4 (static export and `auth-token`) and 5 (remaining
   contract and documentation checks).
+
+## Phases 4 and 5: static export token, contracts, and documentation
+
+Commit: `95ebe62e` (2026-11-11 19:05:42 +0900)
+
+- **Change:**
+  - `staticServerOptions` in [cmd/rotari/web.go](../../cmd/rotari/web.go),
+    which both `rotari web --static-dir` and `rotari tableview --static-dir`
+    use, no longer counts an `auth-token` from the environment or config.
+    `warnIgnoredStaticToken` warns, naming the variable or config file but
+    never the token. `--auth-token` on the command line is still refused.
+  - New `TestStaticExportsIgnoreConfiguredToken` (both commands, both
+    sources, and the command-line refusal). The env-token rejection
+    assertions in `TestCLIFlagPairWebStaticServerOptions` and
+    `TestTableViewCommandWritesAStaticSnapshot` were removed: they encoded
+    the old WEB-3/WEB-22 rule that D7 changes.
+  - WEB-3 and WEB-22 notes and status rows, the static export section of
+    [docs/WEB.md](../../docs/WEB.md), the ISSUES.md entry moved to
+    Resolved, and the plan marked done.
+- **Reason:** Phase 4, implementing D7. Phase 5 had been done along the way:
+  CLI-30, RES-28, WEB-3/WEB-22, CONFIGURATION.md, ENVIRONMENT_VARIABLES.md,
+  CONCEPTS.md, OPERATIONS.md, WEB.md, ARCHITECTURE.md, and all three ISSUES.md
+  items.
+- **Plan impact:**
+  - The plan is complete.
+  - Scope kept to `auth-token`, as D7 says. A `host`, `port`, or
+    `allow-terminal` from config still refuses a static export: WEB-3 and
+    WEB-36 decide that on purpose, with their own test
+    (`TestTerminalOptionsRejectBadConfiguredValues`).
+- **Validation:**
+  - The new and changed tests pass.
+  - `go test ./conformance` (contract status table) passes.
+  - A full run of the `scripts/check.sh` steps passed: `go vet ./...`,
+    `tsc -p internal/webui/tsconfig.json` (run directly), `go test ./...`, and
+    `go test -race ./...`. `gofmt -l` is clean; pre-commit is not installed.
+- **Remaining:** None for this plan. Two follow-ups are recorded above: the
+  source of later `--env`-style validation errors is not named (Phase 2),
+  and other live-server options from config still refuse a static export by
+  design.
