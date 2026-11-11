@@ -26,6 +26,11 @@ replaces automatic discovery with that file. Environment overrides are not
 included in the saved merged file-config snapshot. See
 [Configuration](CONFIGURATION.md#configuration-files).
 
+A value the option cannot use, such as `ROTARI_RUN_RETRY=lots`, is an error
+naming the variable, even when the command line gives the option. An empty
+variable leaves an option with a boolean, number, duration, or fixed set of
+choices unset; a plain string option takes the empty string.
+
 <!-- BEGIN GENERATED ENVIRONMENT REFERENCE -->
 
 | Variable | CLI default | Job | Array | Description |

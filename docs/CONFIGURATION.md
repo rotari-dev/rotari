@@ -42,6 +42,22 @@ set by an environment variable or another config file.
 This value precedence applies across commands; see the
 [CLI contract](https://github.com/rotari-dev/rotari/blob/main/contracts/03-server-and-command-interfaces.md#cli-presentation).
 
+A value that an option cannot use is an error, not a reason to fall back to
+the default. For example, `retry = 1.5`, `quiet = "maybe"`, or
+`ROTARI_RUN_RETRY=lots` stops the command with a message naming the option,
+the value, and the variable or config file it came from:
+
+```text
+invalid retry 1.5 in global config /home/me/.config/rotari/config.toml: want a whole number
+```
+
+This applies even when the command line gives the option, so a wrong setting
+does not stay unnoticed. A command reports only the options it has: a root
+`retry` value is checked by `run` and `retry`, not by `show`. An empty
+environment variable, such as `ROTARI_RUN_RETRY=`, leaves an option with a
+boolean, number, duration, or fixed set of choices unset. `--help` still
+works and lists each problem as a warning.
+
 Command help remains available if the selected configuration file is missing
 or malformed: for example, `rotari run --config missing.toml --help` prints a
 warning on stderr and help on stdout, exiting successfully. In that case,

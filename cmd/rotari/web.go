@@ -90,7 +90,7 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 	staticArtifactContents := cliBool(fs, "static-artifact-contents", false)
 	// The terminal and launch options read the environment and config
 	// strictly, and webTrustedOptions only trusted configs.
-	configured, configuredErr := readWebConfigured()
+	configured := readWebConfigured(fs)
 	allowExec := fs.Bool("allow-exec", configured.allowExec, webFlagUsage("allow-exec"))
 	allowTerminal := fs.Bool("allow-terminal", configured.allowTerminal, webFlagUsage("allow-terminal"))
 	terminalIdleTimeout := fs.Duration("terminal-idle-timeout", configured.idleLimit, webFlagUsage("terminal-idle-timeout"))
@@ -105,10 +105,6 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 	}
 	for _, name := range webTrustedOptions {
 		warnIgnoredWebConfig(fs, name, configured.ignored[name], false)
-	}
-	if configuredErr != nil {
-		printError(configuredErr)
-		return webCommandFlags{}, 1
 	}
 	if *allowExec || *allowTerminal {
 		*host = trustedWebExposedValue(fs, "host", *host, "127.0.0.1")

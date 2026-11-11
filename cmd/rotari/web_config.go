@@ -1,13 +1,9 @@
 package main
 
 import (
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"math"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/rotari-dev/rotari/internal/config"
@@ -107,115 +103,19 @@ func isWebTrustedOption(name string) bool {
 	return false
 }
 
-// webValue is a value of a rotari web option from the environment or a
-// config file, and where it came from.
-type webValue struct {
-	raw  any
-	from string
-	set  bool
-}
-
 // webEnvironmentOrConfig returns the environment's value of a rotari web
 // option, or else the config's, and a local config's value left out under
 // trustedOnly. An empty variable counts as unset.
-func webEnvironmentOrConfig(name string, trustedOnly bool) (ignored configSetting, value webValue) {
+func webEnvironmentOrConfig(name string, trustedOnly bool) (ignored configSetting, value configuredValue) {
 	envName := cliCommandEnvironmentVariable("web", name)
 	if raw, ok := os.LookupEnv(envName); ok && raw != "" {
-		return configSetting{}, webValue{raw: raw, from: envName, set: true}
+		return configSetting{}, configuredValue{raw: raw, from: envName, set: true}
 	}
 	setting, ignored := webConfigSetting(name, trustedOnly)
 	if !setting.found {
-		return ignored, webValue{}
+		return ignored, configuredValue{}
 	}
-	return ignored, webValue{raw: setting.value, from: setting.where(), set: true}
-}
-
-func (value webValue) invalid(name string, err error) error {
-	return fmt.Errorf("invalid %s %s in %s: %v", name, configValueText(value.raw), value.from, err)
-}
-
-// configValueText shows a config or environment value as JSON would.
-func configValueText(raw any) string {
-	data, err := json.Marshal(raw)
-	if err != nil {
-		return fmt.Sprint(raw)
-	}
-	return string(data)
-}
-
-func (value webValue) boolean(name string) (bool, error) {
-	switch raw := value.raw.(type) {
-	case bool:
-		return raw, nil
-	case string:
-		parsed, err := strconv.ParseBool(raw)
-		if err != nil {
-			return false, value.invalid(name, errors.New("want true or false"))
-		}
-		return parsed, nil
-	}
-	return false, value.invalid(name, errors.New("want true or false"))
-}
-
-func (value webValue) integer(name string) (int, error) {
-	switch raw := value.raw.(type) {
-	case int:
-		return raw, nil
-	case int64:
-		if raw >= math.MinInt && raw <= math.MaxInt {
-			return int(raw), nil
-		}
-	case uint64:
-		if raw <= math.MaxInt {
-			return int(raw), nil
-		}
-	case float64:
-		if raw == math.Trunc(raw) && raw >= math.MinInt && raw <= math.MaxInt {
-			return int(raw), nil
-		}
-	case string:
-		if parsed, err := strconv.Atoi(raw); err == nil {
-			return parsed, nil
-		}
-	}
-	return 0, value.invalid(name, errors.New("want a whole number"))
-}
-
-func (value webValue) duration(name string) (time.Duration, error) {
-	if raw, ok := value.raw.(string); ok {
-		if parsed, err := time.ParseDuration(raw); err == nil {
-			return parsed, nil
-		}
-	}
-	return 0, value.invalid(name, errors.New("want a duration such as 30m or 1h"))
-}
-
-func (value webValue) text(name string) (string, error) {
-	switch raw := value.raw.(type) {
-	case string:
-		return raw, nil
-	case int, int64, uint64:
-		return fmt.Sprint(raw), nil
-	}
-	return "", value.invalid(name, errors.New("want a string"))
-}
-
-func (value webValue) texts(name string) ([]string, error) {
-	switch raw := value.raw.(type) {
-	case string:
-		return []string{raw}, nil
-	case []any:
-		result := make([]string, 0, len(raw))
-		for _, item := range raw {
-			text, ok := item.(string)
-			if !ok {
-				return nil, value.invalid(name, errors.New("want a string or a list of strings"))
-			}
-			result = append(result, text)
-		}
-		return result, nil
-	}
-	return nil, value.invalid(name, errors.New("want a string or a list of strings"))
+	return ignored, configuredValue{raw: setting.value, from: setting.where(), set: true}
 }
 
 // webConfigured holds the defaults of the terminal and launch options from the
@@ -233,37 +133,44 @@ type webConfigured struct {
 }
 
 // readWebConfigured reads the terminal and launch options of rotari web from
-// the environment and config. A value that does not parse is an error naming
-// where it came from.
-func readWebConfigured() (webConfigured, error) {
+// the environment and config. A value that does not parse is a problem of fs
+// naming where it came from, even where the environment or the command line
+// replaces it.
+func readWebConfigured(fs *flag.FlagSet) webConfigured {
 	configured := webConfigured{
 		idleLimit: webTerminalIdleLimit, shellLimit: webTerminalShellLimit, groupLimit: webTerminalGroupLimit,
 		replaySize: webTerminalRingSize, from: map[string]string{}, ignored: map[string]configSetting{},
 	}
-	var problems []error
-	read := func(name string, apply func(webValue) error) {
-		ignored, value := webEnvironmentOrConfig(name, isWebTrustedOption(name))
-		if ignored.found {
+	read := func(name string, apply func(configuredValue) error) {
+		setting, ignored := webConfigSetting(name, isWebTrustedOption(name))
+		environment := configuredFromEnvironment(cliCommandEnvironmentVariable("web", name))
+		if ignored.found && !environment.set {
 			configured.ignored[name] = ignored
 		}
-		if !value.set {
-			return
+		values := []configuredValue{environment}
+		if setting.found {
+			values = []configuredValue{{raw: setting.value, from: setting.where(), set: true}, environment}
 		}
-		if err := apply(value); err != nil {
-			problems = append(problems, err)
-			return
+		for _, value := range values {
+			if !value.set {
+				continue
+			}
+			if err := apply(value); err != nil {
+				addConfiguredProblem(fs, err)
+				continue
+			}
+			configured.from[name] = value.from
 		}
-		configured.from[name] = value.from
 	}
-	read("allow-exec", func(value webValue) (err error) {
+	read("allow-exec", func(value configuredValue) (err error) {
 		configured.allowExec, err = value.boolean("allow-exec")
 		return err
 	})
-	read("allow-terminal", func(value webValue) (err error) {
+	read("allow-terminal", func(value configuredValue) (err error) {
 		configured.allowTerminal, err = value.boolean("allow-terminal")
 		return err
 	})
-	read("allowed-host", func(value webValue) error {
+	read("allowed-host", func(value configuredValue) error {
 		hosts, err := value.texts("allowed-host")
 		if err != nil {
 			return err
@@ -276,27 +183,27 @@ func readWebConfigured() (webConfigured, error) {
 		configured.allowedHosts = hosts
 		return nil
 	})
-	read("terminal-idle-timeout", func(value webValue) (err error) {
+	read("terminal-idle-timeout", func(value configuredValue) (err error) {
 		configured.idleLimit, err = value.duration("terminal-idle-timeout")
 		return err
 	})
-	read("terminal-max-shells", func(value webValue) (err error) {
+	read("terminal-max-shells", func(value configuredValue) (err error) {
 		configured.shellLimit, err = value.integer("terminal-max-shells")
 		return err
 	})
-	read("terminal-max-shells-per-project", func(value webValue) (err error) {
+	read("terminal-max-shells-per-project", func(value configuredValue) (err error) {
 		configured.groupLimit, err = value.integer("terminal-max-shells-per-project")
 		return err
 	})
-	read("terminal-replay-size", func(value webValue) (err error) {
+	read("terminal-replay-size", func(value configuredValue) (err error) {
 		configured.replaySize, err = value.text("terminal-replay-size")
 		return err
 	})
-	read("terminal-shell", func(value webValue) (err error) {
+	read("terminal-shell", func(value configuredValue) (err error) {
 		configured.shell, err = value.text("terminal-shell")
 		return err
 	})
-	return configured, errors.Join(problems...)
+	return configured
 }
 
 // webFlagUsage is the help text of a rotari web option.

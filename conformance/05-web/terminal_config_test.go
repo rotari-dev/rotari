@@ -176,6 +176,7 @@ func TestTerminalOptionsRejectBadConfiguredValues(t *testing.T) {
 		{env: e.WithVar("ROTARI_WEB_ALLOW_TERMINAL", "maybe"), want: `invalid allow-terminal "maybe" in ROTARI_WEB_ALLOW_TERMINAL`},
 		{env: e.WithVar("ROTARI_WEB_TERMINAL_MAX_SHELLS", "0"), args: []string{"--allow-terminal"}, want: "--terminal-max-shells 0 must be at least 1 (from ROTARI_WEB_TERMINAL_MAX_SHELLS)"},
 		{env: e, config: "[web]\nterminal-max-shells = \"lots\"\n", want: `invalid terminal-max-shells "lots" in global config`},
+		{env: e.WithVar("ROTARI_WEB_TERMINAL_MAX_SHELLS", "3"), config: "[web]\nterminal-max-shells = \"lots\"\n", want: `invalid terminal-max-shells "lots" in global config`},
 		{env: e, config: "[web]\nallow-terminal = true\nterminal-idle-timeout = \"1m\"\n", want: "must be at least 2m0s (from global config"},
 		{env: e, config: "[web]\nallow-terminal = true\n", args: []string{"--static-dir", filepath.Join(e.Root, "export")}, want: "--allow-terminal cannot be combined with --static-dir"},
 	} {

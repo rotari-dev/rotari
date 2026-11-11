@@ -1,7 +1,8 @@
 # No silent fallbacks for configured values and missing basedirs
 
 Created 2026-11-11. Status: decisions settled with the user on 2026-11-11;
-Phase 1 (survey) done the same day; Phase 2 is next.
+Phases 1 (survey) and 2 (configured values, with its contract CLI-30
+and documentation) done the same day; Phase 3 is next.
 
 ## Purpose
 
@@ -144,7 +145,8 @@ recommended option.
 
 1. **Survey and reproduce.** Done 2026-11-11; results are in the findings
    tables above. Nothing outside the scope was found.
-2. **Collector and typed helpers (item 1).** Implement D1 to D5 in
+2. **Collector and typed helpers (item 1).** Done 2026-11-11; see the work
+   log. Implement D1 to D5 in
    `cmd/rotari`, including choices, repeated values, and string options given
    a list or table. Move `readWebConfigured` onto the collector without
    changing WEB-36's messages. Error format:

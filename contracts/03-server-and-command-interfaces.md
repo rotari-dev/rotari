@@ -244,6 +244,26 @@ does not promise to detect a lost remote client.
   [`cmd/rotari/config.go`](../cmd/rotari/config.go); the external check
   enumerates each command exposing `--config` in the CLI schema in
   [`conformance/03-interfaces/options_test.go`](../conformance/03-interfaces/options_test.go).
+- **CLI-30** An option value from the environment or a config file that the
+  option cannot use is an error naming the option, the value, and its
+  source: the variable, or the config scope and path. Examples are a boolean
+  other than true or false, a number with a fraction for a whole-number
+  option, a duration that does not parse, a value outside an option's
+  choices, a table for a repeated option, and a list or table for a
+  single-valued option, including `basedir` and `project-name`. The command
+  fails even when a later source or the command line gives the option, and is
+  never run with the built-in default in its place. A command reports only
+  the options it has, so a root config value fails only the commands that
+  read it. An empty variable leaves an option with typed values (boolean,
+  number, duration, or choices) unset; a plain string option takes the empty
+  string. `--help` still shows, with each problem as a warning on stderr and
+  the built-in default in its place; a basedir or project name that cannot be
+  used is a configuration error and follows CLI-17. Implemented in
+  [`cmd/rotari/configured_value.go`](../cmd/rotari/configured_value.go), used
+  by the option helpers in [`cmd/rotari/cli_spec.go`](../cmd/rotari/cli_spec.go),
+  by `configLocation` in [`cmd/rotari/config.go`](../cmd/rotari/config.go),
+  and by `readWebConfigured` for WEB-36; tested in
+  [`conformance/03-interfaces/configured_values_test.go`](../conformance/03-interfaces/configured_values_test.go).
 - **CLI-4** `show` for a run, `lineage RUN`, and the Web API's run
   `lineage_summary` group the run's failed and blocked jobs by the same
   causes, in text and in their `failures` JSON. Each job is classified on its

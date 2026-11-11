@@ -97,8 +97,7 @@ func loadCLIConfig(args []string) error {
 		}
 		cliFileConfig = config.Loaded{Values: config.Merge(nil, values), Sources: []config.Source{{Scope: "explicit", Path: cliConfigPath}}}
 		cliConfigLayers = []config.Loaded{cliFileConfig}
-		rememberConfigLocations()
-		return nil
+		return rememberConfigLocations()
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -122,8 +121,7 @@ func loadCLIConfig(args []string) error {
 		for _, source := range cliFileConfig.Sources {
 			cliConfigPath = source.Path
 		}
-		rememberConfigLocations()
-		return nil
+		return rememberConfigLocations()
 	}
 	if baseDir == "" {
 		if !cliIgnoreImplicitLocationDefaults["basedir"] {
@@ -154,7 +152,9 @@ func loadCLIConfig(args []string) error {
 	}
 	if baseDir == "" {
 		if !cliIgnoreImplicitLocationDefaults["basedir"] {
-			baseDir = configString("basedir", "")
+			if baseDir, err = configLocation("basedir"); err != nil {
+				return err
+			}
 		}
 	}
 	var resolvedBaseDir string
@@ -196,7 +196,9 @@ func loadCLIConfig(args []string) error {
 	}
 	cliConfig = config.Merge(nil, cliFileConfig.Values)
 	if projectName == "" && !cliIgnoreImplicitLocationDefaults["project-name"] {
-		projectName = configString("project-name", "")
+		if projectName, err = configLocation("project-name"); err != nil {
+			return err
+		}
 	}
 	if cliIgnoreImplicitLocationDefaults["project-name"] && projectName == "" && cliConfigCommand == "lineage" {
 		projects, listErr := resolve.ExistingProjectNames(resolvedBaseDir)
@@ -238,8 +240,7 @@ func loadCLIConfig(args []string) error {
 	for _, source := range cliFileConfig.Sources {
 		cliConfigPath = source.Path
 	}
-	rememberConfigLocations()
-	return nil
+	return rememberConfigLocations()
 }
 
 // addCLIConfigLayer merges a discovered config file into this invocation's
@@ -302,13 +303,28 @@ func ignoredImplicitLocationDefaults(command string, aggregate bool) map[string]
 	return ignored
 }
 
-func rememberConfigLocations() {
+func rememberConfigLocations() error {
 	cliLocationDefaults = make(map[string]string)
 	for _, key := range []string{"basedir", "project-name"} {
 		if !cliLocationExplicit[key] {
-			cliLocationDefaults[key] = configString(key, "")
+			value, err := configLocation(key)
+			if err != nil {
+				return err
+			}
+			cliLocationDefaults[key] = value
 		}
 	}
+	return nil
+}
+
+// configLocation returns the config value of basedir or project-name, read
+// before any option is defined. A list or table is an error, not a path.
+func configLocation(name string) (string, error) {
+	value := configuredFromConfig(name)
+	if !value.set {
+		return "", nil
+	}
+	return value.scalarText(name)
 }
 
 func setConfigLocation(name, value string) {
@@ -905,61 +921,4 @@ func chooseConfigOutputNamed(reader io.Reader, writer io.Writer, baseDir, projec
 		return "", false
 	}
 	return customPath, true
-}
-
-func configBool(name string, defaultValue bool) bool {
-	value, ok := configValue(name)
-	if !ok || value == nil {
-		return defaultValue
-	}
-	switch parsed := value.(type) {
-	case bool:
-		return parsed
-	case string:
-		if result, err := strconv.ParseBool(parsed); err == nil {
-			return result
-		}
-	}
-	return defaultValue
-}
-
-func configInt(name string, defaultValue int) int {
-	value, ok := configValue(name)
-	if !ok || value == nil {
-		return defaultValue
-	}
-	switch parsed := value.(type) {
-	case int:
-		return parsed
-	case int64:
-		return int(parsed)
-	case uint64:
-		return int(parsed)
-	case float64:
-		return int(parsed)
-	case string:
-		if result, err := strconv.Atoi(parsed); err == nil {
-			return result
-		}
-	}
-	return defaultValue
-}
-
-func configStrings(name string) []string {
-	value, ok := configValue(name)
-	if !ok {
-		return nil
-	}
-	if parsed, ok := value.(string); ok {
-		return []string{parsed}
-	}
-	values, ok := value.([]any)
-	if !ok {
-		return nil
-	}
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		result = append(result, fmt.Sprint(value))
-	}
-	return result
 }

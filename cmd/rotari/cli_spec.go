@@ -962,16 +962,8 @@ func cliString(fs *flag.FlagSet, name, defaultValue string) *string {
 	}
 	spec := cliCommandFlag(fs.Name(), name)
 	if !spec.CommandLineOnly {
-		ignoreImplicitLocation := cliIgnoreImplicitLocationDefaults[name]
-		if !ignoreImplicitLocation {
-			defaultValue = configString(name, defaultValue)
-		}
-		if !ignoreImplicitLocation {
-			if envName := cliCommandEnvironmentVariable(fs.Name(), name); envName != "" {
-				if value, ok := os.LookupEnv(envName); ok {
-					defaultValue = value
-				}
-			}
+		if !cliIgnoreImplicitLocationDefaults[name] {
+			defaultValue = configuredString(fs, spec, defaultValue)
 		}
 		if name == "basedir" && cliLocatedBaseDir != "" {
 			defaultValue = cliLocatedBaseDir
@@ -1083,7 +1075,21 @@ func parseCLIFlagSet(fs *flag.FlagSet, args []string, stopAtPositional bool) err
 		fmt.Fprintln(fs.Output(), err)
 		return err
 	}
-	return fs.Parse(args)
+	err := fs.Parse(args)
+	if errors.Is(err, flag.ErrHelp) {
+		if problems := takeConfiguredProblems(fs); problems != nil {
+			printWarningf("WARNING: %v; showing help with the built-in defaults for these options", problems)
+		}
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	if problems := takeConfiguredProblems(fs); problems != nil {
+		printError(problems)
+		return problems
+	}
+	return nil
 }
 
 func cliOptionSet(fs *flag.FlagSet, name string) bool {
@@ -1244,18 +1250,15 @@ func cliStringVar(fs *flag.FlagSet, target *string, name, defaultValue string) {
 
 func cliBool(fs *flag.FlagSet, name string, defaultValue bool) *bool {
 	spec := cliCommandFlag(fs.Name(), name)
-	environmentNames := []string{cliCommandEnvironmentVariable(fs.Name(), name)}
-	if name == "quiet" {
-		environmentNames = []string{envQuiet, cliCommandEnvironmentVariable(fs.Name(), name)}
-	}
-	if spec.CommandLineOnly {
-		environmentNames = nil
-	} else {
-		defaultValue = configBool(name, defaultValue)
-	}
-	for _, environmentName := range environmentNames {
-		if value, ok := os.LookupEnv(environmentName); ok {
-			if parsed, err := strconv.ParseBool(value); err == nil {
+	if !spec.CommandLineOnly {
+		environmentNames := []string{cliCommandEnvironmentVariable(fs.Name(), name)}
+		if name == "quiet" {
+			environmentNames = []string{envQuiet, cliCommandEnvironmentVariable(fs.Name(), name)}
+		}
+		for _, value := range configuredSources(name, environmentNames...) {
+			if parsed, err := value.boolean(name); err != nil {
+				addConfiguredProblem(fs, err)
+			} else {
 				defaultValue = parsed
 			}
 		}
@@ -1276,9 +1279,10 @@ func commandQuietEnvironmentVariable(command string) string {
 func cliInt(fs *flag.FlagSet, name string, defaultValue int) *int {
 	spec := cliCommandFlag(fs.Name(), name)
 	if !spec.CommandLineOnly {
-		defaultValue = configInt(name, defaultValue)
-		if value, ok := os.LookupEnv(cliCommandEnvironmentVariable(fs.Name(), name)); ok {
-			if parsed, err := strconv.Atoi(value); err == nil {
+		for _, value := range configuredSources(name, cliCommandEnvironmentVariable(fs.Name(), name)) {
+			if parsed, err := value.integer(name); err != nil {
+				addConfiguredProblem(fs, err)
+			} else {
 				defaultValue = parsed
 			}
 		}
@@ -1299,16 +1303,11 @@ func cliDuration(fs *flag.FlagSet, name string, defaultValue time.Duration) *tim
 		fs.DurationVar(target, spec.Name, defaultValue, cliFlagDescriptionFor(fs.Name(), spec))
 		return target
 	}
-	if value, ok := configValue(name); ok {
-		if parsed, err := time.ParseDuration(fmt.Sprint(value)); err == nil {
+	for _, value := range configuredSources(name, cliCommandEnvironmentVariable(fs.Name(), name)) {
+		if parsed, err := value.duration(name); err != nil {
+			addConfiguredProblem(fs, err)
+		} else {
 			defaultValue = parsed
-		}
-	}
-	if envName := cliCommandEnvironmentVariable(fs.Name(), name); envName != "" {
-		if value, ok := os.LookupEnv(envName); ok {
-			if parsed, err := time.ParseDuration(value); err == nil {
-				defaultValue = parsed
-			}
 		}
 	}
 	target := new(time.Duration)
@@ -1323,18 +1322,7 @@ func cliDuration(fs *flag.FlagSet, name string, defaultValue time.Duration) *tim
 func cliValue(fs *flag.FlagSet, target flag.Value, name string) {
 	spec := cliCommandFlag(fs.Name(), name)
 	if !spec.CommandLineOnly {
-		for _, value := range configStrings(name) {
-			_ = target.Set(value)
-		}
-	}
-	if envName := cliCommandEnvironmentVariable(fs.Name(), name); envName != "" && !spec.CommandLineOnly {
-		value, exists := os.LookupEnv(envName)
-		if exists && value != "" {
-			if resettable, ok := target.(interface{ Reset() }); ok {
-				resettable.Reset()
-			}
-			_ = target.Set(value)
-		}
+		configuredRepeated(fs, target, name)
 	}
 	description := cliFlagDescriptionFor(fs.Name(), spec)
 	fs.Var(target, spec.Name, description)
