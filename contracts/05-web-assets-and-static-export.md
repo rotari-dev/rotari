@@ -722,7 +722,10 @@ terminal (`--allow-terminal` and the `--terminal-*` options) are
 rejected when explicitly supplied by flag, environment, or config, rather than
 accepted and silently ignored. A value a workspace, basedir, or project config
 may not supply (WEB-36) is not supplied: it is ignored with its warning, and
-the export goes on. The shared web command
+the export goes on. An `auth-token` from the environment or any config is
+likewise ignored with a warning naming where it is, never the token: it
+protects a live server, and an export has none. `--auth-token` on the
+command line is still refused. The shared web command
 boundary is in [cmd/rotari/web.go](../cmd/rotari/web.go); static-mode pair and
 standalone checks are in
 [conformance/03-interfaces/pairweb/web_static_pairs_test.go](../conformance/03-interfaces/pairweb/web_static_pairs_test.go).
@@ -1313,8 +1316,9 @@ links media cells to their copies; the page disables the separator and header
 controls for delimited files, and shows the reason in place of the filter
 form. Filters, and delimited separator/header settings, cannot be changed;
 a request with filters, another delimited separator or header, or another base
-answers 400 with the reason. `--host`, `--port`, and `--auth-token` (also
-from `ROTARI_WEB_AUTH_TOKEN`) are refused with `--static-dir`, as is a
+answers 400 with the reason. `--host`, `--port`, and `--auth-token` are
+refused with `--static-dir`; an `auth-token` from `ROTARI_WEB_AUTH_TOKEN` or
+config is ignored with a warning, as for `rotari web` (WEB-3). Also refused are a
 Markdown/script/PDF document, a directory, and an output directory that contains the file, since the export
 replaces it. Implemented by `GenerateStaticTableView` in
 [internal/webui/table_view_static.go](../internal/webui/table_view_static.go)

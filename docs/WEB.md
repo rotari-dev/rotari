@@ -496,6 +496,12 @@ only, unless `--static-artifact-contents` copies the files in. History search,
 launching, and control are not available in it. See the
 [Security model](SECURITY.md).
 
+Options of the live server, such as `--host`, `--port`, and `--auth-token`,
+are refused with `--static-dir`. An `auth-token` kept in config or
+`ROTARI_WEB_AUTH_TOKEN` is the exception: the export ignores it with a
+warning, since it protects only a live server. The same holds for
+`rotari tableview --static-dir`.
+
 ## Related
 
 - [FAQ: Web UI](FAQ.md#web-ui)

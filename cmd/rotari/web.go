@@ -356,11 +356,17 @@ func webStaticServerOptions(fs *flag.FlagSet) []string {
 
 // staticServerOptions lists the names, options of command that only a live
 // server uses, given on the command line, in the environment, or in the
-// config.
+// config. An auth-token from the environment or config is the exception: it
+// protects a live server, and a static export has none, so it is ignored
+// with a warning rather than refused.
 func staticServerOptions(fs *flag.FlagSet, command string, names []string) []string {
 	var incompatible []string
 	for _, name := range names {
 		provided := cliOptionSet(fs, name)
+		if name == "auth-token" && !provided {
+			warnIgnoredStaticToken(command)
+			continue
+		}
 		spec := cliCommandFlag(command, name)
 		if !provided && !spec.CommandLineOnly && command == "web" {
 			provided = webOptionConfigured(name)
@@ -377,6 +383,21 @@ func staticServerOptions(fs *flag.FlagSet, command string, names []string) []str
 		}
 	}
 	return incompatible
+}
+
+// warnIgnoredStaticToken says that a static export of command leaves out the
+// auth-token the environment or config gives, naming where it is but never
+// the token.
+func warnIgnoredStaticToken(command string) {
+	from := ""
+	if environment := configuredFromEnvironment(cliCommandEnvironmentVariable(command, "auth-token")); environment.set {
+		from = environment.from
+	} else if setting := configuredFromConfig("auth-token"); setting.set {
+		from = setting.from
+	}
+	if from != "" {
+		printWarningf("WARNING: ignoring auth-token in %s; a static export has no server to protect", from)
+	}
 }
 
 func newFlagSet(name string) *flag.FlagSet {

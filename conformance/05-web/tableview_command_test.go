@@ -164,7 +164,6 @@ func TestTableViewCommandWritesAStaticSnapshot(t *testing.T) {
 	}{
 		{e, []string{"--port", "0"}, "--port cannot be combined with --static-dir"},
 		{e, []string{"--host", "0.0.0.0", "--auth-token", "x"}, "--auth-token, --host cannot be combined with --static-dir"},
-		{e.WithVar("ROTARI_WEB_AUTH_TOKEN", "x"), nil, "--auth-token cannot be combined with --static-dir"},
 	} {
 		args := append(append([]string{"tableview"}, test.args...), "--static-dir", output, filepath.Join(data, "list.csv"))
 		if r := test.env.Rotari(args...); r.Code != 1 || !strings.Contains(r.Stderr, test.want) {

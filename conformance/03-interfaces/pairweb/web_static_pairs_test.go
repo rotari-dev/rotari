@@ -208,7 +208,8 @@ func TestCLIFlagPairWebStaticServerOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertWebServerOptionSourceRejected(t, f.E, []string{"web", "--config", config, "--static-dir", filepath.Join(f.E.Root, "config-rejected")}, "host")
-	assertWebServerOptionSourceRejected(t, f.E.WithVar("ROTARI_WEB_AUTH_TOKEN", "secret"), []string{"web", "--static-dir", filepath.Join(f.E.Root, "env-rejected")}, "auth-token")
+	// An auth-token from the environment or config is ignored with a warning
+	// instead (TestStaticExportsIgnoreConfiguredToken).
 }
 
 func assertWebServerOptionSourceRejected(t *testing.T, e *support.Env, args []string, option string) {

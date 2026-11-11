@@ -1,8 +1,10 @@
 # No silent fallbacks for configured values and missing basedirs
 
 Created 2026-11-11. Status: decisions settled with the user on 2026-11-11;
-Phases 1 (survey), 2 (configured values, contract CLI-30), and 3 (missing
-basedir, contract RES-28) done the same day; Phase 4 is next.
+Done 2026-11-11: Phases 1 (survey), 2 (configured values, contract
+CLI-30), 3 (missing basedir, contract RES-28), 4 (static export and
+`auth-token`, WEB-3 and WEB-22), and 5 (contracts and documentation, done
+with each phase). All three ISSUES.md items are resolved.
 
 ## Purpose
 
@@ -185,9 +187,10 @@ recommended option.
    `check`, the listing commands, `/api/projects`, the Web index, and the
    NOT-4 callers to it. Python client: check that `rotari` errors surface as
    exceptions and are not swallowed.
-4. **Static export (item 3).** Implement D7 in one helper used by both
-   static-export paths.
-5. **Contracts and documentation.** Extend CLI-3 (or add a CLI rule) to say
+4. **Static export (item 3).** Done 2026-11-11. Implement D7 in one helper
+   used by both static-export paths.
+5. **Contracts and documentation.** Done with each phase: item 1 became the
+   new CLI-30 instead of an extension of CLI-3. Extend CLI-3 (or add a CLI rule) to say
    that bad environment and config values are errors naming their source.
    Update RES rules for the missing basedir, WEB-3/WEB-22 for D7, and
    [docs/CONFIGURATION.md](../../docs/CONFIGURATION.md) and
