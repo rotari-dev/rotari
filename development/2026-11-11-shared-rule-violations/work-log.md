@@ -89,7 +89,7 @@ Commit: `8c122ccd` (2026-11-12).
 
 ## Phase 3: task origins
 
-Commit: recorded with this entry (2026-11-12).
+Commit: `9e4cb8e8` (2026-11-12).
 
 - **Change:**
   - `model.Queue.OriginOf` gives a task of an array its `TaskOrigin`: its
@@ -135,3 +135,68 @@ Commit: recorded with this entry (2026-11-12).
   - `go vet ./...`, `tsc`, `go test ./...`, `go test -race ./...`.
   - The ISSUES.md `bug-report` check was not run, as in Phase 2.
 - **Remaining:** Phase 4.
+
+## Phase 4: PID identity
+
+Commit: recorded with this entry (2026-11-12).
+
+- **Change:**
+  - Added `state.ProcessIdentity` and `state.ObserveProcess` /
+    `ObserveProcessGroup`
+    ([process_identity.go](../../internal/state/process_identity.go)),
+    implementing D3. They return one of: same, gone, reused, another host,
+    another namespace, or unverifiable, and say whether the location was
+    verified.
+  - Pure parts for callers and tests: `ProcessIdentity.Locate`,
+    `ClassifyProcess`, `ProbeOutcome`, and `Elsewhere` /
+    `ElsewhereError`.
+  - Moved onto it:
+    - Local `Cancel`, `Suspend`, `Resume`, and `LocalProcessGroupAlive`,
+      through one reader, `executor.LocalJobIdentity` (`job.json`, else the
+      `pid` file).
+    - `executor.LocalElsewhere`, which replaces `LocalHostMismatch`, and
+      `runnerHostMismatch`.
+    - `state.OtherPIDNamespace` (the run lock).
+    - `coordinatorLocation` and `coordinatorProcess`.
+    - The execution probe's local check and `localGroupEvidence`.
+    - Attachment liveness (`clientMayBeLive`, which replaces
+      `processMayBeSame`) and `SameLaunchOrigin`.
+  - Attachments and `model.LaunchOrigin` record `pid_namespace`.
+  - Each caller keeps its wording: the coordinator and probe reasons are
+    unchanged, and a verified location is still required for them to probe.
+- **Reason:** Phase 4 of the plan, item 3.
+- **Plan impact:**
+  - COORD-1 is extended to another PID namespace. Job control refuses with
+    `job "ID" runs in PID namespace X, not Y; run OP outside this sandbox or
+    container` before anything is written or signalled.
+  - Local control now reads a reused leader PID as not running, and does not
+    signal it. `suspend` and `resume` probe the process group, like `cancel`
+    and liveness, rather than the leader alone.
+  - Liveness still counts a reused leader's group as alive, as the probe
+    calls it possibly active.
+  - Records from an earlier rotari, without a namespace or host, are probed
+    as before.
+  - Updated COORD-1 and its README row, the coordination notes, FAQ, and
+    ARCHITECTURE.md, and moved the ISSUES.md item to Resolved.
+- **Validation:**
+  - `TestProcessLocation`, `TestClassifyProcess`, `TestObserveProcess`, and
+    `TestLocalElsewhere` (unit). `TestLocalElsewhere` replaces
+    `TestLocalHostMismatch` with the same host case, plus namespace cases.
+  - The coordinator and probe evidence tables and the attachment PID-reuse
+    test now go through the shared check, with the same cases. The
+    attachment test adds another namespace.
+  - `TestControlFromAnotherPIDNamespace` (conformance, COORD-1) runs rotari
+    under `unshare --user --map-root-user --pid --fork --mount-proc`, and
+    skips where that is not permitted. On `9e4cb8e8` it fails as Phase 1
+    found: `suspend` and `resume` say not running, and `cancel` exits 0 and
+    writes `cancelled`. It passes now.
+  - `go vet ./...`, `tsc`, `go test ./...`, `go test -race ./...`.
+    - The first full run failed `TestControlFromAnotherHost`. It stands for
+      another host by rewriting only `context.json`, and `LocalElsewhere`
+      let `job.json` decide.
+    - A local job runs on its coordinator's host, so the two should agree.
+      `LocalElsewhere` now refuses when either places the job elsewhere,
+      which keeps the earlier host check exactly.
+  - The ISSUES.md `bug-report` check was not run, as in Phases 2 and 3.
+- **Remaining:** none in this plan. Next is the third stabilization plan,
+  test-suite flakiness.

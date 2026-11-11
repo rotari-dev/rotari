@@ -1,9 +1,9 @@
 # Shared-rule violations: run order, task origins, and PID identity
 
-Created 2026-11-11. Status: in progress; decisions D1 to D3 settled with
-the user on 2026-11-11, each with the recommended option. Phase 1 (survey)
-done the same day, Phases 2 (run order) and 3 (task origins) on
-2026-11-12; Phase 4 is next.
+Created 2026-11-11. Status: done; decisions D1 to D3 settled with the user
+on 2026-11-11, each with the recommended option. Phase 1 (survey) done the
+same day, Phases 2 (run order), 3 (task origins), and 4 (PID identity) on
+2026-11-12.
 
 ## Purpose
 
@@ -168,7 +168,7 @@ and basedir.
    run, was found and moved too; see the work log.
 3. **Task origins (item 2).** Done 2026-11-12 (RES-30); see the work log. Implement D2 with the per-caller behavior
    recorded in Phase 1 kept or deliberately changed.
-4. **PID identity (item 3).** Implement D3. Extend COORD-1 to another
+4. **PID identity (item 3).** Done 2026-11-12 (COORD-1); see the work log. Implement D3. Extend COORD-1 to another
    namespace.
 5. **Contracts and documentation**, with each phase: the affected RES, SEL,
    COORD, and WEB notes, the user docs, and the ISSUES.md entries moved to

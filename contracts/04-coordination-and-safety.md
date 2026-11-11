@@ -108,7 +108,12 @@ chain is checked across `show`, `jobs`, reports, and the Web API by
 - **COORD-1** Controlling a local job (`cancel`, `suspend`, or `resume`, from
   the CLI or the Web UI) from a host other than the one it runs on fails with
   an error naming that host, instead of reporting that the job is not running
-  or signalling an unrelated process with the same PID.
+  or signalling an unrelated process with the same PID. So does controlling
+  it from another PID namespace on the same host, such as a sandbox or
+  container, naming both namespaces; nothing is recorded or signalled. A
+  job, client, or coordinator in another namespace reads as unknown or
+  running there, never as gone. A record from an earlier rotari without a
+  namespace is checked as before.
 - **COORD-2** A whole-run cancel of a run whose coordinator runs on another
   host fails the same way, naming that host, instead of reporting success
   while the run goes on. So does one from another PID namespace on the same
@@ -181,9 +186,17 @@ Design and implementation notes:
 - `jobcontrol.Controller.Control` and `CancelJobs` signal local jobs by process
   group. The wrapper's PID is also its process-group ID via `Setpgid`, so a
   negative PID reaches both the wrapper and its command.
-  `executor.LocalHostMismatch` compares the current host with `context.json`
-  (COORD-1), and `runnerHostMismatch` in `internal/jobcontrol` compares it
-  with `running.lock` (COORD-2), before any signal.
+  Whether a recorded process (host, PID namespace, PID, process start) can
+  be observed from here is decided once, by `state.ObserveProcess` and
+  `state.ObserveProcessGroup`
+  ([process_identity.go](../internal/state/process_identity.go)): same, gone,
+  reused, another host, another namespace, or unverifiable. Local `cancel`,
+  `suspend`, `resume`, and process-group liveness, client attachments, launch
+  origins, the run lock, the coordinator check, and the execution probe all
+  use it. `executor.LocalElsewhere` refuses a job that the run's `context.json`
+  host or the job's own `job.json` places elsewhere (COORD-1), and
+  `runnerHostMismatch` in `internal/jobcontrol` compares the host with
+  `running.lock` (COORD-2), before any signal.
 - `schedulerCommandHint` turns missing scheduler binaries into explicit errors
   and preserves scheduler stdout/stderr, including explanations for rejected
   operations on queued jobs (COORD-4).
@@ -196,7 +209,10 @@ Design and implementation notes:
 COORD-1 to COORD-5 are checked through the binary by
 [`conformance/04-coordination/private_state_test.go`](../conformance/04-coordination/private_state_test.go),
 which rewrites the host recorded in `context.json` and `running.lock` to
-stand for another host.
+stand for another host, and COORD-1's namespace case by
+[`conformance/04-coordination/pid_namespace_test.go`](../conformance/04-coordination/pid_namespace_test.go),
+which runs rotari in a new PID namespace with `unshare` and skips where that
+is not permitted.
 
 ## Concurrency and safety
 

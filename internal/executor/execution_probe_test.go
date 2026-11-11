@@ -33,7 +33,7 @@ func TestLocalGroupEvidence(t *testing.T) {
 		{"inspection error", "123", "123", syscall.EIO, "unknown", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			got, reason, possibly := localGroupEvidence(test.recorded, test.current, test.err)
+			got, reason, possibly := localGroupEvidence(state.ProbeOutcome(test.recorded, test.current, test.err))
 			if got != test.state || possibly != test.possibly || reason == "" {
 				t.Fatalf("got %s %q %t", got, reason, possibly)
 			}

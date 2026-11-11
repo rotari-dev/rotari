@@ -24,6 +24,7 @@ type record struct {
 	RunID        string `json:"run_id,omitempty"`
 	PID          int    `json:"pid"`
 	Host         string `json:"host"`
+	PIDNamespace string `json:"pid_namespace,omitempty"`
 	ProcessStart string `json:"process_start,omitempty"`
 	Disconnect   string `json:"disconnect_action,omitempty"`
 	Initiator    bool   `json:"initiator,omitempty"`
@@ -89,6 +90,7 @@ func open(paths state.ProjectPaths, info record) (*Session, error) {
 		return nil, fmt.Errorf("determine attachment host: %w", err)
 	}
 	info.Host = host
+	info.PIDNamespace = state.PIDNamespace()
 	info.ProcessStart = state.ProcessStart(os.Getpid())
 	info.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	lockPath := filepath.Join(dir, info.ID+".lock")
@@ -219,7 +221,7 @@ func scanSession(dir, id, localHost string) (*Info, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read attachment session %s: %w", id, err)
 	}
-	client := toInfo(info, held || info.Host != localHost || processMayBeSame(info.PID, info.ProcessStart))
+	client := toInfo(info, held || clientMayBeLive(info, localHost))
 	return &client, nil
 }
 
@@ -372,13 +374,21 @@ func toInfo(info record, live bool) Info {
 	return Info{ID: info.ID, RunID: info.RunID, PID: info.PID, Host: info.Host, Disconnect: info.Disconnect, Initiator: info.Initiator, Live: live}
 }
 
-func processMayBeSame(pid int, start string) bool {
-	if pid <= 0 {
+// clientMayBeLive reports whether the client process a session records may
+// still run, by the shared rule (state.ObserveProcess). A client on another
+// host or in another PID namespace cannot be checked from here and counts as
+// live; so does one whose start time cannot be verified.
+func clientMayBeLive(info record, localHost string) bool {
+	if info.PID <= 0 {
 		return false
 	}
-	current := state.ProcessStart(pid)
-	if start != "" && current != "" {
-		return current == start
+	if info.Host != localHost {
+		return true
 	}
-	return state.ProcessAlive(pid)
+	switch state.ObserveProcess(state.ProcessIdentity{Host: info.Host, PIDNamespace: info.PIDNamespace, PID: info.PID, ProcessStart: info.ProcessStart}).Verdict {
+	case state.ProcessGone, state.ProcessReused:
+		return false
+	default:
+		return true
+	}
 }

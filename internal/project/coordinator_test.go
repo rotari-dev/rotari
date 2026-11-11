@@ -26,7 +26,7 @@ func TestCoordinatorProcessEvidence(t *testing.T) {
 		{"permission denied", "100", "100", syscall.EPERM, CoordinatorUnknown},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			got, reason := coordinatorProcess(test.recorded, test.current, test.probeErr)
+			got, reason := coordinatorProcess(state.ProbeOutcome(test.recorded, test.current, test.probeErr))
 			if got != test.want || reason == "" {
 				t.Fatalf("assessment = %s (%s), want %s with evidence", got, reason, test.want)
 			}

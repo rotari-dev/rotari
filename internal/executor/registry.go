@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/rotari-dev/rotari/internal/state"
 )
@@ -78,24 +77,26 @@ func (registry Registry) Owner(store state.Store, jobDir string) (JobExecutor, e
 	return nil, ErrJobNotRunning
 }
 
-// LocalHostMismatch reports the run's recorded hostname when executor is the
-// local executor and this process runs on a different host. The local
-// executor signals jobs by PID, which is only meaningful on the host that
-// spawned the process; over a shared base directory, a failed PID check on
-// the wrong host would misleadingly report "job is not running", so callers
-// should surface this instead before trying.
-func LocalHostMismatch(store state.Store, executor JobExecutor, runDir string) (recordedHost string, mismatch bool) {
+// LocalElsewhere returns a *state.ElsewhereError when executor is the local
+// executor and the job in jobDir runs on another host or in another PID
+// namespace (COORD-1). The local executor signals jobs by PID, which is only
+// meaningful in the host and namespace that spawned the process; a failed
+// PID check there would misleadingly report "job is not running", so
+// callers surface this before trying. The run's recorded host
+// (context.json) and the job's own record (job.json, which attempts from an
+// earlier rotari lack) must both place the job here.
+func LocalElsewhere(store state.Store, executor JobExecutor, runDir, jobDir string) error {
 	if executor.Name() != "local" {
-		return "", false
+		return nil
 	}
 	safeRunDir := filepath.Join(filepath.Dir(runDir), filepath.Base(runDir))
-	context, err := state.LoadContext(store, safeRunDir)
-	if err != nil || context.Hostname == "" {
-		return "", false
+	if context, err := state.LoadContext(store, safeRunDir); err == nil {
+		run := state.ProcessIdentity{Host: context.Hostname}
+		if err := state.Elsewhere(run, state.LocateProcess(run)); err != nil {
+			return err
+		}
 	}
-	host, err := os.Hostname()
-	if err != nil || strings.EqualFold(host, context.Hostname) {
-		return "", false
-	}
-	return context.Hostname, true
+	// A job without a PID yet is still placed by its record.
+	identity, _ := LocalJobIdentity(store, jobDir)
+	return state.Elsewhere(identity, state.LocateProcess(identity))
 }

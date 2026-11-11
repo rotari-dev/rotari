@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -84,39 +83,48 @@ func (probe *ExecutionProber) local(dir string, result model.RecoveryExecution) 
 		result.Reason = "cannot read local process identity: " + err.Error()
 		return result
 	}
-	host, err := os.Hostname()
-	if err != nil {
-		result.Reason = "cannot identify inspection host: " + err.Error()
-		return result
-	}
-	ns := state.PIDNamespace()
+	processIdentity := identity.process()
+	location := state.LocateProcess(processIdentity)
 	switch {
+	case location.Verdict == state.ProcessUnverifiable:
+		result.Reason = "cannot identify inspection host: " + location.ProbeErr.Error()
 	case identity.Executor != "local" || identity.PID <= 1 || identity.PID > (1<<31)-1:
 		result.Reason = "local launch identity is incomplete; a process may have started before identity publication"
-	case identity.Host == "" || identity.Host != host:
+	case identity.Host == "" || location.Verdict == state.ProcessOtherHost:
 		result.Reason = "local process belongs to another or unrecorded host"
-	case ns == "" || identity.PIDNamespace == "" || ns != identity.PIDNamespace:
+	case location.Verdict == state.ProcessOtherNamespace || !location.LocationVerified:
 		result.Reason = "local PID namespace does not match or cannot be verified"
 	default:
 		result.NativeID = strconv.Itoa(identity.PID)
-		err := syscall.Kill(-identity.PID, 0)
-		result.State, result.Reason, result.PossiblyActive = localGroupEvidence(identity.ProcessStart, state.ProcessStart(identity.PID), err)
+		result.State, result.Reason, result.PossiblyActive = localGroupEvidence(state.ObserveProcessGroup(processIdentity))
 	}
 	return result
 }
 
-func localGroupEvidence(recordedStart, currentStart string, err error) (string, string, bool) {
-	switch {
-	case errors.Is(err, syscall.ESRCH):
+func (identity localIdentity) process() state.ProcessIdentity {
+	return state.ProcessIdentity{Host: identity.Host, PIDNamespace: identity.PIDNamespace, PID: identity.PID, ProcessStart: identity.ProcessStart}
+}
+
+// localGroupEvidence words the shared verdict on a local process group
+// (state.ObserveProcessGroup) for recovery. A group that exists with an
+// unverifiable or different leader may still hold the original's
+// descendants, so it is possibly active.
+func localGroupEvidence(observation state.ProcessObservation) (string, string, bool) {
+	switch observation.Verdict {
+	case state.ProcessGone:
 		return "stopped", "recorded process group no longer exists in the verified host/PID namespace", false
-	case err != nil:
-		return "unknown", "cannot inspect recorded process group: " + err.Error(), errors.Is(err, syscall.EPERM)
-	case recordedStart == "" || currentStart == "":
+	}
+	switch {
+	case observation.ProbeErr != nil:
+		return "unknown", "cannot inspect recorded process group: " + observation.ProbeErr.Error(), errors.Is(observation.ProbeErr, syscall.EPERM)
+	case observation.Verdict == state.ProcessUnverifiable:
 		return "unknown", "process group exists but its leader start time cannot be verified; possibly live descendants or a reused group", true
-	case recordedStart != currentStart:
+	case observation.Verdict == state.ProcessReused:
 		return "unknown", "process group exists but leader identity differs; group reuse cannot establish the original execution stopped", true
-	default:
+	case observation.Verdict == state.ProcessSame:
 		return "active", "process group exists and its leader start time matches the recorded execution", false
+	default:
+		return "unknown", "recorded process group is " + string(observation.Verdict), false
 	}
 }
 

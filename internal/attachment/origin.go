@@ -13,13 +13,20 @@ import (
 func CurrentLaunchOrigin() model.LaunchOrigin {
 	host, _ := os.Hostname()
 	parent := os.Getppid()
-	return model.LaunchOrigin{Host: host, PID: parent, ProcessStart: state.ProcessStart(parent)}
+	return model.LaunchOrigin{Host: host, PIDNamespace: state.PIDNamespace(), PID: parent, ProcessStart: state.ProcessStart(parent)}
 }
 
-// SameLaunchOrigin reports whether a run's recorded origin is current. A
-// start time known on both sides must match, so a reused PID never matches.
+// SameLaunchOrigin reports whether a run's recorded origin is current: the
+// same PID in the same host and PID namespace (state.ProcessIdentity.Locate).
+// A start time known on both sides must match, so a reused PID never
+// matches. An origin from an earlier rotari, without a namespace, matches
+// on host and PID as before.
 func SameLaunchOrigin(recorded *model.LaunchOrigin, current model.LaunchOrigin) bool {
 	if recorded == nil || recorded.Host != current.Host || recorded.PID != current.PID {
+		return false
+	}
+	identity := state.ProcessIdentity{Host: recorded.Host, PIDNamespace: recorded.PIDNamespace, PID: recorded.PID}
+	if verdict, _ := identity.Locate(current.Host, current.PIDNamespace); verdict != state.ProcessHere {
 		return false
 	}
 	return recorded.ProcessStart == "" || current.ProcessStart == "" || recorded.ProcessStart == current.ProcessStart

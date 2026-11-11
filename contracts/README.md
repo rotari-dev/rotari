@@ -175,7 +175,7 @@ the IDs, this table, and those calls disagree.
 | SAFE-14 | CLI/Python dry-run and MCP preview expose nonmutating recovery policy; refused applies preserve structured evidence | conformance | `TestUnlockOwnershipAndDryRun`, `TestUnlockExecutionEvidenceOverridesTerminalOutcome` |
 | SAFE-15 | A complete matching summary repairs finalization only with ownership and execution safeguards; incomplete summaries only release, preserving the queue and history | conformance | `TestUnlockFinalizationRepair` |
 | SAFE-16 | Shared scoped local/scheduler/SSH execution evidence gates finalization and release; stopped needs no execution attestation, unknown requires it, and verified activity always refuses | conformance | `TestUnlockFinalizationRepair`, `TestUnlockExecutionEvidenceOverridesTerminalOutcome`, `TestSSHJobReadsAsRunning` |
-| COORD-1 | Controlling a local job from another host fails, naming that host | conformance | `TestControlFromAnotherHost` |
+| COORD-1 | Controlling a local job from another host or PID namespace fails, naming the host or both namespaces | conformance | `TestControlFromAnotherHost`, `TestControlFromAnotherPIDNamespace` |
 | COORD-2 | Cancelling a run whose coordinator is on another host or in another PID namespace fails, naming it | conformance | `TestControlFromAnotherHost`, `TestLockFromAnotherPIDNamespaceIsLocked` |
 | COORD-3 | A remote lock keeps the project locked until explicit recovery with attestation for unknown ownership | conformance | `TestControlFromAnotherHost`, `TestLockFromAnotherPIDNamespaceIsLocked`, `TestUnlockOwnershipAndDryRun` |
 | COORD-4 | A missing scheduler command fails the job with an error naming it | partial | `TestMissingSchedulerCommand` |

@@ -455,7 +455,10 @@ Local and SSH jobs receive `SIGTERM` through their process groups. Slurm, PBS, L
 
 ### Why do cross-host `cancel`/`suspend`/`resume` fail for local jobs?
 
-A local job's PID is meaningful only on the host that started it. Run these commands on the runner host.
+A local job's PID is meaningful only on the host that started it, and only in
+the PID namespace it started in. Run these commands on the runner host, and
+outside any sandbox or container the job was not started in; the error names
+the host, or the job's namespace and yours.
 
 ### Does whole-run `cancel` have the same cross-host problem?
 

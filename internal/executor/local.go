@@ -48,7 +48,7 @@ func (local Local) Resume(jobDir string) error  { return local.signal(jobDir, sy
 // process group that is already gone is not an error: the recorded
 // cancellation is all that is left to do.
 func (local Local) Cancel(jobDir string) error {
-	pid, err := local.recordedPID(jobDir)
+	identity, observation, err := local.observe(jobDir)
 	if err != nil {
 		return err
 	}
@@ -56,59 +56,89 @@ func (local Local) Cancel(jobDir string) error {
 	if err := os.WriteFile(filepath.Join(jobDir, "cancelled"), []byte(nowRFC3339()+"\n"), local.Store.FileMode); err != nil { // NOSONAR: jobDir comes from validated job path helpers.
 		return fmt.Errorf("record job cancellation: %w", err)
 	}
-	if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
+	if observation.Verdict == state.ProcessGone || observation.Verdict == state.ProcessReused {
+		return nil
+	}
+	if err := syscall.Kill(-identity.PID, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
 		return err
 	}
 	return nil
 }
 
 func (local Local) signal(jobDir string, sig syscall.Signal) error {
-	pid, err := local.recordedPID(jobDir)
+	identity, observation, err := local.observe(jobDir)
 	if err != nil {
 		return err
 	}
-	if !processAlive(pid) {
+	if observation.Verdict == state.ProcessGone || observation.Verdict == state.ProcessReused {
 		return fmt.Errorf("job is not running")
 	}
-	return syscall.Kill(-pid, sig)
+	return syscall.Kill(-identity.PID, sig)
 }
 
-func (Local) recordedPID(jobDir string) (int, error) {
-	// codeql[go/path-injection]: jobDir is a validated job directory and pid is a fixed file name.
-	pidData, err := os.ReadFile(filepath.Join(jobDir, "pid"))
+// observe reads the job's recorded process and observes its process group
+// with the shared rule (state.ObserveProcessGroup). A job on another host or
+// in another PID namespace is refused with a *state.ElsewhereError before
+// anything is written or signalled.
+func (local Local) observe(jobDir string) (state.ProcessIdentity, state.ProcessObservation, error) {
+	identity, err := LocalJobIdentity(local.Store, jobDir)
 	if err != nil {
-		return 0, fmt.Errorf("job is not running")
+		return identity, state.ProcessObservation{}, err
 	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
-	if err != nil {
-		return 0, fmt.Errorf("job is not running")
+	observation := state.ObserveProcessGroup(identity)
+	return identity, observation, state.Elsewhere(identity, observation)
+}
+
+// LocalJobIdentity is the process a local attempt recorded: its host, PID
+// namespace, and start from job.json, and its PID from there or from the pid
+// file. An attempt from an earlier rotari has only the pid file, and its
+// identity names no host or namespace. Without a PID the job is not running.
+func LocalJobIdentity(store state.Store, jobDir string) (state.ProcessIdentity, error) {
+	var recorded localIdentity
+	// codeql[go/path-injection]: jobDir is a validated job directory and job.json is a fixed file name.
+	if err := store.ReadJSON(filepath.Join(jobDir, "job.json"), &recorded); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return state.ProcessIdentity{}, fmt.Errorf("read local process identity: %w", err)
 	}
-	return pid, nil
+	identity := recorded.process()
+	if identity.PID <= 0 {
+		// codeql[go/path-injection]: jobDir is a validated job directory and pid is a fixed file name.
+		pidData, err := os.ReadFile(filepath.Join(jobDir, "pid"))
+		if err != nil {
+			return identity, fmt.Errorf("job is not running")
+		}
+		identity.PID, err = strconv.Atoi(strings.TrimSpace(string(pidData)))
+		if err != nil || identity.PID <= 0 {
+			return identity, fmt.Errorf("job is not running")
+		}
+	}
+	return identity, nil
 }
 
 // LocalProcessGroupAlive reports whether the process group recorded by a local
-// attempt exists. known is false when the PID record cannot be inspected.
+// attempt may still exist, by the shared rule (state.ObserveProcessGroup).
+// known is false when the PID record cannot be inspected, or when the job
+// runs on another host or in another PID namespace, where its PID means
+// nothing here. A group whose leader's PID was reused may still hold the
+// original's descendants, so it counts as alive.
 func LocalProcessGroupAlive(jobDir string) (alive, known bool) {
-	path, err := state.ValidatedStateFile(jobDir, "pid")
-	if err != nil {
+	if _, err := state.ValidatedStateFile(jobDir, "pid"); err != nil {
 		return false, false
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
+	identity, err := LocalJobIdentity(state.NewStore(state.DirectoryMode(), state.FileMode()), jobDir)
+	if err != nil || identity.PID <= 1 {
 		return false, false
 	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil || pid <= 1 {
+	observation := state.ObserveProcessGroup(identity)
+	switch {
+	case observation.Verdict == state.ProcessOtherHost || observation.Verdict == state.ProcessOtherNamespace:
 		return false, false
-	}
-	err = syscall.Kill(-pid, 0)
-	if err == nil || errors.Is(err, syscall.EPERM) {
+	case observation.Verdict == state.ProcessGone:
+		return false, true
+	case observation.ProbeErr != nil && !errors.Is(observation.ProbeErr, syscall.EPERM):
+		return false, false
+	default:
 		return true, true
 	}
-	if errors.Is(err, syscall.ESRCH) {
-		return false, true
-	}
-	return false, false
 }
 
 func processAlive(pid int) bool {

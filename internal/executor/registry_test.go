@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/rotari-dev/rotari/internal/state"
@@ -50,19 +51,66 @@ func TestRegistryOwner(t *testing.T) {
 	}
 }
 
-func TestLocalHostMismatch(t *testing.T) {
+func TestLocalElsewhere(t *testing.T) {
 	store := state.NewStore(0o700, 0o600)
 	registry := NewRegistry(store, nil)
 	runDir := t.TempDir()
+	jobDir := filepath.Join(runDir, "job")
+	if err := os.MkdirAll(jobDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	local, _ := registry.Lookup("local")
 	slurm, _ := registry.Lookup("slurm")
+	host, err := os.Hostname()
+	if err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := func(executor JobExecutor) *state.ElsewhereError {
+		t.Helper()
+		var refused *state.ElsewhereError
+		if err := LocalElsewhere(store, executor, runDir, jobDir); err != nil && !errors.As(err, &refused) {
+			t.Fatalf("unexpected error %v", err)
+		}
+		return refused
+	}
+	// An attempt from an earlier rotari records only a pid; the run's host
+	// places it.
 	if err := os.WriteFile(filepath.Join(runDir, "context.json"), []byte(`{"hostname":"elsewhere.invalid"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if host, mismatch := LocalHostMismatch(store, local, runDir); !mismatch || host != "elsewhere.invalid" {
-		t.Fatalf("local job on another host = %q, %v", host, mismatch)
+	if err := os.WriteFile(filepath.Join(jobDir, "pid"), []byte("12345\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if _, mismatch := LocalHostMismatch(store, slurm, runDir); mismatch {
+	if refused := elsewhere(local); refused == nil || refused.Observation.Verdict != state.ProcessOtherHost || refused.Identity.Host != "elsewhere.invalid" {
+		t.Fatalf("local job on another host = %+v", refused)
+	}
+	if elsewhere(slurm) != nil {
 		t.Fatal("scheduler jobs are controllable from any host")
+	}
+	// With the run on this host, the job's own record decides: this host,
+	// another PID namespace.
+	if err := store.WriteJSON(filepath.Join(runDir, "context.json"), map[string]string{"hostname": host}); err != nil {
+		t.Fatal(err)
+	}
+	identity := localIdentity{Executor: "local", Host: host, PID: 12345, PIDNamespace: "pid:[1]"}
+	if err := store.WriteJSON(filepath.Join(jobDir, "job.json"), identity); err != nil {
+		t.Fatal(err)
+	}
+	refused := elsewhere(local)
+	if state.PIDNamespace() == "" {
+		if refused != nil {
+			t.Fatalf("without a namespace here nothing can differ: %+v", refused)
+		}
+		return
+	}
+	if refused == nil || refused.Observation.Verdict != state.ProcessOtherNamespace || !strings.Contains(refused.Error(), "pid:[1]") {
+		t.Fatalf("local job in another namespace = %+v", refused)
+	}
+	identity.PIDNamespace = state.PIDNamespace()
+	if err := store.WriteJSON(filepath.Join(jobDir, "job.json"), identity); err != nil {
+		t.Fatal(err)
+	}
+	if refused := elsewhere(local); refused != nil {
+		t.Fatalf("a job recorded here is not elsewhere: %+v", refused)
 	}
 }

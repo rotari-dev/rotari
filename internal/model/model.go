@@ -752,6 +752,7 @@ type RecoveryExecution struct {
 // tells it from a later process reusing its PID.
 type LaunchOrigin struct {
 	Host         string `json:"host"`
+	PIDNamespace string `json:"pid_namespace,omitempty"`
 	PID          int    `json:"pid"`
 	ProcessStart string `json:"process_start,omitempty"`
 }

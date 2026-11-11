@@ -422,11 +422,25 @@ func TestProcessStartIdentityDetectsPIDReuse(t *testing.T) {
 	if identity == "" {
 		t.Skip("process start identity is not available on this platform")
 	}
-	if processMayBeSame(os.Getpid(), "not-the-current-start-time") {
+	host, err := os.Hostname()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := record{PID: os.Getpid(), Host: host, PIDNamespace: state.PIDNamespace()}
+	client.ProcessStart = "not-the-current-start-time"
+	if clientMayBeLive(client, host) {
 		t.Fatal("different process start time was treated as the same process")
 	}
-	if !processMayBeSame(os.Getpid(), identity) {
+	client.ProcessStart = identity
+	if !clientMayBeLive(client, host) {
 		t.Fatal("matching process start time was treated as a reused PID")
+	}
+	// A client in another PID namespace cannot be checked here, even when
+	// its PID names a different process here.
+	client.ProcessStart = "not-the-current-start-time"
+	client.PIDNamespace = "pid:[1]"
+	if state.PIDNamespace() != "" && !clientMayBeLive(client, host) {
+		t.Fatal("a client in another PID namespace was read as gone")
 	}
 }
 

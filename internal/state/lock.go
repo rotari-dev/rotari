@@ -63,7 +63,8 @@ func PIDNamespace() string {
 // OtherPIDNamespace reports whether lock records a PID namespace other than
 // this process's, where its PID names another process or none.
 func OtherPIDNamespace(lock model.LockInfo) bool {
-	return lock.PIDNamespace != "" && lock.PIDNamespace != PIDNamespace()
+	verdict, _ := ProcessIdentity{PIDNamespace: lock.PIDNamespace}.Locate("", PIDNamespace())
+	return verdict == ProcessOtherNamespace
 }
 
 func LoadLock(path string) (model.LockInfo, error) {

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"syscall"
 	"time"
 
 	"github.com/rotari-dev/rotari/internal/model"
@@ -52,39 +51,50 @@ func AssessCoordinator(store state.Store, runDir string) (CoordinatorAssessment,
 	}
 	// Probe only identities in this host and namespace. Never signal an
 	// unvalidated remote PID, even with signal zero.
-	probeErr := syscall.Kill(identity.PID, 0)
-	result.State, result.Reason = coordinatorProcess(identity.ProcessStart, state.ProcessStart(identity.PID), probeErr)
+	observation := state.ObserveProcess(coordinatorIdentity(identity))
+	result.State, result.Reason = coordinatorProcess(observation)
 	return result, nil
 }
 
+func coordinatorIdentity(identity *model.RunCoordinator) state.ProcessIdentity {
+	return state.ProcessIdentity{Host: identity.Host, PIDNamespace: identity.PIDNamespace, PID: identity.PID, ProcessStart: identity.ProcessStart}
+}
+
 func coordinatorLocation(identity *model.RunCoordinator, host, namespace string) (CoordinatorState, string) {
-	switch {
-	case identity == nil:
+	if identity == nil {
 		return CoordinatorUnknown, "coordinator identity was not recorded"
-	case identity.Host == "" || identity.PID <= 0:
+	}
+	if identity.Host == "" || identity.PID <= 0 {
 		return CoordinatorUnknown, "coordinator identity is incomplete"
-	case identity.Host != host:
+	}
+	switch verdict, verified := coordinatorIdentity(identity).Locate(host, namespace); {
+	case verdict == state.ProcessOtherHost:
 		return CoordinatorUnknown, "coordinator belongs to another host"
-	case identity.PIDNamespace == "" || namespace == "":
-		return CoordinatorUnknown, "coordinator PID namespace cannot be verified"
-	case identity.PIDNamespace != namespace:
+	case verdict == state.ProcessOtherNamespace:
 		return CoordinatorUnknown, "coordinator belongs to another PID namespace"
+	case !verified:
+		return CoordinatorUnknown, "coordinator PID namespace cannot be verified"
 	default:
 		return CoordinatorUnknown, ""
 	}
 }
 
-func coordinatorProcess(recordedStart, currentStart string, probeErr error) (CoordinatorState, string) {
+// coordinatorProcess words the shared process verdict (state.ObserveProcess)
+// for a coordinator whose location coordinatorLocation verified. Any probe
+// error, EPERM included, leaves it unknown.
+func coordinatorProcess(observation state.ProcessObservation) (CoordinatorState, string) {
 	switch {
-	case errors.Is(probeErr, syscall.ESRCH):
+	case observation.Verdict == state.ProcessGone:
 		return CoordinatorStopped, "coordinator process no longer exists"
-	case probeErr != nil:
-		return CoordinatorUnknown, fmt.Sprintf("cannot inspect coordinator process: %v", probeErr)
-	case recordedStart == "" || currentStart == "":
+	case observation.ProbeErr != nil:
+		return CoordinatorUnknown, fmt.Sprintf("cannot inspect coordinator process: %v", observation.ProbeErr)
+	case observation.Verdict == state.ProcessUnverifiable:
 		return CoordinatorUnknown, "coordinator process start time cannot be verified; process may still be alive"
-	case recordedStart != currentStart:
+	case observation.Verdict == state.ProcessReused:
 		return CoordinatorStopped, "PID belongs to a different process"
-	default:
+	case observation.Verdict == state.ProcessSame:
 		return CoordinatorLive, "coordinator process identity matches"
+	default:
+		return CoordinatorUnknown, fmt.Sprintf("coordinator process is %s", observation.Verdict)
 	}
 }

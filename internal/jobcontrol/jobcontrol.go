@@ -128,8 +128,8 @@ func (controller Controller) prepareControlTarget(runDir, jobID, operation strin
 		}
 		return controlTarget{}, false, fmt.Errorf("job %q is not running", jobID)
 	}
-	if host, mismatch := executor.LocalHostMismatch(controller.Store, owner, runDir); mismatch {
-		return controlTarget{}, false, fmt.Errorf("job %q runs on host %q; run %s from that host", jobID, host, operation)
+	if err := executor.LocalElsewhere(controller.Store, owner, runDir, jobDir); err != nil {
+		return controlTarget{}, false, elsewhereError(jobID, operation, err)
 	}
 	suspender, ok := owner.(executor.Suspender)
 	if !ok {
@@ -306,8 +306,8 @@ func (controller Controller) cancelSubmitted(runDir, jobDir, jobID string) (bool
 	if err != nil {
 		return false, nil
 	}
-	if host, mismatch := executor.LocalHostMismatch(controller.Store, owner, runDir); mismatch {
-		return false, fmt.Errorf("job %q runs on host %q; run cancel from that host", jobID, host)
+	if err := executor.LocalElsewhere(controller.Store, owner, runDir, jobDir); err != nil {
+		return false, elsewhereError(jobID, "cancel", err)
 	}
 	canceller, ok := owner.(executor.Canceller)
 	if !ok {
@@ -686,17 +686,26 @@ func finishCancelMessage(message string, paths state.ProjectPaths, runID string,
 	return message, nil
 }
 
+// elsewhereError refuses operation on a local job that runs on another host
+// or in another PID namespace (COORD-1), naming where it runs.
+func elsewhereError(jobID, operation string, err error) error {
+	var elsewhere *state.ElsewhereError
+	if !errors.As(err, &elsewhere) {
+		return err
+	}
+	if elsewhere.Observation.Verdict == state.ProcessOtherHost {
+		return fmt.Errorf("job %q runs on host %q; run %s from that host", jobID, elsewhere.Identity.Host, operation)
+	}
+	return fmt.Errorf("job %q runs in PID namespace %s, not %s; run %s outside this sandbox or container", jobID, elsewhere.Identity.PIDNamespace, elsewhere.Observation.PIDNamespace, operation)
+}
+
 // runnerHostMismatch reports the recorded host when a run's lock belongs to a
 // different host than this process. Whole-run cancel signals local jobs by
 // the PIDs recorded on the runner's host; on another host those PIDs belong
 // to nothing or to unrelated processes, so the cancel would report success
 // without stopping the run.
 func runnerHostMismatch(lock model.LockInfo) (recordedHost string, mismatch bool) {
-	if lock.Host == "" {
-		return "", false
-	}
-	host, err := os.Hostname()
-	if err != nil || strings.EqualFold(host, lock.Host) {
+	if state.LocateProcess(state.ProcessIdentity{Host: lock.Host}).Verdict != state.ProcessOtherHost {
 		return "", false
 	}
 	return lock.Host, true
