@@ -101,3 +101,74 @@ Commit: `23bdc89a` (2026-11-11 16:22:45 +0900)
     fails with the source named.
 - **Remaining:** Phases 3 to 5. The source of later `--env`-style
   validation errors is not named (see above).
+
+## Phase 3: missing basedir
+
+Commit: `28a3f1cb` (2026-11-11 18:47:12 +0900)
+
+- **Change:**
+  - New [internal/state/project_names.go](../../internal/state/project_names.go):
+    `ProjectNames` is the one listing of `<basedir>/projects`. It returns
+    `BaseDirMissingError` (matching `ErrBaseDirMissing`) for a basedir that
+    does not exist, nil when there is no projects directory, and an empty
+    list when the directory is empty. `ProjectNamesOrNone` reads a missing
+    basedir as having no projects, and `RequireBaseDir` checks existence.
+  - All sixteen readers use it: `internal/joblist`, `internal/project`
+    (`Overviews`), `internal/config`, `internal/resolve`, `internal/runlist`
+    (twice), `internal/webui` (index and static state), and in `cmd/rotari`
+    `config.go` (twice), `server.go`, `completion.go` (twice), `info.go`,
+    `show.go`, and `wait.go` (twice).
+  - `loadCLIConfig` records the basedir an invocation was given and where it
+    came from. `warnMissingGivenBaseDir` in `main` warns for read-only
+    commands, except `wait`.
+  - `jobsBaseDirs` leaves out registered basedirs that are gone and returns
+    them for `warnMissingBaseDirs`. `projects` now uses it instead of its own
+    copy of the registry walk.
+  - Web: `webBaseDir.Missing` is set in `basedirEntries` for registered
+    basedirs other than the server's own. Both `basedirLabelHTML` versions
+    (Go and `web_app_core.js`) add a `missing` mark, styled in
+    `web_shell.css`. `site.projectNames` gives the server's own missing
+    basedir its default project and is an error for any other, which
+    `/api/projects` answers with 404. The history search and `runwatch` use
+    the shared error instead of their own `os.Stat`.
+  - Contract RES-28 and status row;
+    [docs/CONCEPTS.md](../../docs/CONCEPTS.md),
+    [docs/OPERATIONS.md](../../docs/OPERATIONS.md),
+    [docs/WEB.md](../../docs/WEB.md), and
+    [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md); the ISSUES.md entry
+    moved to Resolved.
+- **Reason:** Phase 3, implementing D6.
+- **Plan impact:**
+  - D6a: before writing code, the user chose to split the missing cases into
+    a given basedir, the implicit default, and a registered one.
+  - D6b: the first full test run failed nine existing conformance tests
+    (RES-3, RES-16, RES-24, the registry-mismatch and "project is in another
+    basedir" messages) and two CLI-30 cases, because a given basedir that
+    does not exist was an error. A basedir named in `ROTARI_BASEDIR` or by
+    `rotari init` exists only after its first run. The user chose a warning
+    instead, which keeps output and exit status. `wait` was dropped from the
+    warning for RES-16.
+  - The Phase 1 count of ten readers was wrong; there were sixteen (the
+    search output had been cut short). The plan records the correction.
+  - Item 2 is done.
+- **Validation:**
+  - New `TestMissingGivenBasedirIsSaid` and
+    `TestRemovedRegisteredBasedirIsReported` pass. The first covers each of
+    the eight read-only commands with a missing and an existing empty
+    basedir, comparing exit status, plus the variable and config sources,
+    `--help`, silent `wait`, the implicit default, and `add` creating its
+    basedir. The second covers the warning in `jobs`, `projects`, `runs`, and
+    `notifications`, `/api/basedirs` `missing`, `/api/projects` 404 and the
+    server's own default, and the sidebar mark on the jobs page.
+  - `go test ./conformance` (contract status table) passes.
+  - After the D6b change, a full run of the `scripts/check.sh` steps passed:
+    `go vet ./...`, `tsc -p internal/webui/tsconfig.json` (run directly),
+    `go test ./...`, and `go test -race ./...`. The earlier run with the
+    error behavior failed as described above. `gofmt -l` is clean;
+    pre-commit is not installed.
+  - With a scratch binary, ran each read-only command against a missing and
+    an empty basedir, and the aggregate commands with a removed registered
+    basedir, before the D6b change; the conformance tests cover the final
+    behavior.
+- **Remaining:** Phases 4 (static export and `auth-token`) and 5 (remaining
+  contract and documentation checks).
