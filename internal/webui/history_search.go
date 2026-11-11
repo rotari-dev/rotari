@@ -80,7 +80,7 @@ func (s site) handleHistorySearchOptions(writer http.ResponseWriter, request *ht
 		writeWebError(writer, err)
 		return
 	}
-	runIDs, err := webRunIDs(paths.RunsDir)
+	runIDs, err := webRunIDs(paths)
 	if err != nil {
 		writeWebError(writer, err)
 		return
@@ -264,7 +264,7 @@ func (s site) loadHistorySearchProject(entry webBaseDir, projectName, selectedRu
 	if err != nil {
 		return nil, err
 	}
-	runIDs, err := webRunIDs(paths.RunsDir)
+	runIDs, err := webRunIDs(paths)
 	if err != nil {
 		return nil, err
 	}

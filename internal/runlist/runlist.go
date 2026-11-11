@@ -163,8 +163,8 @@ func readRun(paths state.ProjectPaths, projectName string, entry os.DirEntry, in
 		return Run{}, err
 	}
 	run := Run{BaseDir: paths.BaseDir, Project: projectName, RunID: runID}
-	if info, _ := entry.Info(); info != nil {
-		run.Order = info.ModTime().UnixNano()
+	if started, ok := state.RunIDStart(runID); ok {
+		run.Order = started.UnixNano()
 	}
 	summary, err := state.LoadRunSummaryHead(filepath.Join(runDir, "summary.json"))
 	if err != nil && !os.IsNotExist(err) {
@@ -315,23 +315,13 @@ func Overlapping(runs []Run, from, to, now time.Time) []Run {
 // mayMeet reports whether the run in entry may have a span meeting the
 // window, judged from its ID and its directory's modification time only.
 func (bounds window) mayMeet(entry os.DirEntry) bool {
-	if started, ok := RunIDStart(entry.Name()); ok && !started.Before(bounds.to) {
+	if started, ok := state.RunIDStart(entry.Name()); ok && !started.Before(bounds.to) {
 		return false
 	}
 	if info, err := entry.Info(); err == nil && info.ModTime().Before(bounds.from) {
 		return false
 	}
 	return true
-}
-
-// RunIDStart is the start time a run ID records: rotari names a run by its
-// UTC start, YYYYMMDD-HHMMSS-XXXXXXXX. ok is false for an ID in another form.
-func RunIDStart(runID string) (time.Time, bool) {
-	if len(runID) < len("20060102-150405") {
-		return time.Time{}, false
-	}
-	started, err := time.Parse("20060102-150405", runID[:len("20060102-150405")])
-	return started, err == nil
 }
 
 // LatestStart is the latest run start, by run ID, among the runs in
@@ -349,7 +339,7 @@ func LatestStart(baseDirs []string, now time.Time) (latest time.Time, ok bool) {
 				continue
 			}
 			for _, run := range runs {
-				if started, found := RunIDStart(run.Name()); found && run.IsDir() && started.Before(now) && started.After(latest) {
+				if started, found := state.RunIDStart(run.Name()); found && run.IsDir() && started.Before(now) && started.After(latest) {
 					latest, ok = started, true
 				}
 			}

@@ -18,7 +18,6 @@ import (
 )
 
 const jobIDLen = 9
-const runIDLen = len("20060102-150405-00000000")
 const commandJSONName = "command.json"
 const mimeApplicationJSON = "application/json"
 
@@ -217,12 +216,7 @@ func isRunning(paths state.ProjectPaths) (bool, error) {
 }
 
 func makeRunID() string {
-	var value [4]byte
-	if _, err := rand.Read(value[:]); err != nil {
-		panic(fmt.Sprintf("failed to generate run id: %v", err))
-	}
-	timestamp := time.Now().UTC().Format("20060102-150405")
-	return fmt.Sprintf("%s-%08x", timestamp, value)
+	return state.NewRunID(time.Now())
 }
 
 func makeJobID() string {

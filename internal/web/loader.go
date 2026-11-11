@@ -21,7 +21,7 @@ type QueueLoader struct {
 	Paths       state.ProjectPaths
 	Queue       func() (model.Queue, error)
 	Lock        func() (model.LockInfo, error)
-	Runs        func() ([]string, error)
+	Runs        func() ([]string, error) // newest first
 	Summary     func(runID string) (model.RunSummary, error)
 	Jobs        func(runID string, summary model.RunSummary) ([]Job, error)
 	Context     func(runID string) (model.RunContext, error)
@@ -49,6 +49,7 @@ func LoadQueueState(loader QueueLoader) (QueueState, error) {
 		return QueueState{}, err
 	}
 	state.RunCount = len(runIDs)
+	state.RunOrder = runIDs
 	for _, runID := range runIDs {
 		summary, summaryErr := loader.Summary(runID)
 		if newerStateVersion(summaryErr) {

@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -809,8 +808,8 @@ func jobIDsTarget(scope Scope, cliProjectName string, jobIDs []string, includeQu
 }
 
 // RunID resolves the run a history command reads. An explicit requested run
-// must exist; empty selects meta.json's last run, then the newest run
-// directory, while "latest" selects the newest settled run.
+// must exist; empty selects the newest run in the shared run order
+// (state.RunsNewestFirst), while "latest" selects the newest settled run.
 func RunID(paths state.ProjectPaths, requested string) (string, error) {
 	if requested == model.Latest {
 		return latestSettledRunID(paths)
@@ -825,42 +824,14 @@ func RunID(paths state.ProjectPaths, requested string) (string, error) {
 		}
 		return requested, nil
 	}
-	meta, err := state.LoadMeta(paths.MetaFile)
+	runID, err := state.NewestRunID(paths)
 	if err != nil {
-		return "", fmt.Errorf("failed to load metadata: %w", err)
+		return "", err
 	}
-	if meta.LastRunID != "" {
-		// codeql[go/path-injection]: LastRunID is loaded from validated state metadata.
-		if info, err := os.Stat(filepath.Join(paths.RunsDir, meta.LastRunID)); err == nil && info.IsDir() {
-			return meta.LastRunID, nil
-		}
+	if runID == "" {
+		return "", fmt.Errorf("project %q has no runs (runs_dir=%s)", paths.ProjectName, paths.RunsDir)
 	}
-	{
-		entries, err := os.ReadDir(paths.RunsDir)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return "", fmt.Errorf("project %q has no runs (runs_dir=%s)", paths.ProjectName, paths.RunsDir)
-			}
-			return "", fmt.Errorf("failed to read runs: %w", err)
-		}
-		runIDs := make([]string, 0, len(entries))
-		for _, entry := range entries {
-			if entry.IsDir() {
-				runIDs = append(runIDs, entry.Name())
-			}
-		}
-		if len(runIDs) == 0 {
-			return "", fmt.Errorf("project %q has no runs (runs_dir=%s)", paths.ProjectName, paths.RunsDir)
-		}
-		sort.Slice(runIDs, func(i, j int) bool {
-			// codeql[go/path-injection]: runIDs come from directory entries under RunsDir.
-			left, _ := os.Stat(filepath.Join(paths.RunsDir, runIDs[i]))
-			// codeql[go/path-injection]: runIDs come from directory entries under RunsDir.
-			right, _ := os.Stat(filepath.Join(paths.RunsDir, runIDs[j]))
-			return left.ModTime().After(right.ModTime())
-		})
-		return runIDs[0], nil
-	}
+	return runID, nil
 }
 
 // latestSettledRunID resolves the reserved latest selector without choosing a
@@ -901,26 +872,10 @@ func settledRunCandidate(paths state.ProjectPaths, runID string) (bool, error) {
 }
 
 func newestSettledRunID(paths state.ProjectPaths) (string, error) {
-	entries, err := os.ReadDir(paths.RunsDir)
+	runIDs, err := state.RunsNewestFirst(paths)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf("%w: project %q (runs_dir=%s)", ErrNoSettledRuns, paths.ProjectName, paths.RunsDir)
-		}
-		return "", fmt.Errorf("failed to read runs: %w", err)
+		return "", err
 	}
-	runIDs := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() && state.IsValidPathElement(entry.Name()) {
-			runIDs = append(runIDs, entry.Name())
-		}
-	}
-	sort.Slice(runIDs, func(i, j int) bool {
-		// codeql[go/path-injection]: runIDs come from directory entries under RunsDir.
-		left, _ := os.Stat(filepath.Join(paths.RunsDir, runIDs[i]))
-		// codeql[go/path-injection]: runIDs come from directory entries under RunsDir.
-		right, _ := os.Stat(filepath.Join(paths.RunsDir, runIDs[j]))
-		return left.ModTime().After(right.ModTime())
-	})
 	for _, runID := range runIDs {
 		settled, err := runIsSettled(paths, runID)
 		if err != nil {

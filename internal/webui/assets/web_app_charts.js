@@ -826,7 +826,7 @@ function renderRunGraphics() {
   const run = queue && queue.runs.find((item) => item.run_id === runID);
   const app = document.getElementById("app");
   if (!run || !app || app.querySelector(".run-graphic")) return;
-  const latest = latestRun(queue.runs);
+  const latest = latestRun(queue);
   const sections = [
     failureCausesSection(run, runID, !!latest && latest.run_id === runID),
     jobTimelineSection(run),

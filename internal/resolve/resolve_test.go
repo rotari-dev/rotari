@@ -327,8 +327,10 @@ func TestRunIDFallsBackToNewestRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	olderPath := filepath.Join(paths.RunsDir, "older-run")
-	newerPath := filepath.Join(paths.RunsDir, "newer-run")
+	// The newer run, by the start in its ID, has the older directory time:
+	// the run order does not use directory times.
+	olderPath := filepath.Join(paths.RunsDir, "20260101-000000-ffffffff")
+	newerPath := filepath.Join(paths.RunsDir, "20260101-000100-00000000")
 	if err := os.MkdirAll(olderPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -337,10 +339,10 @@ func TestRunIDFallsBackToNewestRun(t *testing.T) {
 	}
 	older := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	newer := older.Add(time.Minute)
-	if err := os.Chtimes(olderPath, older, older); err != nil {
+	if err := os.Chtimes(olderPath, newer, newer); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chtimes(newerPath, newer, newer); err != nil {
+	if err := os.Chtimes(newerPath, older, older); err != nil {
 		t.Fatal(err)
 	}
 	meta := state.DefaultMeta()
@@ -353,8 +355,8 @@ func TestRunIDFallsBackToNewestRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if runID != "newer-run" {
-		t.Fatalf("run ID = %q, want newer-run", runID)
+	if runID != "20260101-000100-00000000" {
+		t.Fatalf("run ID = %q, want the run started later", runID)
 	}
 }
 

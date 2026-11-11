@@ -134,7 +134,7 @@ the IDs, this table, and those calls disagree.
 | RES-12 | `--run-id` is exact except the reserved `latest` | conformance | `TestLatestRunID`, `TestLatestRunIDSkipsActiveRun` |
 | RES-13 | A run ID or attempt ID alone resolves base directory, project, and run | partial | `TestRunIDAloneResolvesLocation` |
 | RES-14 | Explicit location options win; conflicts with the registry fail | partial | `TestExplicitLocationMustMatchRegistry` |
-| RES-15 | History consumers fall back to `last_run_id`, then the newest run | conformance | `TestHistoryUsesLastRunThenNewestRun` |
+| RES-15 | History consumers fall back to `last_run_id`, then the newest run | conformance | `TestHistoryUsesLastRunThenNewestRun`, `TestOneRunOrder` |
 | RES-16 | `wait` selector resolution, missing-target errors, attached-run warnings, and implicit waiting for the runs this process started (or every active run with `--all`) regardless of `ROTARI_PROJECT_NAME` | partial | `TestWaitMissingProjectIsAnError`, `TestWaitResolvesActiveAndFinishedSelectors`, `TestWaitReturnsCompletedRunExitCode`, `TestWaitWithoutActiveRunsIsNoOp`, `TestWaitWithoutSelectorWaitsAllProjectsDespiteProjectEnv`, `TestWaitWithoutSelectorWarnsAboutInterruptedRuns`, `TestWaitWarnsForAttachedRunTargetsAndFollowsThemImplicitly`, `TestWaitWithoutSelectorWaitsForRunsThisProcessStarted` |
 | RES-17 | Run lookup applies to history commands only | partial | `TestStateCreatingCommandsDoNotResolveRunIDs` |
 | RES-18 | `cancel`, `suspend`, and `resume` merge selectors and require the active run | conformance | `TestJobControlSelectors` |
@@ -148,6 +148,7 @@ the IDs, this table, and those calls disagree.
 | RES-26 | List commands ignore implicit location defaults; jobs/runs/projects scan known basedirs by default, and show requires a uniquely selected detail target | conformance | `TestAggregateCommandsIgnoreImplicitLocationDefaults` |
 | RES-27 | A carried job shows the log of the attempt that produced its result, however many carries back, in `show`, `--logs`, `--follow`, `/api/log`, the word cloud, and the run page | conformance | `TestCarriedJobLogsFollowEveryCarry` |
 | RES-28 | A missing basedir is told apart from an empty one: given to a read-only command it is a warning naming its source; registered and gone it is a warning, and missing in the Web UI; the implicit default before its first run is empty | conformance | `TestMissingGivenBasedirIsSaid`, `TestRemovedRegisteredBasedirIsReported` |
+| RES-29 | One run order (`last_run_id`, then the start in the run ID, then the coordinator's start for runs in the same second) for history without a run, `latest`, the last run after a delete, and the Web index and pages | conformance | `TestOneRunOrder` |
 | DUR-1 | Every executor runs jobs through the self-reporting wrapper | partial | `TestJobOutlivesKilledSupervisor`, `TestSSHJobReadsAsRunning` |
 | DUR-2 | The wrapper records status independently of its launcher | partial | `TestJobOutlivesKilledSupervisor` |
 | DUR-3 | An orphaned local job still records its own status | conformance | `TestJobOutlivesKilledSupervisor` |

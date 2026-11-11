@@ -184,7 +184,10 @@ func (editor Editor) deleteRun(paths state.ProjectPaths, runID string, dryRun bo
 		return err
 	}
 	if meta.LastRunID == runID {
-		meta.LastRunID = latestRunID(paths.RunsDir)
+		// The deleted run is gone, so the newest remaining run is next.
+		if meta.LastRunID, err = state.NewestRunID(paths); err != nil {
+			return err
+		}
 	}
 	meta.Phase = "collecting"
 	meta.UpdatedAt = nowRFC3339()
@@ -195,27 +198,6 @@ func (editor Editor) deleteRun(paths state.ProjectPaths, runID string, dryRun bo
 		return fmt.Errorf("failed to remove run %q attachment state: %w", runID, err)
 	}
 	return editor.UnregisterRun(runID)
-}
-
-func latestRunID(runsDir string) string {
-	entries, err := os.ReadDir(runsDir)
-	if err != nil {
-		return ""
-	}
-	latestID := ""
-	var latestTime time.Time
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil || (latestID != "" && !info.ModTime().After(latestTime)) {
-			continue
-		}
-		latestID = entry.Name()
-		latestTime = info.ModTime()
-	}
-	return latestID
 }
 
 func nowRFC3339() string {

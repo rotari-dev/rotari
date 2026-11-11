@@ -135,19 +135,17 @@ function enableTableSorting() {
     paginateTable(queueJobsTable, "queueJobs");
   }
 }
-function runOrderKey(run) {
-  const sample = run?.context?.load_samples?.[0];
-  return (sample && sample.at) || run.started_at || "";
+// orderedRuns is a project's runs newest first, in the order the server
+// sends (run_order, the shared run order); a run it does not list sorts last.
+function orderedRuns(q) {
+  const rank = new Map((q.run_order || []).map((id, index) => [id, index]));
+  const position = (run) =>
+    rank.has(run.run_id) ? rank.get(run.run_id) : Number.MAX_SAFE_INTEGER;
+  return (q.runs || []).slice().sort((a, b) => position(a) - position(b));
 }
-function latestRun(runs) {
-  return (runs || []).reduce((latest, run) => {
-    if (!latest) return run;
-    const key = runOrderKey(run);
-    const latestKey = runOrderKey(latest);
-    return key > latestKey || (key === latestKey && run.run_id > latest.run_id)
-      ? run
-      : latest;
-  }, null);
+// latestRun is the newest of a project's runs that the page holds.
+function latestRun(q) {
+  return orderedRuns(q)[0] || null;
 }
 function jobDisplayStatus(job, run) {
   if (job.execution_status) return job.execution_status;

@@ -287,9 +287,11 @@ function mergeWebIndex(index) {
           runs.set(runID, { ...runs.get(runID), ...detail });
         }
       }
-      project.runs = [...runs.values()].sort((a, b) =>
-        b.run_id.localeCompare(a.run_id),
-      );
+      project.run_order = indexed.run_order;
+      project.runs = orderedRuns({
+        runs: [...runs.values()],
+        run_order: indexed.run_order,
+      });
       return project;
     }),
   };
@@ -469,9 +471,7 @@ function toggleNotificationBasedir(checkbox) {
   window.refreshNotificationInbox?.();
 }
 function sidebarRunLinksHTML(q, isActive, activeRun, basedirID) {
-  const runs = (q.runs || [])
-    .slice()
-    .sort((a, b) => b.run_id.localeCompare(a.run_id));
+  const runs = orderedRuns(q);
   const runLinks = runs
     .map(
       (r) =>
@@ -1540,7 +1540,7 @@ function renderOverview(queues) {
     " running</span>";
   const rows = queues
     .map((q) => {
-      const latest = latestRun(q.runs);
+      const latest = latestRun(q);
       return (
         '<tr><td><a class="link project-name" href="/project/' +
         encodeURIComponent(q.project_name) +
@@ -1602,7 +1602,7 @@ function renderQueue(q) {
 // projectRunsHTML is a project page's runs: name over ID, status, client,
 // exit code, and times, with Path and Delete last in each row.
 function projectRunsHTML(q) {
-  const latest = latestRun(q.runs);
+  const latest = latestRun(q);
   const rows = q.runs
     .map(
       (r) =>
@@ -1781,7 +1781,7 @@ function renderRun(q, runID) {
       selectedAttemptByJob[q.project_name + "/" + runID + "/" + job.id];
     if (attemptID) selectJobAttemptFields(job, attemptID);
   });
-  const latest = latestRun(q.runs);
+  const latest = latestRun(q);
   const goToRun =
     run.cwd && run.cwd !== "-" ? ["cd " + shellQuote(run.cwd)] : [];
   const retry =

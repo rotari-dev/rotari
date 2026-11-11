@@ -19,7 +19,7 @@ Commit: `d9512117` (2026-11-11, plan only)
 
 ## Phase 1: survey and reproduce
 
-Commit: recorded with this entry (plan and work log only).
+Commit: `17cb01ea` (2026-11-11, plan and work log only).
 
 - **Change:** Added the Phase 1 results to [plan.md](plan.md). Corrected the
   D1 tie-break: the summary's `started_at` has second precision, so ties
@@ -40,3 +40,49 @@ Commit: recorded with this entry (plan and work log only).
   - PID identity: a local job controlled from
     `unshare --user --map-root-user --pid --fork --mount-proc`.
 - **Remaining:** Phases 2 to 5.
+
+## Phase 2: run order
+
+Commit: recorded with this entry (2026-11-12).
+
+- **Change:**
+  - Added `state.RunsNewestFirst` and `state.NewestRunID`
+    ([run_order.go](../../internal/state/run_order.go)), implementing D1.
+  - Moved `resolve.RunID`, `resolve.newestSettledRunID`, and `delete`'s new
+    last run onto it, replacing the directory-mtime rules.
+  - The Web loaders (`webRunIDs`, the index, full project state, history
+    search options, All shells' run count) use the shared order. The index
+    shows its two newest runs, and the Web API sends each project's
+    `run_order`.
+  - Removed a sixth rule found in this phase: the page's `latestRun` picked
+    by load sample or start time, and its run lists sorted by ID. Both now
+    follow `run_order` (`orderedRuns` in `web_app_tables.js`).
+  - `runs` falls back to the start in the run ID instead of the directory
+    time when a run has no recorded start.
+  - Defined the run ID format once: `state.NewRunID` and `state.RunIDStart`
+    replace `makeRunID`'s layout, `runIDLen` in `cmd/rotari`, and
+    `runlist.RunIDStart`.
+- **Reason:** Phase 2 of the plan, item 1.
+- **Plan impact:**
+  - Added RES-29 and pointed RES-12 and RES-15 at it.
+  - Documented the latest run in CONCEPTS.md, and the new files in
+    ARCHITECTURE.md.
+  - Moved the ISSUES.md item to Resolved.
+  - Decided here: a run directory whose name records no start sorts oldest,
+    by name. A `context.json` that cannot be read for a same-second tie is an
+    error naming the run.
+  - The history search's run options are now newest first; they were in
+    name order.
+- **Validation:**
+  - `TestRunsNewestFirst` and `TestRunIDStart` (unit).
+  - `TestOneRunOrder` (conformance, RES-29 and RES-15) fails on `17cb01ea`
+    with each Phase 1 finding, and passes now.
+  - `TestRunIDFallsBackToNewestRun` asserted the mtime rule. It now has
+    directory times opposite to start order.
+  - `go vet ./...`, `tsc`, `go test ./...`, `go test -race ./...`. The first
+    full run failed `TestReadCountsStayBounded` (`show`: 4 runs listings,
+    bound 3). `NewestRunID` now returns a recorded last run that exists
+    without listing, as `resolve.RunID` did; it is first in the order anyway.
+  - The ISSUES.md `bug-report` check was not run. It needs an independent
+    agent, which the user has not asked for in this session.
+- **Remaining:** Phases 3 and 4, each with its contracts and docs.

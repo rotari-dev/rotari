@@ -150,6 +150,14 @@ The `run-id` identifies a run and provides its project location. An
 `run-id`, so the command can resolve the same project location from the attempt
 alone.
 
+A run ID begins with the UTC second the run started, as in
+`20261112-030405-1a2b3c4d`. The latest run of a project, which commands use
+when you give no run, is the one the project last started. When that run
+has been deleted, it is the run that started last; runs begun in the same
+second are ordered by when they actually started. `latest` is the newest
+such run that has finished. The commands and the Web UI use this one order,
+whatever the runs' names or file times.
+
 `show` accepts a `RUN_ID`, `ATTEMPT_ID`,
 `JOB_ID`, or job name as its optional positional argument. The associated run,
 project, and basedir are resolved automatically when the selector identifies

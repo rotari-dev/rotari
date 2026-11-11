@@ -1509,18 +1509,16 @@ func (s site) loadWebIndexProject(baseDir, projectName string) (webprojection.Qu
 		project.RunnerHost = lock.Host
 		project.RunnerStartedAt = lock.StartedAt
 	}
-	ids, err := webRunIDs(paths.RunsDir)
+	ids, err := webRunIDs(paths)
 	if err != nil {
 		return webprojection.QueueState{}, err
 	}
 	project.RunCount = len(ids)
+	project.RunOrder = ids
 	project.Revision = webProjectRevision(paths)
 	selected := make(map[string]bool)
-	if len(ids) > 0 {
-		selected[ids[len(ids)-1]] = true
-	}
-	if len(ids) > 1 {
-		selected[ids[len(ids)-2]] = true
+	for _, runID := range ids[:min(2, len(ids))] {
+		selected[runID] = true
 	}
 	if project.RunningRunID != "" {
 		selected[project.RunningRunID] = true
@@ -1552,7 +1550,11 @@ func (s site) loadWebIndexProject(baseDir, projectName string) (webprojection.Qu
 			project.Runs = append(project.Runs, run)
 		}
 	}
-	sort.Slice(project.Runs, func(i, j int) bool { return project.Runs[i].RunID > project.Runs[j].RunID })
+	rank := make(map[string]int, len(ids))
+	for index, runID := range ids {
+		rank[runID] = index
+	}
+	sort.SliceStable(project.Runs, func(i, j int) bool { return rank[project.Runs[i].RunID] < rank[project.Runs[j].RunID] })
 	webprojection.FormatQueueDisplayTimes(&project)
 	return project, nil
 }
@@ -1604,11 +1606,12 @@ func (s site) loadWebProjectOverview(baseDir, projectName string) (webprojection
 		project.RunnerHost = lock.Host
 		project.RunnerStartedAt = lock.StartedAt
 	}
-	ids, err := webRunIDs(paths.RunsDir)
+	ids, err := webRunIDs(paths)
 	if err != nil {
 		return webprojection.QueueState{}, err
 	}
 	project.RunCount = len(ids)
+	project.RunOrder = ids
 	project.Revision = webProjectRevision(paths)
 	for _, runID := range ids {
 		run, loadErr := s.loadWebRunSummary(paths, runID, project)
@@ -1702,22 +1705,10 @@ func webProjectRevision(paths stateinternal.ProjectPaths) string {
 	return revision(paths.QueueFile) + "/" + revision(paths.RunsDir) + "/" + revision(paths.LockFile)
 }
 
-func webRunIDs(runsDir string) ([]string, error) {
-	entries, err := os.ReadDir(runsDir)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			ids = append(ids, entry.Name())
-		}
-	}
-	sort.Strings(ids)
-	return ids, nil
+// webRunIDs lists a project's runs newest first, in the shared run order
+// (state.RunsNewestFirst).
+func webRunIDs(paths stateinternal.ProjectPaths) ([]string, error) {
+	return stateinternal.RunsNewestFirst(paths)
 }
 
 func loadWebServerState(projectDir string) webprojection.ServerState {
@@ -2101,22 +2092,7 @@ func (s site) loadWebQueueState(paths stateinternal.ProjectPaths) (webprojection
 		Paths:       paths,
 		Queue:       func() (model.Queue, error) { return stateinternal.LoadQueue(paths.QueueFile) },
 		Lock:        func() (model.LockInfo, error) { return stateinternal.LoadLock(paths.LockFile) },
-		Runs: func() ([]string, error) {
-			entries, err := os.ReadDir(paths.RunsDir)
-			if os.IsNotExist(err) {
-				return nil, nil
-			}
-			if err != nil {
-				return nil, err
-			}
-			ids := make([]string, 0, len(entries))
-			for _, entry := range entries {
-				if entry.IsDir() {
-					ids = append(ids, entry.Name())
-				}
-			}
-			return ids, nil
-		},
+		Runs:        func() ([]string, error) { return webRunIDs(paths) },
 		Summary: func(runID string) (model.RunSummary, error) {
 			return stateinternal.LoadRunSummary(filepath.Join(paths.RunsDir, runID, "summary.json"))
 		},

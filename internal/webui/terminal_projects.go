@@ -78,7 +78,7 @@ func (s site) terminalLastRun(baseDir, projectName string) (int, *terminalLastRu
 	if err != nil {
 		return 0, nil, err
 	}
-	ids, err := webRunIDs(paths.RunsDir)
+	ids, err := webRunIDs(paths)
 	if err != nil || len(ids) == 0 {
 		return 0, nil, err
 	}

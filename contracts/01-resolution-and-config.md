@@ -118,6 +118,30 @@ scope; a separate `--all-basedirs` switch is not needed. Implementation:
 
 Other non-location option defaults remain applicable to aggregate views.
 
+**RES-29** There is one run order, decided once by `state.RunsNewestFirst`
+next to the run directory layout:
+
+- The newest run is `meta.json`'s `last_run_id` when it names a run
+  directory.
+- The others are ordered by the UTC start second in the run ID
+  (`YYYYMMDD-HHMMSS-XXXXXXXX`). Runs that share a second are ordered by when
+  their coordinator recorded itself (`recorded_at` in `context.json`), read
+  only for those runs; a run without it, from an earlier rotari, sorts by its
+  ID among them, after those that have it. A `context.json` that cannot be
+  read for this is an error naming the run.
+- A run directory whose name records no start is the oldest, by name.
+
+Directory modification times and the random tail of the ID play no part.
+The run that history commands use without `--run-id` (RES-15), `latest`
+(RES-12, the newest settled run in this order), the last run a `delete`
+leaves, the two runs the Web UI index shows, and the order of runs and the
+latest run on its pages all follow it; the Web API sends the order as each
+project's `run_order`. Implementation: [run_order.go](../internal/state/run_order.go);
+tests: [unit](../internal/state/run_order_test.go) and
+[built-binary conformance](../conformance/01-resolution/run_order_test.go).
+`runs` lists runs across projects by their recorded start time;
+for a run whose start it cannot read, it uses the start in the run ID.
+
 **RES-28** A basedir that does not exist is told apart from one that exists
 without projects, once, by `state.ProjectNames`; each reader decides what a
 missing basedir means for it:
@@ -160,7 +184,7 @@ Implemented by [internal/state/project_names.go](../internal/state/project_names
   IANA timezone from `TZ` when valid, otherwise Go's local timezone.
 - **RES-12** A supplied `--run-id` is exact, except that the reserved value `latest`
   selects the latest settled (completed, neither active nor interrupted) run
-  using the normal metadata/newest-directory fallback. `latest` is accepted wherever a
+  in the run order of RES-29. `latest` is accepted wherever a
   run is given, as `--run-id` or positionally; the exceptions are `unlock`,
   whose `--run-id` confirms the locked run, and `cancel`, `suspend`, and
   `resume`, which act on running jobs. It is reserved: `add`, `change`,
@@ -175,8 +199,8 @@ Implemented by [internal/state/project_names.go](../internal/state/project_names
   File-derived location defaults are not explicit registry constraints; their
   provenance is retained through CLI parsing. An unregistered run uses normal resolution for compatibility, while a missing
   explicit run is an error with no latest fallback.
-- **RES-15** Without `--run-id`, history consumers use `meta.json` `last_run_id`, then the
-  newest run directory where supported. `show` may prefer an active run,
+- **RES-15** Without `--run-id`, history consumers use the newest run in the
+  run order of RES-29: `meta.json` `last_run_id`, then the latest start. `show` may prefer an active run,
   an interrupted run, or a non-empty idle queue before history, and `export`
   picks a non-empty queue before the latest run; see
   [06-selectors.md](06-selectors.md) for the options that skip the queue.

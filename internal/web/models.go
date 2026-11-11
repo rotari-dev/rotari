@@ -97,17 +97,21 @@ type Attempt struct {
 }
 
 type QueueState struct {
-	QueueName       string               `json:"project_name"`
-	ConfigPath      string               `json:"config_path,omitempty"`
-	ConfigSources   []model.ConfigSource `json:"config_sources,omitempty"`
-	Queue           model.Queue          `json:"queue"`
-	Runs            []Run                `json:"runs"`
-	RunCount        int                  `json:"run_count"`
-	Revision        string               `json:"revision,omitempty"`
-	RunnerPID       int                  `json:"runner_pid,omitempty"`
-	RunningRunID    string               `json:"running_run_id,omitempty"`
-	RunnerHost      string               `json:"runner_host,omitempty"`
-	RunnerStartedAt string               `json:"runner_started_at,omitempty"`
+	QueueName     string               `json:"project_name"`
+	ConfigPath    string               `json:"config_path,omitempty"`
+	ConfigSources []model.ConfigSource `json:"config_sources,omitempty"`
+	Queue         model.Queue          `json:"queue"`
+	Runs          []Run                `json:"runs"`
+	RunCount      int                  `json:"run_count"`
+	// RunOrder is every run of the project, newest first, in the shared run
+	// order (state.RunsNewestFirst). Runs may hold only some of them; the
+	// page orders and picks the latest run by this list.
+	RunOrder        []string `json:"run_order,omitempty"`
+	Revision        string   `json:"revision,omitempty"`
+	RunnerPID       int      `json:"runner_pid,omitempty"`
+	RunningRunID    string   `json:"running_run_id,omitempty"`
+	RunnerHost      string   `json:"runner_host,omitempty"`
+	RunnerStartedAt string   `json:"runner_started_at,omitempty"`
 	// Server is the persisted record of the project's supervisor, which
 	// exists only while a run is starting or active.
 	Server ServerState `json:"server"`

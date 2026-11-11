@@ -20,8 +20,6 @@ const FinalResultFileName = "final_result.json"
 // discovery information, not no associated files.
 const ArtifactsFileName = "artifacts.json"
 
-const runIDLength = len("20060102-150405-00000000")
-
 type AttemptIDPayload struct {
 	RunID  string
 	JobID  string
