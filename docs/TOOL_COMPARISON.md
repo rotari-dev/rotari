@@ -175,6 +175,13 @@ What separates rotari from all of them:
   every run is started by a person or an agent through the CLI, Python client,
   or API. The Web UI can inspect and control runs, but does not turn rotari
   into an event-driven workflow engine.
+- **No adaptive search.** Grid and random sweeps are a fixed set of jobs,
+  which rotari's matrix and array jobs run. Searches such as Bayesian
+  optimization, Hyperband, or early stopping decide the next trials from
+  earlier results, the same kind of decision a workflow engine makes; rotari
+  leaves it to the caller or to a tool such as W&B Sweeps or Polyaxon, which
+  also has DAGs and cron schedules on Kubernetes (see
+  [Experiment trackers](#experiment-trackers)).
 - **No service to operate.** There is no resident server or database, and
   on a cluster the site's scheduler does the placement and resource
   allocation.
@@ -201,6 +208,9 @@ through their library, and their UI compares runs. They answer "which
 settings gave the best result"; rotari answers "what ran, where, and what
 failed". Most of them do not run your commands, and rotari does not read
 metrics, so the two are used together rather than instead of each other.
+The Polyaxon entries are based on a clone of
+[polyaxon](https://github.com/polyaxon/polyaxon) (2026-11-10, v2.20.1),
+taken on 2026-11-11.
 
 | | Records | How data gets there | Where data lives | Runs jobs itself |
 | --- | --- | --- | --- | --- |
@@ -208,6 +218,7 @@ metrics, so the two are used together rather than instead of each other.
 | [Aim](https://aimstack.io/) | parameters, metrics, images, and other objects | the job's code calls its SDK or a framework integration | a local repository, optionally behind a tracking server | no |
 | [Weights & Biases](https://wandb.ai/) | parameters, metrics, artifacts, models | the job's code calls its SDK | a hosted service or a self-hosted server | `wandb agent` runs sweep trials the server hands out |
 | [ClearML](https://clear.ml/) | experiments, metrics, artifacts, models, datasets | the job's code calls its SDK, with automatic logging | a ClearML server, hosted or self-hosted | ClearML Agent runs queued tasks on workers |
+| [Polyaxon](https://polyaxon.com/) | parameters, metrics, artifacts, logs, lineage | the job's code calls its tracking client | a Polyaxon server: PostgreSQL, with artifacts in object storage or NFS | on Kubernetes: Polyaxonfile jobs, DAGs, schedules, and hyperparameter searches; a pip or Docker Compose install tracks only |
 | [TensorBoard](https://www.tensorflow.org/tensorboard) | scalars, images, graphs, and other summaries | the job writes event files | event files on disk | no |
 | rotari | each job's command, status, attempts, logs, and artifact paths | rotari runs the job; no code changes | files in the basedir | yes: local, SSH, Slurm, PBS, LSF, SGE |
 
@@ -229,14 +240,16 @@ How they fit together:
   for the default locations, run tags, and storage trade-offs.
 - **Sweeps.** Rotari's matrix and array jobs run parameter sweeps on any
   backend and keep each trial's logs and status; the tracker compares their
-  results. W&B Sweeps and ClearML's agents instead decide trials themselves
-  and run them on their own workers, which suits search strategies such as
-  Bayesian optimization that choose the next trial from earlier results.
+  results. W&B Sweeps, ClearML's agents, and Polyaxon's matrix searches
+  instead decide trials themselves and run them on their own workers, which
+  suits search strategies such as Bayesian optimization that choose the next
+  trial from earlier results.
 - **Shared storage.** Many parallel jobs writing one SQLite database over a
   network file system risk lock errors, since SQLite's locking is unreliable
   there. Consider a file store, per-job stores, or a tracking server, and test
   the choice under the expected concurrency.
 
 Choose a tracker for comparing metrics and managing models; keep rotari for
-running the jobs that produce them. Consider ClearML's agents or W&B Sweeps
-instead of rotari when the tracker should also decide and dispatch the runs.
+running the jobs that produce them. Consider ClearML's agents, W&B Sweeps, or
+Polyaxon instead of rotari when the tracker should also decide and dispatch
+the runs.
