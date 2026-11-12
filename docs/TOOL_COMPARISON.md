@@ -12,7 +12,7 @@ first part is based on clones of
 (2026-01-14), taken on 2026-09-27, and on the
 [GNU Parallel manual](https://www.gnu.org/software/parallel/man.html).
 
-## Summary
+## Batch job tools
 
 Rotari belongs with these tools, while also offering a small manifest format
 and a Python client for constructing and inspecting batches. Like them, it
@@ -31,8 +31,6 @@ without turning rotari into a workflow engine.
 | submitit | a Python function call | Slurm, local | resubmit from Python | job folders |
 | `sbatch --array`, `queue.pl` | a script and an index | one scheduler | resubmit chosen indices | scheduler accounting |
 | rotari | a job in a queue, run as a batch | local, SSH, Slurm, PBS, LSF, SGE | `run --retry`, `retry`, or manifest/fingerprint matching can reuse or rerun selected work | every run, with lineage across related runs |
-
-## Tool by tool
 
 ### Shell background jobs
 
@@ -106,7 +104,7 @@ exists only in the script: finding the failed indices, resubmitting them, and
 keeping track of what changed between attempts is manual, and the script is
 tied to one scheduler.
 
-## Where rotari differs
+### Where rotari differs
 
 - **The run is the unit of history.** Every run keeps its commands and each
   job's status and logs, so `show` answers what ran and what failed long
