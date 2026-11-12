@@ -33,6 +33,14 @@ are not part of the `rotari` command-line interface. Runnable samples are in
   the MkDocs build.
 - `sync_readme.py`: synchronize `docs/GETTING_STARTED.md` into the GitHub README.
 
+## Testing
+
+- `flake-repeat.sh PACKAGE TEST_REGEX`: run one Go test many times under CPU
+  contention to reproduce an intermittent failure. The test, its child
+  processes, and busy loops share a few CPUs (`--cpus`, default `0-3`) at
+  nice 19, so other users of a shared machine are not slowed; failing
+  output is kept. See `--help`.
+
 Run `python3 scripts/sync_readme.py --check` to verify that the README is in
 sync with the Getting Started guide.
 

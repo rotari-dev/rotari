@@ -1,7 +1,8 @@
 # Test-suite flakiness
 
-Created 2026-11-12. Status: planned; decisions D1 to D4 settled with the
-user on 2026-11-12, each with the recommended option. Phase 1 is next.
+Created 2026-11-12. Status: Phase 1 done; decisions D1 to D4 settled with the
+user on 2026-11-12, each with the recommended option (D1 amended to
+confine the load to a few CPUs). Next: a whole-package round, then Phase 2.
 
 ## Purpose
 
@@ -86,6 +87,12 @@ These are hypotheses for Phase 1 to test, not conclusions.
   that the recurrences saw. It records each failure's output and keeps its
   temporary state. The alternative is repeating the full suite, which is
   slower and does not say which test is at fault.
+
+  Amended with the user on 2026-11-12: the development machine is shared
+  (56 CPUs, nine users), so the load is not machine-wide. The test, the
+  processes it starts, and the busy loops are confined with `taskset` to a
+  few CPUs (default 0-3) at nice 19, and the contention is made inside that
+  set. The tool is [scripts/flake-repeat.sh](../../scripts/flake-repeat.sh).
 - **D2. What "fixed" means.** Recommended:
   - The cause is shown by a reproduction that fails before the change and
     passes after it.
