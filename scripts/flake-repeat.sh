@@ -11,6 +11,7 @@
 #   --parallel N   test processes at a time (default 2)
 #   --cpus LIST    taskset CPU list (default 0-3)
 #   --load N       busy loops per CPU in LIST (default 2; 0 for none)
+#   --skip REGEX   pass -test.skip REGEX, to leave out a known failure
 #   --race         build the test binary with -race
 #   --out DIR      keep output in DIR (default: a new directory under $TMPDIR)
 #
@@ -25,6 +26,7 @@ parallel=2
 cpus=0-3
 load=2
 race=false
+skip=""
 out=""
 keep_passing=false
 
@@ -39,6 +41,7 @@ while (($# > 0)); do
     --parallel) parallel=$2 && shift 2 ;;
     --cpus) cpus=$2 && shift 2 ;;
     --load) load=$2 && shift 2 ;;
+    --skip) skip=$2 && shift 2 ;;
     --race) race=true && shift ;;
     --out) out=$2 && shift 2 ;;
     --keep-passing) keep_passing=true && shift ;;
@@ -95,7 +98,7 @@ done
 {
     echo "commit:   $(cd "$root" && jj log -r @- --no-graph -T 'commit_id.short() ++ " " ++ description.first_line()' 2>/dev/null || echo unknown)"
     echo "package:  $package"
-    echo "test:     $pattern"
+    echo "test:     $pattern${skip:+ (skip $skip)}"
     echo "runs:     $runs x count $count, $parallel at a time"
     echo "cpus:     $cpus ($cpu_count), busy loops $((load * cpu_count)), race $race"
     echo "started:  $(date -u +%FT%TZ)"
@@ -106,7 +109,7 @@ run_one() {
     mkdir -p "$tmp"
     local code=0
     (cd "$package_dir" && TMPDIR=$tmp taskset -c "$cpus" nice -n 19 \
-        "$binary" -test.run "$pattern" -test.count "$count" -test.v -test.timeout 30m) >"$log" 2>&1 || code=$?
+        "$binary" -test.run "$pattern" ${skip:+-test.skip "$skip"} -test.count "$count" -test.v -test.timeout 30m) >"$log" 2>&1 || code=$?
     echo "exit $code" >>"$log"
     rm -rf "$tmp"
     if [[ "$code" == 0 && "$keep_passing" != true ]]; then

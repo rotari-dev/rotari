@@ -23,7 +23,7 @@ Commit: `65b28ecb` (2026-11-12, plan only).
 
 ## Phase 1: measure
 
-Commit: recorded with this entry (2026-11-12).
+Commit: `7180a200` (2026-11-12).
 
 - **Change:** Added [scripts/flake-repeat.sh](../../scripts/flake-repeat.sh),
   the D1 repeat runner, and measured each item with it. Amended D1 with the
@@ -78,3 +78,50 @@ Commit: recorded with this entry (2026-11-12).
 - **Validation:** the measurements above. Raw output was kept in the
   session scratchpad, not in the repository.
 - **Remaining:** whole-package round; Phases 2 to 4.
+
+## Phase 3, first group: F1, the SSH start delay
+
+Commit: recorded with this entry (2026-11-12).
+
+- **Change:** taken ahead of Phase 2 with the user, because the cause is in
+  the product.
+  - [internal/executor/ssh.go](../../internal/executor/ssh.go): the remote
+    wrapper calls `cleanup_old_state` in the background after the job has
+    started and recorded its process, and waits for it before exiting.
+    `find -mindepth 1 -maxdepth 1 -type d -mmin +43200` selects the expired
+    token directories, so retained ones are not examined; `id -u` and the
+    process-group table are read once. In a subshell, the cleanup can no
+    longer overwrite the wrapper's `remote_pid`. The pruning rule (30 days,
+    and only when the recorded group is absent) is unchanged.
+  - `TestSSHWrapperStartsTheJobBeforePruning` (unit): a `stat` on `PATH`
+    logs each token directory examined and whether the job's `process`
+    record existed then.
+  - `TestSSHJobReadsAsRunning` (conformance): the loopback sshd sets
+    `XDG_RUNTIME_DIR` to the test's directory (`SetEnv`), so tests no longer
+    leave token directories in the user's `/tmp/rotari-UID`; the test seeds
+    5000 retained directories and checks they are kept. Its `show` loop now
+    waits for `running (recorded)` instead of taking the first status after
+    `pending`.
+  - SAFE-16 note, [ARCHITECTURE.md](../../docs/ARCHITECTURE.md), and
+    [OPERATIONS.md](../../docs/OPERATIONS.md) say pruning follows the start
+    and examines only expired state. No CLI, Web, or Python client change.
+- **Reason:** Phase 1 found the delay. Fixing the delay alone left 12 of 30
+  failures under load, all `show --json job = unknown`: a dispatched attempt
+  reads `unknown` until `Submit` records the running phase, as
+  `DisplayStatus` defines, and the fixture kept that first snapshot. That is
+  the symptom of all three recorded recurrences.
+- **Plan impact:** F1 resolved, with both causes shown. `scripts/flake-repeat.sh`
+  gained `--skip`, for the whole-package round.
+- **Validation:**
+  - Repeat runner, CPUs 0-3, two busy loops per CPU, `-race`, 10 x 3:
+    30 of 30 failed at `7180a200`; 18 of 30 passed with the product fix
+    alone; 30 of 30 passed with both.
+  - At `7180a200` in a temporary workspace: the unit test fails (both
+    directories examined, before the record); the conformance test fails
+    with `info ... State:unknown`. Both pass after the fix; the conformance
+    test takes 1.8 s instead of over 20 s.
+  - The user's `/tmp/rotari-UID` held 893 entries before and after a run of
+    the SSH conformance tests.
+  - `go vet`, the Web UI type check, `go test ./...`, `go test -race ./...`:
+    all passed (the race step included the conformance contract table).
+- **Remaining:** whole-package round (running); Phase 2; F9; Phase 4.

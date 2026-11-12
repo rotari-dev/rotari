@@ -315,6 +315,8 @@ remote_pid=$!
 if remote_start=$(read_start_time "$remote_pid"); then
 	printf '%s %s\n' "$remote_pid" "$remote_start" > "$state_dir/process.tmp" && mv "$state_dir/process.tmp" "$state_dir/process"
 fi
+cleanup_old_state </dev/null >/dev/null 2>&1 &
+cleanup_pid=$!
 watchdog_pid=
 ` + sshTimeoutWatchdog(model.TimeoutSeconds(timeout)) + `wait "$remote_pid"
 exit_code=$?
@@ -324,17 +326,25 @@ if [ -f "$state_dir/timed_out" ]; then
 	exit_code=` + fmt.Sprint(TimeoutExitCode) + `
 fi
 printf '%s\n' "$exit_code" > "$state_dir/finished.tmp" && mv "$state_dir/finished.tmp" "$state_dir/finished"
+wait "$cleanup_pid"
 exit "$exit_code"
 `
 	return script
 }
 
+// sshRemoteStateCleanupScript defines cleanup_old_state, which removes token
+// directories older than retention whose recorded process group is gone. The
+// wrapper runs it in the background after the job has started and recorded
+// its process, so pruning never delays a job. find selects the expired
+// directories in one pass: the directories retained cost nothing, however
+// many SSH jobs ran on the host within the retention.
 func sshRemoteStateCleanupScript(retention time.Duration) string {
 	return `cleanup_old_state() {
-		[ -r /proc/self/stat ] || return
-		now=$(date +%s) || return
-	cutoff=$((now - ` + strconv.FormatInt(int64(retention.Seconds()), 10) + `))
-	for candidate in "$state_root"/*; do
+	[ -r /proc/self/stat ] || return
+	uid=$(id -u) || return
+	process_groups_read=
+	find "$state_root" -mindepth 1 -maxdepth 1 -type d -mmin +` + strconv.FormatInt(int64(retention.Minutes()), 10) + ` 2>/dev/null |
+	while IFS= read -r candidate; do
 		[ -d "$candidate" ] && [ ! -L "$candidate" ] || continue
 		token=${candidate##*/}
 		[ "${#token}" -eq 32 ] || continue
@@ -342,10 +352,7 @@ func sshRemoteStateCleanupScript(retention time.Duration) string {
 		[ "$candidate" != "$state_dir" ] || continue
 		owner=$(stat -c %u "$candidate" 2>/dev/null) || continue
 		mode=$(stat -c %a "$candidate" 2>/dev/null) || continue
-		[ "$owner" = "$(id -u)" ] && [ "$mode" = "700" ] || continue
-		modified=$(stat -c %Y "$candidate" 2>/dev/null) || continue
-		case "$modified" in *[!0-9]*) continue ;; esac
-		[ "$modified" -le "$cutoff" ] || continue
+		[ "$owner" = "$uid" ] && [ "$mode" = "700" ] || continue
 		[ -f "$candidate/process" ] && [ ! -L "$candidate/process" ] || continue
 		read remote_pid recorded_start extra < "$candidate/process" || continue
 		case "$remote_pid:$recorded_start" in *[!0-9:]*|:*|*:) continue ;; esac
@@ -363,14 +370,16 @@ func sshRemoteStateCleanupScript(retention time.Duration) string {
 				fi
 			fi
 		fi
-		process_groups=$(ps -eo pgid=,stat= 2>/dev/null) || continue
+		if [ -z "$process_groups_read" ]; then
+			process_groups=$(ps -eo pgid=,stat= 2>/dev/null) || continue
+			process_groups_read=1
+		fi
 		if printf '%s\n' "$process_groups" | awk -v pgid="$remote_pid" '$1 == pgid && $2 !~ /^[ZX]/ { found=1 } END { exit !found }'; then
 			continue
 		fi
 		rm -rf "$candidate"
 	done
 }
-cleanup_old_state
 `
 }
 

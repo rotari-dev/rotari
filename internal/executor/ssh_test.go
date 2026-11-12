@@ -231,6 +231,76 @@ func TestSSHWrapperPrunesOldStoppedRemoteState(t *testing.T) {
 	}
 }
 
+// The wrapper starts the job and records its process before it prunes, and
+// pruning examines only directories past the retention, so retained state
+// never delays a job however much of it a host has (F1 in the test-flakiness
+// plan: 891 retained directories delayed each start by 5 to 45 seconds).
+func TestSSHWrapperStartsTheJobBeforePruning(t *testing.T) {
+	realStat, err := exec.LookPath("stat")
+	if err != nil {
+		t.Skipf("stat not found: %v", err)
+	}
+	runtimeDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	stateRoot := filepath.Join(runtimeDir, "rotari-"+fmt.Sprint(os.Getuid()))
+	if err := os.Mkdir(stateRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	makeState := func(token string, modified time.Time) string {
+		dir := filepath.Join(stateRoot, token)
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		// A PID above the kernel's limit names no process.
+		if err := os.WriteFile(filepath.Join(dir, "process"), []byte("1073741824 1\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(dir, modified, modified); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+	expiredToken, retainedToken, newToken := "0123456789abcdef0123456789abcdef", "00112233445566778899aabbccddeeff", "abcdef0123456789abcdef0123456789"
+	expiredDir := makeState(expiredToken, time.Now().Add(-sshRemoteStateRetention-time.Minute))
+	retainedDir := makeState(retainedToken, time.Now().Add(-time.Hour))
+
+	// stat reports each token directory the wrapper examines, and whether
+	// the new job's process was recorded by then.
+	binDir, logPath := t.TempDir(), filepath.Join(t.TempDir(), "examined")
+	writeExecutable(t, binDir, "stat", fmt.Sprintf(`#!/bin/sh
+for arg in "$@"; do
+	case "$arg" in
+	%[1]s/*)
+		if [ -f %[2]s ]; then when=recorded; else when=unrecorded; fi
+		printf '%%s %%s\n' "${arg##*/}" "$when" >> %[3]s ;;
+	esac
+done
+exec %[4]s "$@"
+`, ShellQuote(stateRoot), ShellQuote(filepath.Join(stateRoot, newToken, "process")), ShellQuote(logPath), ShellQuote(realStat)))
+	cmd := exec.Command("sh", "-c", sshWrapperScript([]string{"sleep", "0.2"}, nil, "", newToken, ""))
+	cmd.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("SSH wrapper failed: %v: %s", err, output)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	examined := string(data)
+	if strings.Contains(examined, retainedToken) {
+		t.Errorf("pruning examined a directory within the retention:\n%s", examined)
+	}
+	if !strings.Contains(examined, expiredToken+" recorded") || strings.Contains(examined, "unrecorded") {
+		t.Errorf("pruning must examine the expired directory only after the job's process is recorded:\n%s", examined)
+	}
+	if _, err := os.Stat(expiredDir); !os.IsNotExist(err) {
+		t.Errorf("expired stopped state remains: %v", err)
+	}
+	if _, err := os.Stat(retainedDir); err != nil {
+		t.Errorf("retained state was pruned: %v", err)
+	}
+}
+
 func TestSSHCancelRefusesReusedPID(t *testing.T) {
 	remoteDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", remoteDir)

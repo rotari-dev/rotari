@@ -312,7 +312,8 @@ queries that token over SSH and checks `/proc` plus the process-group table;
 missing token state or failed/ambiguous remote process queries remain
 unknown. Remote state is retained for 30 days and pruned only by a later SSH
 wrapper when the matching process group is absent; active or unverifiable
-groups are retained. Descendants that leave the recorded group, for example
+groups are retained. The wrapper prunes after its job has started and looks
+only at expired state, so retained state does not delay jobs. Descendants that leave the recorded group, for example
 with `setsid`, are outside the probe's scope. The remote runtime directory may
 also be cleared by the host, which safely degrades the evidence to unknown.
 

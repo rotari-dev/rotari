@@ -379,6 +379,9 @@ A project is in one of three states, derived from `running.lock` and
   scope. Remote token state is
   retained for 30 days and pruned on a later SSH wrapper only when the
   recorded process group is absent; active or unverifiable groups are kept.
+  The wrapper prunes after its job has started and recorded its process, and
+  examines only state past the retention, so retained state never delays a
+  job's start, however many SSH jobs ran on the host.
   For both finalization and ordinary release, active execution refuses with
   `execution_active` even with attestation; unknown refuses with
   `execution_unknown` unless attested; all stopped units need no execution
@@ -399,6 +402,12 @@ A project is in one of three states, derived from `running.lock` and
   [conformance/03-interfaces/unlock_test.go](../conformance/03-interfaces/unlock_test.go)
   check CLI/MCP parity, unoverridable activity, terminal/live conflicts,
   verified stopped repair, unknown legacy evidence and read-only previews.
+  `TestSSHJobReadsAsRunning` in
+  [conformance/02-lifecycle/ssh_executor_test.go](../conformance/02-lifecycle/ssh_executor_test.go)
+  checks a loopback SSH job's active evidence on a host holding thousands of
+  retained token directories, and that they are kept; the pruning order is
+  checked by `TestSSHWrapperStartsTheJobBeforePruning` in
+  [internal/executor/ssh_test.go](../internal/executor/ssh_test.go).
 - **SAFE-8** While a project is running or interrupted, `add`, `copy`,
   `change`, `remove`, `import`, and `reset` edit the queue for the next run,
   since the run took its own jobs when it started (CORE-3). They leave the

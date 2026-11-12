@@ -97,7 +97,8 @@ flowchart LR
   removes execution attestation. Unknown/unsupported evidence remains
   explicit. Process-group and scheduler scopes are not machine-wide audits.
   SSH state is retained for 30 days and safely pruned only when no matching
-  process group remains. Both finalization and ordinary release use the
+  process group remains; the remote wrapper prunes in the background after
+  its job has started, examining only expired state. Both finalization and ordinary release use the
   execution assessment; stale snapshots are rejected after lock reacquisition.
 - **Web server.** `rotari web` ([cmd/rotari/web.go](../cmd/rotari/web.go) parses flags; [internal/webui](../internal/webui/) serves).
    It lists registered basedirs and lightweight project/run metadata, checks

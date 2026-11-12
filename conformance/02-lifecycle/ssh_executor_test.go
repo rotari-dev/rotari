@@ -32,7 +32,9 @@ func sshLoopback(t *testing.T, root string) []string {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(root, "ssh")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	// The remote side keeps its token state under XDG_RUNTIME_DIR, which
+	// sshd sets to a directory of the test, not the user's shared one.
+	if err := os.MkdirAll(filepath.Join(dir, "runtime"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	for _, key := range []string{"host_key", "client_key"} {
@@ -57,7 +59,8 @@ StrictModes no
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PubkeyAuthentication yes
-`, filepath.Join(dir, "host_key"), filepath.Join(dir, "authorized_keys")),
+SetEnv XDG_RUNTIME_DIR=%s
+`, filepath.Join(dir, "host_key"), filepath.Join(dir, "authorized_keys"), filepath.Join(dir, "runtime")),
 		"config": fmt.Sprintf(`Host rotari-ssh-test
   User %s
   IdentityFile %s
@@ -78,6 +81,31 @@ PubkeyAuthentication yes
 		t.Skipf("loopback SSH session unavailable: %v: %s", err, out)
 	}
 	return []string{"rotari-ssh-test", "-F " + filepath.Join(dir, "config")}
+}
+
+// sshRemoteStateRoot is where the remote side of sshLoopback keeps its
+// token state.
+func sshRemoteStateRoot(root string) string {
+	return filepath.Join(root, "ssh", "runtime", fmt.Sprintf("rotari-%d", os.Getuid()))
+}
+
+// seedRetainedRemoteState fills the remote state root with count token
+// directories within the retention, as a host that ran many SSH jobs has.
+func seedRetainedRemoteState(t *testing.T, root string, count int) {
+	t.Helper()
+	stateRoot := sshRemoteStateRoot(root)
+	for index := 0; index < count; index++ {
+		dir := filepath.Join(stateRoot, fmt.Sprintf("%032x", index+1))
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "finished"), []byte("0\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Chmod(stateRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // A job run through the SSH executor in a real run, which gives every job an
@@ -108,11 +136,15 @@ func TestSSHExecutorRunsAJob(t *testing.T) {
 
 // A job running through the SSH executor reads as running
 // in show and the Web API, as a local job does, rather than as unknown, and
-// info finds its remote process group active.
+// info finds its remote process group active. The host holds thousands of
+// retained token directories, which must not delay the job's start: pruning
+// runs after the job has started and examines only expired state (SAFE-16).
 func TestSSHJobReadsAsRunning(t *testing.T) {
 	covers(t, "DUR-1", "SAFE-16")
 	e := support.NewEnv(t)
 	options := sshLoopback(t, e.Root)
+	const retained = 5000
+	seedRetainedRemoteState(t, e.Root, retained)
 	args := []string{"add", "-p", "remote", "-e", "ssh"}
 	for _, option := range options {
 		args = append(args, "--executor-option="+option)
@@ -130,15 +162,18 @@ func TestSSHJobReadsAsRunning(t *testing.T) {
 			Status string `json:"status"`
 		} `json:"jobs"`
 	}
+	// A dispatched attempt reads as unknown until Submit records the running
+	// phase once ssh has started (DisplayStatus); wait for that record
+	// rather than taking the first status after pending.
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		shown.RunID, shown.Jobs = "", nil
 		_ = json.Unmarshal([]byte(e.Rotari("show", "-p", "remote", "--json").Stdout), &shown)
-		if shown.RunID != "" && len(shown.Jobs) == 1 && shown.Jobs[0].Status != "pending" {
+		if shown.RunID != "" && len(shown.Jobs) == 1 && shown.Jobs[0].Status == "running (recorded)" {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("SSH job was never dispatched: %+v", shown)
+			t.Fatalf("SSH job never read as running (recorded); last show --json: %+v", shown)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -184,5 +219,9 @@ func TestSSHJobReadsAsRunning(t *testing.T) {
 	}
 	if len(detail.Jobs) != 1 || detail.Jobs[0].ExecutionStatus != "running (recorded)" {
 		t.Errorf("Web API jobs = %+v, want %s running (recorded)", detail.Jobs, jobID)
+	}
+	// Retained state is kept: the seeded directories and this job's.
+	if entries, err := os.ReadDir(sshRemoteStateRoot(e.Root)); err != nil || len(entries) != retained+1 {
+		t.Errorf("remote state root holds %d entries (%v), want the %d retained and this job's", len(entries), err, retained)
 	}
 }
