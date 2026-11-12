@@ -100,7 +100,8 @@ export async function launchChrome(chrome) {
       `--user-data-dir=${profile}`,
       "about:blank",
     ],
-    { stdio: "ignore" },
+    // Its own process group, so that close stops Chrome's helpers too.
+    { stdio: "ignore", detached: true },
   );
   const portFile = join(profile, "DevToolsActivePort");
   // The file can exist before Chrome has written to it, so what counts is its
@@ -122,11 +123,39 @@ export async function launchChrome(chrome) {
     cdp,
     async close() {
       cdp.close();
-      browser.kill();
-      await sleep(300);
+      await stopProcessGroup(browser.pid);
       rmSync(profile, { recursive: true, force: true });
     },
   };
+}
+
+// stopProcessGroup ends the process group pgid leads, Chrome and the helpers
+// it started, and returns once none of them is left: Chrome writes its
+// profile while it shuts down, so removing the profile any earlier failed
+// with ENOTEMPTY on a loaded host. SIGKILL follows after ten seconds.
+async function stopProcessGroup(pgid) {
+  const signal = (name) => {
+    try {
+      process.kill(-pgid, name);
+      return true;
+    } catch (error) {
+      if (error.code === "ESRCH") return false;
+      throw error;
+    }
+  };
+  const waitGone = async () => {
+    for (let i = 0; i < 100; i++) {
+      if (!signal(0)) return true;
+      await sleep(100);
+    }
+    return !signal(0);
+  };
+  signal("SIGTERM");
+  if (await waitGone()) return;
+  signal("SIGKILL");
+  if (!(await waitGone())) {
+    throw new Error(`Chrome's process group ${pgid} survived SIGKILL`);
+  }
 }
 
 // withPage opens url at the given viewport and colour scheme, waits for the

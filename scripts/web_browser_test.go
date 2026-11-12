@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -64,5 +65,70 @@ func TestLaunchChromeWaitsForDevToolsPortContents(t *testing.T) {
 	}
 	if output, err := exec.Command(node, "--input-type=module", "-e", launchCheck, helper, chrome).CombinedOutput(); err != nil {
 		t.Fatalf("launching: %v\n%s", err, output)
+	}
+}
+
+// slowExitChrome is ready at once and, on SIGTERM, keeps writing into its
+// profile for a second before it exits, as Chrome does while it shuts down.
+// It records its profile and PID in $FAKE_RECORD.
+const slowExitChrome = `#!/bin/sh
+for argument in "$@"; do
+  case "$argument" in
+    --user-data-dir=*) profile="${argument#*=}" ;;
+  esac
+done
+printf '%s\n%s\n' "$profile" "$$" > "$FAKE_RECORD"
+printf '%s\n/devtools/browser/fake' "$FAKE_DEVTOOLS_PORT" > "$profile/DevToolsActivePort"
+stopping=
+trap 'stopping=1' TERM
+while [ -z "$stopping" ]; do sleep 0.05; done
+i=0
+while [ "$i" -lt 20 ]; do
+  mkdir -p "$profile/Default" && : > "$profile/Default/late-$i"
+  i=$((i + 1))
+  sleep 0.05
+done
+`
+
+// TestCloseWaitsForTheBrowserToExit covers a browser still writing its
+// profile after SIGTERM: close must return only once the browser has exited
+// and its profile is removed. A fixed 300 ms wait failed browser checks in
+// CI with ENOTEMPTY while removing the profile.
+func TestCloseWaitsForTheBrowserToExit(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil || exec.Command(node, "-e", `if (typeof WebSocket !== "function") process.exit(1)`).Run() != nil {
+		if os.Getenv("ROTARI_REQUIRE_BROWSER_TESTS") != "" {
+			t.Fatal("launching the browser needs Node 22 or later")
+		}
+		t.Skip("launching the browser needs Node 22 or later")
+	}
+	helper, err := filepath.Abs("web-browser.mjs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	chrome, record := filepath.Join(dir, "chrome"), filepath.Join(dir, "record")
+	if err := os.WriteFile(chrome, []byte(slowExitChrome), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command(node, "--input-type=module", "-e", launchCheck, helper, chrome)
+	command.Env = append(os.Environ(), "FAKE_RECORD="+record)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("launching and closing: %v\n%s", err, output)
+	}
+	data, err := os.ReadFile(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) != 2 {
+		t.Fatalf("record = %q", data)
+	}
+	profile, pid := fields[0], fields[1]
+	if _, err := os.Stat(filepath.Join("/proc", pid)); err == nil {
+		t.Errorf("close returned while the browser (PID %s) still ran", pid)
+	}
+	if _, err := os.Stat(profile); !os.IsNotExist(err) {
+		t.Errorf("the profile %s remains after close: %v", profile, err)
 	}
 }

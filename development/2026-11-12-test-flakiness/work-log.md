@@ -212,7 +212,7 @@ Commit: `bf6d94a2` (2026-11-12).
 
 ## Phase 4: close
 
-Commit: recorded with this entry (2026-11-12).
+Commit: `e46c30f8` (2026-11-12).
 
 - **Whole-package round** (CPUs 0-3, two busy loops per CPU, nice 19, at
   `7180a200` in a separate workspace; counts are top-level tests):
@@ -254,3 +254,24 @@ Commit: recorded with this entry (2026-11-12).
 - **Validation:** documentation only for this entry; the code changes were
   validated in the entries above.
 - **Remaining:** none in this plan. Nothing is pushed.
+
+## After closing: a browser check failed in CI
+
+Commit: recorded with this entry (2026-11-13).
+
+- **Change:** `launchChrome` in
+  [scripts/web-browser.mjs](../../scripts/web-browser.mjs) starts Chrome in
+  its own process group, and `close` waits until the group is gone before it
+  removes the profile, instead of sleeping 300 ms.
+  `TestCloseWaitsForTheBrowserToExit` covers it with a fake browser that
+  writes its profile for a second after SIGTERM.
+- **Reason:** the user supplied the CI log of
+  `TestStoredValuesStayTextInBrowser/html` (the plan had left CI-only
+  browser failures out unless logs were supplied). Every page check had
+  passed; removing the profile failed with `ENOTEMPTY`. The log also shows
+  Phase 2 working in CI: the harness kept the state and transcript.
+- **Validation:** the new test fails at `e46c30f8` and passes after;
+  `TestLaunchChromeWaitsForDevToolsPortContents` still passes; `go vet
+  ./scripts`. The real browser tests need headless Chrome, which this
+  machine lacks, so they run only in CI.
+- **Remaining:** see whether the next CI run passes.
