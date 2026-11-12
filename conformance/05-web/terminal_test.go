@@ -642,7 +642,7 @@ func TestTerminalShellsFollowTheirProject(t *testing.T) {
 	}
 	inDir(open(ofRun), first)
 	plain := start("")
-	if plain.Number != 1 || plain.Project != "" || plain.Link != "/" {
+	if plain.Number != 1 || plain.Project != "" || plain.Link != "/activity" {
 		t.Errorf("a shell of no project: %+v", plain)
 	}
 	plainPage := open(plain)

@@ -18,6 +18,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/rotari-dev/rotari/internal/config"
 	"github.com/rotari-dev/rotari/internal/resolve"
 	stateinternal "github.com/rotari-dev/rotari/internal/state"
 	"github.com/rotari-dev/rotari/internal/terminal"
@@ -150,7 +151,8 @@ func terminalSize(writer http.ResponseWriter, request *http.Request) (rows, cols
 
 // terminalPlace is where a page's new shell belongs and starts.
 type terminalPlace struct {
-	// BaseDir and Project are empty for a page of no project.
+	// BaseDir and Project are empty for a page of no project, and Project alone for a
+	// page of a basedir, such as its All projects.
 	BaseDir string `json:"basedir"`
 	Project string `json:"project"`
 	Dir     string `json:"dir"`
@@ -160,19 +162,21 @@ type terminalPlace struct {
 
 // terminalPlaceFor reads a page's place from its basedir ID, project, and run, looking
 // the directory up here rather than taking one from the page. An empty run is the
-// project's latest. It answers the request if the place is bad.
+// project's latest. A basedir with no project is a page of that basedir, and an empty
+// basedir ID the server's own basedir; with neither, the page is of no project. It
+// answers the request if the place is bad.
 func (s site) terminalPlaceFor(writer http.ResponseWriter, request *http.Request) (terminalPlace, bool) {
 	query := request.URL.Query()
 	id, project, run := query.Get("basedir"), query.Get("project"), query.Get("run")
 	place := terminalPlace{Dir: s.Terminal.DefaultDir()}
-	if project == "" {
-		if run != "" {
-			http.Error(writer, "a run needs its project", http.StatusBadRequest)
-			return place, false
-		}
+	if project == "" && run != "" {
+		http.Error(writer, "a run needs its project", http.StatusBadRequest)
+		return place, false
+	}
+	if project == "" && !query.Has("basedir") {
 		return place, true
 	}
-	if !stateinternal.IsValidPathElement(project) || (run != "" && !stateinternal.IsValidPathElement(run)) {
+	if project != "" && !stateinternal.IsValidPathElement(project) || run != "" && !stateinternal.IsValidPathElement(run) {
 		http.Error(writer, "invalid project or run", http.StatusBadRequest)
 		return place, false
 	}
@@ -187,6 +191,15 @@ func (s site) terminalPlaceFor(writer http.ResponseWriter, request *http.Request
 	}
 	if absolute, err := filepath.Abs(place.BaseDir); err == nil {
 		place.BaseDir = filepath.Clean(absolute)
+	}
+	if project == "" {
+		dir, err := terminalBaseDirStart(place.BaseDir)
+		if err != nil {
+			place.note = err.Error()
+		} else if dir != "" {
+			place.Dir = dir
+		}
+		return place, true
 	}
 	place.Project = project
 	dir, err := s.terminalRunDir(place.BaseDir, project, run)
@@ -222,12 +235,56 @@ func (s site) terminalRunDir(baseDir, project, run string) (string, error) {
 	return context.CWD, nil
 }
 
-// terminalGroup keys the shells of one project of one basedir. A path holds no NUL.
+// terminalNoProjectLink is a page that shows the shells of no project: one of every
+// basedir, since a basedir's own pages show its shells.
+const terminalNoProjectLink = "/activity"
+
+// terminalWorkspaceBaseDir is the name `rotari init` gives a workspace's basedir.
+const terminalWorkspaceBaseDir = ".rotari-state"
+
+// terminalBaseDirStart is where a basedir's shell starts: the basedir's parent when that
+// is the workspace the basedir belongs to, and otherwise "" for the home directory. A
+// workspace's basedir is named .rotari-state, as `rotari init` makes it, or is the one the
+// workspace's .rotari.toml names, read as a command run there would read it. A basedir
+// elsewhere, such as the default one, has no directory of its own to work in.
+func terminalBaseDirStart(baseDir string) (string, error) {
+	parent := filepath.Dir(baseDir)
+	inWorkspace := filepath.Base(baseDir) == terminalWorkspaceBaseDir
+	if !inWorkspace {
+		loaded, err := config.LoadScope("workspace", parent)
+		if err != nil {
+			return "", err
+		}
+		if named, ok := loaded.Values["basedir"].(string); ok && named != "" {
+			if !filepath.IsAbs(named) {
+				named = filepath.Join(parent, named)
+			}
+			inWorkspace = filepath.Clean(named) == baseDir
+		}
+	}
+	if !inWorkspace {
+		return "", nil
+	}
+	if info, err := os.Stat(parent); err != nil || !info.IsDir() {
+		return "", fmt.Errorf("%q does not exist on this host", parent)
+	}
+	return parent, nil
+}
+
+// terminalGroup keys the shells of one project of one basedir, or of the basedir alone
+// with an empty project, which no project's name is. A path holds no NUL.
 func terminalGroup(place terminalPlace) string {
-	if place.Project == "" {
+	if place.BaseDir == "" {
 		return ""
 	}
 	return place.BaseDir + "\x00" + place.Project
+}
+
+// terminalGroupPlace reads a group back: a project's basedir and project, a basedir's own
+// with an empty project, and both empty for no project.
+func terminalGroupPlace(group string) (baseDir, project string) {
+	baseDir, project, _ = strings.Cut(group, "\x00")
+	return baseDir, project
 }
 
 // terminalShellResponse is a shell as a page sees it.
@@ -253,9 +310,9 @@ type terminalShellResponse struct {
 }
 
 func (s site) terminalShellResponse(shell terminal.ShellInfo) terminalShellResponse {
-	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Name: shell.Name, Dir: shell.Dir, UnseenOutput: shell.UnseenOutput, CommandFinished: shell.CommandFinished, Running: shell.Running, StartedAt: shell.StartedAt, ActiveAt: shell.ActiveAt, Link: "/"}
-	baseDir, project, ok := strings.Cut(shell.Group, "\x00")
-	if !ok {
+	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Name: shell.Name, Dir: shell.Dir, UnseenOutput: shell.UnseenOutput, CommandFinished: shell.CommandFinished, Running: shell.Running, StartedAt: shell.StartedAt, ActiveAt: shell.ActiveAt, Link: terminalNoProjectLink}
+	baseDir, project := terminalGroupPlace(shell.Group)
+	if baseDir == "" {
 		return response
 	}
 	response.BaseDir, response.Project = baseDir, project
@@ -265,7 +322,11 @@ func (s site) terminalShellResponse(shell terminal.ShellInfo) terminalShellRespo
 			if !entry.Current {
 				prefix = basedirRoutePrefix + entry.ID
 			}
-			response.Link = prefix + "/project/" + url.PathEscape(project)
+			// A basedir's shells show on its All projects.
+			response.Link = prefix + "/"
+			if project != "" {
+				response.Link = prefix + "/project/" + url.PathEscape(project)
+			}
 		}
 	}
 	return response
@@ -334,8 +395,13 @@ func (s site) serveTerminalShells(writer http.ResponseWriter, request *http.Requ
 			return
 		}
 		start := terminal.StartOptions{Rows: rows, Cols: cols, Group: terminalGroup(place), Dir: place.Dir}
-		if place.Project != "" {
+		switch {
+		case place.Project != "":
 			start.Env = []string{stateinternal.BaseDirEnv + "=" + place.BaseDir, stateinternal.ProjectNameEnv + "=" + place.Project}
+		case place.BaseDir != "":
+			// A project named in the server's own environment is not this basedir's.
+			start.Env = []string{stateinternal.BaseDirEnv + "=" + place.BaseDir}
+			start.Unset = []string{stateinternal.ProjectNameEnv}
 		}
 		if place.note != "" {
 			start.Banner = "rotari: " + place.note + ", so this shell opened in your home directory.\r\n"
@@ -345,7 +411,11 @@ func (s site) serveTerminalShells(writer http.ResponseWriter, request *http.Requ
 		case errors.Is(err, terminal.ErrTooManyShells):
 			http.Error(writer, "at most "+strconv.Itoa(shellLimit)+" shells can run at once", http.StatusConflict)
 		case errors.Is(err, terminal.ErrTooManyInGroup):
-			http.Error(writer, "at most "+strconv.Itoa(groupLimit)+" shells can run for one project", http.StatusConflict)
+			owner := "project"
+			if place.Project == "" && place.BaseDir != "" {
+				owner = "basedir"
+			}
+			http.Error(writer, "at most "+strconv.Itoa(groupLimit)+" shells can run for one "+owner, http.StatusConflict)
 		case errors.Is(err, terminal.ErrKeeperClosed):
 			http.Error(writer, "the server is stopping", http.StatusServiceUnavailable)
 		case err != nil:

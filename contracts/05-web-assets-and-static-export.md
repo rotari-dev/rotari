@@ -1416,7 +1416,7 @@ is at its prompt, or `"command_error"` saying why it could not be found, and `"p
 has, and `last_run`, the run `rotari show` reads when given none (the last one started), with `run_id`, `run_name`, `lifecycle` as the run page labels
 it, `tone`, its status colour, `started_at` and `finished_at` when its files say, and `jobs`, its jobs counted by the
 run page's Jobs card groups (`run` in progress, `pending`, `bad` failed, `ok`, `warn` blocked, `off` other); or
-`status_error` saying why its runs could not be read (405 for other methods). Shells with no project are not listed.
+`status_error` saying why its runs could not be read (405 for other methods). Shells of no project, or of a basedir's own, are not listed.
 `GET /_terminal/window`, followed by
 the path of a page such as `/project/p`, is the panel's page of its own (405 for other methods). `PUT /_terminal/order` with `{"ids":
 [...]}` arranges the project of the first running shell named, with others of it following and shells that have
@@ -1424,11 +1424,18 @@ ended or are of another project ignored; the list then gives each project's shel
 last. `POST` and
 `/_terminal/here`, which says where a new shell would go, take a page's place: `project`, with
 `basedir` for a mounted one (404 if unknown), and `run`, read on the server and never a path from the
-page. A shell runs as `$SHELL -l` or `/bin/sh` with the server's environment less the Web token. With
+page; `basedir` with no project, empty for the server's own, is the place of that basedir's own pages, and
+`run` with no project is refused (400). A shell runs as `$SHELL -l` or `/bin/sh` with the server's environment less the Web token. With
 a project, it starts where `run`, or the project's latest run, started. If that cannot be found or
 does not exist on this host it starts in the home directory and says why in its first line, escaped,
-which replays with its output. With no project it starts in the home directory, and belongs to no
-project. A project's shell has `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME` set to its basedir and project. Up to eight shells run per project of a basedir, and thirty-two in all, or what
+which replays with its output. A basedir's own shell, with `basedir` and no project, starts in the basedir's
+parent when the basedir is named `.rotari-state` or the parent's `.rotari.toml` names it as `basedir`, a relative
+value read from the parent, and otherwise in the home directory, saying nothing; when that parent does not exist
+on this host or its `.rotari.toml` cannot be read, it starts in the home directory and says why, as above. With
+neither it starts in the home directory, and belongs to no project. A project's shell has `ROTARI_BASEDIR` and
+`ROTARI_PROJECT_NAME` set to its basedir and project, and a basedir's own shell `ROTARI_BASEDIR` set and
+`ROTARI_PROJECT_NAME` removed, whatever the server's environment says. Up to eight shells run per project of a
+basedir, as many for each basedir's own, and thirty-two in all, or what
 `--terminal-max-shells-per-project` and `--terminal-max-shells` say. `--terminal-shell` replaces `$SHELL`, and
 `--terminal-replay-size` the 256 KiB of output kept per shell. These flags and `--terminal-idle-timeout` are
 rejected on the command line without `--allow-terminal`, and with a bad value from anywhere when the terminal is on,
@@ -1438,7 +1445,8 @@ until one has; its `command_finished` says a command it ran in its foreground en
 connection showed it, and a connection showing it clears it; its `running` says a command holds its foreground as
 the list is made; its `started_at` is when it started and its `active_at` when it last printed or was typed into,
 which the list's `now` dates by the server's clock. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
-use in its project when it started, and its `link` is the page that shows it. A connection names its shell with
+use in its project when it started, and its `link` is the page that shows it: its project's page, its basedir's
+All projects for a basedir's own shell, and `/activity` for one of no project. A connection names its shell with
 `shell`, and never starts one: a shell not running closes it with 4005. A shell outlives its
 connections and replays recent output to the next, except what came before a `clear` message. A new connection to it takes it over, closing
 the last with code 4001; one with `takeover=0`, which a page reconnecting by itself sends, gets 4001
@@ -1500,9 +1508,11 @@ the binary in [conformance/05-web/terminal_config_test.go](../conformance/05-web
 **WEB-33** `rotari web --allow-terminal` adds a Terminal button to the top bar of the
 application and Recent jobs pages, which shows how many shells there are in all projects, as `Terminal (3)`,
 with the panel open or not and without connecting to any, on a page in view; with no answer from the server it
-shows no number. Each project row in the sidebar whose project has shells is marked with how many. It opens a panel along the bottom, or down the left or right of the window as the browser
+shows no number. Each project row in the sidebar whose project has shells is marked with how many, and so is a
+basedir's All projects row when the basedir has shells of its own. It opens a panel along the bottom, or down the left or right of the window as the browser
 keeps from a menu in the panel's bar, with a tab for each
-shell of the page's project, or of no project on a page of none. A list names the projects with
+shell of the page's project; on a basedir's other pages, such as All projects and Recent jobs, of that basedir's
+own; and on Activity and History search, of no project. A list names the projects with
 shells, and choosing one goes to its page. A tab not shown whose `command_finished` is set shows a bell in place of
 its unseen-output mark, as its All shells card does. A tab's tooltip and an All shells card say when the shell
 started and how long it has been idle, by the server's clock. A card's line of what runs also says how many
@@ -1524,8 +1534,8 @@ as a tab's menu and close button do, and **End all** beside a project's name and
 that project's shells and every shell, after one question, leaving the dialog open and drawn again; a refusal is
 told in the dialog. A
 project's **+** starts another shell there, off at the limit and saying which, and **New shell in**, a list of every
-basedir's projects with no shell and of no project, starts one in the project chosen, each where that project's
-page would start it (WEB-34), shown in no pane but as a card with the keys; a basedir whose projects cannot be
+basedir with no shell of its own, each of its projects with no shell, and no project, starts one where the page
+of the choice would start it (WEB-34), shown in no pane but as a card with the keys; a basedir whose projects cannot be
 listed is named.
 It is a view of when it opened, or of **Refresh**, and Escape, **Close**, a click beside it, or hiding the panel
 closes it. Opening the panel with no shell there starts one, **+**
@@ -1563,8 +1573,9 @@ connection, and panes stack when the panel is under 720 pixels wide, keeping the
 **Window** in the same menu opens the panel in a browser window of its own, from the click, on the page's project
 with the panes this browser tab had for each project; the window fills itself, has no resizer, Maximize, or Hide,
 and its project list, as the panel's does, takes the page that opened it to that project's page, the window
-switching with it. When the page moves to another project's page,
-the window switches to that project; a page of no project, or of the project it last followed, leaves it. The page lets go of its shells without
+switching with it. When the page moves to another project's page, or to a page of another basedir's own, such as
+its All projects or Recent jobs, the window switches to that project or basedir; a page of no project, such as
+Activity, or of the project or basedir it last followed, leaves it. The page lets go of its shells without
 saying another tab took them, gives up the panel's room, and keeps whether the panel is open for other pages.
 While the window is open, the Terminal button brings it to the front, a send button types into the window's pane
 with the keys and names its project when it is not the page's, and **Open a terminal here** starts the shell

@@ -818,27 +818,44 @@ async function copyJobsValue(button) {
     placeOfPath(
       inWindow ? location.pathname.slice(windowPath.length) : location.pathname,
     );
-  // placeOfPath is a page path's place: a shell's link gives its project's.
-  const placeOfPath = (path) => {
+  // pageOfPath is whose shells a page shows, as the application script routes it: a
+  // project's page or a run's belongs to the project; Activity and History search, which
+  // cover every basedir, to no project (global); and any other page, such as All projects
+  // or Recent jobs, to its basedir. mounted is the basedir's ID, empty for the server's own.
+  const pageOfPath = (path) => {
     const parts = path.split("/").filter(Boolean);
-    const query = [];
-    if (parts[0] === "_basedir") {
-      query.push("basedir=" + parts[1]);
-      parts.splice(0, 2);
-    }
-    if (parts[0] === "project" && parts[1]) {
-      query.push("project=" + parts[1]);
-      if (parts[2] === "run" && parts[3]) query.push("run=" + parts[3]);
-    }
+    let mounted = "";
+    if (parts[0] === "_basedir" && parts[1]) mounted = parts.splice(0, 2)[1];
+    if (parts[0] === "project" && parts[1])
+      return {
+        mounted,
+        project: parts[1],
+        run: parts[2] === "run" ? parts[3] || "" : "",
+      };
+    if (parts[0] === "activity" || parts[0] === "search")
+      return { global: parts[0] };
+    return { mounted };
+  };
+  // placeOfPath is a page path's place: a shell's link gives its group's.
+  const placeOfPath = (path) => {
+    const page = pageOfPath(path);
+    if (page.global) return "";
+    // A project's page names the server's own basedir by leaving it out, and a basedir's
+    // own page by an empty ID.
+    const query =
+      page.mounted || !page.project ? ["basedir=" + page.mounted] : [];
+    if (page.project) query.push("project=" + page.project);
+    if (page.run) query.push("run=" + page.run);
     return query.join("&");
   };
   const sameGroup = (shell, other) =>
     shell.basedir === other.basedir && shell.project === other.project;
   const shellsHere = () => shells.filter((shell) => sameGroup(shell, here));
-  const projectName = (group) => group.project || "No project";
+  // projectName names a group: its project, its basedir for a basedir's own shells, or none.
+  const projectName = (group) => group.project || group.basedir || "No project";
   // inBasedir tells apart projects of the same name in different basedirs.
   const inBasedir = (entry, entries) =>
-    entry.basedir &&
+    entry.project &&
     entries.some((item) => item !== entry && item.project === entry.project)
       ? " in " + entry.basedir
       : "";
@@ -1318,7 +1335,7 @@ async function copyJobsValue(button) {
   };
   const shellName = (shell) => {
     const name = shell.name || "Shell " + shell.number;
-    return shell.project ? name + " of " + shell.project : name;
+    return shell.basedir ? name + " of " + projectName(shell) : name;
   };
   // noteEndedShells tells of shells that ended out of sight: the shown one's connection
   // says so itself, and a shell someone ended from this page is no news.
@@ -1336,8 +1353,9 @@ async function copyJobsValue(button) {
       6000,
     );
   };
-  // markSidebarProjects marks each project in the sidebar that has shells, which
-  // web_shell.css draws as an icon on its row. Links are compared decoded, since the
+  // markSidebarProjects marks each project in the sidebar that has shells, and each
+  // basedir's All projects that has shells of its own, which web_shell.css draws as an
+  // icon on its row. Links are compared decoded, since the
   // server and the page encode a project's name differently.
   const linkPath = (href) => {
     try {
@@ -1351,7 +1369,7 @@ async function copyJobsValue(button) {
   const markSidebarProjects = () => {
     const counts = new Map();
     for (const shell of shells) {
-      if (!shell.project) continue;
+      if (!shell.basedir) continue; // Of no project, which no row stands for.
       const path = linkPath(shell.link);
       counts.set(path, (counts.get(path) || 0) + 1);
     }
@@ -1780,8 +1798,8 @@ async function copyJobsValue(button) {
     const started = await response.json();
     drawOverview(started.id);
   };
-  // drawOverviewNew offers, under the cards, a shell in a project with none yet: every
-  // project of every basedir the server knows that has no shell, and no project at all,
+  // drawOverviewNew offers, under the cards, a shell where there is none yet: every basedir
+  // the server knows and each of its projects that has no shell, and no project at all,
   // which starts in the home directory.
   const drawOverviewNew = async (serial, listed) => {
     const row = document.createElement("div");
@@ -1842,20 +1860,20 @@ async function copyJobsValue(button) {
     };
     const options = [];
     if (!hasShells("", ""))
-      options.push(option("No project (home directory)", "/"));
+      options.push(option("No project (home directory)", "/activity"));
     for (const { basedir, projects } of lists) {
-      const free = (projects || []).filter(
-        (project) => !hasShells(basedir.path, project),
-      );
-      if (!free.length) continue;
-      const items = free.map((project) =>
-        option(
-          project,
-          (basedir.current ? "" : "/_basedir/" + basedir.id) +
-            "/project/" +
-            encodeURIComponent(project),
-        ),
-      );
+      const prefix = basedir.current ? "" : "/_basedir/" + basedir.id;
+      // The basedir's own shells, which its All projects shows.
+      const items = hasShells(basedir.path, "")
+        ? []
+        : [option("All projects (the basedir)", prefix + "/")];
+      for (const project of projects || []) {
+        if (!hasShells(basedir.path, project))
+          items.push(
+            option(project, prefix + "/project/" + encodeURIComponent(project)),
+          );
+      }
+      if (!items.length) continue;
       if (basedirs.length > 1) {
         const group = document.createElement("optgroup");
         group.label = basedir.path;
@@ -2270,7 +2288,10 @@ async function copyJobsValue(button) {
         more.textContent = "+";
         const full =
           entry.shells.length >= groupLimit
-            ? "at most " + groupLimit + " shells can run for one project"
+            ? "at most " +
+              groupLimit +
+              " shells can run for one " +
+              (entry.basedir && !entry.project ? "basedir" : "project")
             : shells.length >= shellLimit
               ? "at most " + shellLimit + " shells can run at once"
               : "";
@@ -2703,8 +2724,8 @@ async function copyJobsValue(button) {
       !(await askToEnd(
         [shell],
         "End " +
-          (shell.project && !sameGroup(shell, here)
-            ? "shell " + shell.number + " of " + shell.project
+          (shell.basedir && !sameGroup(shell, here)
+            ? "shell " + shell.number + " of " + projectName(shell)
             : "shell " + shell.number),
       ))
     )
@@ -2728,8 +2749,9 @@ async function copyJobsValue(button) {
     return true;
   };
   const noShellMessage = () =>
-    (here.project ? "No shell for " + here.project + "." : "No shell here.") +
-    " Open the terminal to start one.";
+    (here.basedir
+      ? "No shell for " + projectName(here) + "."
+      : "No shell here.") + " Open the terminal to start one.";
   const settleSend = (pane, problem) => {
     if (!pane.pendingSend) return;
     const { resolve, timer } = pane.pendingSend;
@@ -2851,8 +2873,8 @@ async function copyJobsValue(button) {
       panel.classList.add("terminal-empty");
       showStatus(
         pane,
-        here.project
-          ? "No shell for " + here.project + " yet."
+        here.basedir
+          ? "No shell for " + projectName(here) + " yet."
           : "No shell here yet.",
         "Start a shell",
         () => newShell(pane),
@@ -3368,14 +3390,14 @@ async function copyJobsValue(button) {
         window.opener.postMessage(message, location.origin);
     } catch {}
   };
-  // The page's path as far as its project, which a window opens on. A run's page gives
-  // its project.
+  // The page's path as far as whose shells it shows, which a window opens on: a project's
+  // page, which a run's page gives, a basedir's All projects, which its other pages give,
+  // or Activity and History search, of no project.
   const projectPath = (path = location.pathname) => {
-    const parts = path.split("/").filter(Boolean);
-    const kept = [];
-    if (parts[0] === "_basedir" && parts[1]) kept.push(...parts.splice(0, 2));
-    if (parts[0] === "project" && parts[1]) kept.push(parts[0], parts[1]);
-    return "/" + kept.join("/");
+    const page = pageOfPath(path);
+    if (page.global) return "/" + page.global;
+    const prefix = page.mounted ? "/_basedir/" + page.mounted : "";
+    return prefix + (page.project ? "/project/" + page.project : "/");
   };
   // letGo gives up every pane's connection, saying nothing of it, and closes the panel
   // without remembering that, for the window to take the shells.
@@ -3428,11 +3450,11 @@ async function copyJobsValue(button) {
       sessionStorage.setItem(followedKey, path);
     } catch {}
   };
-  // followPage has the window show this page's project, when the page is of a project
-  // other than the one the window last followed. A page of no project leaves it.
+  // followPage has the window show this page's project or basedir, when it is not the one
+  // the window last followed. A page of no project, such as Activity, leaves it.
   const followPage = () => {
     const path = projectPath();
-    if (!path.includes("/project/") || path === followed()) return;
+    if (pageOfPath(path).global || path === followed()) return;
     rememberFollowed(path);
     terminalWindow.postMessage(
       { type: "rotari-terminal-follow", path },

@@ -530,8 +530,12 @@ func (s site) shellLaunchStart(command launcher.Command, request webLaunchReques
 		return launcher.StartRequest{}, fmt.Errorf("launcher %q accepts only %s, not %s", command.Name, strings.Join(command.PatternsFor(kind), ", "), name)
 	}
 	labels := map[string]string{"shell": strconv.Itoa(shell.Number)}
-	if baseDir, project, ok := strings.Cut(shell.Group, "\x00"); ok {
-		labels["basedir"], labels["project"] = baseDir, project
+	baseDir, project := terminalGroupPlace(shell.Group)
+	if baseDir != "" {
+		labels["basedir"] = baseDir
+	}
+	if project != "" {
+		labels["project"] = project
 	}
 	return launcher.StartRequest{Command: command, Target: dir, Kind: kind, Labels: labels, NewInstance: request.NewInstance}, nil
 }

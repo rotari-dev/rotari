@@ -3553,7 +3553,8 @@ CLI_SCHEMA: dict[str, Any] = {
                 },
                 {
                     "description": "with --allow-terminal, how many shells of "
-                    "one project may run at once (default 8)",
+                    "one project, or of one basedir's own pages, "
+                    "may run at once (default 8)",
                     "environment": "ROTARI_WEB_TERMINAL_MAX_SHELLS_PER_PROJECT",
                     "name": "terminal-max-shells-per-project",
                     "value_name": "COUNT",

@@ -144,7 +144,8 @@ under 1000 pixels wide the panel stays at the bottom. Panes stack when the panel
 **Window** in the same menu moves the whole panel, with its tabs, panes, and project list, into a browser
 window of its own, for a second screen. The page gets all of its room back. The page and the window keep to one
 project, as with the panel: moving to another project's page switches the window, and choosing a project in the
-window takes the page there. Pages of no project, such as Recent jobs, leave the window as it is. While the window is open, the **Terminal** button brings it
+window takes the page there. A state directory's **All projects** and **Recent jobs** switch it to that state
+directory's own shells, and Activity and History search, of no project, leave the window as it is. While the window is open, the **Terminal** button brings it
 to the front, the send buttons type into it, and **Open a terminal here** starts the shell there. Following
 links in the page keeps the window. Close the window, or choose **Back to page** in its **Panel position** menu,
 to put the panel back where it was. If the browser blocks pop-ups, the panel stays and says so. Reloading the
@@ -153,7 +154,8 @@ another tab does today. Closing the browser tab closes its window too; the shell
 that opens the terminal.
 The button shows how many shells are running in all
 projects, as **Terminal (3)**, so you can see what is left running with the panel closed, and each project
-in the sidebar with a shell running has a terminal icon; point at it to see how many.
+in the sidebar with a shell running has a terminal icon, as does a state directory's **All projects** when the
+state directory has shells of its own; point at it to see how many.
 
 The **All shells** icon beside **+** opens a dialog over the page, as a log does, listing every running shell,
 grouped by project with the page's first. Under each project's name, a line says what its last run (the one
@@ -168,8 +170,8 @@ and show that shell in the pane with the keys; one of another project takes the 
 does. The pencil on a card renames its tab and the cross ends its shell, after asking; **F2** and **Delete** do
 the same for the card with the keys, and the dialog stays open for the next one. **End all** beside a project's
 name ends its shells, and **End all shells** at the top every shell, after asking. The **+** beside a project's name
-starts another shell there, and **New shell in** under the cards starts one in a project that has none, or in no
-project; each starts where that project's page would, and the new shell appears as a card without being shown
+starts another shell there, and **New shell in** under the cards starts one in a project or state directory that
+has none (**All projects** under the state directory), or in no project; each starts where that page would, and the new shell appears as a card without being shown
 in a pane. The list is taken when the dialog
 opens, and **Refresh** takes it again. Escape, **Close**, or a click
 beside the dialog closes it. The directory is the shell's own, not that of a program running in it, and when the
@@ -178,23 +180,32 @@ the first of a pipeline; a shell with no job control runs everything in its own 
 show no command.
 
 Shells belong to projects, as an editor's terminals belong to its window. A project's pages show
-that project's tabs, and the list beside them goes to other projects that have shells. Other pages,
-such as Recent jobs, show the shells of no project.
+that project's tabs, and the list beside them goes to other projects that have shells. A state
+directory's **All projects** and **Recent jobs** show the shells of that state directory itself, for
+work across its projects. Activity and History search, which cover every state directory, show the
+shells of no project.
 
 | Where you are | Where a new shell starts |
 |---|---|
 | A project's page | Where its latest run started |
 | A run's page | Where that run started |
-| Any other page | Your home directory |
+| A state directory's All projects or Recent jobs | The workspace it belongs to, otherwise your home directory |
+| Activity or History search | Your home directory |
+
+A state directory belongs to a workspace when it is named `.rotari-state`, as `rotari init` makes
+it, or when the `.rotari.toml` beside it names it as `basedir`; the workspace is the directory that
+holds both. Any other state directory, such as the default `~/.local/state/rotari`, has no
+workspace, and its shells start in your home directory.
 
 A project's shells have `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME` set to it, so `rotari show` and the
-like need no `-p`, wherever you `cd`. Give `-p` to reach another project. Other shells keep what
-`rotari web` itself has.
+like need no `-p`, wherever you `cd`. Give `-p` to reach another project. A state directory's own
+shells have `ROTARI_BASEDIR` set to it and no `ROTARI_PROJECT_NAME`, so commands there pick a project
+as they would anywhere else: from `-p`, a config, or the only project in the state directory. Shells of no project keep what `rotari web` itself has.
 
-**+** opens another shell in a tab of its own, up to eight per project and 32 in all, and each tab's
+**+** opens another shell in a tab of its own, up to eight per project or state directory and 32 in all, and each tab's
 **×** ends its shell. A run's page also has **Open a terminal here** beside its working directory.
-If the directory is gone or the project has no run, the shell opens in your home directory and its
-first line says why. A shell that has started stays where it is when newer runs start.
+If the directory is gone, the project has no run, or a workspace's `.rotari.toml` cannot be read,
+the shell opens in your home directory and its first line says why. A shell that has started stays where it is when newer runs start.
 
 Copy buttons have a send button beside them that types the same thing into the tab being shown, in the
 focused pane if the panel is split, without running it: press Enter in the terminal to run it. A suggested command, such as how to run the queue,
@@ -280,7 +291,7 @@ rotari web --allow-terminal
   | --- | --- | --- |
   | `--terminal-idle-timeout` | `3h` | How long the shells last after the last page closes. At least `2m`. |
   | `--terminal-max-shells` | `32` | Shells at once. |
-  | `--terminal-max-shells-per-project` | `8` | Shells of one project at once. |
+  | `--terminal-max-shells-per-project` | `8` | Shells of one project, or of one state directory's own pages, at once. |
   | `--terminal-replay-size` | `256KiB` | Recent output kept per shell, up to `64MiB`. More uses more memory. |
   | `--terminal-shell` | `$SHELL`, or `/bin/sh` | The shell to run. |
 

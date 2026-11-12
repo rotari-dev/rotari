@@ -138,7 +138,7 @@ flowchart LR
    With `--allow-terminal`, it holds shells in an `internal/terminal` `Keeper`
    ([cmd/rotari/web_terminal.go](../cmd/rotari/web_terminal.go) builds it;
    [internal/webui/terminal.go](../internal/webui/terminal.go) serves them at `/_terminal/shells`,
-   `/_terminal/here`, and `/_terminal/ws`, groups them by basedir and project, and serves the panel's own window
+   `/_terminal/here`, and `/_terminal/ws`, groups them by project, by basedir for a basedir's own pages, or as of no project, and serves the panel's own window
    at `/_terminal/window`; `/_terminal/projects` says what each project with shells last ran, counted by the run page's Jobs card groups
    (`jobCountGroup`, in Go and JS alike); `/_terminal/shells/ID/preview` says where a shell is and what it runs, which
    [internal/terminal](../internal/terminal) finds from its process without attaching). Pages only attach to

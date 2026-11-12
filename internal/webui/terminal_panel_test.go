@@ -42,9 +42,11 @@ const { JSDOM, VirtualConsole } = require('jsdom');
 const webShellCSS = fs.readFileSync(process.argv[3], 'utf8');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const home = '/home/u';
-const plain = (id, number) => ({ id, number, basedir: '', project: '', dir: home, link: '/' });
+// A shell of no project shows on Activity, and a basedir's own on its All projects.
+const plain = (id, number) => ({ id, number, basedir: '', project: '', dir: home, link: '/activity' });
+const ofBasedir = (id, number, basedir = '/b') => ({ id, number, basedir, project: '', dir: '/w', link: basedir === '/b' ? '/' : '/_basedir/' + basedir.slice(1) + '/' });
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
-const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/', maximized = false, fontSize = '' } = {}) => {
+const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/activity', maximized = false, fontSize = '' } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
   // xterm.js parses what it is given later; a test can hold that back.
   const parser = { held: false, waiting: [], release() { this.held = false; this.waiting.splice(0).forEach((parse) => parse()); } };
@@ -66,12 +68,13 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     if (method === 'POST') {
       if (server.startError) return refused(500, server.startError);
       const project = decodeURIComponent(/project=([^&]*)/.exec(url)?.[1] || '');
-      const inGroup = server.shells.filter((shell) => shell.project === project);
+      const basedir = project || /[?&]basedir=/.test(url) ? '/b' : '';
+      const inGroup = server.shells.filter((shell) => shell.basedir === basedir && shell.project === project);
       if (inGroup.length >= server.limit) return refused(409, 'at most ' + server.limit);
       let number = 1;
       while (inGroup.some((shell) => shell.number === number)) number++;
       const id = String(++server.lastID);
-      const shell = project ? inProject(id, number, project) : plain(id, number);
+      const shell = project ? inProject(id, number, project) : basedir ? ofBasedir(id, number) : plain(id, number);
       server.shells = [...server.shells, shell];
       return Promise.resolve({ ok: true, status: 201, json: async () => shell });
     }
@@ -152,7 +155,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           requests.push('GET ' + address);
           if (status() !== 200) return Promise.resolve({ ok: false, status: status(), text: async () => 'refused' });
           const project = decodeURIComponent(/project=([^&]*)/.exec(address)?.[1] || '');
-          return Promise.resolve({ ok: true, status: 200, json: async () => ({ basedir: project ? '/b' : '', project, dir: project ? '/w/' + project : home }) });
+          const basedirID = /[?&]basedir=([^&]*)/.exec(address)?.[1];
+          // A project's shells here are all of /b, as the fixtures make them.
+          const basedir = project ? '/b' : basedirID ? '/' + basedirID : basedirID !== undefined ? '/b' : '';
+          return Promise.resolve({ ok: true, status: 200, json: async () => ({ basedir, project, dir: project ? '/w/' + project : basedir ? '/w' : home }) });
         }
         return new Promise(() => {});
       };
@@ -1026,9 +1032,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   await press(sending, sending.window.copyIconForValue('two\nlines', 'name'));
   assert.match(shown.textContent, /control characters/);
   assert.equal(sending.pasted.at(-1).includes('lines'), false, 'a line break reached the terminal');
-  // The Recent jobs page draws its buttons on the server, and gets the same ones.
+  // The Recent jobs page draws its buttons on the server, and gets the same ones. It is a
+  // page of its basedir, so it shows the basedir's own shells.
   const jobsFile = process.argv[4];
-  const jobs = load(jobsFile, { path: '/jobs/', stored: '1', shells: [plain('1', 1)] });
+  const jobs = load(jobsFile, { path: '/jobs/', stored: '1', shells: [plain('2', 1), ofBasedir('1', 1)] });
   await wait(50);
   const jobsSend = jobs.document.querySelector('.jobs-copy.terminal-send');
   assert.notEqual(jobsSend, null, 'the Recent jobs page offers no send button');
@@ -2254,14 +2261,23 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   found.closed = true;
   await wait(600);
   assert.deepEqual(sp(following).live(), ['1']);
-  // A page of the project the window last followed, or of none, leaves the window as it is,
-  // whatever was chosen in it since.
-  for (const [path, last] of [['/project/p1', '/project/p1'], ['/jobs/', '/project/p1'], ['/', '/project/p1']]) {
+  // A page of the project or basedir the window last followed, or of none, leaves the window
+  // as it is, whatever was chosen in it since. Recent jobs is a page of the basedir that All
+  // projects is.
+  for (const [path, last] of [['/project/p1', '/project/p1'], ['/jobs/', '/'], ['/', '/'], ['/activity', '/project/p1'], ['/_basedir/c/search', '/project/p1']]) {
     const staying = load(process.argv[1], { stored: '1', path, remembered: ['rotari-terminal-windowed', '1'], split: ['rotari-terminal-followed', last] });
     await wait(30);
     const kept = fakeWindow();
     post(staying, { type: 'rotari-terminal-window' }, kept);
     assert.deepEqual(kept.messages, [], path + ' moved the window');
+  }
+  // A basedir's page the window did not follow takes it to the basedir's All projects.
+  for (const [path, want] of [['/jobs/', '/'], ['/_basedir/c/', '/_basedir/c/'], ['/_basedir/c/jobs/', '/_basedir/c/']]) {
+    const moving = load(process.argv[1], { stored: '1', path, remembered: ['rotari-terminal-windowed', '1'], split: ['rotari-terminal-followed', '/project/p1'] });
+    await wait(30);
+    const moved = fakeWindow();
+    post(moving, { type: 'rotari-terminal-window' }, moved);
+    assert.deepEqual(moved.messages, [[{ type: 'rotari-terminal-follow', path: want }, origin]], path + ' did not move the window');
   }
   // Popping out remembers the page's project as followed.
   assert.equal(popping.window.sessionStorage.getItem('rotari-terminal-followed'), '/project/p1');
@@ -2336,27 +2352,42 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(tabbedClosed, 1, 'stayed after its tab closed');
   assert.equal(tabbed.requests.filter((request) => request.startsWith('DELETE')).length, 0, 'ended a shell on closing');
 
+  // A basedir's All projects shows the basedir's own shells, and Activity those of no
+  // project; each names its group when asking where a shell would start.
+  for (const [path, query, shown] of [['/', 'basedir=', '1'], ['/_basedir/c/', 'basedir=c', '3'], ['/activity', '', '2'], ['/search', '', '2']]) {
+    const grouped = load(process.argv[1], { stored: '1', path, shells: [ofBasedir('1', 1), plain('2', 1), ofBasedir('3', 1, '/c'), inProject('4', 1, 'p1')] });
+    await wait(50);
+    assert.ok(grouped.requests.includes('GET /_terminal/here?' + query), path + ': ' + grouped.requests.join(', '));
+    assert.equal(grouped.sockets.length, 1, path + ' did not show one shell');
+    assert.match(grouped.sockets[0].url, new RegExp('shell=' + shown + '&'), path + ' showed another group\'s shell');
+  }
+
   // The sidebar marks each project with shells, with the panel closed, and again after
-  // the sidebar is drawn again; a basedir's row and a shell of no project mark nothing.
-  const marking = load(process.argv[1], { shells: [inProject('1', 1, 'p 1'), inProject('2', 2, 'p 1'), inProject('3', 1, 'p3'), plain('4', 1)] });
+  // the sidebar is drawn again, and a basedir's All projects for the basedir's own shells;
+  // a basedir's row and a shell of no project mark nothing.
+  const marking = load(process.argv[1], { shells: [inProject('1', 1, 'p 1'), inProject('2', 2, 'p 1'), inProject('3', 1, 'p3'), plain('4', 1), ofBasedir('5', 1, '/c')] });
   const sidebarRows = '<div class="sidebar-project-row basedir-row"><a class="sidebar-project-link" href="/">b</a></div>' +
+    '<div class="sidebar-project all-projects"><div class="sidebar-project-row"><a class="sidebar-project-link" href="/">All projects</a></div></div>' +
+    '<div class="sidebar-project-row basedir-row"><a class="sidebar-project-link" href="/_basedir/c/">c</a></div>' +
+    '<div class="sidebar-project all-projects"><div class="sidebar-project-row"><a class="sidebar-project-link" href="/_basedir/c/">All projects</a></div></div>' +
     '<div class="sidebar-project"><div class="sidebar-project-row"><a class="sidebar-project-link" href="/project/p%201">p 1</a></div></div>' +
     '<div class="sidebar-project"><div class="sidebar-project-row"><a class="sidebar-project-link" href="/project/p2">p2</a></div></div>';
   marking.document.getElementById('sidebar-basedirs').innerHTML = sidebarRows;
   await wait(50);
   const marks = () => [...marking.document.querySelectorAll('#sidebar-basedirs .sidebar-project-row')].map((row) => [row.textContent, row.dataset.terminalShells || '', row.title]);
-  assert.deepEqual(marks(), [['b', '', ''], ['p 1', '2', '2 shells in the terminal'], ['p2', '', '']]);
+  assert.deepEqual(marks(), [['b', '', ''], ['All projects', '', ''], ['c', '', ''], ['All projects', '1', '1 shell in the terminal'], ['p 1', '2', '2 shells in the terminal'], ['p2', '', '']]);
   marking.document.getElementById('sidebar-basedirs').innerHTML = sidebarRows;
   await wait(10);
-  assert.deepEqual(marks()[1], ['p 1', '2', '2 shells in the terminal'], 'a sidebar drawn again lost its mark');
+  assert.deepEqual(marks()[4], ['p 1', '2', '2 shells in the terminal'], 'a sidebar drawn again lost its mark');
+  assert.deepEqual(marks()[3], ['All projects', '1', '1 shell in the terminal'], 'a sidebar drawn again lost its basedir\'s mark');
   marking.server.shells = marking.server.shells.filter((shell) => shell.id !== '2');
   marking.polls[0]();
   await wait(20);
-  assert.deepEqual(marks()[1], ['p 1', '1', '1 shell in the terminal']);
+  assert.deepEqual(marks()[4], ['p 1', '1', '1 shell in the terminal']);
   marking.server.shells = marking.server.shells.filter((shell) => shell.id !== '1');
   marking.polls[0]();
   await wait(20);
-  assert.deepEqual(marks()[1], ['p 1', '', ''], 'a project with no shell kept its mark');
+  assert.deepEqual(marks()[4], ['p 1', '', ''], 'a project with no shell kept its mark');
   assert.match(webShellCSS, /\.sidebar-project-row\[data-terminal-shells\]::after \{/);
 
   // All shells shows every project's shells in the page's dialog, as a log is, this page's
@@ -2570,8 +2601,9 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   addFor('q').click();
   await wait(30);
   assert.ok(growing.requests.includes('POST /_terminal/shells?rows=24&cols=80&basedir=c&project=q'), growing.requests.join(', '));
-  // A project with no shell yet starts one from the list under the cards, where its page
-  // would; no project starts in the home directory, and a basedir that cannot be listed says so.
+  // A project or basedir with no shell yet starts one from the list under the cards, where
+  // its page would; no project starts in the home directory, and a basedir whose projects
+  // cannot be listed says so, still offering its own shells.
   growing.server.basedirs = [{ id: 'b', path: '/b', current: true }, { id: 'c', path: '/c', current: false }, { id: 'd', path: '/d', current: false }];
   growing.server.projects = { b: ['p1', 'p2', 'fresh'], c: ['q', 'other one'] };
   [...growTour().querySelectorAll('button')].find((item) => item.textContent === 'Refresh').click();
@@ -2579,9 +2611,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const newRow = () => growTour().querySelector('.terminal-overview-new');
   const newChoice = () => newRow().querySelector('select');
   assert.deepEqual([...newChoice().children].map((item) => item.tagName === 'OPTGROUP' ? [item.label, [...item.children].map((option) => [option.textContent, option.value])] : [item.textContent, item.value]), [
-    ['No project (home directory)', '/'],
-    ['/b', [['fresh', '/project/fresh']]],
-    ['/c', [['other one', '/_basedir/c/project/other%20one']]],
+    ['No project (home directory)', '/activity'],
+    ['/b', [['All projects (the basedir)', '/'], ['fresh', '/project/fresh']]],
+    ['/c', [['All projects (the basedir)', '/_basedir/c/'], ['other one', '/_basedir/c/project/other%20one']]],
+    ['/d', [['All projects (the basedir)', '/_basedir/d/']]],
   ]);
   assert.equal(newRow().querySelector('.terminal-overview-new-note').textContent, 'Not listed: /d: gone');
   newChoice().value = '/_basedir/c/project/other%20one';
@@ -2589,6 +2622,13 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   await wait(50);
   assert.ok(growing.requests.includes('POST /_terminal/shells?rows=24&cols=80&basedir=c&project=other%20one'), growing.requests.join(', '));
   assert.equal(growing.document.activeElement.dataset.shell, String(growing.server.lastID));
+  newChoice().value = '/';
+  [...newRow().querySelectorAll('button')].find((item) => item.textContent === 'Start').click();
+  await wait(50);
+  assert.ok(growing.requests.includes('POST /_terminal/shells?rows=24&cols=80&basedir='), growing.requests.join(', '));
+  assert.equal([...growTour().querySelectorAll('h3 span')].at(-1).textContent, '/b', 'the basedir\'s shells are not named by it');
+  assert.deepEqual([...newChoice().children].map((item) => item.label || item.textContent)[1], '/b');
+  assert.deepEqual([...newChoice().children][1] && [...[...newChoice().children][1].children].map((option) => option.textContent), ['fresh'], 'the basedir with a shell was still offered');
   assert.equal(growing.sockets.length, growSockets, 'the new shell was shown in a pane');
   growing.server.basedirsStatus = 500;
   [...growTour().querySelectorAll('button')].find((item) => item.textContent === 'Refresh').click();

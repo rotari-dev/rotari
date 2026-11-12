@@ -693,6 +693,18 @@ func TestStartPlacesTheShellAndKeepsItsBanner(t *testing.T) {
 	}
 }
 
+// A shell can go without some of the keeper's environment, and keeps what it is given
+// besides.
+func TestStartLeavesOutWhatItUnsets(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	shell, err := keeper.Start(StartOptions{Rows: 24, Cols: 80, Env: []string{"ADDED=added"}, Unset: []string{"HOME", "ADDED"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := watchShell(t, keeper, shell.ID)
+	seen.run(t, `echo "env-[$HOME]-[$ADDED]-[${PATH:+path}]"`, "env-[]-[added]-[path]")
+}
+
 // A shell nobody is looking at is not idle while another one is in use, since a
 // person watches one at a time. With nothing attached to any, they all end.
 func TestIdleLimitAppliesToTheShellsTogether(t *testing.T) {

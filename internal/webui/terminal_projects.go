@@ -55,8 +55,9 @@ func (s site) serveTerminalProjects(writer http.ResponseWriter, request *http.Re
 			continue
 		}
 		seen[shell.Group] = true
-		baseDir, projectName, ok := strings.Cut(shell.Group, "\x00")
-		if !ok {
+		baseDir, projectName := terminalGroupPlace(shell.Group)
+		if projectName == "" {
+			// No project, or a basedir's own shells, which have no runs.
 			continue
 		}
 		entry := terminalProjectResponse{BaseDir: baseDir, Project: projectName}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -90,6 +91,8 @@ type StartOptions struct {
 	Banner string
 	// Env is added to the Keeper's Shell.Env, overriding what is there.
 	Env []string
+	// Unset names variables of the Keeper's Shell.Env that this shell does not get.
+	Unset []string
 }
 
 // ShellInfo describes a running shell.
@@ -195,7 +198,11 @@ func (keeper *Keeper) Start(start StartOptions) (ShellInfo, error) {
 	if start.Dir != "" {
 		options.Dir = start.Dir
 	}
-	options.Env = append(slices.Clone(options.Env), start.Env...)
+	options.Env = slices.DeleteFunc(slices.Clone(options.Env), func(entry string) bool {
+		name, _, _ := strings.Cut(entry, "=")
+		return slices.Contains(start.Unset, name)
+	})
+	options.Env = append(options.Env, start.Env...)
 	session, err := Start(options)
 	if err != nil {
 		return ShellInfo{}, err
