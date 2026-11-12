@@ -1,8 +1,9 @@
 # Test-suite flakiness
 
-Created 2026-11-12. Status: Phase 1 done; decisions D1 to D4 settled with the
-user on 2026-11-12, each with the recommended option (D1 amended to
-confine the load to a few CPUs). Next: a whole-package round, then Phase 2.
+Created 2026-11-12. Status: done (2026-11-12); decisions D1 to D4 settled
+with the user on 2026-11-12, each with the recommended option (D1 amended to
+confine the load to a few CPUs). Outcome in the
+[work log](work-log.md#phase-4-close).
 
 ## Purpose
 

@@ -185,7 +185,7 @@ Commit: `0ab50c41` (2026-11-12).
 
 ## The positional `unlock` row
 
-Commit: recorded with this entry (2026-11-12).
+Commit: `bf6d94a2` (2026-11-12).
 
 - **Change:** `setupInterrupted` in
   [conformance/06-selectors/positional_test.go](../../conformance/06-selectors/positional_test.go)
@@ -209,3 +209,48 @@ Commit: recorded with this entry (2026-11-12).
   and `-race` of 06-selectors, 04-coordination, and conformance/support,
   passed.
 - **Remaining:** whole-package round (running); Phase 4.
+
+## Phase 4: close
+
+Commit: recorded with this entry (2026-11-12).
+
+- **Whole-package round** (CPUs 0-3, two busy loops per CPU, nice 19, at
+  `7180a200` in a separate workspace; counts are top-level tests):
+
+  | Package | Runs | Failures |
+  | --- | --- | --- |
+  | 06-selectors | 6 | 0 / 54 |
+  | 06-selectors, `-race` | 4 | 0 / 36 |
+  | 02-lifecycle (F1 skipped) | 6 | 0 / 300 |
+  | conformance root | 6 | 0 / 24 |
+  | 03-interfaces | 6 | 0 / 516 |
+  | 04-coordination | 6 | 0 / 240 |
+  | 03-interfaces/pairruns | 4 | 0 / 48 |
+  | 03-interfaces/pairedits | 2 | 0 / 20 |
+
+- **Outcome per item:**
+
+  | Item | Outcome |
+  | --- | --- |
+  | F1 | fixed, two causes shown: the SSH start delay (product) and the `show` snapshot (fixture), `6626af04` |
+  | F9 | fixed, cause shown: a single check of a group still being reaped (fixture), `0ab50c41` |
+  | F2, F3, F4, F5, F6, F8, F10, F11 | closed without reproduction (D3), with the counts in ISSUES.md; F11's evidence is thin (6 runs) |
+  | F7 | left open: its 2026-11-12 recurrence was explained and fixed (`bf6d94a2`), but its older symptoms (a missing `second`, `lineage/latest_run` choosing `first`) were not reproduced, and whether `8c122ccd` fixed them is not shown |
+
+- **Findings against the plan's hypotheses:**
+  - Run order within a second: not reproduced at `17cb01ea` either, so this
+    measurement says nothing about `8c122ccd`.
+  - Shared fixtures in parallel tables: false for 06-selectors, where each
+    row builds its own fixture.
+  - Load: confirmed for F1 and F9, where it widened a real window.
+  - Missing evidence: fixed by Phase 2 in all three conformance harnesses.
+- **Out of scope, still open in ISSUES.md:** about fifteen other
+  intermittent test items not among F1 to F11, among them the
+  `pairjobcontrol` timeouts under load, the unlock flag-pair and
+  `unlock_test.go` items, `TestUnlockDerivesInterruptedRun/lock`, the
+  runtime-directory sweep, the `wait` disconnect items, the elapsed-time
+  assertion, the jj revision read, and the terminal test that failed in CI.
+  They are candidates for a further plan with the same tools.
+- **Validation:** documentation only for this entry; the code changes were
+  validated in the entries above.
+- **Remaining:** none in this plan. Nothing is pushed.
