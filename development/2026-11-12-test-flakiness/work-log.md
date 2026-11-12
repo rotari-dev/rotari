@@ -128,7 +128,7 @@ Commit: `6626af04` (2026-11-12).
 
 ## Phase 2: evidence capture, and F9
 
-Commit: recorded with this entry (2026-11-12).
+Commit: `0ab50c41` (2026-11-12).
 
 - **Change:**
   - [conformance/support/evidence.go](../../conformance/support/evidence.go):
@@ -182,3 +182,30 @@ Commit: recorded with this entry (2026-11-12).
     the first four passed.
 - **Remaining:** whole-package round (running); the positional `unlock`
   row; Phase 4.
+
+## The positional `unlock` row
+
+Commit: recorded with this entry (2026-11-12).
+
+- **Change:** `setupInterrupted` in
+  [conformance/06-selectors/positional_test.go](../../conformance/06-selectors/positional_test.go)
+  kills the run's supervisor first, then the job. `support.KillSupervisors`
+  returns only once the supervisors are gone (its other caller, in
+  04-coordination, still passes).
+- **Reason:** the user chose to run the ordering experiment scoped to the
+  test's own processes. Killing only the job group recorded in the test's
+  own `job.json` (PID checked against its recorded start time), then the
+  rest 0 or 500 ms later, let the supervisor record the job's result and
+  finish the run both times (`state=empty`). The recurrence was the narrow
+  case in between: the supervisor recorded the result and died during its
+  final steps, leaving an interrupted run with a complete summary, which
+  `unlock` correctly finalizes. The earlier experiment, killing the client
+  first, left the summary incomplete. The product behaves as specified.
+- **Plan impact:** this recurrence is explained and fixed; the positional
+  item's older symptoms stay open.
+- **Validation:** the `unlock` rows under the repeat runner, 100 of 100
+  passed (as before the change, so the evidence is the ordered experiment);
+  `go vet ./conformance/...`; `TestPositionalArguments` and 04-coordination,
+  and `-race` of 06-selectors, 04-coordination, and conformance/support,
+  passed.
+- **Remaining:** whole-package round (running); Phase 4.

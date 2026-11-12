@@ -622,13 +622,29 @@ func (e *Env) JobExitStatus(project, jobID string) string {
 }
 
 // KillSupervisors kills the supervisor processes of runs under root, as a
-// crash would, and leaves their jobs running.
+// crash would, and leaves their jobs running. It returns once they are gone,
+// so a caller that then stops the jobs cannot let a supervisor record their
+// results.
 func KillSupervisors(t *testing.T, root string) {
 	t.Helper()
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
+	if _, err := os.ReadDir("/proc"); err != nil {
 		t.Skipf("cannot list processes: %v", err)
 	}
+	for _, pid := range supervisors(root) {
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+	}
+	WaitUntil(t, 10*time.Second, func() (bool, string) {
+		left := supervisors(root)
+		return len(left) == 0, fmt.Sprintf("killed supervisors still running: %v", left)
+	})
+}
+
+// supervisors lists the supervisor processes of runs under root. A killed
+// process that is not yet reaped has an empty command line, so it is not
+// listed.
+func supervisors(root string) []int {
+	entries, _ := os.ReadDir("/proc")
+	var pids []int
 	for _, entry := range entries {
 		pid, err := strconv.Atoi(entry.Name())
 		if err != nil {
@@ -638,8 +654,9 @@ func KillSupervisors(t *testing.T, root string) {
 		if err != nil || !bytes.Contains(cmdline, []byte(root+string(filepath.Separator))) || !bytes.Contains(cmdline, []byte(supervisorArg)) {
 			continue
 		}
-		_ = syscall.Kill(pid, syscall.SIGKILL)
+		pids = append(pids, pid)
 	}
+	return pids
 }
 
 func KillStrays(t *testing.T, root string) {

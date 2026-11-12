@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rotari-dev/rotari/conformance/support"
 )
 
 // Contract SEL-10: each command takes the positional arguments of its row in
@@ -245,9 +247,12 @@ func (f selectorFixture) setUp(setup, tmp string) {
 	case setupActive:
 		f.startLive()
 	case setupInterrupted:
-		// Killing the run's supervisor, and its job, leaves the run lock
-		// naming a process that is gone.
+		// Killing the run's supervisor, and then its job, leaves the run lock
+		// naming a process that is gone. The supervisor goes first: a job
+		// killed before it lets the supervisor record the job's result, so
+		// the run ends with a complete summary, or finishes.
 		f.startLive()
+		support.KillSupervisors(f.e.t, f.e.root)
 		killStrays(f.e.t, f.e.root)
 		waitUntil(f.e.t, 15*time.Second, func() (bool, string) {
 			out := f.e.rotari("check", "-b", f.base, "sweep").stdout
