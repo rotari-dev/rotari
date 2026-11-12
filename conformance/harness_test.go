@@ -66,12 +66,14 @@ type env struct {
 	base   string
 	master string
 	vars   []string
+	// transcript is kept with root when the test fails.
+	transcript *support.Transcript
 }
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	root := t.TempDir()
-	e := &env{t: t, root: root, base: filepath.Join(root, "base"), master: filepath.Join(root, "master")}
+	e := &env{t: t, root: root, base: filepath.Join(root, "base"), master: filepath.Join(root, "master"), transcript: &support.Transcript{}}
 	for _, dir := range []string{"home", "config", "state", "cache", "tmp"} {
 		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
 			t.Fatal(err)
@@ -89,7 +91,9 @@ func newEnv(t *testing.T) *env {
 		"ROTARI_MASTERDIR=" + e.master,
 	}
 	// Before the directories go away, stop the supervisor a test started,
-	// then any job process still running. Cleanups run last-in first-out.
+	// then any job process still running, then keep the evidence of a
+	// failure. Cleanups run last-in first-out.
+	support.KeepOnFailure(t, root, e.transcript)
 	t.Cleanup(func() { killStrays(t, root) })
 	t.Cleanup(func() { _ = e.command("server", "shutdown").Run() })
 	return e
@@ -164,6 +168,7 @@ func (e *env) command(args ...string) *exec.Cmd {
 	cmd := exec.Command(rotariBin, args...)
 	cmd.Env = e.vars
 	cmd.Dir = e.root
+	e.transcript.Started(cmd.Dir, args)
 	return cmd
 }
 
@@ -173,6 +178,7 @@ func (e *env) rotari(args ...string) result {
 	var stdout, stderr bytes.Buffer
 	cmd := e.command(args...)
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	started := time.Now()
 	err := cmd.Run()
 	code := 0
 	if exitErr, ok := err.(*exec.ExitError); ok {
@@ -180,6 +186,7 @@ func (e *env) rotari(args ...string) result {
 	} else if err != nil {
 		e.t.Fatalf("rotari %q: %v", args, err)
 	}
+	e.transcript.Finished(args, code, stdout.String(), stderr.String(), time.Since(started))
 	return result{args: args, code: code, stdout: stdout.String(), stderr: stderr.String()}
 }
 

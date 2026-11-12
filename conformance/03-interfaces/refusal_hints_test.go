@@ -80,6 +80,9 @@ func TestRefusalAndSourceHintsNameOnlyANonImplicitBaseDir(t *testing.T) {
 					notice = line
 				}
 			}
+			if notice == "" {
+				t.Fatalf("retry printed no `Include them with:` notice: %s", retried)
+			}
 			check("retry source notice", notice)
 			copyCommand := printedCommands(notice)[0]
 			if r := client.Rotari(append(copyCommand[:len(copyCommand):len(copyCommand)], "--dry-run")...); r.Code != 0 {

@@ -28,6 +28,8 @@ type env struct {
 	t                  *testing.T
 	root, base, master string
 	vars               []string
+	// transcript is kept with root when the test fails.
+	transcript *support.Transcript
 }
 type result struct {
 	args           []string
@@ -61,13 +63,15 @@ func covers(t *testing.T, _ ...string) { t.Helper() }
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	root := t.TempDir()
-	e := &env{t: t, root: root, base: filepath.Join(root, "base"), master: filepath.Join(root, "master")}
+	e := &env{t: t, root: root, base: filepath.Join(root, "base"), master: filepath.Join(root, "master"), transcript: &support.Transcript{}}
 	for _, d := range []string{"home", "config", "state", "cache", "tmp"} {
 		if err := os.MkdirAll(filepath.Join(root, d), 0755); err != nil {
 			t.Fatal(err)
 		}
 	}
 	e.vars = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + filepath.Join(root, "home"), "XDG_CONFIG_HOME=" + filepath.Join(root, "config"), "XDG_STATE_HOME=" + filepath.Join(root, "state"), "XDG_CACHE_HOME=" + filepath.Join(root, "cache"), "TMPDIR=" + filepath.Join(root, "tmp"), "TZ=UTC", "ROTARI_BASEDIR=" + e.base, "ROTARI_MASTERDIR=" + e.master}
+	// Cleanups run last-in first-out: the evidence is kept last.
+	support.KeepOnFailure(t, root, e.transcript)
 	t.Cleanup(func() { killStrays(t, root) })
 	t.Cleanup(func() { _ = e.command("server", "shutdown").Run() })
 	return e
@@ -77,6 +81,7 @@ func (e *env) command(a ...string) *exec.Cmd {
 	c := exec.Command(rotariBin, a...)
 	c.Env = e.vars
 	c.Dir = e.root
+	e.transcript.Started(c.Dir, a)
 	return c
 }
 func (e *env) rotari(a ...string) result {
@@ -85,6 +90,7 @@ func (e *env) rotari(a ...string) result {
 	c := e.command(a...)
 	c.Stdout = &o
 	c.Stderr = &s
+	started := time.Now()
 	err := c.Run()
 	code := 0
 	if x, ok := err.(*exec.ExitError); ok {
@@ -92,6 +98,7 @@ func (e *env) rotari(a ...string) result {
 	} else if err != nil {
 		e.t.Fatal(err)
 	}
+	e.transcript.Finished(a, code, o.String(), s.String(), time.Since(started))
 	return result{a, code, o.String(), s.String()}
 }
 func (e *env) mustRotari(a ...string) result {

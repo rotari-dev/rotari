@@ -35,3 +35,17 @@ fixed value choices. Descriptions and other derived metadata are covered by
 help output or focused tests rather than duplicated in the schema snapshot.
 Dynamic paths, IDs, and timestamps in JSON output are normalized before
 comparison.
+
+## Evidence from a failing test
+
+When a test that uses `support.NewEnv` (or `newEnv` in this directory)
+fails, its state directory is moved to
+`$TMPDIR/rotari-conformance-failed/TEST-NNNN/state`, and
+`commands.log` beside it lists every rotari command the test ran: when it
+started, where, its exit code, and the full output of the commands run to
+completion. The failure output names the directory. A passing test keeps
+nothing, and nothing removes these directories, so delete them when done.
+
+To reproduce an intermittent failure, run the test many times under CPU
+contention with [scripts/flake-repeat.sh](../scripts/flake-repeat.sh), which
+keeps the `TMPDIR` of each failing process.

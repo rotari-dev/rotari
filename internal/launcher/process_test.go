@@ -139,8 +139,9 @@ func readNumberFile(t *testing.T, path string) int {
 	return 0
 }
 
-// waitProcessGone fails unless pid disappears. A killed process whose parent
-// already exited is reaped by init, so it does not linger as a zombie.
+// waitProcessGone fails unless pid disappears, or, for a negative pid, the
+// process group -pid. A killed process whose parent already exited is reaped
+// by init, so it does not linger as a zombie.
 func waitProcessGone(t *testing.T, pid int, why string) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
@@ -319,9 +320,9 @@ func TestKilledOwnerStopsLaunches(t *testing.T) {
 	}
 	_ = web.Wait()
 	waitProcessGone(t, child, "after its Web process was killed")
-	if !errors.Is(syscall.Kill(-pgid, 0), syscall.ESRCH) {
-		t.Fatalf("process group %d survived its Web process", pgid)
-	}
+	// The group's shell leader ends with sleep and is reaped just after it,
+	// so the group can outlive sleep by microseconds; wait for it too.
+	waitProcessGone(t, -pgid, "after its Web process was killed")
 }
 
 // serveHTTP stands in for a launched service: it listens on

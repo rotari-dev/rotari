@@ -16,7 +16,9 @@
 #   --out DIR      keep output in DIR (default: a new directory under $TMPDIR)
 #
 # Each process's output is kept as run-K.log; the logs of processes that
-# passed are removed unless --keep-passing is given. The summary counts the
+# passed are removed unless --keep-passing is given. A failing process also
+# keeps its TMPDIR as tmp-K, where a failed conformance test leaves its state
+# directory and command transcript under rotari-conformance-failed/. The summary counts the
 # top-level "--- PASS" and "--- FAIL" lines of the tests TEST_REGEX matches.
 set -euo pipefail
 
@@ -111,7 +113,9 @@ run_one() {
     (cd "$package_dir" && TMPDIR=$tmp taskset -c "$cpus" nice -n 19 \
         "$binary" -test.run "$pattern" ${skip:+-test.skip "$skip"} -test.count "$count" -test.v -test.timeout 30m) >"$log" 2>&1 || code=$?
     echo "exit $code" >>"$log"
-    rm -rf "$tmp"
+    # A failing process keeps its TMPDIR, where conformance tests leave the
+    # evidence of a failure (rotari-conformance-failed/).
+    [[ "$code" != 0 ]] || rm -rf "$tmp"
     if [[ "$code" == 0 && "$keep_passing" != true ]]; then
         # Keep the counts of a passing log, not its output.
         grep -E '^--- (PASS|FAIL)' "$log" >"$log.counts" || true

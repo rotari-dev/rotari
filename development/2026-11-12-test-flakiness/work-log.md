@@ -81,7 +81,7 @@ Commit: `7180a200` (2026-11-12).
 
 ## Phase 3, first group: F1, the SSH start delay
 
-Commit: recorded with this entry (2026-11-12).
+Commit: `6626af04` (2026-11-12).
 
 - **Change:** taken ahead of Phase 2 with the user, because the cause is in
   the product.
@@ -125,3 +125,60 @@ Commit: recorded with this entry (2026-11-12).
   - `go vet`, the Web UI type check, `go test ./...`, `go test -race ./...`:
     all passed (the race step included the conformance contract table).
 - **Remaining:** whole-package round (running); Phase 2; F9; Phase 4.
+
+## Phase 2: evidence capture, and F9
+
+Commit: recorded with this entry (2026-11-12).
+
+- **Change:**
+  - [conformance/support/evidence.go](../../conformance/support/evidence.go):
+    `Transcript` records each rotari command's start, directory, exit code,
+    elapsed time, and full output; `KeepOnFailure` moves a failed test's
+    state directory to `$TMPDIR/rotari-conformance-failed/TEST-NNNN/state`,
+    writes `commands.log` beside it, and logs the place. It is registered
+    before the cleanups that stop servers and processes, so it runs after
+    them. A passing test keeps nothing.
+  - All three conformance harnesses use it: `support.NewEnv`, `newEnv` in
+    [conformance/harness_test.go](../../conformance/harness_test.go), and the
+    selectors' own `newEnv` in
+    [conformance/06-selectors/harness_test.go](../../conformance/06-selectors/harness_test.go).
+    The first full run showed the selectors harness had none, when a
+    positional row failed without evidence.
+  - F8's fixture fails with the `retry` output when its notice is missing.
+    F2 already used `RotariRun` and F3 already printed both commands; the
+    other `run` and `retry` calls that check only an exit code are refusal
+    tests that also check stderr, and now leave a transcript.
+  - `scripts/flake-repeat.sh` keeps a failing process's `TMPDIR` (tmp-K).
+  - [conformance/README.md](../../conformance/README.md) says where the
+    evidence goes.
+  - F9: the fixture waits for the process group to be gone, as it already
+    waited for the child.
+- **Reason:** Phase 2 of the plan (D4), and F9 from Phase 1.
+- **F9 cause shown:** a debug copy listed the group's members on failure:
+  none were left in `/proc`, and the group was gone 3 microseconds later, in
+  both failures of 500. The group's `sh` leader ends with `sleep` and is
+  reaped just after it.
+- **New observation:** the full suite failed once in
+  `TestPositionalArguments/unlock/complete_run_ID` (`repaired finalization`
+  instead of `recovered queue`). Each selector row builds its own fixture,
+  so the "shared parallel fixtures" hypothesis does not hold for
+  06-selectors. Killing the client before the supervisor did not reproduce
+  it. A second experiment, killing the job's process group first, was
+  stopped by the tool's permission check: it matched `sleep 300` across the
+  machine instead of the test's own processes. Recorded in ISSUES.md under
+  the positional item.
+- **Validation:**
+  - `TestKeepEvidenceMovesStateAndWritesTranscript`; a deliberately failing
+    test kept `state/` and a `commands.log` with both commands and their
+    output, and named the place.
+  - F9 under the repeat runner (CPUs 0-3, two busy loops per CPU): 7 of
+    1000 failed before (5 of 500 in Phase 1, 2 of 500 in the debug copy),
+    0 of 1000 after.
+  - `go vet ./...`, `go test ./...` (one failure, above), and
+    `go test -race ./...` (passed) before the selectors harness and F9
+    edits; after them, `go vet ./...` and `go test` of the changed packages
+    (`internal/launcher`, `conformance`, `conformance/support`,
+    `conformance/06-selectors`, `conformance/03-interfaces`) and `-race` of
+    the first four passed.
+- **Remaining:** whole-package round (running); the positional `unlock`
+  row; Phase 4.
