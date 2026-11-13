@@ -117,3 +117,18 @@ line where the prompt wraps, which is the shell's doing.
 3.9.8 reports only the two `confirmEndingShells` differences that are on `main` too. Not seen in a real browser.
 
 **Remaining:** None.
+
+## 2026-11-14 00:08 +09:00 — `d90d18f0` Draw the Explorer's Collapse all as editors do
+
+**Change:** `explorerIcons.collapse` in `internal/webui/assets/web_shell.js` is a box in front of another with a
+minus, in place of a chevron pointing up.
+
+**Reason:** The user did not recognize the chevron, which sat beside **Up one directory**'s arrow, and chose the
+form VS Code uses for collapsing the folders in its Explorer.
+
+**Plan impact:** None.
+
+**Validation:** `go test ./internal/webui/ -run 'TestTerminalPanel$'`: pass. The icon itself was not seen in a
+browser.
+
+**Remaining:** None.
