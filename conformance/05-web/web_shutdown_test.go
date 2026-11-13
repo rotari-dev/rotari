@@ -3,7 +3,6 @@ package web
 import (
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -42,10 +41,9 @@ func TestWebShutdownStopsTheDetachedServer(t *testing.T) {
 	if !strings.Contains(stopped.Stdout, "Stopped rotari web at "+server.url+" (PID "+strconv.Itoa(server.pid)+")") {
 		t.Errorf("--shutdown --yes did not say it stopped the server: %s", stopped)
 	}
-	// --shutdown returns once the server is gone, so nothing is left to wait for.
-	if _, err := os.Stat(filepath.Join("/proc", strconv.Itoa(server.pid))); err == nil {
-		t.Errorf("the server (PID %d) is still running after --shutdown returned", server.pid)
-	}
+	// --shutdown returns once the server's lease is released, which it does as it closes
+	// its files, a moment before the process is gone.
+	awaitProcessGone(t, server.pid, "--shutdown")
 	if _, err := os.Stat(record); !os.IsNotExist(err) {
 		t.Errorf("the record outlived --shutdown: %v", err)
 	}
