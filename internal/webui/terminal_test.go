@@ -505,6 +505,8 @@ func TestTerminalShellRoutesAreGuarded(t *testing.T) {
 		{http.MethodGet, terminalShellsPath + "/" + shell.ID + "/" + terminalPreviewName},
 		{http.MethodGet, terminalFilesPath + "?path=/"},
 		{http.MethodPost, terminalFilesPath + "/mkdir"},
+		{http.MethodGet, terminalFilesPath + "/download?path=/"},
+		{http.MethodPost, terminalFilesPath + "/upload?dir=/&name=x"},
 	} {
 		mutates := route.method != http.MethodGet
 		for _, test := range []struct {
@@ -713,7 +715,7 @@ func TestTerminalSessionAndSignOut(t *testing.T) {
 func TestTerminalIsAbsentWithoutTheOption(t *testing.T) {
 	server := httptest.NewServer(Handler(Options{BaseDir: t.TempDir()}))
 	defer server.Close()
-	for _, path := range []string{terminalSocketPath + "?shell=1&rows=24&cols=80", terminalShellsPath, terminalWindowPath + "/project/p", terminalFilesPath + "?path=/", terminalFilesPath + "/mkdir"} {
+	for _, path := range []string{terminalSocketPath + "?shell=1&rows=24&cols=80", terminalShellsPath, terminalWindowPath + "/project/p", terminalFilesPath + "?path=/", terminalFilesPath + "/mkdir", terminalFilesPath + "/download?path=/"} {
 		response, err := http.Get(server.URL + path)
 		if err != nil {
 			t.Fatal(err)

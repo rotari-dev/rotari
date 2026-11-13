@@ -1463,6 +1463,27 @@ level by `TestIdleLimitAppliesToTheShellsTogether` and
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-44** With `rotari web --allow-terminal`, the terminal's Explorer downloads and uploads. A row's menu has
+**Download**, a file as it is and a folder as `name.zip`, and **Upload...**, into a folder or a file's folder, as
+does the tree's empty part (into its top); the browser's file chooser takes one or more files. Files dragged in from
+outside the page onto a folder, a file's row, or the tree's empty part upload there, a closed folder held over opening
+after 700 ms; a folder dropped with them is not uploaded, saying so, and files dropped elsewhere in the panel are not
+left to the browser to open, the Explorer saying where to drop them. A row dragged out of the browser carries
+`DownloadURL` (followed by Chrome and Edge) unless its name holds `:`. `GET /_terminal/files/download?path=/ABS`
+answers a regular file as `application/octet-stream` with ranges, and a folder as `application/zip` written while it
+is read, its entries under the folder's name, folders included, symbolic links and special files left out; both as
+attachments with the name. A failure partway through a zip, such as a file it cannot read, aborts the connection
+rather than ending a short archive. Anything but a file or folder is 400, a path that cannot be read 422. `POST
+/_terminal/files/upload?dir=/ABS&name=NAME` writes the body, which must be `application/octet-stream` (415), as the
+new file, under a temporary name in that folder first and then renamed into place without replacing, so a broken
+upload leaves nothing; a name taken is 409, a bad name (as WEB-43) 400, and other failures 422, each with the reason,
+and success answers `{"path"}`. Uploads go one at a time, the footer naming the file, and a note says how many
+uploaded and why any did not. Both routes are served only where the terminal is, behind its checks. Implemented in
+`internal/fileops` (`WriteNew`, `WriteZip`), `serveTerminalDownload` and `serveTerminalUpload` in
+`internal/webui/terminal_files.go`, and the Explorer in `web_shell.js`; covered by
+[`TestTerminalExplorerDownloadsAndUploads`](../conformance/05-web/terminal_explorer_test.go), the tests of
+`internal/fileops`, `TestTerminalFilesDownloadAndUpload`, and `TestTerminalPanel`.
+
 **WEB-43** With `rotari web --allow-terminal`, the terminal's Explorer (WEB-42) changes files: **New File** and
 **New Folder** in its head and menu, and **Rename** (F2), **Delete** (the Delete key), **Cut**, **Copy**, and
 **Paste** (Ctrl+X, C, V) in a row's menu, with New File, New Folder, and Paste on the tree's empty part. A new or

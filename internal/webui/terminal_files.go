@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -202,6 +203,14 @@ type terminalFileChange struct {
 
 func (s site) serveTerminalFileChange(writer http.ResponseWriter, request *http.Request, op string) {
 	writer.Header().Set("Cache-Control", "no-store")
+	switch op {
+	case "download":
+		serveTerminalDownload(writer, request)
+		return
+	case "upload":
+		serveTerminalUpload(writer, request)
+		return
+	}
 	if request.Method != http.MethodPost {
 		writer.Header().Set("Allow", http.MethodPost)
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
@@ -244,6 +253,12 @@ func (s site) serveTerminalFileChange(writer http.ResponseWriter, request *http.
 	case "copy":
 		done, err = fileops.CopyFile(change.From, done, change.Unique)
 	}
+	writeFileChange(writer, done, err)
+}
+
+// writeFileChange answers a change with the path it made, or its refusal: 400 for what
+// should not have been asked, 409 for a name taken, 422 for any other failure.
+func writeFileChange(writer http.ResponseWriter, done string, err error) {
 	switch {
 	case errors.Is(err, fileops.ErrBadName):
 		http.Error(writer, err.Error(), http.StatusBadRequest)
@@ -254,4 +269,76 @@ func (s site) serveTerminalFileChange(writer http.ResponseWriter, request *http.
 	default:
 		writeTerminalJSON(writer, http.StatusOK, map[string]string{"path": done})
 	}
+}
+
+// serveTerminalDownload sends ?path= as an attachment: a file as it is, with ranges, and
+// a folder as a zip written while it is read. A zip that fails partway, as on a file it
+// cannot read, aborts the connection, so the browser reports a failed download rather
+// than keeping a short archive.
+func serveTerminalDownload(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet && request.Method != http.MethodHead {
+		writer.Header().Set("Allow", "GET, HEAD")
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	path := request.URL.Query().Get("path")
+	if err := checkTerminalDir(path); err != nil {
+		http.Error(writer, err.Error(), http.StatusBadRequest)
+		return
+	}
+	path = filepath.Clean(path)
+	info, err := os.Stat(path)
+	if err != nil {
+		http.Error(writer, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	switch {
+	case info.IsDir():
+		writer.Header().Set(headerContentType, "application/zip")
+		writer.Header().Set("Content-Disposition", attachmentDisposition(fileops.ZipName(path)))
+		if request.Method == http.MethodHead {
+			return
+		}
+		if err := fileops.WriteZip(request.Context(), writer, path); err != nil {
+			if request.Context().Err() == nil {
+				log.Printf("terminal download of %s: %v", path, err)
+			}
+			panic(http.ErrAbortHandler)
+		}
+	case info.Mode().IsRegular():
+		file, err := os.Open(path)
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+		defer file.Close()
+		writer.Header().Set(headerContentType, "application/octet-stream")
+		writer.Header().Set("Content-Disposition", attachmentDisposition(filepath.Base(path)))
+		http.ServeContent(writer, request, "", info.ModTime(), file)
+	default:
+		http.Error(writer, path+" is neither a file nor a folder", http.StatusBadRequest)
+	}
+}
+
+// serveTerminalUpload writes the body as the new file ?name= in ?dir=, never replacing
+// anything. It needs the file as application/octet-stream, which a form from another
+// site cannot send.
+func serveTerminalUpload(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		writer.Header().Set("Allow", http.MethodPost)
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if mediaType, _, _ := mime.ParseMediaType(request.Header.Get(headerContentType)); mediaType != "application/octet-stream" {
+		http.Error(writer, "an upload sends the file as application/octet-stream", http.StatusUnsupportedMediaType)
+		return
+	}
+	query := request.URL.Query()
+	dir := query.Get("dir")
+	if err := checkTerminalDir(dir); err != nil {
+		http.Error(writer, err.Error(), http.StatusBadRequest)
+		return
+	}
+	path, err := fileops.WriteNew(dir, query.Get("name"), request.Body)
+	writeFileChange(writer, path, err)
 }

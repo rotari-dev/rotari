@@ -1,6 +1,8 @@
 package webui
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -264,5 +266,133 @@ func TestTerminalFilesChange(t *testing.T) {
 	}
 	if status, _ := terminalRequest(t, server, http.MethodGet, terminalFilesPath+"/mkdir"); status != http.StatusMethodNotAllowed {
 		t.Errorf("GET: status %d", status)
+	}
+}
+
+// terminalTransfer makes a download or upload request with the token.
+func terminalTransfer(t *testing.T, server *httptest.Server, method, target, contentType, body string) (*http.Response, []byte) {
+	t.Helper()
+	request, err := http.NewRequest(method, server.URL+target, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("X-Rotari-Token", terminalTestToken)
+	if contentType != "" {
+		request.Header.Set("Content-Type", contentType)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return nil, []byte(err.Error())
+	}
+	defer response.Body.Close()
+	answer, err := io.ReadAll(response.Body)
+	if err != nil {
+		return response, []byte("read: " + err.Error())
+	}
+	return response, answer
+}
+
+func TestTerminalFilesDownloadAndUpload(t *testing.T) {
+	server, _ := terminalServer(t, "/bin/sh")
+	dir := t.TempDir()
+	at := func(name string) string { return filepath.Join(dir, name) }
+	if err := os.MkdirAll(at("results/empty"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(at("results/scores é.csv"), []byte("a,b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A file comes as it is, named, with ranges.
+	response, body := terminalTransfer(t, server, http.MethodGet, terminalFilesPath+"/download?path="+url.QueryEscape(at("results/scores é.csv")), "", "")
+	if response.StatusCode != http.StatusOK || string(body) != "a,b\n" || response.Header.Get("Content-Type") != "application/octet-stream" || !strings.Contains(response.Header.Get("Content-Disposition"), "attachment") || !strings.Contains(response.Header.Get("Content-Disposition"), "scores%20%C3%A9.csv") {
+		t.Errorf("a file: %d %q %v", response.StatusCode, body, response.Header)
+	}
+	request, err := http.NewRequest(http.MethodGet, server.URL+terminalFilesPath+"/download?path="+url.QueryEscape(at("results/scores é.csv")), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("X-Rotari-Token", terminalTestToken)
+	request.Header.Set("Range", "bytes=2-")
+	if ranged, err := http.DefaultClient.Do(request); err != nil || ranged.StatusCode != http.StatusPartialContent {
+		t.Errorf("a range: %v %v", ranged, err)
+	} else {
+		ranged.Body.Close()
+	}
+	// A folder comes as a zip under its name.
+	response, body = terminalTransfer(t, server, http.MethodGet, terminalFilesPath+"/download?path="+url.QueryEscape(at("results")), "", "")
+	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != "application/zip" || !strings.Contains(response.Header.Get("Content-Disposition"), `filename=results.zip`) {
+		t.Fatalf("a folder: %d %v", response.StatusCode, response.Header)
+	}
+	archive, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, file := range archive.File {
+		names = append(names, file.Name)
+	}
+	if strings.Join(names, "|") != "results/|results/empty/|results/scores é.csv" {
+		t.Errorf("zip entries %q", names)
+	}
+	for name, test := range map[string]struct {
+		query  string
+		status int
+	}{
+		"relative": {"path=results", http.StatusBadRequest},
+		"missing":  {"path=" + url.QueryEscape(at("gone")), http.StatusUnprocessableEntity},
+		"a device": {"path=/dev/null", http.StatusBadRequest},
+	} {
+		if response, body := terminalTransfer(t, server, http.MethodGet, terminalFilesPath+"/download?"+test.query, "", ""); response.StatusCode != test.status {
+			t.Errorf("%s: %d %s, want %d", name, response.StatusCode, body, test.status)
+		}
+	}
+	// A folder that cannot be read whole aborts the connection, after the status.
+	if os.Geteuid() != 0 {
+		if err := os.WriteFile(at("results/locked"), []byte("x"), 0); err != nil {
+			t.Fatal(err)
+		}
+		response, body := terminalTransfer(t, server, http.MethodGet, terminalFilesPath+"/download?path="+url.QueryEscape(at("results")), "", "")
+		if response != nil && response.StatusCode == http.StatusOK && !strings.HasPrefix(string(body), "read: ") {
+			t.Errorf("an unreadable file: the download completed with %d bytes", len(body))
+		}
+		if err := os.Remove(at("results/locked")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// An upload writes a new file and replaces nothing.
+	upload := func(query, contentType, content string) (int, string) {
+		response, body := terminalTransfer(t, server, http.MethodPost, terminalFilesPath+"/upload?"+query, contentType, content)
+		return response.StatusCode, string(body)
+	}
+	if status, body := upload("dir="+url.QueryEscape(at("results"))+"&name="+url.QueryEscape("new é.txt"), "application/octet-stream", "hello"); status != http.StatusOK || !strings.Contains(body, at("results/new é.txt")) {
+		t.Errorf("an upload: %d %s", status, body)
+	}
+	if content, err := os.ReadFile(at("results/new é.txt")); err != nil || string(content) != "hello" {
+		t.Errorf("uploaded %q %v", content, err)
+	}
+	for name, test := range map[string]struct {
+		query, contentType string
+		status             int
+		want               string
+	}{
+		"a name taken":  {"dir=" + url.QueryEscape(at("results")) + "&name=new%20%C3%A9.txt", "application/octet-stream", http.StatusConflict, "already exists"},
+		"a bad name":    {"dir=" + url.QueryEscape(at("results")) + "&name=a%2Fb", "application/octet-stream", http.StatusBadRequest, "holds / or"},
+		"no name":       {"dir=" + url.QueryEscape(at("results")), "application/octet-stream", http.StatusBadRequest, "a name is needed"},
+		"relative":      {"dir=results&name=x", "application/octet-stream", http.StatusBadRequest, "not absolute"},
+		"a missing dir": {"dir=" + url.QueryEscape(at("gone")) + "&name=x", "application/octet-stream", http.StatusUnprocessableEntity, "no such file"},
+		"a form":        {"dir=" + url.QueryEscape(at("results")) + "&name=x", "application/x-www-form-urlencoded", http.StatusUnsupportedMediaType, "octet-stream"},
+	} {
+		if status, body := upload(test.query, test.contentType, "other"); status != test.status || !strings.Contains(body, test.want) {
+			t.Errorf("%s: %d %s, want %d saying %q", name, status, body, test.status, test.want)
+		}
+	}
+	if content, err := os.ReadFile(at("results/new é.txt")); err != nil || string(content) != "hello" {
+		t.Errorf("a refused upload changed the file: %q %v", content, err)
+	}
+	if response, _ := terminalTransfer(t, server, http.MethodGet, terminalFilesPath+"/upload?dir=/&name=x", "", ""); response.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("GET upload: %d", response.StatusCode)
+	}
+	if response, _ := terminalTransfer(t, server, http.MethodPost, terminalFilesPath+"/download?path=/", "application/json", "{}"); response.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("POST download: %d", response.StatusCode)
 	}
 }

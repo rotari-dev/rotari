@@ -134,6 +134,13 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           requests.push('GET ' + address);
           return Promise.resolve({ ok: true, status: 200, json: async () => server.launchers || { available: false, reason: 'Launching is disabled on this server.', hint: 'Restart with rotari web --allow-exec.' } });
         }
+        if (address.startsWith('/_terminal/files/upload?')) {
+          const query = new URLSearchParams(address.slice(address.indexOf('?') + 1));
+          (server.uploads ||= []).push([query.get('dir'), query.get('name'), (init.headers || {})['Content-Type'], init.body?.constructor?.name]);
+          const refused = server.refuseUpload?.[query.get('name')];
+          if (refused) return Promise.resolve({ ok: false, status: 409, text: async () => refused });
+          return Promise.resolve({ ok: true, status: 200, json: async () => ({ path: query.get('dir') + '/' + query.get('name') }) });
+        }
         if (address.startsWith('/_terminal/files/')) {
           const op = address.slice('/_terminal/files/'.length);
           const body = JSON.parse(init.body);
@@ -3011,10 +3018,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     row.dispatchEvent(new ex.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
     return [...ex.document.querySelectorAll('.terminal-tab-menu button')];
   };
-  assert.deepEqual(menuOf(exRow('train.yaml')).map((item) => [item.textContent, item.disabled]), [['Open in the Table viewer', false], ['Open in a new terminal tab', false], ['Send the path to the terminal', false], ['New File...', false], ['New Folder...', false], ['Cut', false], ['Copy', false], ['Paste', true], ['Rename...', false], ['Delete...', false], ['Copy the path', false], ['Copy the path from here', false]]);
-  menuOf(exRow('train.yaml'))[11].click();
+  assert.deepEqual(menuOf(exRow('train.yaml')).map((item) => [item.textContent, item.disabled]), [['Open in the Table viewer', false], ['Open in a new terminal tab', false], ['Send the path to the terminal', false], ['Download', false], ['Upload...', false], ['New File...', false], ['New Folder...', false], ['Cut', false], ['Copy', false], ['Paste', true], ['Rename...', false], ['Delete...', false], ['Copy the path', false], ['Copy the path from here', false]]);
+  menuOf(exRow('train.yaml'))[13].click();
   await wait(10);
-  menuOf(exRow('train.yaml'))[10].click();
+  menuOf(exRow('train.yaml'))[12].click();
   await wait(10);
   assert.deepEqual(exCopied, ['conf/train.yaml', '/w/p1/conf/train.yaml']);
   // A new tab opens in a folder, or in a file's folder, as a shell of the page's project.
@@ -3099,7 +3106,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   promptAnswer = 'x';
   ex.document.querySelector('.terminal-explorer-tree').dispatchEvent(new ex.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
   const rootMenu = [...ex.document.querySelectorAll('.terminal-tab-menu button')];
-  assert.deepEqual(rootMenu.map((item) => item.textContent), ['New File...', 'New Folder...', 'Paste']);
+  assert.deepEqual(rootMenu.map((item) => item.textContent), ['New File...', 'New Folder...', 'Paste', 'Upload...']);
   rootMenu[1].click();
   await wait(20);
   assert.deepEqual(lastChange().slice(0, 2), ['mkdir', { path: '/w/p1/x' }]);
@@ -3129,6 +3136,57 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   dragEvent('dragend', exRow('a b.csv'));
   exRow('shared').click();
   await wait(20);
+
+  // Download: a link to the file, or to the folder as a zip, and a row dragged out of the
+  // browser carries the same address.
+  const followed = [];
+  ex.window.HTMLAnchorElement.prototype.click = function () { followed.push([this.getAttribute('href'), this.hasAttribute('download')]); };
+  menuOf(exRow('conf')).find((item) => item.textContent === 'Download').click();
+  assert.deepEqual(followed.at(-1), ['/_terminal/files/download?path=%2Fw%2Fp1%2Fconf', true]);
+  const carried = {};
+  const outward = new ex.window.Event('dragstart', { bubbles: true });
+  Object.defineProperty(outward, 'dataTransfer', { value: { types: [], setData(type, value) { carried[type] = value; }, effectAllowed: '' } });
+  exRow('conf').dispatchEvent(outward);
+  assert.equal(carried.DownloadURL, 'application/zip:conf.zip:http://127.0.0.1:9/_terminal/files/download?path=%2Fw%2Fp1%2Fconf');
+  exRow('conf').dispatchEvent(new ex.window.Event('dragend', { bubbles: true }));
+  // Upload: chosen files go one at a time, each refused rather than replacing a file.
+  ex.window.HTMLInputElement.prototype.click = function () {
+    if (this.type !== 'file') return;
+    Object.defineProperty(this, 'files', { value: [new ex.window.File(['a'], 'one.csv'), new ex.window.File(['b'], 'two.csv')] });
+    this.onchange();
+  };
+  ex.server.refuseUpload = { 'two.csv': 'write /w/p1/conf/two.csv: file already exists' };
+  menuOf(exRow('conf')).find((item) => item.textContent === 'Upload...').click();
+  await wait(30);
+  assert.deepEqual(ex.server.uploads, [['/w/p1/conf', 'one.csv', 'application/octet-stream', 'File'], ['/w/p1/conf', 'two.csv', 'application/octet-stream', 'File']]);
+  assert.equal(exNote(), 'Uploaded 1 of 2. Not uploaded: two.csv: write /w/p1/conf/two.csv: file already exists');
+  assert.equal(ex.document.querySelector('.terminal-input-file, input[type="file"]'), null, 'the chooser stayed in the page');
+  delete ex.server.refuseUpload;
+  // Files dropped from the desktop on a folder upload there; a folder dropped with them does not.
+  const fromDesktop = (type, target, folders = [], names = []) => {
+    const event = new ex.window.Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: {
+      types: ['Files'], dropEffect: '',
+      items: [...folders.map((name) => ({ webkitGetAsEntry: () => ({ isDirectory: true, name }) })), ...names.map((name) => ({ webkitGetAsEntry: () => ({ isDirectory: false, name }) }))],
+      files: [...folders, ...names].map((name) => new ex.window.File([''], name)),
+    } });
+    target.dispatchEvent(event);
+    return event;
+  };
+  assert.equal(fromDesktop('dragover', exRow('conf')).defaultPrevented, true, 'a folder refused files from the desktop');
+  const notes = [];
+  const noteBox = ex.document.querySelector('.terminal-send-note');
+  new ex.window.MutationObserver(() => notes.push(noteBox.textContent)).observe(noteBox, { childList: true, characterData: true, subtree: true });
+  fromDesktop('drop', exRow('conf'), ['dataset'], ['three.txt']);
+  await wait(30);
+  assert.deepEqual(ex.server.uploads.at(-1), ['/w/p1/conf', 'three.txt', 'application/octet-stream', 'File']);
+  assert.equal(ex.server.uploads.some((upload) => upload[1] === 'dataset'), false, 'a folder was uploaded');
+  assert.ok(notes.includes('Folders are not uploaded: dataset. The files are.'), notes.join(' | '));
+  assert.equal(exNote(), 'Uploaded three.txt to /w/p1/conf.');
+  // Dropped on a pane instead, nothing opens in place of the page.
+  const besideTree = fromDesktop('drop', ex.document.querySelector('.terminal-pane'), [], ['four.txt']);
+  assert.equal(besideTree.defaultPrevented, true, 'a file dropped on a pane was left to the browser');
+  assert.equal(exNote(), 'Drop files on a folder in the Explorer to upload them.');
   // A file opens in the Table viewer in a tab opened at once, so that no pop-up is blocked.
   ex.server.tableviewSource = { source: 'E 1', dir: '/w/p1', child: 'a b.csv' };
   exRow('a b.csv').dispatchEvent(new ex.window.MouseEvent('dblclick', { bubbles: true }));

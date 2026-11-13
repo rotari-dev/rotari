@@ -1,7 +1,10 @@
 package web
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -255,5 +258,102 @@ func TestTerminalExplorerChangesFiles(t *testing.T) {
 		if _, err := os.Lstat(at(refused)); !os.IsNotExist(err) {
 			t.Errorf("a refused request made %s", refused)
 		}
+	}
+}
+
+// The Explorer downloads a file, or a folder as a zip, and uploads files without
+// replacing any, only where the terminal is served.
+func TestTerminalExplorerDownloadsAndUploads(t *testing.T) {
+	covers(t, "WEB-44")
+	e := terminalEnv(t)
+	base := e.StartWeb("--allow-terminal")
+	dir := filepath.Join(e.Root, "results")
+	if err := os.MkdirAll(filepath.Join(dir, "empty"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "scores.csv"), []byte("a,b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(e.Root, "elsewhere"), filepath.Join(dir, "link")); err != nil {
+		t.Fatal(err)
+	}
+	get := func(path string) (*http.Response, []byte) {
+		request, err := http.NewRequest(http.MethodGet, base+"/_terminal/files/download?path="+url.QueryEscape(path), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("X-Rotari-Token", launchToken)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		body, err := io.ReadAll(response.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response, body
+	}
+	response, body := get(filepath.Join(dir, "scores.csv"))
+	if response.StatusCode != http.StatusOK || string(body) != "a,b\n" || response.Header.Get("Content-Disposition") != "attachment; filename=scores.csv" {
+		t.Errorf("a file: %d %q %v", response.StatusCode, body, response.Header)
+	}
+	response, body = get(dir)
+	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != "application/zip" || response.Header.Get("Content-Disposition") != "attachment; filename=results.zip" {
+		t.Fatalf("a folder: %d %v", response.StatusCode, response.Header)
+	}
+	archive, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, file := range archive.File {
+		names = append(names, file.Name)
+	}
+	if strings.Join(names, "|") != "results/|results/empty/|results/scores.csv" {
+		t.Errorf("zip entries %q, want the folders and the file without the link", names)
+	}
+	upload := func(name, contentType, content string, headers map[string]string) support.HTTPResult {
+		all := map[string]string{"X-Rotari-Token": launchToken, "Content-Type": contentType}
+		for key, value := range headers {
+			all[key] = value
+		}
+		return e.HTTPDo(http.MethodPost, base+"/_terminal/files/upload?dir="+url.QueryEscape(dir)+"&name="+url.QueryEscape(name), all, content)
+	}
+	if got := upload("new.txt", "application/octet-stream", "hello", nil); got.Status != http.StatusOK || !strings.Contains(got.Body, filepath.Join(dir, "new.txt")) {
+		t.Errorf("an upload: (%d, %s)", got.Status, got.Body)
+	}
+	for name, test := range map[string]struct {
+		file, contentType string
+		headers           map[string]string
+		status            int
+	}{
+		"a name taken":          {"new.txt", "application/octet-stream", nil, http.StatusConflict},
+		"a bad name":            {"a/b", "application/octet-stream", nil, http.StatusBadRequest},
+		"a form":                {"form.txt", "application/x-www-form-urlencoded", nil, http.StatusUnsupportedMediaType},
+		"through a plain proxy": {"proxied.txt", "application/octet-stream", map[string]string{"X-Forwarded-For": "192.0.2.1"}, http.StatusForbidden},
+		"from another site":     {"elsewhere.txt", "application/octet-stream", map[string]string{"Origin": "http://attacker.example"}, http.StatusForbidden},
+	} {
+		if got := upload(test.file, test.contentType, "other", test.headers); got.Status != test.status {
+			t.Errorf("%s: (%d, %s), want %d", name, got.Status, got.Body, test.status)
+		}
+	}
+	if content, err := os.ReadFile(filepath.Join(dir, "new.txt")); err != nil || string(content) != "hello" {
+		t.Errorf("the upload after refusals: %q %v", content, err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var left []string
+	for _, entry := range entries {
+		left = append(left, entry.Name())
+	}
+	if strings.Join(left, ",") != "empty,link,new.txt,scores.csv" {
+		t.Errorf("left %v, want no refused or temporary files", left)
+	}
+	plain := support.NewEnv(t).StartWeb()
+	if got := e.HTTPDo(http.MethodGet, plain+"/_terminal/files/download?path="+url.QueryEscape(dir), nil, ""); got.Status != http.StatusNotFound {
+		t.Errorf("a download without the terminal: (%d, %s)", got.Status, got.Body)
 	}
 }

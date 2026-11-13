@@ -3602,6 +3602,17 @@ function shellWord(value) {
         // Copied into a pane as its path, moved within the tree.
         event.dataTransfer.effectAllowed = "copyMove";
         explorer.dragging = path;
+        // Dragged out of the browser, it downloads, where the browser knows how.
+        const saved = folder ? baseName(path) + ".zip" : baseName(path);
+        if (!saved.includes(":"))
+          event.dataTransfer.setData(
+            "DownloadURL",
+            (folder ? "application/zip" : "application/octet-stream") +
+              ":" +
+              saved +
+              ":" +
+              new URL(downloadPath(path), location.href).href,
+          );
       };
       row.ondragend = () => {
         explorer.dragging = "";
@@ -3634,6 +3645,8 @@ function shellWord(value) {
           true,
         ],
         ["Send the path to the terminal", () => sendExplorerPath(path), true],
+        ["Download", () => downloadExplorerItem(path), true],
+        ["Upload...", () => chooseUploads(folder ? path : dir), true],
         ...explorerChangeChoices(path, folder),
         ["Copy the path", () => copyExplorerText(path), true],
         [
@@ -3793,17 +3806,24 @@ function shellWord(value) {
   // takesDrops lets a row, or the tree's empty part, take a row dragged within the tree:
   // a folder takes it, a file's row gives it to its folder, and a closed folder held over
   // opens after a moment.
+  // Files dragged in from outside the page, as from the desktop, rather than a row.
+  const carriesFiles = (event) =>
+    !explorer.dragging &&
+    [...(event.dataTransfer?.types || [])].includes("Files");
   const takesDrops = (element, folder, closedFolder) => {
     // The tree's own folder is its top, which moves with the shell.
     const target = () => (typeof folder === "function" ? folder() : folder);
+    const fromTree = (event) =>
+      element !== explorer.tree || event.target === explorer.tree;
     element.addEventListener("dragover", (event) => {
       const into = target();
-      if (!explorer.dragging) return;
-      if (element === explorer.tree && event.target !== explorer.tree) return;
-      if (!movableInto(explorer.dragging, into)) return;
+      if (!fromTree(event) || !into) return;
+      const files = carriesFiles(event);
+      if (!files && !movableInto(explorer.dragging, into)) return;
       event.preventDefault();
       event.stopPropagation();
-      event.dataTransfer && (event.dataTransfer.dropEffect = "move");
+      if (event.dataTransfer)
+        event.dataTransfer.dropEffect = files ? "copy" : "move";
       if (!element.classList.contains("terminal-explorer-drop")) {
         clearDragMarks();
         element.classList.add("terminal-explorer-drop");
@@ -3811,7 +3831,7 @@ function shellWord(value) {
       if (closedFolder && explorer.hoverPath !== into) {
         explorer.hoverPath = into;
         explorer.hoverTimer = setTimeout(() => {
-          if (explorer.dragging && !explorer.expanded.has(into))
+          if (explorer.hoverPath === into && !explorer.expanded.has(into))
             toggleFolder(into);
         }, explorerHoverOpen);
       }
@@ -3827,15 +3847,124 @@ function shellWord(value) {
       }
     });
     element.addEventListener("drop", (event) => {
-      if (!explorer.dragging) return;
-      if (element === explorer.tree && event.target !== explorer.tree) return;
+      if (!fromTree(event)) return;
+      const files = carriesFiles(event);
+      if (!files && !explorer.dragging) return;
       event.preventDefault();
       event.stopPropagation();
+      clearDragMarks();
+      if (files) {
+        uploadDropped(event.dataTransfer, target());
+        return;
+      }
       const path = explorer.dragging;
       explorer.dragging = "";
-      clearDragMarks();
       moveByDrag(path, target());
     });
+  };
+  // Downloads and uploads. A folder downloads as a zip the server writes as it reads, and
+  // a file as it is; the browser shows the progress. Uploads go one file at a time, each
+  // refused rather than replacing a file of its name.
+  const downloadPath = (path) =>
+    filesPath + "/download?path=" + encodeURIComponent(path);
+  const downloadExplorerItem = (path) => {
+    const link = document.createElement("a");
+    link.href = downloadPath(path);
+    link.download = "";
+    document.body.append(link);
+    link.click();
+    link.remove();
+  };
+  const uploadFiles = async (files, into) => {
+    if (!files.length || !into) return;
+    const failed = [];
+    for (const [index, file] of files.entries()) {
+      explorer.busy =
+        "Uploading " +
+        file.name +
+        (files.length > 1 ? ", " + (index + 1) + " of " + files.length : "") +
+        "...";
+      renderExplorer();
+      let response;
+      try {
+        response = await serverFetch(
+          filesPath +
+            "/upload?dir=" +
+            encodeURIComponent(into) +
+            "&name=" +
+            encodeURIComponent(file.name),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: file,
+          },
+        );
+      } catch {}
+      if (!response?.ok)
+        failed.push(
+          file.name +
+            ": " +
+            (response
+              ? ((await response.text()) || "").trim() ||
+                "status " + response.status
+              : "the server did not answer"),
+        );
+    }
+    explorer.busy = "";
+    const uploaded = files.length - failed.length;
+    if (failed.length)
+      showNote(
+        (uploaded
+          ? "Uploaded " + uploaded + " of " + files.length + ". "
+          : "") +
+          "Not uploaded: " +
+          failed.join("; "),
+        8000,
+      );
+    else
+      showNote(
+        "Uploaded " +
+          (files.length === 1 ? files[0].name : files.length + " files") +
+          " to " +
+          into +
+          ".",
+        2500,
+      );
+    if (into !== explorer.root) explorer.expanded.add(into);
+    await refreshExplorer();
+  };
+  // A dropped folder is not uploaded: only the files dropped with it are.
+  const uploadDropped = (transfer, into) => {
+    const folders = new Set(
+      [...(transfer.items || [])]
+        .map((item) => item.webkitGetAsEntry?.())
+        .filter((entry) => entry?.isDirectory)
+        .map((entry) => entry.name),
+    );
+    const files = [...(transfer.files || [])].filter(
+      (file) => !folders.has(file.name),
+    );
+    if (folders.size)
+      showNote(
+        "Folders are not uploaded: " +
+          [...folders].join(", ") +
+          (files.length ? ". The files are." : "."),
+        6000,
+      );
+    uploadFiles(files, into);
+  };
+  const chooseUploads = (into) => {
+    const chooser = document.createElement("input");
+    chooser.type = "file";
+    chooser.multiple = true;
+    chooser.hidden = true;
+    chooser.onchange = () => {
+      const files = [...chooser.files];
+      chooser.remove();
+      uploadFiles(files, into);
+    };
+    document.body.append(chooser);
+    chooser.click();
   };
   // The menu of a row's changes, after its other choices.
   const explorerChangeChoices = (path, folder) => [
@@ -4146,6 +4275,7 @@ function shellWord(value) {
           () => pasteExplorerItem(explorer.root),
           Boolean(explorer.clipboard),
         ],
+        ["Upload...", () => chooseUploads(explorer.root), true],
       ]);
     };
     explorer.footer = document.createElement("div");
@@ -4161,6 +4291,15 @@ function shellWord(value) {
     explorer.body = document.createElement("div");
     explorer.body.className = "terminal-body";
     explorer.body.append(aside, panesBox);
+    // A file dropped beside the tree would make the browser open it in place of the page.
+    explorer.body.addEventListener("dragover", (event) => {
+      if (carriesFiles(event)) event.preventDefault();
+    });
+    explorer.body.addEventListener("drop", (event) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      showNote("Drop files on a folder in the Explorer to upload them.", 4000);
+    });
     new ResizeObserver(() => applyExplorer()).observe(explorer.body);
     return explorer.body;
   };

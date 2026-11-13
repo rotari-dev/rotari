@@ -257,6 +257,14 @@ move between file systems, such as onto another disk, is refused: use `mv` in th
 for files: a copy pasted beside its file is named `name copy.ext`, then `name copy 2.ext`; for a folder, use
 `cp -r` in the shell.
 
+**Download** in a row's menu saves a file through the browser, or a folder as `name.zip`, made as it is sent, so a
+large folder starts at once and takes as long as it takes; the browser shows its progress. Symbolic links inside it
+are left out, and if a file in it cannot be read, the download fails rather than leaving one out. In Chrome and Edge
+you can also drag a row out of the browser onto your desktop. **Upload...** in the menu of a folder, a file (its
+folder), or the tree's empty part picks files to send there, and you can drop files from your desktop onto a
+folder or the tree, holding them over a closed folder to open it. A file whose name is taken there is not uploaded,
+and the Explorer says so; a folder dropped among files is not uploaded either.
+
 The **Clear** icon empties the tab's screen and scrollback, and what would be shown again after following a
 link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing
 while a full-screen program such as `vim` runs, and says so.

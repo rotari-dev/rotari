@@ -212,7 +212,8 @@ path, under the same token, `Host` check, and HTTPS-or-loopback rule as the shel
 on the same server could not, so it widens nothing; without `--allow-terminal`, neither is offered. The
 Explorer's changes to files (making, renaming, moving, copying, deleting) are the same: `POST` requests with a JSON
 body, which a page on another site cannot send without a preflight the server never grants, behind the same
-checks, and nothing a shell could not do.
+checks, and nothing a shell could not do. Downloads and uploads are too: a download is a `GET` that a page on another
+site can start but not read, and an upload needs an `application/octet-stream` body, which a form cannot send.
 
 Shells outlive their connections, like a launched VS Code server, so ones left open stay reachable
 to anyone with your session while any page stays open and for up to 3 hours after, or what
