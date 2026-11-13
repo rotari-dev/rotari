@@ -152,7 +152,22 @@ manifests too, but its manifest describes jobs and their execution settings,
 not a file-driven pipeline. Most workflow engines also define
 where and with what each step runs, and several start runs by themselves from
 schedules or events. This is the right design for pipelines that are shared,
-reproduced, or operated, and it is what rotari leaves out.
+reproduced, or operated, and it is what rotari leaves out. They come in two
+kinds, by who starts a run:
+
+- **Pipeline engines: Snakemake and Nextflow.** A person starts each run
+  from the CLI, as with rotari, often on the same HPC schedulers. The
+  pipeline's steps follow from the files or data channels that pass between
+  them, and a rerun reuses what is already done. They are common in
+  bioinformatics and other data analysis, and are the closest to rotari in
+  who uses them and how; the difference is that the pipeline is formalized.
+- **Orchestrators: Dagu, Airflow, Prefect, and Dagster.** A resident
+  scheduler starts runs by itself, on cron schedules or events as well as on
+  request, and monitors them, for workflows operated day after day, such as data
+  ingestion. Dagu is the lightest, a single binary, but is still a service
+  to keep running. They are the furthest from rotari.
+
+The table lists them in that order.
 
 | | Workflow defined as | Runs start from | Where steps run | Environment | Rerunning failures |
 | --- | --- | --- | --- | --- | --- |
@@ -164,15 +179,15 @@ reproduced, or operated, and it is what rotari leaves out.
 
 What separates rotari from all of them:
 
-- **A batch definition, not a pipeline engine.** A shell script, manifest, or
-  Python program can build the batch. Rotari supports job dependencies,
-  arrays, matrices, retries, and reconciliation, but it does not provide
-  file-based dependency discovery, conditional workflow logic, or general
-  output passing between jobs.
-- **No workflow triggers.** There is no built-in scheduler, cron, or sensor;
-  every run is started by a person or an agent through the CLI, Python client,
-  or API. The Web UI can inspect and control runs, but does not turn rotari
-  into an event-driven workflow engine.
+- **A batch definition, not a pipeline engine** (the difference from Snakemake
+  and Nextflow). A shell script, manifest, or Python program can build the
+  batch. Rotari supports job dependencies, arrays, matrices, retries, and
+  reconciliation, but it does not provide file-based dependency discovery,
+  conditional workflow logic, or general output passing between jobs.
+- **No workflow triggers** (the difference from the orchestrators). There is
+  no built-in scheduler, cron, or sensor; every run is started by a person or
+  an agent through the CLI, Python client, or API. The Web UI can inspect and
+  control runs, but does not turn rotari into an event-driven workflow engine.
 - **No adaptive search.** Grid and random sweeps are a fixed set of jobs,
   which rotari's matrix and array jobs run. Searches such as Bayesian
   optimization, Hyperband, or early stopping decide the next trials from
@@ -180,19 +195,24 @@ What separates rotari from all of them:
   leaves it to the caller or to a tool such as W&B Sweeps or Polyaxon, which
   also has DAGs and cron schedules on Kubernetes (see
   [Experiment trackers](#experiment-trackers)).
-- **No service to operate.** There is no resident server or database, and
-  on a cluster the site's scheduler does the placement and resource
-  allocation.
+- **No service to operate** (also the difference from the orchestrators).
+  There is no resident server or database, and on a cluster the site's
+  scheduler does the placement and resource allocation.
 
 Choose a workflow engine when the pipeline itself is the product: shared with
 others, rerun on new data, or operated on a schedule. Rotari is not a step
-toward one; it is for batches that people run themselves from scripts. Among
-them:
+toward one; it is for batches that people run themselves from scripts.
+
+A pipeline engine, when people still start the runs but the pipeline should
+be formalized:
 
 - **Snakemake** when the pipeline is driven by files and its structure is
   worth formalizing.
 - **Nextflow** for pipelines that are shared, reproduced, and run at scale,
   with containers, clusters, or cloud.
+
+An orchestrator, when runs should start by themselves and be monitored:
+
 - **Dagu** for a lightweight, single-binary workflow engine with a Web UI,
   cron, and event triggers.
 - **Airflow, Prefect, or Dagster** for production pipelines that run on a
