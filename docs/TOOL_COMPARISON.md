@@ -201,23 +201,43 @@ them:
 ## Experiment trackers
 
 Experiment trackers record what a training job measured: its parameters,
-metrics over time, and outputs such as models. The job's code logs to them
-through their library, and their UI compares runs. They answer "which
-settings gave the best result"; rotari answers "what ran, where, and what
-failed". Most of them do not run your commands, and rotari does not read
-metrics, so the two are used together rather than instead of each other.
-The Polyaxon entries are based on a clone of
+metrics over time, and outputs such as models. They answer "which settings
+gave the best result"; rotari answers "what ran, where, and what failed".
+Rotari does not read metrics, so they are used alongside it. They come in
+three kinds, by how much they do:
+
+- **A viewer of files the job writes: TensorBoard.** The job writes event
+  files, for example with PyTorch's `SummaryWriter` or `tf.summary`, and
+  TensorBoard draws the curves from a directory of them. There is no
+  database, no server to keep, and no record of runs beyond the files:
+  comparing runs means pointing it at their directories. Nothing to set up,
+  which is why it is everywhere, and nothing to search either.
+- **Trackers: MLflow, Aim, and Weights & Biases.** The job's code logs each
+  run through the tracker's library to a store, and the tracker's UI
+  searches and compares runs across projects, keeps models, and shares
+  results. MLflow and Aim can keep the store in local files; W&B sends it to
+  a hosted service or a self-hosted server, so on compute nodes without
+  internet access it logs offline and is synced later.
+- **Trackers that also dispatch runs: ClearML, W&B Sweeps, and Polyaxon.**
+  Besides recording, they decide what to run and start it on their own
+  workers: ClearML Agent runs queued tasks, `wandb agent` runs the sweep
+  trials the W&B server chooses, and Polyaxon runs jobs, DAGs, and searches
+  on Kubernetes. Only this kind overlaps with rotari; see the Polyaxon
+  notes and the Sweeps item below.
+
+The table lists them in that order; W&B is a tracker whose sweep agent also
+dispatches runs. The Polyaxon entries are based on a clone of
 [polyaxon](https://github.com/polyaxon/polyaxon) (2026-11-10, v2.20.1),
 taken on 2026-11-11.
 
 | | Records | How data gets there | Where data lives | Runs jobs itself |
 | --- | --- | --- | --- | --- |
+| [TensorBoard](https://www.tensorflow.org/tensorboard) | scalars, images, graphs, and other summaries | the job writes event files | event files on disk | no |
 | [MLflow](https://mlflow.org/) | parameters, metrics, artifacts, models | the job's code calls its API, or autologging | a local file store or SQLite database, or a tracking server | `mlflow run` runs an MLflow Project; it has no queue of shell commands |
 | [Aim](https://aimstack.io/) | parameters, metrics, images, and other objects | the job's code calls its SDK or a framework integration | a local repository, optionally behind a tracking server | no |
 | [Weights & Biases](https://wandb.ai/) | parameters, metrics, artifacts, models | the job's code calls its SDK | a hosted service or a self-hosted server | `wandb agent` runs sweep trials the server hands out |
 | [ClearML](https://clear.ml/) | experiments, metrics, artifacts, models, datasets | the job's code calls its SDK, with automatic logging | a ClearML server, hosted or self-hosted | ClearML Agent runs queued tasks on workers |
 | [Polyaxon](https://polyaxon.com/) | parameters, metrics, artifacts, logs, lineage | the job's code calls its tracking client | a Polyaxon server: PostgreSQL, with artifacts in object storage or NFS | on Kubernetes: Polyaxonfile jobs, DAGs, schedules, and hyperparameter searches; a pip or Docker Compose install tracks only |
-| [TensorBoard](https://www.tensorflow.org/tensorboard) | scalars, images, graphs, and other summaries | the job writes event files | event files on disk | no |
 | rotari | each job's command, status, attempts, logs, and artifact paths | rotari runs the job; no code changes | files in the basedir | yes: local, SSH, Slurm, PBS, LSF, SGE |
 
 Polyaxon is the one tracker here whose relation to rotari depends on where
@@ -232,9 +252,9 @@ the jobs run:
   no Kubernetes executor.
 - **On Slurm, PBS, LSF, SGE, or SSH hosts, use both.** This is where rotari
   is meant to run: batch clusters, typically at universities and computing
-  centers, and machines reached over SSH.
-  Polyaxon cannot run jobs there: installed with pip or Docker Compose
-  instead of on Kubernetes, it only tracks. Rotari runs the jobs, and their
+  centers, and machines reached over SSH. Polyaxon cannot run jobs there:
+  installed with pip or Docker Compose instead of on Kubernetes, it only
+  tracks. Rotari runs the jobs, and their
   code logs to the Polyaxon server, as with MLflow.
 
 How they fit together:
