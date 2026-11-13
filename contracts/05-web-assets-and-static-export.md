@@ -1463,6 +1463,34 @@ level by `TestIdleLimitAppliesToTheShellsTogether` and
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-45** With `rotari web --allow-terminal`, the shells of one group (a project's, a basedir's own, or those of no
+project, as WEB-34 groups them) share a history of where they have been. The server reads a shell's own working
+directory once its output has paused at its prompt (the shell holding its terminal's foreground) after input with a
+carriage return or line feed, and a directory other than the one it last read for that shell goes to the front of the
+group's history; where a shell starts enters when it starts, named without symbolic links. Each directory appears
+once, newest first, at most 20. A directory changed by a program in front of the shell, such as a nested shell or
+`ssh`, is not seen, nor one left before the prompt returns. The history is kept only in memory: a shell ending leaves
+it, and it is forgotten whenever every shell ends (signing out, the idle limit, the server stopping). `GET
+/_terminal/shells/ID/dirs` answers `history` (`dir`, `entered_at`); for a project's shell, `runs`, where its newest
+runs started in `rotari show`'s order, read from at most the latest 20 runs and each directory once, at most five, with
+`run` and `started_at` from the run ID, a run whose context cannot be read or names no directory listed with `error`
+in place of `dir`, and `runs_error` beside the history when the runs cannot be listed; for a basedir's own shell, the
+`workspace` it belongs to, if any, or its `error`. Every directory carries `not_utf8` (U+FFFD in place of bad bytes),
+`missing` (not a directory on this host now), and `stat_error`. A shell not running is 404, a method but GET 405, and
+the route is served only where the terminal is (404 without it), behind its checks. The panel's **Recent
+directories** button, and the Explorer's path, open a dropdown of these, with a filter, under **Recent**, **Runs**,
+and **Workspace**; arrow keys move over the rows that can be chosen, Enter or a click chooses, and Escape closes it
+and gives the keys back to the shell. Choosing asks the shell's preview first and types `cd` and the path, quoted as
+the send buttons quote one word, without Enter, through the send buttons' rules; when a command holds the
+foreground, or that cannot be told, it types nothing and a note says why. A row also shows its directory in the
+Explorer with Follow off, opens a new tab of the page's shells there (WEB-34's `dir`), or copies the path. A missing
+directory can only be copied, and a name marked `not_utf8` or a run with an `error` offers nothing; a refused request
+is shown in the list. Implemented in `Keeper.History` in `internal/terminal`, `internal/webui/terminal_dirs.go`, and
+the panel in `web_shell.js`; covered by [`TestTerminalRecentDirectories`](../conformance/05-web/terminal_dirs_test.go),
+`TestHistoryIsWhereAGroupsShellsHaveBeen`, `TestHistoryKeepsTwentyDirectories`,
+`TestHistoryKeepsTheStartOfAShellMovedAtOnce`, `TestTerminalDirsOfAShellsGroup`,
+`TestTerminalDirsReadTheNewestTwentyRuns`, `TestTerminalPanel`, and a step of `TestTerminalPanelInBrowser`.
+
 **WEB-44** With `rotari web --allow-terminal`, the terminal's Explorer downloads and uploads. A row's menu has
 **Download**, a file as it is and a folder as `name.zip`, and **Upload...**, into a folder or a file's folder, as
 does the tree's empty part (into its top); the browser's file chooser takes one or more files. Files dragged in from

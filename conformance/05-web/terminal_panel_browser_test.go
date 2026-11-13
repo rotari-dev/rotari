@@ -100,6 +100,22 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await page.evaluate('document.querySelector(".xterm-viewport").scrollTop = 0');
   await until('the first line of the long output in the scrollback', screenHas('line-1.'));
 
+  // Recent directories offers where the shell has been; choosing one types cd, which
+  // Enter then runs.
+  await typeLine('mkdir -p "$HOME/dir one" "$HOME/dir two" && cd "$HOME/dir one" && echo "one-$((2+2))"');
+  await until('the first cd', screenHas('one-4'));
+  await typeLine('cd "$HOME/dir two" && echo "two-$((2+2))"');
+  await until('the second cd', screenHas('two-4'));
+  await sleep(600);
+  await page.evaluate('[...document.querySelectorAll(".terminal-bar button")].find((item) => item.getAttribute("aria-label") === "Recent directories").click()');
+  const dirRows = '[...document.querySelectorAll(".terminal-dirs-row .terminal-dirs-path")].map((item) => item.textContent)';
+  await until('the recent directories', dirRows + '[0]?.endsWith("/dir two") && ' + dirRows + '[1]?.endsWith("/dir one")');
+  await page.evaluate('document.querySelectorAll(".terminal-dirs-row")[1].click()');
+  await until('cd typed', 'document.querySelector(".terminal-dirs") === null');
+  await sleep(300);
+  await typeLine(' && echo "at-$(basename "$(pwd -P)" | tr " " _)"');
+  await until('the chosen directory', screenHas('at-dir_one'));
+
   // A project's page has tabs of its own, and starts none by itself.
   await page.evaluate('location.href = "/project/p1"');
   await until('the project page', 'location.pathname === "/project/p1" && document.querySelector(".terminal-action")?.textContent === "Start a shell"');

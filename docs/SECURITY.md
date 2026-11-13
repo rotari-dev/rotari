@@ -215,6 +215,10 @@ body, which a page on another site cannot send without a preflight the server ne
 checks, and nothing a shell could not do. Downloads and uploads are too: a download is a `GET` that a page on another
 site can start but not read, and an upload needs an `application/octet-stream` body, which a form cannot send.
 
+**Recent directories** (`GET /_terminal/shells/ID/dirs`) answers, behind the same checks, the directories a
+project's shells have been in and where its runs started. The server keeps those directories in memory only, never
+on disk, and forgets them when every shell ends; it records nothing that is typed.
+
 Shells outlive their connections, like a launched VS Code server, so ones left open stay reachable
 to anyone with your session while any page stays open and for up to 3 hours after, or what
 `--terminal-idle-timeout` says, and recent

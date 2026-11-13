@@ -266,6 +266,19 @@ folder or the tree, holding them over a closed folder to open it. While a file g
 says which, how much of it has gone, and shows a bar. A file whose name is taken there is not uploaded,
 and the Explorer says so; a folder dropped among files is not uploaded either.
 
+The **Recent directories** icon in the bar, or a click on the path at the top of the Explorer, lists where the
+project's shells have been, newest first, and under **Runs** where the project's last few runs started (on a
+state directory's own pages, its workspace instead). Type to filter, use the arrow keys or the mouse, and choose
+one to type `cd` and the directory into the pane with the keys, quoted if it needs to be; press Enter to go there.
+Nothing is typed while a program such as `vim` or `ssh` runs in the shell, and a note says what runs. Each row can
+also show its directory in the Explorer, open a new tab there, or copy the path. A directory that is no longer there
+is greyed out, as is a run whose directory cannot be read, with the reason.
+
+The list needs no setup in your shell: rotari looks at where each shell is when it is back at its prompt after you
+press Enter, so `cd`, `pushd`, and tools such as `z` all count, and so does where each shell starts. A directory
+changed inside another program, such as a nested shell, `ssh`, or `tmux`, does not. It keeps the last 20
+directories of each project, in memory only, and forgets them all when every shell ends, as when you sign out.
+
 The **Clear** icon empties the tab's screen and scrollback, and what would be shown again after following a
 link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing
 while a full-screen program such as `vim` runs, and says so.

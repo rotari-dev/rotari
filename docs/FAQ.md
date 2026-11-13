@@ -520,7 +520,8 @@ set, so `rotari` commands in it need no `-p`. A project's page shows its shells,
 lists every project's shells with what each runs and how each project's last run is doing.
 
 The shells themselves are ordinary: rotari does not run jobs through them or log what you type,
-and jobs run the same with or without them. The terminal is off unless you pass `--allow-terminal`,
+and jobs run the same with or without them. It remembers only the directories each project's shells have been in,
+in memory, for **Recent directories**, and forgets them when every shell ends. The terminal is off unless you pass `--allow-terminal`,
 and it does not replace `tmux` or your terminal emulator. See [Terminal](WEB.md#terminal).
 
 ### Do my Web terminal shells survive closing or reloading the browser tab?
