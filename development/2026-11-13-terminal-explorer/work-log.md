@@ -68,3 +68,31 @@ Decision 10 (Open a terminal in, Launch in) is still open.
 
 **Remaining:** Decision 10's menu items, if the user wants them. The column, the drawer, and dragging have not been
 seen in a real browser.
+
+## 2026-11-13 23:16 +09:00 — `79aa9781` Keep the terminal Explorer beside the panes, open by default
+
+**Change:**
+
+- `internal/webui/assets/web_shell.js`: the drawer is gone: no scrim, no close button in the Explorer's head, no
+  closing after a row is used or on Escape. `applyExplorer` only shows or hides the column and applies the saved
+  width, which `applyExplorerWidth` clamps so the panes keep 200 pixels (`explorerPanesRoom`, was 480 as the
+  drawer's threshold). The Explorer is open unless `rotari-terminal-explorer` is `"0"`. Opening with the panel
+  does not move the keys from the shell; only the bar's button does.
+- `internal/webui/assets/web_shell.css`: the drawer, scrim, and close-button rules are removed.
+- `internal/webui/terminal_panel_test.go`: the fake `/_terminal/files` records into `server.fileRequests`, apart
+  from `requests`, since every page that opens the panel now lists files and other sections assert `requests`
+  exactly. A new `explorer` load option sets the stored state before the page's script reads it. The Explorer
+  section checks the default, the remembered close (no listing on a poll), the column in a 420-pixel body
+  (220 px wide), dragging its edge to 180 px and against the panes' 200 px, and that sending leaves it open.
+- WEB-42 note and row, `docs/WEB.md`, and plan decision 1 describe the column wherever the panel is and the default.
+
+**Reason:** The user tried it with the panel at the left and right: the width could not be dragged (the drawer
+hid the handle), the drawer covered the terminal's text, and they asked for the Explorer to open with the terminal.
+
+**Plan impact:** Decision 1 changed as above.
+
+**Validation:** `tsc -p internal/webui/tsconfig.json`: pass. `go test ./internal/webui/ ./conformance/05-web/`
+(under `taskset -c 0-11`, go1.25.8, Node v24): pass. Prettier 3.9.8 reports only the two `confirmEndingShells`
+differences that are on `main` too. Not seen in a real browser.
+
+**Remaining:** Decision 10's menu items, if wanted.
