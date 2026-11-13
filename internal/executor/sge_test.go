@@ -156,3 +156,40 @@ func TestWaitSGEJobUsesWrapperStatus(t *testing.T) {
 		t.Fatalf("result = %+v, want wrapper exit 9", result)
 	}
 }
+
+// Grid Engine rejects a job name containing a newline, tab, carriage return,
+// or any of / : @ \ * ? (verify_str_key with QSUB_TABLE), and qsub itself
+// refuses a -N argument containing /. Command previews routinely contain such
+// characters, for example a path, so the name must not carry them through.
+func TestSubmitSGEJobNameOmitsCharactersGridEngineRejects(t *testing.T) {
+	binDir := t.TempDir()
+	argumentsPath := filepath.Join(t.TempDir(), "qsub-args")
+	writeExecutable(t, binDir, "qsub", fmt.Sprintf("#!/bin/sh\nprintf '%%s\\0' \"$@\" > %q\nprintf '12345\\n'\n", argumentsPath))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	job := model.JobSpec{ID: "job-1", AttemptID: "att_run-1-job-1-0", Command: []string{"sh", "-c", "touch '/tmp/a b' && echo user@host:*?\\\t\r\nend"}, LogMode: model.LogModeSeparate}
+	policy := sgeSubmissionPolicy{retry: schedulerSubmissionRetryPolicy{}, spacing: newSchedulerSubmissionGate(0)}
+	if _, err := submitSGEJobWithPolicies(testStore(), testLogf, t.TempDir(), job, nil, policy); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(argumentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Split(strings.TrimSuffix(string(data), "\x00"), "\x00")
+	name := ""
+	for i, arg := range args {
+		if arg == "-N" && i+1 < len(args) {
+			name = args[i+1]
+		}
+	}
+	if name == "" {
+		t.Fatalf("qsub args %q have no -N", args)
+	}
+	if strings.ContainsAny(name, "\n\t\r/:@\\*?") {
+		t.Fatalf("job name %q contains a character Grid Engine rejects", name)
+	}
+	if want := "rotari show att_run-1-job-1-0 (sh -c touch '_tmp_a b' && echo user_host_"; !strings.HasPrefix(name, want) {
+		t.Fatalf("job name = %q, want prefix %q", name, want)
+	}
+}

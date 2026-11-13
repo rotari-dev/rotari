@@ -135,7 +135,7 @@ func submitSGEJobWithPolicies(store state.Store, logf func(string, ...any), runD
 	if job.EffectiveLogMode() == model.LogModeMerge {
 		stdoutPath, stderrPath = filepath.Join(jobDir, "output"), filepath.Join(jobDir, "output")
 	}
-	args := []string{"-terse", "-N", schedulerJobName(job), "-o", stdoutPath, "-e", stderrPath}
+	args := []string{"-terse", "-N", sgeJobName(job), "-o", stdoutPath, "-e", stderrPath}
 	expandedOptions, err := ExpandShellOptions(options)
 	if err != nil {
 		return sgeJobMetadata{}, err
@@ -164,6 +164,24 @@ func submitSGEJobWithPolicies(store state.Store, logf func(string, ...any), runD
 		logf("[%s] submit job=%s sge_job_id=%s command=%s\n", metadata.SubmittedAt, job.ID, jobID, strings.Join(job.Command, " "))
 	}
 	return metadata, nil
+}
+
+// sgeJobRejectedNameCharacters are the characters Grid Engine refuses in a job
+// name: qsub rejects / in -N, and qmaster's verify_str_key (QSUB_TABLE) also
+// rejects the rest.
+const sgeJobRejectedNameCharacters = "\n\t\r/:@\\*?"
+
+// sgeJobName is schedulerJobName with each character Grid Engine rejects
+// replaced by _, so that a command preview containing a path or similar text
+// does not make qsub refuse the job. The name starts with "rotari", so it
+// never starts with the digit Grid Engine also rejects.
+func sgeJobName(job model.JobSpec) string {
+	return strings.Map(func(r rune) rune {
+		if strings.ContainsRune(sgeJobRejectedNameCharacters, r) {
+			return '_'
+		}
+		return r
+	}, schedulerJobName(job))
 }
 
 func parseSGEJobID(output string) (string, error) {
