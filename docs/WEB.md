@@ -235,8 +235,9 @@ tree stays where you put it while the shell moves on; the line at its foot then 
 
 Click a folder to open or close it, and double-click a file, or press Enter on it, to open it in the Table viewer
 in a new tab; the arrow keys move through the tree. Pointing at a row shows two buttons: send its path to the
-terminal, and open it in the Table viewer. Right-click offers those, **Copy the path**, and **Copy the path from
-here**, relative to the shell's directory. You can also drag a row onto a pane to type its path there. A path goes
+terminal, and open it in the Table viewer. Right-click offers those, **Open in a new terminal tab**, which starts
+a shell of the page's project in that folder (a file's own folder, for a file), **Copy the path**, and **Copy the
+path from here**, relative to the shell's directory. You can also drag a row onto a pane to type its path there. A path goes
 in as the send buttons above send a value: relative to the shell's directory when the file is under it, otherwise
 whole, quoted if it needs to be, and not run until you press Enter. A name with a line break or other control
 character shows it as an escape such as `\n` and is not sent. A name that is not valid UTF-8 shows a

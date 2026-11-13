@@ -130,3 +130,42 @@ func TestTerminalFilesRefuseWithTheReason(t *testing.T) {
 		t.Errorf("POST: status %d", status)
 	}
 }
+
+// The Explorer's Open in a new terminal tab starts a shell in the directory it names, and
+// in no other place when that directory will not do.
+func TestTerminalShellStartsInANamedDirectory(t *testing.T) {
+	server, _ := terminalServer(t, "/bin/sh")
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "plain")
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	status, body := terminalRequest(t, server, http.MethodPost, terminalShellsPath+"?rows=24&cols=80&dir="+url.QueryEscape(dir+"/."))
+	var shell struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(body), &shell); status != http.StatusCreated || err != nil {
+		t.Fatalf("start: status %d, %v: %s", status, err, body)
+	}
+	if listing := terminalFiles(t, server, "shell="+shell.ID); listing.Dir != dir {
+		t.Errorf("the shell is in %q, want %q", listing.Dir, dir)
+	}
+	for name, test := range map[string]struct{ query, want string }{
+		"relative":       {"dir=tmp", "not absolute"},
+		"missing":        {"dir=" + url.QueryEscape(filepath.Join(dir, "gone")), "no such file"},
+		"a file":         {"dir=" + url.QueryEscape(file), "is not a directory"},
+		"empty":          {"dir=", "path is empty"},
+		"beside its run": {"project=p&run=r&dir=" + url.QueryEscape(dir), "not both"},
+	} {
+		status, body := terminalRequest(t, server, http.MethodPost, terminalShellsPath+"?rows=24&cols=80&"+test.query)
+		if status != http.StatusBadRequest || !strings.Contains(body, test.want) {
+			t.Errorf("%s: status %d: %s, want 400 saying %q", name, status, body, test.want)
+		}
+	}
+	if shells := listTerminalShells(t, server); len(shells) != 1 {
+		t.Errorf("refused starts left %d shells, want 1", len(shells))
+	}
+}

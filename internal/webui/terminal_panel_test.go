@@ -3003,12 +3003,22 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     row.dispatchEvent(new ex.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
     return [...ex.document.querySelectorAll('.terminal-tab-menu button')];
   };
-  assert.deepEqual(menuOf(exRow('train.yaml')).map((item) => [item.textContent, item.disabled]), [['Open in the Table viewer', false], ['Send the path to the terminal', false], ['Copy the path', false], ['Copy the path from here', false]]);
+  assert.deepEqual(menuOf(exRow('train.yaml')).map((item) => [item.textContent, item.disabled]), [['Open in the Table viewer', false], ['Open in a new terminal tab', false], ['Send the path to the terminal', false], ['Copy the path', false], ['Copy the path from here', false]]);
+  menuOf(exRow('train.yaml'))[4].click();
+  await wait(10);
   menuOf(exRow('train.yaml'))[3].click();
   await wait(10);
-  menuOf(exRow('train.yaml'))[2].click();
-  await wait(10);
   assert.deepEqual(exCopied, ['conf/train.yaml', '/w/p1/conf/train.yaml']);
+  // A new tab opens in a folder, or in a file's folder, as a shell of the page's project.
+  const startsBefore = ex.server.shells.length;
+  menuOf(exRow('train.yaml'))[1].click();
+  await wait(30);
+  assert.ok(ex.requests.includes('POST /_terminal/shells?rows=24&cols=80&project=p1&dir=%2Fw%2Fp1%2Fconf'), ex.requests.join(', '));
+  assert.equal(ex.server.shells.length, startsBefore + 1);
+  const exStarted = ex.server.shells.at(-1);
+  assert.equal(ex.document.querySelector('.terminal-tab [aria-selected="true"]').textContent, String(exStarted.number));
+  [...ex.document.querySelectorAll('.terminal-tab [role="tab"]')][0].click();
+  await wait(30);
   // A file opens in the Table viewer in a tab exOpened at once, so that no pop-up is blocked.
   ex.server.tableviewSource = { source: 'E 1', dir: '/w/p1', child: 'a b.csv' };
   exRow('a b.csv').dispatchEvent(new ex.window.MouseEvent('dblclick', { bubbles: true }));

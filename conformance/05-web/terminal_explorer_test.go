@@ -30,7 +30,7 @@ type explorerListing struct {
 // The terminal's Explorer lists where a shell is now, or any directory, and opens a file
 // in the Table viewer, only where the terminal is served.
 func TestTerminalExplorerListsAndOpensFiles(t *testing.T) {
-	covers(t, "WEB-42")
+	covers(t, "WEB-42", "WEB-34")
 	e := terminalEnv(t)
 	base := e.StartWeb("--allow-terminal")
 	headers := http.Header{"X-Rotari-Token": {launchToken}}
@@ -142,6 +142,26 @@ func TestTerminalExplorerListsAndOpensFiles(t *testing.T) {
 			t.Errorf("%s: (%d, %s), want %d", name, got.Status, got.Body, test.status)
 		}
 	}
+	// Open in a new terminal tab: a shell starts in the directory named, or not at all.
+	status, body := terminalShellsRequest(t, http.MethodPost, base+"/_terminal/shells?rows=24&cols=80&dir="+url.QueryEscape(filepath.Join(real, "conf")), headers)
+	var started struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &started); status != http.StatusCreated || err != nil {
+		t.Fatalf("a shell in a directory: status %d, %v: %s", status, err, body)
+	}
+	if status, body := list("shell=" + url.QueryEscape(started.ID)); status != http.StatusOK || !strings.Contains(body, `"dir":"`+filepath.Join(real, "conf")+`"`) {
+		t.Errorf("the new shell's directory: status %d: %s", status, body)
+	}
+	for name, dir := range map[string]string{"relative": "conf", "missing": filepath.Join(real, "gone"), "a file": filepath.Join(real, "scores.csv")} {
+		if status, body := terminalShellsRequest(t, http.MethodPost, base+"/_terminal/shells?rows=24&cols=80&dir="+url.QueryEscape(dir), headers); status != http.StatusBadRequest {
+			t.Errorf("a shell in %s: status %d: %s, want 400", name, status, body)
+		}
+	}
+	if shells := listTerminalShells(t, base, headers); len(shells) != 2 {
+		t.Errorf("refused starts: %d shells, want 2", len(shells))
+	}
+
 	plain := support.NewEnv(t).StartWeb()
 	if got := e.HTTPDo(http.MethodGet, plain+"/_terminal/files?path=/", nil, ""); got.Status != http.StatusNotFound {
 		t.Errorf("files without the terminal: (%d, %s), want 404", got.Status, got.Body)

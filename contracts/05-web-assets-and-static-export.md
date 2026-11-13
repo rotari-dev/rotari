@@ -1403,7 +1403,9 @@ it, and the flag is rejected with `--allow-control=false` or `--static-dir`. Wit
 `--allow-exec`, every route requires the Web token, generated and printed when none is set, and
 `Host` and `Origin` are checked (WEB-14). The WebSocket at `/_terminal/ws` also requires HTTPS
 or a direct loopback connection, even with a token, and so do `/_terminal/shells`, which lists the
-shells on `GET` and starts one on `POST` with `rows` and `cols` (409 at the limit), and
+shells on `GET` and starts one on `POST` with `rows` and `cols` (409 at the limit), and, for the Explorer
+(WEB-42), `dir`, an absolute directory to start in instead of where the page's place would, refused with the
+reason (400) when it is not an existing directory or comes with `run`, never started elsewhere, and
 `/_terminal/shells/ID`, which ends one on `DELETE` (404 if it is not running) and names it on `PATCH` with
 `{"name": ...}`, up to 64 characters on one line, or empty for none. `GET /_terminal/shells/ID/preview`
 says where a shell is now and what it runs without connecting to it, so it takes the shell from no page and
@@ -1480,7 +1482,8 @@ tree shows such a refusal in place, says how many entries it leaves out with a l
 shows control characters in names as escapes, and offers nothing for a name marked `not_utf8`. A row's buttons and
 menu send its path to the terminal, relative to the shell's directory when under it and otherwise absolute, through
 the send buttons' rules (one word, quoted as `shellQuote` does, refused with a note for control characters); open it
-in the Table viewer; or copy it whole or from the shell's directory. A row dropped on a pane sends its path to that
+in the Table viewer; open a new tab of the page's shells in that folder, or a file's folder; or copy it whole or
+from the shell's directory. A new tab asks `POST /_terminal/shells` with `dir` (WEB-34). A row dropped on a pane sends its path to that
 pane. Opening asks `POST /api/tableview-sources` with `{"path": "/ABS"}`, which needs the terminal (403 without)
 and HTTPS or a direct loopback connection (403 otherwise), takes either `path` or `shell` (400 for both), follows
 symbolic links (400 for a path that does not resolve), and pins the folder, or a file's folder with the file's name

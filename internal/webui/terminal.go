@@ -217,6 +217,30 @@ func (s site) terminalPlaceFor(writer http.ResponseWriter, request *http.Request
 	return place, true
 }
 
+// terminalStartDir is a directory the page names for a new shell to start in, as the
+// Explorer's Open in a new terminal tab does. It keeps the page's place, project and
+// all, and only moves where the shell starts. Whoever can start a shell can cd there,
+// so any directory will do, but it must be one: a shell is never started elsewhere
+// in its place.
+func terminalStartDir(query url.Values) (string, error) {
+	if query.Get("run") != "" {
+		return "", errors.New("a shell starts where its run started or in dir, not both")
+	}
+	dir := query.Get("dir")
+	if err := checkTerminalDir(dir); err != nil {
+		return "", err
+	}
+	dir = filepath.Clean(dir)
+	info, err := os.Stat(dir)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s is not a directory", dir)
+	}
+	return dir, nil
+}
+
 // terminalRunDir is where a run was started.
 func (s site) terminalRunDir(baseDir, project, run string) (string, error) {
 	paths, err := stateinternal.ResolveProjectPaths(baseDir, project)
@@ -395,6 +419,14 @@ func (s site) serveTerminalShells(writer http.ResponseWriter, request *http.Requ
 		place, ok := s.terminalPlaceFor(writer, request)
 		if !ok {
 			return
+		}
+		if request.URL.Query().Has("dir") {
+			dir, err := terminalStartDir(request.URL.Query())
+			if err != nil {
+				http.Error(writer, err.Error(), http.StatusBadRequest)
+				return
+			}
+			place.Dir, place.note = dir, ""
 		}
 		start := terminal.StartOptions{Rows: rows, Cols: cols, Group: terminalGroup(place), Dir: place.Dir}
 		switch {

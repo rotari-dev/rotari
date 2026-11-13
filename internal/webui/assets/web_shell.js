@@ -2668,7 +2668,10 @@ function shellWord(value) {
     }
   };
   // startShell starts a shell at a pane's size, and returns it, or says why not there.
-  const startShell = async (pane, again) => {
+  // A directory given, as the Explorer gives one, is where the shell starts, still of the
+  // page's project; the server refuses one that is not a directory rather than starting
+  // the shell elsewhere.
+  const startShell = async (pane, again, dir = "") => {
     showStatus(pane, "Starting a shell...");
     let response;
     try {
@@ -2680,7 +2683,8 @@ function shellWord(value) {
           pane.term.rows +
           "&cols=" +
           pane.term.cols +
-          (place && "&" + place),
+          (place && "&" + place) +
+          (dir && "&dir=" + encodeURIComponent(dir)),
         { method: "POST" },
       );
     } catch {}
@@ -2693,9 +2697,9 @@ function shellWord(value) {
     shells = [...shells, shell];
     return shell;
   };
-  const newShell = async (pane) => {
+  const newShell = async (pane, dir = "") => {
     clearTimeout(pane.retryTimer);
-    const shell = await startShell(pane, () => newShell(pane));
+    const shell = await startShell(pane, () => newShell(pane, dir), dir);
     if (shell) show(pane, shell.id);
   };
   // addPane gives a new row in the layout its pane, which gets its screen once placed.
@@ -3607,6 +3611,12 @@ function shellWord(value) {
       }
       openPanelMenu(event, [
         ["Open in the Table viewer", () => openInViewer(path), true],
+        // A file's folder, as editors open a terminal for a file.
+        [
+          "Open in a new terminal tab",
+          () => newShell(focused, folder ? path : dir),
+          true,
+        ],
         ["Send the path to the terminal", () => sendExplorerPath(path), true],
         ["Copy the path", () => copyExplorerText(path), true],
         [

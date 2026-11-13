@@ -76,9 +76,12 @@ panel at the bottom, the panel at a side, and the details).
 9. **Freshness.** The tree lists again when the panel's shell list refreshes (every five seconds in view), shortly
    after Enter is typed in the focused pane (for `cd`), when the focused pane changes, and on **Refresh**. Expanded
    folders are listed again with the root. A folder that has gone collapses.
-10. **Not in this plan:** **Open a terminal in** and **Launch in** for a folder, shown in the mockup's menu. Each
-    needs a shell start or a launch to take a directory from the page, a further change to WEB-34 and WEB-38;
-    they wait for the user to ask. Creating, renaming, and deleting files stay the shell's.
+10. **Open in a new terminal tab** (added 2026-11-14, at the user's request): the menu starts a shell of the
+    page's place in a folder, or a file's folder, through `POST /_terminal/shells` with `dir` (WEB-34), which is
+    refused with the reason when it is not an existing absolute directory or comes with `run`, rather than starting
+    the shell elsewhere. Moving the current tab's shell there was dropped: it would type `cd` into whatever the shell
+    runs, and telling a prompt from a program such as `ssh` by looking at processes is not reliable. **Launch in**
+    for a folder is not in this plan. Creating, renaming, and deleting files stay the shell's.
 
 ## Phases
 
