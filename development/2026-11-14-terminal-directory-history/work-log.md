@@ -50,3 +50,25 @@
   ./internal/doclinks ./internal/archtest` passed after the ARCHITECTURE edit. Browser tests skipped (no Chrome
   here).
 - **Remaining:** phases 3 (the panel) and 4 (WEB-45, conformance, docs). No page uses the route yet.
+
+## 2026-11-14 03:03 +09:00 — The panel's Recent directories dropdown (`d56e86fd1d60`)
+
+- **Change:** `internal/webui/assets/web_shell.js` adds a **Recent directories** icon to the bar (after **Launch
+  here**, disabled with no shell in the focused pane, as it is) and makes the Explorer's path line open the same
+  dropdown. The dropdown (`openDirs`) has a filter field and **Recent**, **Runs**, and **Workspace** sections from
+  `/_terminal/shells/ID/dirs`; arrow keys skip rows that cannot be chosen, Enter or a click chooses, Escape closes and
+  gives the keys back to the shell, and the button closes what it opened. Choosing (`typeCd`) asks the shell's
+  `preview` first and types `cd` plus `shellWord(dir)` through `sendToTerminalAndSay` only when no command holds the
+  foreground; otherwise, or when that cannot be told, a note says why and nothing is typed. Row actions: **Show in
+  the Explorer** (root there, Follow off), **Open in a new terminal tab** (`newShell` with `dir`), **Copy the
+  path**. A missing directory keeps only Copy; a non-UTF-8 name or a run with an `error` offers nothing. A refused
+  request shows the reason in the list. Styles in `web_shell.css`. JSDOM coverage at the end of
+  `TestTerminalPanel`, with a fake for `/dirs`.
+- **Reason:** plan phase 3, decisions 8–10.
+- **Plan impact:** phase 3 done. Found while testing: the keys must be attached before the list loads, or Escape
+  could not close a dropdown showing a refusal.
+- **Validation:** `tsc -p internal/webui/tsconfig.json` clean; prettier (from `node_modules`) applied to the JS
+  and CSS. `go test ./internal/webui ./conformance/05-web` passed with Node 24 and `NODE_PATH` (under `taskset -c
+  0-7`). Not tried in a real browser: none here, and `TestTerminalPanelInBrowser` is extended in phase 4.
+- **Remaining:** phase 4: WEB-45 and its conformance test, a `TestTerminalPanelInBrowser` step, and the docs
+  (WEB.md, FAQ, SECURITY.md). Until then the feature is undocumented on local `main`.

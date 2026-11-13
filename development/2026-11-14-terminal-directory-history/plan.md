@@ -2,7 +2,7 @@
 
 Created: 2026-11-14
 Status: Accepted by the user on 2026-11-14, with the open questions answered as proposed. Phase 1 (the Keeper)
-and phase 2 (`/_terminal/shells/ID/dirs`) are done; phase 3 (the panel) is next. See [work-log.md](work-log.md).
+phase 2 (`/_terminal/shells/ID/dirs`), and phase 3 (the panel) are done; phase 4 (WEB-45, docs) is next. See [work-log.md](work-log.md).
 
 ## Goal
 
