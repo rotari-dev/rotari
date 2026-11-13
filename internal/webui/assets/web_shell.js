@@ -268,6 +268,17 @@ function shellWord(value) {
       "M6.5 13V9.5H3",
     ],
     hide: ["M3.5 12.5h9"],
+    // A clock with its hand turned back: where the shells have been.
+    recentDirs: [
+      "M2.5 8a5.5 5.5 0 1 0 1.6-3.9",
+      "M2.5 2.5v2.5H5",
+      "M8 5v3l2 1.5",
+    ],
+    newTab: ["M8 3.5v9", "M3.5 8h9"],
+    copy: [
+      { x: 5.5, y: 5.5, width: 8, height: 8, rx: 1 },
+      "M10.5 3.5v-1h-8v8h1",
+    ],
     rename: ["M10 3.5l2.5 2.5L6 12.5H3.5V10z", "M8.5 5l2.5 2.5"],
     endShell: ["M4.5 4.5l7 7", "M11.5 4.5l-7 7"],
     // A play mark: run something here.
@@ -397,6 +408,7 @@ function shellWord(value) {
     tabs,
     add,
     launchButton,
+    dirsButton,
     splitRightButton,
     splitDownButton,
     closePaneButton,
@@ -3119,6 +3131,7 @@ function shellWord(value) {
     splitRightButton.disabled = splitDownButton.disabled = !canSplit;
     closePaneButton.disabled = panes.length < 2;
     launchButton.disabled = focused.shown === null;
+    dirsButton.disabled = focused.shown === null;
   };
   // applyLayout places the panes and the handles between them, by position alone: moving
   // a screen in the page, as columns of their own elements would need, would make
@@ -3513,6 +3526,252 @@ function shellWord(value) {
     } catch (error) {
       showNote("Copy failed: " + error.message, 6000);
     }
+  };
+  // Recent directories: where the shells of the focused pane's group have been, and where
+  // its project's recent runs started, or its workspace, from the shell's dirs. Choosing
+  // one types cd and the quoted path into the pane without running it, and only while
+  // the shell is at its prompt, so that it cannot land in vim or ssh. A row also shows in
+  // the Explorer, opens a new tab there, or copies the path. A directory that is gone, or
+  // whose name is not UTF-8, is shown but cannot be chosen, and a run that could not be
+  // read says why.
+  let dirsBox = null;
+  let dirsAnchor = null;
+  const closeDirs = (refocus = false) => {
+    if (!dirsBox) return;
+    dirsBox.remove();
+    dirsBox = null;
+    dirsAnchor = null;
+    if (refocus) focused.term?.focus();
+  };
+  document.addEventListener("pointerdown", (event) => {
+    if (
+      dirsBox &&
+      !dirsBox.contains(event.target) &&
+      !dirsAnchor?.contains(event.target)
+    )
+      closeDirs();
+  });
+  const dirsURL = (id, name) =>
+    shellsPath + "/" + encodeURIComponent(id) + "/" + name;
+  // fetchShellJSON is a shell's dirs or preview, or the reason it could not be had.
+  const fetchShellJSON = async (id, name) => {
+    let response;
+    try {
+      response = await serverFetch(dirsURL(id, name));
+    } catch {}
+    if (!response) return { error: "the server did not answer" };
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      return { error: text.trim() || "HTTP " + response.status };
+    }
+    return response.json().catch(() => ({ error: "the answer was not JSON" }));
+  };
+  // dirSections are the dropdown's sections, each a heading and its rows.
+  const dirSections = (answer) => {
+    const when = (time) => (time ? new Date(time).toLocaleString() : "");
+    const sections = [
+      [
+        "Recent",
+        (answer.history || []).map((entry) => ({
+          ...entry,
+          detail: when(entry.entered_at),
+        })),
+        "No directories yet.",
+      ],
+    ];
+    if (answer.runs_error)
+      sections.push(["Runs", [{ error: answer.runs_error }], ""]);
+    else if (answer.runs?.length)
+      sections.push([
+        "Runs",
+        answer.runs.map((entry) => ({
+          ...entry,
+          detail:
+            entry.run +
+            (entry.started_at ? " · " + when(entry.started_at) : ""),
+        })),
+        "",
+      ]);
+    if (answer.workspace)
+      sections.push(["Workspace", [{ ...answer.workspace, detail: "" }], ""]);
+    return sections;
+  };
+  // whyNotDir is why a row cannot be chosen, or "".
+  const whyNotDir = (entry) =>
+    entry.error
+      ? entry.error
+      : entry.not_utf8
+        ? "This name is not valid UTF-8, so it cannot be typed or copied."
+        : entry.missing
+          ? "Not on this host."
+          : "";
+  const openDirs = async (anchor) => {
+    if (dirsBox) {
+      const again = dirsAnchor === anchor;
+      closeDirs(again);
+      if (again) return;
+    }
+    const id = focused.shown;
+    if (id === null) return;
+    const box = makeElement("div", "terminal-dirs");
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-label", "Recent directories");
+    const filter = makeElement("input", "terminal-dirs-filter");
+    filter.type = "search";
+    filter.placeholder = "Filter";
+    filter.setAttribute("aria-label", "Filter directories");
+    const list = makeElement("div", "terminal-dirs-list", "Loading...");
+    list.setAttribute("role", "listbox");
+    list.setAttribute("aria-label", "Directories");
+    box.append(filter, list);
+    dirsBox = box;
+    dirsAnchor = anchor;
+    document.body.append(box);
+    const near = anchor.getBoundingClientRect();
+    const size = box.getBoundingClientRect();
+    box.style.left =
+      Math.max(0, Math.min(near.left, innerWidth - size.width)) + "px";
+    // Above the anchor when the panel is at the bottom and there is no room below.
+    const below = near.bottom + size.height <= innerHeight;
+    box.style.top =
+      Math.max(0, below ? near.bottom : near.top - size.height) + "px";
+    // The keys work from the start, so that Escape closes it while it loads or after a
+    // refusal.
+    let active = null;
+    const rows = () => [...list.querySelectorAll(".terminal-dirs-row")];
+    const choosable = () =>
+      rows().filter((row) => row.getAttribute("aria-disabled") !== "true");
+    const activate = (row) => {
+      active = row;
+      for (const other of rows())
+        other.setAttribute("aria-selected", String(other === row));
+      row?.scrollIntoView?.({ block: "nearest" });
+    };
+    box.onkeydown = (event) => {
+      const choices = choosable();
+      const at = choices.indexOf(active);
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        if (!choices.length) return;
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        activate(choices[(at + step + choices.length) % choices.length]);
+      } else if (event.key === "Enter" && active) {
+        event.preventDefault();
+        typeCd(id, active.dirEntry.dir);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeDirs(true);
+      }
+    };
+    filter.focus();
+    const answer = await fetchShellJSON(id, "dirs");
+    if (dirsBox !== box) return;
+    if (answer.error) {
+      list.textContent = "Cannot list the directories: " + answer.error;
+      return;
+    }
+    const sections = dirSections(answer);
+    const render = () => {
+      const wanted = filter.value.trim().toLowerCase();
+      list.replaceChildren();
+      for (const [heading, entries, empty] of sections) {
+        const shown = entries.filter(
+          (entry) =>
+            !wanted || (entry.dir || "").toLowerCase().includes(wanted),
+        );
+        if (!shown.length && (wanted || !empty)) continue;
+        list.append(makeElement("div", "terminal-dirs-heading", heading));
+        if (!shown.length)
+          list.append(makeElement("div", "terminal-dirs-empty", empty));
+        for (const entry of shown) list.append(dirRow(entry, id));
+      }
+      if (!list.childElementCount)
+        list.append(
+          makeElement("div", "terminal-dirs-empty", "Nothing matches."),
+        );
+      activate(choosable()[0] || null);
+    };
+    filter.oninput = render;
+    render();
+  };
+  const dirRow = (entry, id) => {
+    const row = makeElement("div", "terminal-dirs-row");
+    row.setAttribute("role", "option");
+    row.dirEntry = entry;
+    const why = whyNotDir(entry);
+    row.append(makeElement("span", "terminal-dirs-path", entry.dir || "—"));
+    const detail = [entry.detail, why, entry.stat_error]
+      .filter(Boolean)
+      .join(" · ");
+    if (detail) row.append(makeElement("span", "terminal-dirs-detail", detail));
+    row.title = [entry.dir, why || entry.stat_error].filter(Boolean).join("\n");
+    if (why) {
+      row.setAttribute("aria-disabled", "true");
+      // A directory that is gone can still be copied; a bad name or a run with no
+      // directory has nothing to offer.
+      if (!entry.missing || entry.not_utf8 || entry.error) return row;
+    } else {
+      row.onclick = (event) => {
+        if (event.target.closest("button")) return;
+        typeCd(id, entry.dir);
+      };
+    }
+    const actions = makeElement("span", "terminal-dirs-actions");
+    const action = (label, shapes, run) => {
+      const button = explorerIconButton(label, shapes, (event) => {
+        event.stopPropagation();
+        run();
+      });
+      actions.append(button);
+    };
+    if (!why) {
+      action("Show in the Explorer", explorerIcons.explorer, () =>
+        showDirInExplorer(entry.dir),
+      );
+      action("Open in a new terminal tab", icons.newTab, () => {
+        closeDirs();
+        newShell(focused, entry.dir);
+      });
+    }
+    action("Copy the path", icons.copy, () => {
+      closeDirs(true);
+      copyExplorerText(entry.dir);
+    });
+    row.append(actions);
+    return row;
+  };
+  // typeCd types cd and the directory into the focused pane, once the shell is known to
+  // be at its prompt, and says why not otherwise.
+  const typeCd = async (id, dir) => {
+    closeDirs();
+    const preview = await fetchShellJSON(id, "preview");
+    const refusal = preview.error
+      ? "Cannot tell what runs in this shell (" +
+        preview.error +
+        "), so cd was not typed."
+      : preview.command
+        ? preview.command + " is running in this shell, so cd was not typed."
+        : preview.command_error
+          ? "Cannot tell what runs in this shell (" +
+            preview.command_error +
+            "), so cd was not typed."
+          : focused.shown !== id
+            ? "This pane shows another shell now, so cd was not typed."
+            : "";
+    if (refusal) {
+      showNote(refusal, 6000);
+      return;
+    }
+    await window.sendToTerminalAndSay("cd " + shellWord(dir));
+  };
+  const showDirInExplorer = (dir) => {
+    closeDirs();
+    explorer.follow = false;
+    explorer.followButton?.setAttribute("aria-pressed", "false");
+    moveExplorerRoot(dir);
+    if (explorer.open) refreshExplorer();
+    else setExplorerOpen(true);
   };
   const rowOf = (path) =>
     [...(explorer.tree?.children || [])].find(
@@ -4311,6 +4570,15 @@ function shellWord(value) {
     );
     explorer.where = document.createElement("div");
     explorer.where.className = "terminal-explorer-where";
+    // The path at the top offers the shell's recent directories, as the bar's button does.
+    explorer.where.setAttribute("role", "button");
+    explorer.where.tabIndex = 0;
+    explorer.where.onclick = () => openDirs(explorer.where);
+    explorer.where.onkeydown = (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openDirs(explorer.where);
+    };
     explorer.tree = document.createElement("div");
     explorer.tree.className = "terminal-explorer-tree";
     explorer.tree.setAttribute("role", "tree");
@@ -4501,6 +4769,12 @@ function shellWord(value) {
       },
       "Launch a registered command, such as TensorBoard, in the directory this pane's shell is in now",
     );
+    dirsButton = iconButton(
+      "Recent directories",
+      icons.recentDirs,
+      () => openDirs(dirsButton),
+      "Recent directories: where this project's shells have been, and where its runs started, to cd to",
+    );
     overviewButton = iconButton(
       "All shells",
       icons.overview,
@@ -4543,6 +4817,7 @@ function shellWord(value) {
       add,
       overviewButton,
       launchButton,
+      dirsButton,
       spacer,
       fontButton("A-", "Smaller text", -1),
       fontButton("A+", "Larger text", 1),
@@ -5180,7 +5455,12 @@ function shellWord(value) {
   // them, or that this could not be checked; ending is "Signing out" or "Stopping the
   // server", and question what to ask. With nothing running, or on a page without the
   // terminal, it asks quietQuestion, or nothing when that is empty.
-  const confirmEndingShells = async (ending, question, offered, quietQuestion) => {
+  const confirmEndingShells = async (
+    ending,
+    question,
+    offered,
+    quietQuestion,
+  ) => {
     const quiet = () => !quietQuestion || confirm(quietQuestion);
     if (!offered) return quiet();
     let problem = "";
@@ -5221,7 +5501,9 @@ function shellWord(value) {
     );
   };
   const confirmSignOut = async (form) => {
-    if (!(await confirmEndingShells("Signing out", "Sign out anyway?", true, "")))
+    if (
+      !(await confirmEndingShells("Signing out", "Sign out anyway?", true, ""))
+    )
       return;
     signingOut = true;
     form.submit();

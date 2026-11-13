@@ -55,6 +55,14 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     requests.push(method + ' ' + url);
     const refused = (code, text) => Promise.resolve({ ok: false, status: code, text: async () => text });
     if (status() !== 200) return refused(status(), 'refused');
+    const dirsAsked = /\/_terminal\/shells\/([^/]+)\/dirs$/.exec(url);
+    if (dirsAsked) {
+      const id = decodeURIComponent(dirsAsked[1]);
+      if (!server.shells.some((shell) => shell.id === id)) return refused(404, 'no such shell');
+      const answer = server.dirs?.[id];
+      if (typeof answer === 'number') return refused(answer, 'dirs refused');
+      return Promise.resolve({ ok: true, status: 200, json: async () => answer || { history: [], runs: [] } });
+    }
     const previewed = /\/_terminal\/shells\/([^/]+)\/preview$/.exec(url);
     if (previewed) {
       const id = decodeURIComponent(previewed[1]);
@@ -3314,6 +3322,130 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(exAside().hidden, false, 'sending closed the Explorer');
   assert.equal(ex.document.querySelector('.terminal-explorer-scrim'), null);
   ex.window.HTMLElement.prototype.getBoundingClientRect = narrow;
+  }
+
+  // Recent directories: the group's history, then where the project's runs started.
+  // Choosing one by click or keys types cd and the quoted path without Enter, only while
+  // the shell is at its prompt; a gone directory, a name that is not UTF-8, and a run with
+  // no directory are shown but cannot be chosen.
+  {
+  const rd = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  const at = '2026-11-14T00:00:00Z';
+  rd.server.cwds = { 1: '/w/p1' };
+  rd.server.files = { '/w/p1': [], '/w/p1/a b': [{ name: 'x', kind: 'file' }] };
+  rd.server.dirs = { 1: {
+    history: [{ dir: '/w/p1/a b', entered_at: at }, { dir: '/w/p1', entered_at: at }, { dir: '/w/gone', missing: true, entered_at: at }, { dir: '/w/odd\uFFFD', not_utf8: true, entered_at: at }],
+    runs: [{ dir: '/w/p1', run: '20261114-000700-aaaaaaaa', started_at: '2026-11-14T00:07:00Z' }, { dir: '', run: 'r-bad', error: 'run "r-bad" does not say where it started' }],
+  } };
+  const rdCopied = [];
+  Object.defineProperty(rd.window.navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => rdCopied.push(text) } });
+  await wait(50);
+  rd.sockets.at(-1).onopen?.();
+  const rdButton = [...rd.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'Recent directories');
+  const rdBox = () => rd.document.querySelector('.terminal-dirs');
+  const rdRows = () => [...rd.document.querySelectorAll('.terminal-dirs-row')];
+  const rdPaths = () => rdRows().map((row) => row.querySelector('.terminal-dirs-path').textContent);
+  const rdNote = () => rd.document.querySelector('.terminal-send-note')?.textContent;
+  const rdKey = (key) => rdBox().dispatchEvent(new rd.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  const rdOpen = async (anchor = rdButton) => { anchor.click(); await wait(20); };
+  assert.equal(rdButton.disabled, false);
+  await rdOpen();
+  assert.ok(rd.requests.includes('GET /_terminal/shells/1/dirs'), rd.requests.join(', '));
+  assert.equal(rd.document.activeElement, rd.document.querySelector('.terminal-dirs-filter'), 'the filter did not take the keys');
+  assert.deepEqual([...rd.document.querySelectorAll('.terminal-dirs-heading')].map((item) => item.textContent), ['Recent', 'Runs']);
+  assert.deepEqual(rdPaths(), ['/w/p1/a b', '/w/p1', '/w/gone', '/w/odd\uFFFD', '/w/p1', '—']);
+  assert.deepEqual(rdRows().map((row) => row.getAttribute('aria-disabled')), [null, null, 'true', 'true', null, 'true']);
+  assert.match(rdRows()[2].textContent, /Not on this host/);
+  assert.match(rdRows()[3].title, /not valid UTF-8/);
+  assert.match(rdRows()[4].textContent, /20261114-000700-aaaaaaaa/);
+  assert.match(rdRows()[5].textContent, /does not say where it started/);
+  // Only a gone directory's path can still be copied; the others offer nothing.
+  assert.deepEqual(rdRows().map((row) => [...row.querySelectorAll('.terminal-dirs-actions button')].map((item) => item.getAttribute('aria-label')).join(',')),
+    ['Show in the Explorer,Open in a new terminal tab,Copy the path', 'Show in the Explorer,Open in a new terminal tab,Copy the path', 'Copy the path', '', 'Show in the Explorer,Open in a new terminal tab,Copy the path', '']);
+  // The arrow keys pass over what cannot be chosen, and Enter types it.
+  assert.equal(rdRows()[0].getAttribute('aria-selected'), 'true');
+  rdKey('ArrowDown');
+  assert.equal(rdRows()[1].getAttribute('aria-selected'), 'true');
+  rdKey('ArrowDown');
+  assert.equal(rdRows()[4].getAttribute('aria-selected'), 'true', 'the keys stopped on a row that cannot be chosen');
+  rdKey('ArrowUp');
+  rdKey('Enter');
+  await wait(30);
+  assert.equal(rdBox(), null, 'choosing left the dropdown open');
+  assert.ok(rd.requests.includes('GET /_terminal/shells/1/preview'), 'it typed without asking what runs');
+  assert.equal(rd.pasted.at(-1), 'cd /w/p1');
+  // A click types it too, quoted as every shell reads it.
+  await rdOpen();
+  rdRows()[0].click();
+  await wait(30);
+  assert.equal(rd.pasted.at(-1), "cd '/w/p1/a b'");
+  // Clicking what cannot be chosen types nothing.
+  const typedBefore = rd.pasted.length;
+  await rdOpen();
+  rdRows()[2].click();
+  rdRows()[5].click();
+  await wait(30);
+  assert.equal(rd.pasted.length, typedBefore, 'a row that cannot be chosen was typed');
+  // The filter narrows the rows, and says when nothing matches.
+  const rdFilter = rd.document.querySelector('.terminal-dirs-filter');
+  rdFilter.value = 'GONE';
+  rdFilter.dispatchEvent(new rd.window.Event('input'));
+  assert.deepEqual(rdPaths(), ['/w/gone']);
+  rdFilter.value = 'zzz';
+  rdFilter.dispatchEvent(new rd.window.Event('input'));
+  assert.deepEqual(rdPaths(), []);
+  assert.match(rdBox().textContent, /Nothing matches/);
+  // Escape closes it and gives the keys back to the shell, as the button does again.
+  rdKey('Escape');
+  assert.equal(rdBox(), null);
+  await rdOpen();
+  await rdOpen();
+  assert.equal(rdBox(), null, 'the button did not close what it opened');
+  // A program in front of the shell gets nothing typed into it, and the note says what runs.
+  rd.server.commands = { 1: 'vim notes' };
+  await rdOpen();
+  rdRows()[1].click();
+  await wait(30);
+  assert.equal(rd.pasted.length, typedBefore, 'cd was typed into vim');
+  assert.match(rdNote(), /vim notes is running in this shell/);
+  rd.server.commands = { 1: '?' };
+  await rdOpen();
+  rdRows()[1].click();
+  await wait(30);
+  assert.equal(rd.pasted.length, typedBefore, 'cd was typed though what runs was not known');
+  assert.match(rdNote(), /Cannot tell what runs in this shell \(no such group\)/);
+  rd.server.commands = {};
+  // A row's other actions: copy, a new tab there, and the Explorer there without following.
+  await rdOpen();
+  rdRows()[2].querySelector('[aria-label="Copy the path"]').click();
+  await wait(20);
+  assert.deepEqual(rdCopied, ['/w/gone']);
+  await rdOpen();
+  rdRows()[0].querySelector('[aria-label="Open in a new terminal tab"]').click();
+  await wait(30);
+  assert.ok(rd.requests.includes('POST /_terminal/shells?rows=24&cols=80&project=p1&dir=%2Fw%2Fp1%2Fa%20b'), rd.requests.join(', '));
+  [...rd.document.querySelectorAll('.terminal-tab [role="tab"]')][0].click();
+  await wait(30);
+  await rdOpen();
+  rdRows()[0].querySelector('[aria-label="Show in the Explorer"]').click();
+  await wait(30);
+  assert.equal(rd.document.querySelector('.terminal-explorer-where').textContent, '/w/p1/a b');
+  assert.equal(rd.document.querySelector('.terminal-explorer .terminal-explorer-head [aria-label="Follow the shell"]').getAttribute('aria-pressed'), 'false');
+  // The Explorer's path opens the same dropdown.
+  await rdOpen(rd.document.querySelector('.terminal-explorer-where'));
+  assert.notEqual(rdBox(), null, 'the Explorer\'s path did not open the dropdown');
+  rdKey('Escape');
+  // A refusal is shown, not an empty list.
+  rd.server.dirs[1] = 500;
+  await rdOpen();
+  assert.equal(rd.document.querySelector('.terminal-dirs-list').textContent, 'Cannot list the directories: dirs refused');
+  rdKey('Escape');
+  // A project with no history and no runs says so.
+  rd.server.dirs[1] = { history: [], runs: [] };
+  await rdOpen();
+  assert.deepEqual([...rd.document.querySelectorAll('.terminal-dirs-heading')].map((item) => item.textContent), ['Recent']);
+  assert.match(rdBox().textContent, /No directories yet/);
+  rdKey('Escape');
   }
   process.exit(0);
 })().catch((error) => { console.error(error.stack || String(error)); process.exit(1); });
