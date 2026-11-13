@@ -60,11 +60,40 @@ state_dir="$work/state"
 mkdir -p "$state_dir"
 chmod 0777 "$state_dir"
 
+# sge_diagnostics prints what docker logs lacks when SGE tests fail: qmaster's
+# messages file, which records why it rejected a submission, and test
+# submissions that tell a plain qsub from one with -V or a rotari-style -N.
+# The environment -V sends is listed by variable name and value length only.
+sge_diagnostics() {
+    docker exec --user "$scheduler_user" "$container" sh -lc "$scheduler_setup"'
+        spool=$(awk '\''$1 == "qmaster_spool_dir" { print $2 }'\'' "$SGE_ROOT/$SGE_CELL/common/bootstrap")
+        echo "== tail of $spool/messages"
+        tail -n 100 "$spool/messages"
+        printf "#!/bin/sh\ntrue\n" > /tmp/sge-probe.sh
+        echo "== qsub plain"
+        qsub -terse /tmp/sge-probe.sh
+        echo "exit $?"
+        echo "== qsub -V"
+        qsub -terse -V /tmp/sge-probe.sh
+        echo "exit $?"
+        echo "== qsub -N \"rotari show att_probe-0 (true)\""
+        qsub -terse -N "rotari show att_probe-0 (true)" /tmp/sge-probe.sh
+        echo "exit $?"
+        echo "== environment sent by -V (name and value length)"
+        env | awk -F= '\''{ name = $1; sub(/^[^=]*=/, ""); print name, length($0) }'\''
+        echo "== tail of $spool/messages after the test submissions"
+        tail -n 30 "$spool/messages"
+    '
+}
+
 cleanup() {
     local status=$?
     if docker container inspect "$container" >/dev/null 2>&1; then
         if [[ $status -ne 0 ]]; then
             docker logs "$container" >&2 || true
+            if [[ "$executor" == sge ]]; then
+                sge_diagnostics >&2 || true
+            fi
         fi
         # Container users own files in /state that the host user cannot remove.
         docker exec --user root "$container" find /state -mindepth 1 -delete >/dev/null 2>&1 || true
