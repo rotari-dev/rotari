@@ -82,6 +82,9 @@ type site struct {
 	notificationSession string
 	// registered is shared by every basedir mount of one server.
 	registered *registeredBaseDirs
+	// shellTableViews holds the Table viewer sources issued for terminal
+	// shells' directories; nil for a static export.
+	shellTableViews *shellTableViews
 }
 
 func (s site) environments() []web.EnvironmentDefinition {
@@ -94,7 +97,7 @@ func Handler(options Options) http.Handler {
 		options.WorkspaceDir, _ = os.Getwd()
 	}
 	registered := &registeredBaseDirs{dirs: options.BaseDirs, reload: options.ReloadBaseDirs}
-	return site{Options: options, notificationSession: newNotificationSession(), registered: registered}.handler()
+	return site{Options: options, notificationSession: newNotificationSession(), registered: registered, shellTableViews: newShellTableViews()}.handler()
 }
 
 // GenerateStatic writes a read-only static export of the Web UI to

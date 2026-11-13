@@ -1667,42 +1667,110 @@ async function copyJobsValue(button) {
       } catch {}
       answer = await answerOf(listing);
       if (serial !== launchSerial) return;
-      if (!listing?.ok || !answer.available) {
-        launchProblem(body, answer.reason || answer.error, answer.hint);
+      if (!listing?.ok) {
+        launchProblem(body, answer.error, answer.hint);
         return;
       }
-      const commands = answer.commands || [];
-      if (!commands.length) {
+      // The Web UI's own viewers, such as the Table viewer, run no command, so they are
+      // offered without launching: the server pins the shell's directory under a source
+      // the viewer's page names, and the page opens in a new tab.
+      const viewers = answer.viewers || [];
+      const commands = answer.available ? answer.commands || [] : [];
+      if (!viewers.length && !commands.length) {
         launchProblem(
           body,
-          (answer.unmatched || {}).directory ||
-            "No registered command accepts a directory.",
+          answer.available
+            ? (answer.unmatched || {}).directory ||
+                "No registered command accepts a directory."
+            : answer.reason,
+          answer.available ? undefined : answer.hint,
         );
         return;
       }
-      const list = makeElement("div", "terminal-launch-commands");
-      for (const command of commands) {
-        const button = textButton(command.name, () =>
-          previewShellLaunch(serial, body, shell, command.name, listCommands),
-        );
-        button.disabled = Boolean(command.unavailable);
-        if (command.unavailable)
-          button.title = "Not installed: " + command.unavailable;
-        list.append(button);
+      const shown = [];
+      if (viewers.length) {
+        let pinned;
+        let pinnedAnswer;
+        try {
+          pinned = await serverFetch("/api/tableview-sources", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ shell: shell.id }),
+          });
+        } catch {}
+        pinnedAnswer = await answerOf(pinned);
+        if (serial !== launchSerial) return;
+        if (!pinned?.ok) {
+          shown.push(
+            makeElement(
+              "p",
+              "terminal-launch-problem",
+              "Cannot open a viewer here: " + pinnedAnswer.error,
+            ),
+          );
+        } else {
+          const list = makeElement(
+            "div",
+            "terminal-launch-commands terminal-launch-viewers",
+          );
+          for (const viewer of viewers) {
+            const link = makeElement(
+              "a",
+              "terminal-launch-viewer",
+              viewer.name,
+            );
+            link.href =
+              viewer.path +
+              "?source=" +
+              encodeURIComponent(pinnedAnswer.source);
+            link.target = "_blank";
+            link.rel = "noopener";
+            link.title = "Open " + pinnedAnswer.dir + " in a new tab";
+            link.onclick = () => done();
+            list.append(link);
+          }
+          shown.push(
+            makeElement(
+              "p",
+              "terminal-launch-intro",
+              "View " + pinnedAnswer.dir + " in this server:",
+            ),
+            list,
+          );
+        }
       }
-      body.replaceChildren(
-        makeElement(
-          "p",
-          "terminal-launch-intro",
-          "Run a registered command on this directory, as you, on " +
-            (answer.user || "this user") +
-            "@" +
-            (answer.host || "this host") +
-            ":",
-        ),
-        list,
-      );
-      list.querySelector("button:not(:disabled)")?.focus();
+      if (commands.length) {
+        const list = makeElement("div", "terminal-launch-commands");
+        for (const command of commands) {
+          const button = textButton(command.name, () =>
+            previewShellLaunch(serial, body, shell, command.name, listCommands),
+          );
+          button.disabled = Boolean(command.unavailable);
+          if (command.unavailable)
+            button.title = "Not installed: " + command.unavailable;
+          list.append(button);
+        }
+        shown.push(
+          makeElement(
+            "p",
+            "terminal-launch-intro",
+            "Run a registered command on this directory, as you, on " +
+              (answer.user || "this user") +
+              "@" +
+              (answer.host || "this host") +
+              ":",
+          ),
+          list,
+        );
+      } else if (!answer.available && answer.reason) {
+        shown.push(makeElement("p", "terminal-launch-hint", answer.reason));
+        if (answer.hint)
+          shown.push(makeElement("p", "terminal-launch-hint", answer.hint));
+      }
+      body.replaceChildren(...shown);
+      body
+        .querySelector("a.terminal-launch-viewer, button:not(:disabled)")
+        ?.focus();
     };
     await listCommands();
   };

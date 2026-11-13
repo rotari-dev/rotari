@@ -15,7 +15,6 @@ import (
 
 	"github.com/rotari-dev/rotari/internal/launcher"
 	"github.com/rotari-dev/rotari/internal/tableview"
-	"github.com/rotari-dev/rotari/internal/terminal"
 )
 
 // LaunchOptions enables launching registered commands from artifacts
@@ -504,23 +503,9 @@ func (s site) shellLaunchStart(command launcher.Command, request webLaunchReques
 	if s.Terminal == nil {
 		return launcher.StartRequest{}, errors.New("a launch on a shell needs the terminal, which this server does not offer; restart with `rotari web --allow-terminal`")
 	}
-	var shell *terminal.ShellInfo
-	for _, item := range s.Terminal.Shells() {
-		if item.ID == request.Shell {
-			shell = &item
-			break
-		}
-	}
-	if shell == nil {
-		return launcher.StartRequest{}, fmt.Errorf("shell %s is not running", request.Shell)
-	}
-	dir, err := s.Terminal.Dir(request.Shell)
+	dir, shell, err := s.shellDirectory(request.Shell)
 	if err != nil {
-		return launcher.StartRequest{}, fmt.Errorf("where shell %d is now is not known: %w", shell.Number, err)
-	}
-	info, err := os.Stat(dir)
-	if err != nil || !info.IsDir() {
-		return launcher.StartRequest{}, fmt.Errorf("shell %d is in %s, which is not a directory on this host", shell.Number, dir)
+		return launcher.StartRequest{}, err
 	}
 	kind := launcher.TargetDirectory
 	if !command.Accepts(kind) {

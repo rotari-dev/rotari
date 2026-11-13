@@ -379,7 +379,10 @@ rotari web --allow-exec
 With `--allow-terminal` too, **Launch here** (the play icon) in the terminal's bar runs a command on the directory
 the shell in the pane with the keys is in now, and each All shells card has the same button for its shell: pick a
 command, check what will run, and **Launch**. It is the same as launching on an artifact, with the shell's
-directory as the target.
+directory as the target. The same dialog lists the **Table viewer** above the commands, even without
+`--allow-exec`: it opens the directory the shell was in when the dialog opened in a new tab, and stays on it
+when the shell moves or ends. The server keeps what such a tab shows only while it runs, and only for the 64 most
+recently used, so after a restart the tab says to open it again from **Launch here**.
 
 Without `--allow-exec`, Artifacts says which commands a restart with it could
 run on the artifact, including built-ins whose program is not installed, or
@@ -403,7 +406,8 @@ one store per job, or a tracking server.
 
 A table file (`.csv`, `.tsv`, `.jsonl`, `.scp`, and similar), a Markdown or
 script file, a PDF, or a directory has a **Table viewer** button, available without
-`--allow-exec`. It pages through
+`--allow-exec`; with the terminal, **Launch here** opens a shell's directory in it too (see
+[Launching commands](#launching-commands)). It pages through
 delimited and JSON Lines files and offers filters, sorting, and per-column
 statistics (**Describe**) over the whole file. JSON Lines records are one JSON
 value per line: object keys become sorted columns, and arrays or scalar values

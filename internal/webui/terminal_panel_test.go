@@ -128,6 +128,11 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           requests.push('GET ' + address);
           return Promise.resolve({ ok: true, status: 200, json: async () => server.launchers || { available: false, reason: 'Launching is disabled on this server.', hint: 'Restart with rotari web --allow-exec.' } });
         }
+        if (address === '/api/tableview-sources') {
+          requests.push('POST /api/tableview-sources ' + init.body);
+          const answer = server.tableviewSource || { source: 'S 1', dir: '/w/p1/logs' };
+          return Promise.resolve({ ok: !answer.error, status: answer.error ? 400 : 200, json: async () => answer });
+        }
         if (address.startsWith('/api/launch-preview?')) {
           requests.push('GET ' + address);
           return Promise.resolve({ ok: true, status: 200, json: async () => server.launchPreview });
@@ -2690,6 +2695,29 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.deepEqual([...launchBox().querySelectorAll('.terminal-launch-problem, .terminal-launch-hint')].map((item) => item.textContent), ['Launching is disabled on this server.', 'Restart with rotari web --allow-exec.']);
   launching.document.activeElement.dispatchEvent(new launching.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(launchBox(), null, 'Escape left the launch dialog');
+  // The Web UI's own viewers need no launching: the shell's directory is pinned under a
+  // source, and the viewer opens it in a new tab, with why commands are not offered.
+  const tableViewer = { name: 'Table viewer', path: '/tableview/', targets: ['directory'] };
+  launching.server.launchers = { available: false, reason: 'Launching is disabled on this server.', hint: 'Restart with rotari web --allow-exec.', viewers: [tableViewer] };
+  launchBar.click();
+  await wait(30);
+  assert.ok(launching.requests.includes('POST /api/tableview-sources {"shell":"1"}'), launching.requests.join(', '));
+  const viewerLink = () => launchBox().querySelector('.terminal-launch-viewer');
+  assert.deepEqual([viewerLink().textContent, viewerLink().getAttribute('href'), viewerLink().target, viewerLink().rel, viewerLink().title], ['Table viewer', '/tableview/?source=S%201', '_blank', 'noopener', 'Open /w/p1/logs in a new tab']);
+  assert.equal(launching.document.activeElement, viewerLink());
+  assert.deepEqual([...launchBox().querySelectorAll('.terminal-launch-intro, .terminal-launch-problem, .terminal-launch-hint')].map((item) => [item.className, item.textContent]), [['terminal-launch-intro', 'View /w/p1/logs in this server:'], ['terminal-launch-hint', 'Launching is disabled on this server.'], ['terminal-launch-hint', 'Restart with rotari web --allow-exec.']]);
+  viewerLink().click();
+  assert.equal(launchBox(), null, 'opening the viewer left the launch dialog');
+  // A refused source says why, and leaves the commands.
+  launching.server.tableviewSource = { error: 'shell 1 is not running' };
+  launching.server.launchers = { available: true, user: 'u', host: 'h', commands: [{ name: 'TensorBoard' }], viewers: [tableViewer] };
+  launchBar.click();
+  await wait(30);
+  assert.equal(viewerLink(), null);
+  assert.equal(launchBox().querySelector('.terminal-launch-problem').textContent, 'Cannot open a viewer here: shell 1 is not running');
+  assert.deepEqual([...launchBox().querySelectorAll('.terminal-launch-commands button')].map((item) => item.textContent), ['TensorBoard']);
+  launchBox().querySelector('header button').click();
+  delete launching.server.tableviewSource;
   launching.server.launchers = { available: true, user: 'u', host: 'h', commands: [{ name: 'TensorBoard' }, { name: 'Jupyter Lab', unavailable: 'jupyter is not on PATH' }] };
   launching.server.launchPreview = { name: 'TensorBoard', command: 'tensorboard --logdir "$ROTARI_LAUNCHER_ARTIFACT"', shell: '/bin/sh', mode: 'service', target: '/w/p1/logs', kind: 'directory', cwd: '/w/p1/logs', host: 'h', user: 'u', labels: { project: 'p1', shell: '1' } };
   launching.server.launchAnswer = { id: 'L1', mode: 'service', state: 'starting' };

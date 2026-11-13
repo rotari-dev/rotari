@@ -476,6 +476,8 @@ func writeArtifactError(writer http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errNotServed), errors.Is(err, tableview.ErrOutsideRoots):
 		http.Error(writer, err.Error(), http.StatusForbidden)
+	case errors.Is(err, errShellTableViewGone):
+		http.Error(writer, err.Error(), http.StatusNotFound)
 	case errors.Is(err, fs.ErrNotExist):
 		http.Error(writer, "artifact not found", http.StatusNotFound)
 	case strings.Contains(err.Error(), "path escapes from parent"):

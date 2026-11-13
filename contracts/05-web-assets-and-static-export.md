@@ -1461,6 +1461,26 @@ level by `TestIdleLimitAppliesToTheShellsTogether` and
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-39** With `rotari web --allow-terminal`, with or without `--allow-exec`, the
+Table viewer may show the directory a running shell is in. `POST
+/api/tableview-sources` with `{"shell": ID}`, and nothing else (400 for another
+field, such as a path), looks the shell's directory up on the server as WEB-38
+does and answers a random `source` id and that `dir`; it is refused, saying why,
+for a shell not running (400) and a server without the terminal (403).
+`/tableview/?source=ID` then shows that directory, pinned when the id was issued:
+the shell changing directory or ending does not move the view. It reads only
+under that directory (`child` as for `rotari tableview`), takes no project, run,
+job, attempt, or entry beside `source` (400), and an id this server does not hold,
+because it was never issued, was dropped as the least recently used beyond the
+64 held, or was issued before a restart, is a 404 saying to open the viewer again.
+The terminal's launch dialog (WEB-38) lists the Web UI's viewers that accept a
+directory above the commands, as links that open in a new tab, and still lists
+them, saying why commands are not offered, without `--allow-exec`. Implemented in
+`internal/webui/table_view_shell.go` and the launch dialog in `web_shell.js`;
+covered by [`TestTableViewerOnAShellsDirectory`](../conformance/05-web/launch_test.go),
+`TestTableViewOnAShellsDirectory`, `TestShellTableViewsDropTheLeastRecentlyUsed`,
+and `TestTerminalPanel`.
+
 **WEB-38** With `rotari web --allow-terminal --allow-exec`, a launch (`POST
 /api/launch`, `GET /api/launch-preview`) may name a running shell with `shell`
 instead of an artifact: the target is the directory that shell is in now, looked

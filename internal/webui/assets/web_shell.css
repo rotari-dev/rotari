@@ -1399,6 +1399,18 @@ html.terminal-open .output-panel.terminal-launch {
   padding: 3px 10px;
   font-size: 12px;
 }
+.terminal-launch-viewer {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--text);
+  text-decoration: none;
+}
+.terminal-launch-viewer:hover {
+  border-color: var(--muted);
+}
 .terminal-launch-commands,
 .terminal-launch-choices {
   display: flex;

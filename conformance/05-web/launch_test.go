@@ -1151,3 +1151,62 @@ func TestLaunchOnAShellsDirectory(t *testing.T) {
 		t.Errorf("a shell not running: (%d, %s)", refused.Status, refused.Body)
 	}
 }
+
+func TestTableViewerOnAShellsDirectory(t *testing.T) {
+	covers(t, "WEB-39")
+	e := terminalEnv(t)
+	base := e.StartWeb("--allow-terminal")
+	dir := filepath.Join(e.Root, "tables here")
+	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sub", "scores.csv"), []byte("name,score\nalpha,1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := openTerminalPage(t, base)
+	page.typeLine(`cd '` + dir + `' && echo "moved-$((1+1))"`)
+	page.await("moved-2")
+	shell := listTerminalShells(t, base, http.Header{"X-Rotari-Token": {launchToken}})[0].ID
+	// Without --allow-exec, a directory is still offered the Web UI's own viewer.
+	if listed := api(e, http.MethodGet, base+"/api/launchers?kind=directory&name=tables", ""); listed.Status != http.StatusOK || !strings.Contains(listed.Body, `"name":"Table viewer"`) {
+		t.Fatalf("launchers: (%d, %s)", listed.Status, listed.Body)
+	}
+	issued := api(e, http.MethodPost, base+"/api/tableview-sources", `{"shell":"`+shell+`"}`)
+	var source struct{ Source, Dir string }
+	if err := json.Unmarshal([]byte(issued.Body), &source); err != nil || issued.Status != http.StatusOK || source.Source == "" || source.Dir != real {
+		t.Fatalf("issue: (%d, %s) %v", issued.Status, issued.Body, err)
+	}
+	// The directory is pinned when the source is issued: the shell moving does not move the view.
+	page.typeLine(`cd / && echo "left-$((2+1))"`)
+	page.await("left-3")
+	info := api(e, http.MethodGet, base+"/tableview/api/info?source="+url.QueryEscape(source.Source), "")
+	if info.Status != http.StatusOK || !strings.Contains(info.Body, `"name":"`+real+`"`) || !strings.Contains(info.Body, `"kind":"directory"`) {
+		t.Fatalf("info: (%d, %s)", info.Status, info.Body)
+	}
+	rows := api(e, http.MethodGet, base+"/tableview/api/rows?source="+url.QueryEscape(source.Source)+"&child=sub/scores.csv&sep=,&header=1", "")
+	if rows.Status != http.StatusOK || !strings.Contains(rows.Body, "alpha") {
+		t.Fatalf("rows: (%d, %s)", rows.Status, rows.Body)
+	}
+	for name, test := range map[string]struct {
+		method, target, body string
+		status               int
+	}{
+		"a child leaving the directory": {http.MethodGet, base + "/tableview/api/info?source=" + url.QueryEscape(source.Source) + "&child=../x", "", http.StatusBadRequest},
+		"an artifact beside the source": {http.MethodGet, base + "/tableview/api/info?source=" + url.QueryEscape(source.Source) + "&project_name=p", "", http.StatusBadRequest},
+		"a source never issued":         {http.MethodGet, base + "/tableview/api/info?source=nope", "", http.StatusNotFound},
+		"a shell not running":           {http.MethodPost, base + "/api/tableview-sources", `{"shell":"77"}`, http.StatusBadRequest},
+		"a path instead of a shell":     {http.MethodPost, base + "/api/tableview-sources", `{"shell":"` + shell + `","dir":"/"}`, http.StatusBadRequest},
+	} {
+		if got := api(e, test.method, test.target, test.body); got.Status != test.status {
+			t.Errorf("%s: (%d, %s), want %d", name, got.Status, got.Body, test.status)
+		}
+	}
+	plain := support.NewEnv(t).StartWeb()
+	if got := e.HTTPDo(http.MethodPost, plain+"/api/tableview-sources", nil, `{"shell":"1"}`); got.Status != http.StatusForbidden || !strings.Contains(got.Body, "--allow-terminal") {
+		t.Errorf("without the terminal: (%d, %s)", got.Status, got.Body)
+	}
+}
