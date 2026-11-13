@@ -207,6 +207,10 @@ stored value ever became script, which [the page policy](#script-on-web-ui-pages
 and a launched service's own pages, which that policy does not cover, can reach it just as they can
 call the API. Treat them as trusted code either way.
 
+The terminal panel's Explorer lists any directory the page names and lets the Table viewer open any file, by
+path, under the same token, `Host` check, and HTTPS-or-loopback rule as the shell. That reads nothing a shell
+on the same server could not, so it widens nothing; without `--allow-terminal`, neither is offered.
+
 Shells outlive their connections, like a launched VS Code server, so ones left open stay reachable
 to anyone with your session while any page stays open and for up to 3 hours after, or what
 `--terminal-idle-timeout` says, and recent

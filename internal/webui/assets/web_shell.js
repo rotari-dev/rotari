@@ -193,6 +193,20 @@ async function copyJobsValue(button) {
   }, 1200);
 }
 
+// shellQuote makes a value one word of a shell command, the same in POSIX shells, tcsh,
+// and fish: it goes in single quotes, and each ' and \ goes outside them as \'
+// and \\, which every one of those shells reads as the character itself. Which shell will
+// read it is not known, and could be a program running in it, so the form does not depend
+// on one. Control characters stay as they are; sending refuses them. shellWord leaves a
+// value that needs no quotes as it is.
+function shellQuote(value) {
+  return "'" + String(value ?? "").replace(/['\\]/g, "'\\$&'") + "'";
+}
+function shellWord(value) {
+  value = String(value ?? "");
+  return /^[A-Za-z0-9_\/.:=@%+,-]+$/.test(value) ? value : shellQuote(value);
+}
+
 // The terminal panel along the bottom of the page, with a tab for each shell of the
 // page's project, as an editor keeps a window's terminals with its folder. Shells live
 // on the server, and every page load lists them, attaches to the tab this browser tab
@@ -2532,7 +2546,10 @@ async function copyJobsValue(button) {
       groupLimit = listed.group_limit;
       showShellCount();
       markSidebarProjects();
-      if (panel) renderTabs();
+      if (panel) {
+        renderTabs();
+        refreshExplorer();
+      }
     }
     return { ok: true };
   };
@@ -2626,7 +2643,10 @@ async function copyJobsValue(button) {
     rememberLayout();
     renderTabs();
     connect(pane, takeOver);
-    if (pane === focused) pane.term.focus();
+    if (pane === focused) {
+      pane.term.focus();
+      explorerSoon(0);
+    }
   };
   // startShell starts a shell at a pane's size, and returns it, or says why not there.
   const startShell = async (pane, again) => {
@@ -3117,6 +3137,7 @@ async function copyJobsValue(button) {
     applyLayout();
     rememberLayout();
     renderTabs();
+    explorerSoon(0);
   };
   // moveBoundary gives one neighbor a share, and the other what is left of the two, leaving
   // neither under the smallest pane, unless the two have less room than that between them.
@@ -3173,6 +3194,724 @@ async function copyJobsValue(button) {
     };
     return handle;
   };
+  // The Explorer: a tree of the files where the focused pane's shell is, at the left of the
+  // panel's body, or over the panes as a drawer when the body has no room for both. While
+  // Follow is on, its root is the shell's directory, looked up on the server; Up shows the
+  // parent and turns Follow off. It lists only what a folder holds, a folder at a time, and
+  // lists again with the panel's shells, shortly after Enter in the focused pane, and when
+  // asked. Names are the server's: one that is not UTF-8 is shown but never named back.
+  const explorerOpenKey = "rotari-terminal-explorer";
+  const explorerWidthKey = "rotari-terminal-explorer-width";
+  const explorerPathType = "application/x-rotari-explorer-path";
+  const filesPath = "/_terminal/files";
+  const explorerDefaultWidth = 260;
+  const explorerMinWidth = 160;
+  // The panes beside a column keep at least this much; with less, the Explorer is a drawer.
+  const explorerPanesRoom = 480;
+  const explorer = {
+    open: false,
+    follow: true,
+    root: "", // The directory at the top of the tree.
+    shellDir: "", // Where the focused pane's shell was when last asked.
+    shellID: null,
+    problem: "", // Why the tree shows nothing, such as a pane with no shell.
+    expanded: new Set(),
+    listings: new Map(), // A directory's answer: { entries, total } or { error }.
+    selected: "",
+    visible: [], // The rows shown, top to bottom, for the keys.
+    serial: 0,
+    soon: undefined,
+    element: null,
+    tree: null,
+    title: null,
+    where: null,
+    footer: null,
+    followButton: null,
+    toggle: null,
+    scrim: null,
+    body: null,
+    drawer: false,
+  };
+  try {
+    explorer.open = localStorage.getItem(explorerOpenKey) === "1";
+  } catch {}
+  const explorerIcons = {
+    explorer: ["M1.5 3.5h4.5l1.5 1.5h6.5v8h-12.5z", "M1.5 6.5h12.5"],
+    up: ["M8 13V3", "M4 7l4-4 4 4"],
+    follow: [
+      "M6.5 9.5l3-3",
+      "M7 4.5l1.5-1.5a2.5 2.5 0 0 1 3.5 3.5L10.5 8",
+      "M9 11.5L7.5 13A2.5 2.5 0 0 1 4 9.5L5.5 8",
+    ],
+    refresh: ["M13 8a5 5 0 1 1-1.5-3.5", "M13 2.5V5h-2.5"],
+    collapse: ["M4 10l4-4 4 4"],
+    close: ["M4 4l8 8", "M12 4l-8 8"],
+    send: ["M2.5 8h10", "M9 4.5L12.5 8 9 11.5"],
+    open: [
+      { x: 2, y: 2.5, width: 12, height: 11, rx: 1 },
+      "M2 6h12",
+      "M6 6v7.5",
+    ],
+    chevronRight: ["M6 4l4 4-4 4"],
+    chevronDown: ["M4 6l4 4 4-4"],
+    folder: ["M1.5 3.5h4.5l1.5 1.5h6.5v8h-12.5z"],
+    file: ["M3.5 1.5h6l3 3v10h-9z", "M9.5 1.5v3h3"],
+  };
+  const joinPath = (dir, name) => (dir === "/" ? "/" : dir + "/") + name;
+  const parentOf = (path) => path.slice(0, path.lastIndexOf("/")) || "/";
+  const baseName = (path) =>
+    path === "/" ? "/" : path.slice(path.lastIndexOf("/") + 1);
+  const under = (path, dir) =>
+    path === dir || path.startsWith(dir === "/" ? "/" : dir + "/");
+  // The path that goes into the shell: relative to where the shell is, when it is there,
+  // so that it finishes a command typed there, and never with "..".
+  const pathFromShell = (path) => {
+    const dir = explorer.shellDir;
+    if (!dir || !under(path, dir)) return path;
+    if (path === dir) return ".";
+    return path.slice(dir === "/" ? 1 : dir.length + 1);
+  };
+  const explorerShell = () =>
+    shells.find((shell) => shell.id === focused.shown);
+  const explorerShowing = () =>
+    explorer.open && panel && !panel.hidden && !document.hidden;
+  // A name as text, with each control character as an escape in a mark of its own, so
+  // that a line break or an escape sequence in a name shows as what it is.
+  const drawName = (target, name) => {
+    let plain = "";
+    const flush = () => {
+      if (plain) target.append(plain);
+      plain = "";
+    };
+    for (const character of name) {
+      const code = character.codePointAt(0);
+      if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) {
+        flush();
+        const mark = document.createElement("span");
+        mark.className = "terminal-explorer-escape";
+        mark.textContent =
+          { 9: "\\t", 10: "\\n", 13: "\\r" }[code] ||
+          "\\x" + code.toString(16).padStart(2, "0");
+        target.append(mark);
+      } else plain += character;
+    }
+    flush();
+  };
+  const unnamedNote =
+    "This name is not valid UTF-8, so the Explorer cannot open, send, or copy it.";
+  const listDirectory = async (query) => {
+    let response;
+    try {
+      response = await serverFetch(filesPath + "?" + query);
+    } catch {
+      return { error: "The server did not answer." };
+    }
+    if (response.status === 401 || response.status === 403)
+      return {
+        error: "Sign in again to use the terminal.",
+        status: response.status,
+      };
+    if (!response.ok)
+      return {
+        error:
+          ((await response.text()) || "").trim() || "Status " + response.status,
+        status: response.status,
+      };
+    return response.json();
+  };
+  // refreshExplorer lists what the tree shows again: the root, looked up from the shell
+  // while following, and each folder open in it. A folder that cannot be listed any more
+  // closes. Answers that come after a newer refresh started are dropped.
+  const refreshExplorer = async () => {
+    if (!explorerShowing()) return;
+    const serial = ++explorer.serial;
+    const shell = explorerShell();
+    explorer.shellID = shell?.id ?? null;
+    explorer.problem = "";
+    if (!shell) {
+      explorer.shellDir = "";
+      if (explorer.follow) {
+        explorer.problem = "This pane shows no shell.";
+        renderExplorer();
+        return;
+      }
+    } else if (explorer.follow) {
+      const listed = await listDirectory(
+        "shell=" + encodeURIComponent(shell.id),
+      );
+      if (serial !== explorer.serial) return;
+      if (listed.error) {
+        explorer.problem = listed.error;
+        explorer.shellDir = "";
+        renderExplorer();
+        return;
+      }
+      explorer.shellDir = listed.dir;
+      if (listed.dir !== explorer.root) moveExplorerRoot(listed.dir);
+      explorer.listings.set(listed.dir, listed);
+    } else {
+      let preview;
+      try {
+        const response = await serverFetch(
+          shellsPath + "/" + encodeURIComponent(shell.id) + "/preview",
+        );
+        if (response.ok) preview = await response.json();
+      } catch {}
+      if (serial !== explorer.serial) return;
+      explorer.shellDir = preview?.cwd || "";
+    }
+    const wanted = (explorer.follow ? [] : [explorer.root]).concat(
+      [...explorer.expanded].filter((path) => under(path, explorer.root)),
+    );
+    const answers = await Promise.all(
+      wanted.map((path) => listDirectory("path=" + encodeURIComponent(path))),
+    );
+    if (serial !== explorer.serial) return;
+    wanted.forEach((path, index) => {
+      const answer = answers[index];
+      if (answer.error && path !== explorer.root) {
+        explorer.expanded.delete(path);
+        explorer.listings.delete(path);
+      } else explorer.listings.set(path, answer);
+    });
+    renderExplorer();
+  };
+  const explorerSoon = (delay = 400) => {
+    clearTimeout(explorer.soon);
+    explorer.soon = setTimeout(() => refreshExplorer(), delay);
+  };
+  // moveExplorerRoot shows another directory at the top, keeping the folders open under it.
+  const moveExplorerRoot = (dir) => {
+    explorer.root = dir;
+    for (const path of [...explorer.expanded])
+      if (!under(path, dir) || path === dir) explorer.expanded.delete(path);
+    for (const path of [...explorer.listings.keys()])
+      if (!under(path, dir)) explorer.listings.delete(path);
+    if (explorer.selected && !under(explorer.selected, dir))
+      explorer.selected = "";
+  };
+  const setFollow = (follow) => {
+    explorer.follow = follow;
+    explorer.followButton?.setAttribute("aria-pressed", String(follow));
+    refreshExplorer();
+  };
+  const explorerUp = () => {
+    if (!explorer.root || explorer.root === "/") return;
+    const parent = parentOf(explorer.root);
+    const child = explorer.root;
+    explorer.follow = false;
+    explorer.followButton?.setAttribute("aria-pressed", "false");
+    moveExplorerRoot(parent);
+    explorer.expanded.add(child);
+    explorer.selected = child;
+    refreshExplorer();
+  };
+  const toggleFolder = (path) => {
+    if (explorer.expanded.has(path)) explorer.expanded.delete(path);
+    else explorer.expanded.add(path);
+    renderExplorer();
+    if (explorer.expanded.has(path) && !explorer.listings.has(path))
+      listDirectory("path=" + encodeURIComponent(path)).then((answer) => {
+        explorer.listings.set(path, answer);
+        renderExplorer();
+      });
+  };
+  // A drawer is only for picking something, so doing anything with a row closes it.
+  const closeExplorerDrawer = () => {
+    if (explorer.drawer) setExplorerOpen(false);
+  };
+  const openInViewer = async (path) => {
+    // A tab opened only after the answer would be a pop-up to the browser, so it opens now.
+    const tab = window.open("about:blank", "_blank");
+    if (tab) tab.opener = null;
+    let response, answer;
+    try {
+      response = await serverFetch("/api/tableview-sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      answer = await answerOf(response);
+    } catch {}
+    if (!response?.ok || !answer?.source) {
+      tab?.close();
+      showNote(
+        "Cannot open " +
+          path +
+          " in the Table viewer: " +
+          (answer?.error || "the server did not answer."),
+        6000,
+      );
+      return;
+    }
+    const address =
+      "/tableview/?source=" +
+      encodeURIComponent(answer.source) +
+      (answer.child ? "&child=" + encodeURIComponent(answer.child) : "");
+    // An about:blank tab has no address of its own to resolve a relative one against.
+    if (tab) tab.location.href = new URL(address, location.href).href;
+    else
+      showNote("The browser blocked the new tab for the Table viewer.", 6000);
+    closeExplorerDrawer();
+  };
+  const sendExplorerPath = async (path) => {
+    closeExplorerDrawer();
+    await window.sendToTerminalAndSay(pathFromShell(path), { word: true });
+  };
+  const copyExplorerText = async (text) => {
+    try {
+      if (navigator.clipboard?.writeText)
+        await navigator.clipboard.writeText(text);
+      else copyJobsValueFallback(text);
+      showNote("Copied " + text, 2500);
+    } catch (error) {
+      showNote("Copy failed: " + error.message, 6000);
+    }
+  };
+  const rowOf = (path) =>
+    [...(explorer.tree?.children || [])].find(
+      (row) => row.explorerPath === path,
+    );
+  const selectRow = (path, focus = true) => {
+    explorer.selected = path;
+    for (const row of explorer.tree.children) {
+      if (!row.explorerPath) continue;
+      const selected = row.explorerPath === path;
+      row.setAttribute("aria-selected", String(selected));
+      row.tabIndex = selected ? 0 : -1;
+    }
+    if (focus) rowOf(path)?.focus();
+  };
+  const explorerIconButton = (label, shapes, onclick) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    drawIcon(button, shapes);
+    button.onclick = onclick;
+    return button;
+  };
+  const explorerNoteRow = (level, text, className, button) => {
+    const row = document.createElement("div");
+    row.className = "terminal-explorer-note " + (className || "");
+    row.style.setProperty("--level", String(level));
+    row.append(text);
+    if (button) row.append(" ", button);
+    return row;
+  };
+  const explorerRow = (entry, dir, level) => {
+    const path = joinPath(dir, entry.name);
+    const folder =
+      entry.kind === "dir" ||
+      (entry.kind === "symlink" && entry.target_kind === "dir");
+    const named = !entry.not_utf8;
+    const open = folder && explorer.expanded.has(path);
+    const row = document.createElement("div");
+    row.className = "terminal-explorer-row";
+    row.explorerPath = path;
+    row.setAttribute("role", "treeitem");
+    row.setAttribute("aria-level", String(level + 1));
+    if (folder) row.setAttribute("aria-expanded", String(open));
+    row.setAttribute("aria-selected", String(explorer.selected === path));
+    row.tabIndex = explorer.selected === path ? 0 : -1;
+    row.style.setProperty("--level", String(level));
+    const chevron = document.createElement("span");
+    chevron.className = "terminal-explorer-chevron";
+    if (folder)
+      drawIcon(
+        chevron,
+        open ? explorerIcons.chevronDown : explorerIcons.chevronRight,
+      );
+    const icon = document.createElement("span");
+    icon.className = "terminal-explorer-kind";
+    drawIcon(icon, folder ? explorerIcons.folder : explorerIcons.file);
+    const name = document.createElement("span");
+    name.className = "terminal-explorer-name";
+    drawName(name, entry.name);
+    row.append(chevron, icon, name);
+    if (entry.kind === "symlink") {
+      row.classList.add("terminal-explorer-link");
+      const target = document.createElement("span");
+      target.className = "terminal-explorer-target";
+      target.append("→ ");
+      drawName(target, entry.target || "?");
+      if (entry.target_kind === "missing") target.append(" (missing)");
+      row.append(target);
+    }
+    if (!named) {
+      row.classList.add("terminal-explorer-unnamed");
+      row.title = unnamedNote;
+    } else {
+      row.title = path;
+      const actions = document.createElement("span");
+      actions.className = "terminal-explorer-actions";
+      const send = explorerIconButton(
+        "Send the path to the terminal",
+        explorerIcons.send,
+        (event) => {
+          event.stopPropagation();
+          sendExplorerPath(path);
+        },
+      );
+      const view = explorerIconButton(
+        "Open in the Table viewer",
+        explorerIcons.open,
+        (event) => {
+          event.stopPropagation();
+          openInViewer(path);
+        },
+      );
+      for (const button of [send, view]) button.tabIndex = -1;
+      actions.append(send, view);
+      row.append(actions);
+      row.draggable = true;
+      row.ondragstart = (event) => {
+        event.dataTransfer.setData(explorerPathType, path);
+        event.dataTransfer.setData("text/plain", path);
+        event.dataTransfer.effectAllowed = "copy";
+      };
+    }
+    row.onclick = () => {
+      selectRow(path);
+      if (folder && named) toggleFolder(path);
+    };
+    row.ondblclick = () => {
+      if (!folder && named) openInViewer(path);
+    };
+    row.oncontextmenu = (event) => {
+      selectRow(path);
+      if (!named) {
+        event.preventDefault();
+        showNote(unnamedNote, 6000);
+        return;
+      }
+      openPanelMenu(event, [
+        ["Open in the Table viewer", () => openInViewer(path), true],
+        ["Send the path to the terminal", () => sendExplorerPath(path), true],
+        ["Copy the path", () => copyExplorerText(path), true],
+        [
+          "Copy the path from here",
+          () => copyExplorerText(pathFromShell(path)),
+          Boolean(explorer.shellDir) && under(path, explorer.shellDir),
+        ],
+      ]);
+    };
+    explorer.visible.push({ path, folder, named, parent: dir, level });
+    return row;
+  };
+  // drawEntries puts a directory's rows into the tree, and below each open folder its own.
+  const drawEntries = (dir, level, rows) => {
+    const listing = explorer.listings.get(dir);
+    if (!listing) {
+      rows.push(
+        explorerNoteRow(level, "Listing...", "terminal-explorer-waiting"),
+      );
+      return;
+    }
+    if (listing.error) {
+      rows.push(
+        explorerNoteRow(level, listing.error, "terminal-explorer-problem"),
+      );
+      return;
+    }
+    if (!listing.entries.length)
+      rows.push(explorerNoteRow(level, "Empty", "terminal-explorer-waiting"));
+    for (const entry of listing.entries) {
+      const row = explorerRow(entry, dir, level);
+      rows.push(row);
+      if (row.getAttribute("aria-expanded") === "true")
+        drawEntries(row.explorerPath, level + 1, rows);
+    }
+    if (listing.total > listing.entries.length) {
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "terminal-explorer-more";
+      more.textContent = "Open in the Table viewer";
+      more.onclick = () => openInViewer(dir);
+      rows.push(
+        explorerNoteRow(
+          level,
+          listing.entries.length + " of " + listing.total + " shown.",
+          "terminal-explorer-truncated",
+          more,
+        ),
+      );
+    }
+  };
+  const renderExplorer = () => {
+    if (!explorer.element) return;
+    const hadFocus = explorer.tree.contains(document.activeElement);
+    explorer.visible = [];
+    const shell = explorerShell();
+    const label = shell ? shellName(shell) : "";
+    explorer.title.textContent = explorer.root
+      ? baseName(explorer.root)
+      : "Explorer";
+    explorer.where.textContent = explorer.root;
+    explorer.where.title = explorer.root;
+    const rows = [];
+    if (explorer.problem)
+      rows.push(
+        explorerNoteRow(0, explorer.problem, "terminal-explorer-problem"),
+      );
+    else if (explorer.root) drawEntries(explorer.root, 0, rows);
+    explorer.tree.replaceChildren(...rows);
+    if (!explorer.visible.some((row) => row.path === explorer.selected))
+      explorer.selected = "";
+    const first = explorer.tree.querySelector('[role="treeitem"]');
+    if (!explorer.selected && first) first.tabIndex = 0;
+    if (hadFocus) (rowOf(explorer.selected) || first)?.focus();
+    explorer.footer.replaceChildren();
+    if (!shell) explorer.footer.append("This pane shows no shell.");
+    else if (explorer.follow) explorer.footer.append("Following " + label);
+    else {
+      explorer.footer.append(
+        "Not following" +
+          (explorer.shellDir
+            ? " · " + label + " is in " + explorer.shellDir
+            : ""),
+      );
+      const back = document.createElement("button");
+      back.type = "button";
+      back.className = "terminal-explorer-follow-link";
+      back.textContent = "Follow";
+      back.onclick = () => setFollow(true);
+      explorer.footer.append(back);
+    }
+    explorer.footer.title = explorer.footer.textContent;
+  };
+  const explorerKeys = (event) => {
+    const index = explorer.visible.findIndex(
+      (row) => row.path === explorer.selected,
+    );
+    const current = explorer.visible[index];
+    const go = (row) => {
+      if (row) selectRow(row.path);
+      event.preventDefault();
+    };
+    switch (event.key) {
+      case "ArrowDown":
+        return go(
+          explorer.visible[index + 1] ||
+            (index < 0 ? explorer.visible[0] : null),
+        );
+      case "ArrowUp":
+        return go(explorer.visible[index - 1]);
+      case "Home":
+        return go(explorer.visible[0]);
+      case "End":
+        return go(explorer.visible[explorer.visible.length - 1]);
+      case "ArrowRight":
+        if (!current?.folder || !current.named) return;
+        event.preventDefault();
+        if (!explorer.expanded.has(current.path)) toggleFolder(current.path);
+        else
+          go(
+            explorer.visible[index + 1]?.parent === current.path
+              ? explorer.visible[index + 1]
+              : null,
+          );
+        return;
+      case "ArrowLeft":
+        if (!current) return;
+        event.preventDefault();
+        if (current.folder && explorer.expanded.has(current.path))
+          toggleFolder(current.path);
+        else go(explorer.visible.find((row) => row.path === current.parent));
+        return;
+      case "Enter":
+        if (!current) return;
+        event.preventDefault();
+        if (!current.named) showNote(unnamedNote, 6000);
+        else if (current.folder) toggleFolder(current.path);
+        else openInViewer(current.path);
+        return;
+      case "Escape":
+        if (explorer.drawer) {
+          event.preventDefault();
+          setExplorerOpen(false);
+          focused.term?.focus();
+        }
+        return;
+    }
+  };
+  const savedExplorerWidth = () => {
+    try {
+      return (
+        Number(localStorage.getItem(explorerWidthKey)) || explorerDefaultWidth
+      );
+    } catch {
+      return explorerDefaultWidth;
+    }
+  };
+  const applyExplorerWidth = (width) => {
+    const room = explorer.body?.getBoundingClientRect().width || 0;
+    const most = room
+      ? Math.max(explorerMinWidth, room - explorerPanesRoom)
+      : width;
+    const clamped = Math.round(
+      Math.max(explorerMinWidth, Math.min(width, most)),
+    );
+    panel.style.setProperty("--terminal-explorer-width", clamped + "px");
+    return clamped;
+  };
+  // applyExplorer shows the Explorer as a column, a drawer, or not at all.
+  const applyExplorer = () => {
+    if (!explorer.element) return;
+    const room = explorer.body.getBoundingClientRect().width;
+    const width = savedExplorerWidth();
+    explorer.drawer =
+      room > 0 && room < Math.max(width, explorerMinWidth) + explorerPanesRoom;
+    panel.classList.toggle("terminal-explorer-open", explorer.open);
+    panel.classList.toggle(
+      "terminal-explorer-drawer",
+      explorer.open && explorer.drawer,
+    );
+    explorer.element.hidden = !explorer.open;
+    explorer.scrim.hidden = !(explorer.open && explorer.drawer);
+    explorer.toggle.setAttribute("aria-pressed", String(explorer.open));
+    applyExplorerWidth(explorer.drawer ? Math.min(width, 280) : width);
+  };
+  const setExplorerOpen = (open) => {
+    explorer.open = open;
+    try {
+      localStorage.setItem(explorerOpenKey, open ? "1" : "0");
+    } catch {}
+    applyExplorer();
+    fitPanes();
+    if (open) {
+      refreshExplorer();
+      (
+        rowOf(explorer.selected) ||
+        explorer.tree.querySelector('[role="treeitem"]') ||
+        explorer.tree
+      ).focus();
+    }
+  };
+  const buildExplorerResizer = () => {
+    const handle = document.createElement("div");
+    handle.className = "terminal-explorer-resizer";
+    handle.setAttribute("role", "separator");
+    handle.setAttribute("aria-orientation", "vertical");
+    handle.setAttribute("aria-label", "Resize the Explorer");
+    handle.tabIndex = 0;
+    const resizeTo = (width) => {
+      const applied = applyExplorerWidth(width);
+      try {
+        localStorage.setItem(explorerWidthKey, String(applied));
+      } catch {}
+      fitPanes();
+    };
+    handle.onpointerdown = (event) => {
+      event.preventDefault();
+      handle.setPointerCapture?.(event.pointerId);
+      const left = explorer.body.getBoundingClientRect().left;
+      handle.onpointermove = (move) => resizeTo(move.clientX - left);
+      handle.onpointerup = () => {
+        handle.onpointermove = handle.onpointerup = null;
+      };
+    };
+    handle.onkeydown = (event) => {
+      const step =
+        event.key === "ArrowLeft" ? -16 : event.key === "ArrowRight" ? 16 : 0;
+      if (!step) return;
+      event.preventDefault();
+      resizeTo(explorer.element.getBoundingClientRect().width + step);
+    };
+    return handle;
+  };
+  // buildExplorer makes the Explorer and the body it shares with the panes.
+  const buildExplorer = () => {
+    const aside = document.createElement("aside");
+    aside.className = "terminal-explorer";
+    aside.setAttribute("aria-label", "Explorer");
+    const head = document.createElement("div");
+    head.className = "terminal-explorer-head";
+    explorer.title = document.createElement("span");
+    explorer.title.className = "terminal-explorer-title";
+    explorer.followButton = explorerIconButton(
+      "Follow the shell",
+      explorerIcons.follow,
+      () => setFollow(!explorer.follow),
+    );
+    explorer.followButton.title =
+      "Follow the shell: the tree moves when this pane's shell changes directory";
+    explorer.followButton.setAttribute("aria-pressed", String(explorer.follow));
+    const close = explorerIconButton(
+      "Close the Explorer",
+      explorerIcons.close,
+      () => {
+        setExplorerOpen(false);
+        focused.term?.focus();
+      },
+    );
+    close.classList.add("terminal-explorer-close");
+    head.append(
+      explorer.title,
+      explorerIconButton("Up one directory", explorerIcons.up, explorerUp),
+      explorer.followButton,
+      explorerIconButton("Refresh", explorerIcons.refresh, () =>
+        refreshExplorer(),
+      ),
+      explorerIconButton("Collapse all", explorerIcons.collapse, () => {
+        explorer.expanded.clear();
+        renderExplorer();
+      }),
+      close,
+    );
+    explorer.where = document.createElement("div");
+    explorer.where.className = "terminal-explorer-where";
+    explorer.tree = document.createElement("div");
+    explorer.tree.className = "terminal-explorer-tree";
+    explorer.tree.setAttribute("role", "tree");
+    explorer.tree.setAttribute("aria-label", "Files");
+    explorer.tree.tabIndex = -1;
+    explorer.tree.onkeydown = explorerKeys;
+    explorer.footer = document.createElement("div");
+    explorer.footer.className = "terminal-explorer-footer";
+    aside.append(
+      head,
+      explorer.where,
+      explorer.tree,
+      explorer.footer,
+      buildExplorerResizer(),
+    );
+    aside.onkeydown = (event) => {
+      if (event.key === "Escape" && explorer.drawer && event.target === aside)
+        explorerKeys(event);
+    };
+    explorer.element = aside;
+    explorer.scrim = document.createElement("div");
+    explorer.scrim.className = "terminal-explorer-scrim";
+    explorer.scrim.onclick = () => setExplorerOpen(false);
+    explorer.body = document.createElement("div");
+    explorer.body.className = "terminal-body";
+    explorer.body.append(aside, explorer.scrim, panesBox);
+    new ResizeObserver(() => applyExplorer()).observe(explorer.body);
+    return explorer.body;
+  };
+  // A path dragged from the Explorer onto a pane goes into that pane's shell.
+  const takeExplorerDrops = (pane) => {
+    const carries = (event) =>
+      [...(event.dataTransfer?.types || [])].includes(explorerPathType);
+    pane.element.addEventListener("dragover", (event) => {
+      if (!carries(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      pane.element.classList.add("terminal-pane-drop");
+    });
+    pane.element.addEventListener("dragleave", () =>
+      pane.element.classList.remove("terminal-pane-drop"),
+    );
+    pane.element.addEventListener("drop", (event) => {
+      pane.element.classList.remove("terminal-pane-drop");
+      if (!carries(event)) return;
+      event.preventDefault();
+      const path = event.dataTransfer.getData(explorerPathType);
+      if (focused !== pane) focusPane(pane);
+      sendExplorerPath(path);
+    });
+  };
   const showBriefly = (pane, message) => {
     showStatus(pane, message);
     setTimeout(() => {
@@ -3201,6 +3940,7 @@ async function copyJobsValue(button) {
     pane.viewport.className = "terminal-viewport";
     pane.element.append(notice, pane.viewport);
     panesBox.append(pane.element);
+    takeExplorerDrops(pane);
   };
   const build = () => {
     panel = document.createElement("section");
@@ -3321,7 +4061,15 @@ async function copyJobsValue(button) {
     hide.setAttribute("aria-label", "Hide");
     hide.title = "Hide the terminal; its shells keep running";
     hide.onclick = () => window.toggleTerminalPanel();
+    explorer.toggle = document.createElement("button");
+    explorer.toggle.type = "button";
+    explorer.toggle.className = "terminal-explorer-toggle";
+    drawIcon(explorer.toggle, explorerIcons.explorer);
+    explorer.toggle.setAttribute("aria-label", "Explorer");
+    explorer.toggle.title = "Explorer: the files where this pane's shell is";
+    explorer.toggle.onclick = () => setExplorerOpen(!explorer.open);
     bar.append(
+      explorer.toggle,
       title,
       groups,
       tabs,
@@ -3343,14 +4091,16 @@ async function copyJobsValue(button) {
     panesBox.className = "terminal-panes";
     buildPane(focused);
     // A window has the whole of itself, with nothing to resize, maximize, or hide it for.
+    const body = buildExplorer();
     if (inWindow) {
       for (const button of [maximize, hide]) button.remove();
-      panel.append(bar, panesBox);
+      panel.append(bar, body);
     } else {
-      panel.append(buildResizer(), bar, panesBox);
+      panel.append(buildResizer(), bar, body);
     }
     document.body.append(panel);
     applyPlace();
+    applyExplorer();
     new ResizeObserver(() => {
       if (isStacked() !== laidStacked) applyLayout();
     }).observe(panesBox);
@@ -3376,7 +4126,11 @@ async function copyJobsValue(button) {
     );
     term.open(viewport);
     fit.fit();
-    term.onData((data) => send(pane, new TextEncoder().encode(data)));
+    term.onData((data) => {
+      send(pane, new TextEncoder().encode(data));
+      // Enter may have changed the shell's directory, which the Explorer follows.
+      if (pane === focused && data.includes("\r")) explorerSoon();
+    });
     term.onBinary((data) =>
       send(
         pane,
@@ -3822,11 +4576,6 @@ async function copyJobsValue(button) {
     if (pane.term && !showing) begin();
     return waiting;
   };
-  // A value goes in as one word of a command, so one that needs quoting gets it.
-  const asWord = (value) =>
-    /^[A-Za-z0-9_\/.:=@%+,-]+$/.test(value)
-      ? value
-      : "'" + value.replace(/'/g, "'\\''") + "'";
   let sendNote, sendNoteTimer;
   const showNote = (message, duration) => {
     if (!sendNote) {
@@ -3845,7 +4594,7 @@ async function copyJobsValue(button) {
     { word = false, pasted = false } = {},
   ) => {
     sentToProject = "";
-    const problem = await window.sendToTerminal(word ? asWord(text) : text, {
+    const problem = await window.sendToTerminal(word ? shellWord(text) : text, {
       pasted,
     });
     const sent = sentToProject

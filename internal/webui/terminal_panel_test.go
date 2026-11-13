@@ -133,6 +133,18 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           requests.push('GET ' + address);
           return Promise.resolve({ ok: true, status: 200, json: async () => server.launchers || { available: false, reason: 'Launching is disabled on this server.', hint: 'Restart with rotari web --allow-exec.' } });
         }
+        if (address.startsWith('/_terminal/files?')) {
+          requests.push('GET ' + address);
+          const query = new URLSearchParams(address.slice(address.indexOf('?') + 1));
+          const dir = query.has('shell') ? server.cwds?.[query.get('shell')] : query.get('path');
+          const refuse = (text) => Promise.resolve({ ok: false, status: 422, text: async () => text });
+          if (!dir) return refuse('where the shell is now is not known: no such process');
+          const answer = server.files?.[dir];
+          if (!answer) return refuse('stat ' + dir + ': no such file or directory');
+          if (answer.error) return refuse(answer.error);
+          const entries = Array.isArray(answer) ? answer : answer.entries;
+          return Promise.resolve({ ok: true, status: 200, json: async () => ({ dir, entries, total: answer.total || entries.length }) });
+        }
         if (address === '/api/tableview-sources') {
           requests.push('POST /api/tableview-sources ' + init.body);
           const answer = server.tableviewSource || { source: 'S 1', dir: '/w/p1/logs' };
@@ -1082,6 +1094,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(await press(sending, sending.window.copyButtonHTML("sh -c 'echo hi'", 'command')), "sh -c 'echo hi'", 'a command was quoted as a word');
   assert.equal(await press(sending, sending.window.copyButtonHTML('/w/o d', 'path')), "'/w/o d'");
   assert.equal(await press(sending, sending.window.copyIconForValue("it's", 'name')), "'it'\\''s'");
+  // A backslash goes outside the quotes too, which fish reads as POSIX shells do.
+  assert.equal(await press(sending, sending.window.copyIconForValue('a\\b', 'name')), "'a'\\\\'b'");
+  assert.equal(sending.window.shellQuote("it's\\a"), "'it'\\''s'\\\\'a'");
+  assert.equal(sending.window.shellWord('/w/plain-1.txt'), '/w/plain-1.txt');
   assert.equal(await press(sending, sending.window.copyIconForValue('a;rm -rf "$HOME"<b>', 'name')), "'a;rm -rf \"$HOME\"<b>'");
   const shown = sending.document.querySelector('.terminal-send-note');
   await press(sending, sending.window.copyIconForValue('two\nlines', 'name'));
@@ -2878,6 +2894,197 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   await wait(20);
   assert.equal(scripts().length, 1);
   assert.equal(scripts()[0].getAttribute('src'), '/_terminal/xterm.js');
+
+  // The Explorer: the files where the focused pane's shell is, following it as it moves.
+  {
+  const exploring = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  const ex = exploring;
+  ex.server.cwds = { 1: '/w/p1', 2: '/w/p1/out' };
+  ex.server.files = {
+    '/w': [{ name: 'other', kind: 'file' }, { name: 'p1', kind: 'dir' }],
+    '/w/p1': [
+      { name: 'conf', kind: 'dir' },
+      { name: 'shared', kind: 'symlink', target: '/data/shared', target_kind: 'dir' },
+      { name: 'a b.csv', kind: 'file' },
+      { name: "it's\\x.txt", kind: 'file' },
+      { name: 'bad\nname', kind: 'file' },
+      { name: 'odd�', kind: 'file', not_utf8: true },
+    ],
+    '/w/p1/conf': [{ name: 'train.yaml', kind: 'file' }],
+    '/w/p1/out': { error: 'open /w/p1/out: permission denied' },
+    '/w/p1/shared': { entries: [{ name: 'one', kind: 'file' }], total: 3 },
+  };
+  const exOpened = [];
+  ex.window.open = (...args) => {
+    const tab = { location: { href: args[0] }, opener: 'page', close() { this.closed = true; } };
+    exOpened.push([args, tab]);
+    return tab;
+  };
+  const exCopied = [];
+  Object.defineProperty(ex.window.navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => exCopied.push(text) } });
+  await wait(50);
+  const exToggle = ex.document.querySelector('.terminal-explorer-toggle');
+  const exPanel = () => ex.document.getElementById('terminal-panel');
+  const exAside = () => ex.document.querySelector('.terminal-explorer');
+  const exRows = () => [...ex.document.querySelectorAll('.terminal-explorer-row')];
+  const exRow = (text) => exRows().find((row) => row.querySelector('.terminal-explorer-name').textContent === text);
+  const exNames = () => exRows().map((row) => row.querySelector('.terminal-explorer-name').textContent);
+  const exFooter = () => ex.document.querySelector('.terminal-explorer-footer').textContent;
+  const exNote = () => ex.document.querySelector('.terminal-send-note')?.textContent;
+  assert.equal(ex.document.querySelector('.terminal-bar').firstElementChild, exToggle, 'the Explorer button is not first in the bar');
+  assert.equal(exToggle.getAttribute('aria-pressed'), 'false');
+  assert.equal(exAside().hidden, true, 'the Explorer exOpened by itself');
+  assert.equal(ex.requests.some((request) => request.includes('/_terminal/files')), false, 'a closed Explorer listed files');
+  exToggle.click();
+  await wait(30);
+  assert.equal(ex.window.localStorage.getItem('rotari-terminal-explorer'), '1');
+  assert.equal(exToggle.getAttribute('aria-pressed'), 'true');
+  assert.equal(exAside().hidden, false);
+  assert.equal(exPanel().classList.contains('terminal-explorer-drawer'), false, 'the panel at the bottom made a drawer');
+  assert.ok(ex.requests.includes('GET /_terminal/files?shell=1'), ex.requests.join(', '));
+  assert.equal(ex.document.querySelector('.terminal-explorer-title').textContent, 'p1');
+  assert.equal(ex.document.querySelector('.terminal-explorer-where').textContent, '/w/p1');
+  assert.equal(exFooter(), 'Following Shell 1 of p1');
+  assert.deepEqual(exNames(), ['conf', 'shared', 'a b.csv', "it's\\x.txt", 'bad\\nname', 'odd�']);
+  // A link says where it goes, a control character shows as its escape, and a name that is
+  // not UTF-8 offers nothing.
+  assert.equal(exRow('shared').querySelector('.terminal-explorer-target').textContent, '→ /data/shared');
+  assert.equal(exRow('shared').getAttribute('aria-expanded'), 'false');
+  assert.equal(exRow('bad\\nname').querySelector('.terminal-explorer-escape').textContent, '\\n');
+  assert.equal(exRow('odd�').querySelector('.terminal-explorer-actions'), null);
+  assert.equal(exRow('odd�').draggable, false);
+  assert.match(exRow('odd�').title, /not valid UTF-8/);
+  // A folder opens in place, a level down.
+  exRow('conf').click();
+  await wait(20);
+  assert.ok(ex.requests.includes('GET /_terminal/files?path=%2Fw%2Fp1%2Fconf'), ex.requests.join(', '));
+  assert.deepEqual([exRow('train.yaml').getAttribute('aria-level'), exRow('conf').getAttribute('aria-expanded'), exRow('conf').getAttribute('aria-selected')], ['2', 'true', 'true']);
+  // A folder with more than the server lists says so, and offers the Table viewer.
+  exRow('shared').click();
+  await wait(20);
+  assert.equal(ex.document.querySelector('.terminal-explorer-truncated').textContent, '1 of 3 shown. Open in the Table viewer');
+  exRow('shared').click();
+  // A path goes in relative to the shell, as one word, quoted as every shell reads it.
+  const exSocket = ex.sockets.at(-1);
+  exSocket.onopen?.();
+  const sendOf = (row) => row.querySelector('[aria-label="Send the path to the terminal"]');
+  sendOf(exRow('a b.csv')).click();
+  await wait(20);
+  assert.equal(ex.pasted.at(-1), "'a b.csv'");
+  sendOf(exRow('train.yaml')).click();
+  await wait(20);
+  assert.equal(ex.pasted.at(-1), 'conf/train.yaml');
+  sendOf(exRow("it's\\x.txt")).click();
+  await wait(20);
+  assert.equal(ex.pasted.at(-1), "'it'\\''s'\\\\'x.txt'");
+  const pastedBefore = ex.pasted.length;
+  sendOf(exRow('bad\\nname')).click();
+  await wait(20);
+  assert.equal(ex.pasted.length, pastedBefore, 'a name with a line break was sent');
+  assert.match(exNote(), /control characters/);
+  exRow('odd�').dispatchEvent(new ex.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  assert.match(exNote(), /not valid UTF-8/);
+  assert.equal(ex.document.querySelector('.terminal-tab-menu'), null, 'a name that cannot be named got a menu');
+  // The menu copies the path whole or from the shell's directory.
+  const menuOf = (row) => {
+    row.dispatchEvent(new ex.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+    return [...ex.document.querySelectorAll('.terminal-tab-menu button')];
+  };
+  assert.deepEqual(menuOf(exRow('train.yaml')).map((item) => [item.textContent, item.disabled]), [['Open in the Table viewer', false], ['Send the path to the terminal', false], ['Copy the path', false], ['Copy the path from here', false]]);
+  menuOf(exRow('train.yaml'))[3].click();
+  await wait(10);
+  menuOf(exRow('train.yaml'))[2].click();
+  await wait(10);
+  assert.deepEqual(exCopied, ['conf/train.yaml', '/w/p1/conf/train.yaml']);
+  // A file opens in the Table viewer in a tab exOpened at once, so that no pop-up is blocked.
+  ex.server.tableviewSource = { source: 'E 1', dir: '/w/p1', child: 'a b.csv' };
+  exRow('a b.csv').dispatchEvent(new ex.window.MouseEvent('dblclick', { bubbles: true }));
+  await wait(20);
+  assert.ok(ex.requests.includes('POST /api/tableview-sources {"path":"/w/p1/a b.csv"}'), ex.requests.join(', '));
+  assert.deepEqual([exOpened.at(-1)[0][0], exOpened.at(-1)[0][1], exOpened.at(-1)[1].opener, exOpened.at(-1)[1].location.href], ['about:blank', '_blank', null, 'http://127.0.0.1:9/tableview/?source=E%201&child=a%20b.csv']);
+  ex.server.tableviewSource = { error: 'a path from the Explorer requires HTTPS' };
+  exRow('a b.csv').dispatchEvent(new ex.window.MouseEvent('dblclick', { bubbles: true }));
+  await wait(20);
+  assert.equal(exOpened.at(-1)[1].closed, true, 'a refused viewer left its tab');
+  assert.match(exNote(), /Cannot open \/w\/p1\/a b\.csv in the Table viewer: a path from the Explorer requires HTTPS/);
+  // The keys move through the rows and open and close folders.
+  exRow('conf').focus();
+  exRow('conf').click();
+  await wait(10);
+  const key = (name) => ex.document.querySelector('.terminal-explorer-tree').dispatchEvent(new ex.window.KeyboardEvent('keydown', { key: name, bubbles: true }));
+  key('ArrowRight');
+  await wait(10);
+  key('ArrowRight');
+  assert.equal(ex.document.activeElement, exRow('train.yaml'));
+  key('ArrowLeft');
+  assert.equal(ex.document.activeElement, exRow('conf'));
+  key('ArrowLeft');
+  assert.equal(exRow('conf').getAttribute('aria-expanded'), 'false');
+  key('ArrowDown');
+  assert.equal(ex.document.activeElement, exRow('shared'));
+  // Following: Enter in the shell lists again, and the tree moves with it.
+  ex.server.cwds[1] = '/w/p1/conf';
+  ex.terminals.at(-1).data('cd conf\r');
+  await wait(450);
+  assert.equal(ex.document.querySelector('.terminal-explorer-where').textContent, '/w/p1/conf');
+  assert.deepEqual(exNames(), ['train.yaml']);
+  // Up shows the parent and stops following; the shell's place stays in the footer.
+  ex.document.querySelector('[aria-label="Up one directory"]').click();
+  await wait(20);
+  assert.equal(ex.document.querySelector('.terminal-explorer-where').textContent, '/w/p1');
+  assert.equal(ex.document.querySelector('[aria-label="Follow the shell"]').getAttribute('aria-pressed'), 'false');
+  assert.deepEqual([exRow('conf').getAttribute('aria-expanded'), exRow('conf').getAttribute('aria-selected')], ['true', 'true']);
+  assert.equal(exFooter(), 'Not following · Shell 1 of p1 is in /w/p1/confFollow');
+  ex.server.cwds[1] = '/w/p1/out';
+  ex.terminals.at(-1).data('cd ../out\r');
+  await wait(450);
+  assert.equal(ex.document.querySelector('.terminal-explorer-where').textContent, '/w/p1', 'the tree moved while not following');
+  // A path outside the shell's directory goes in whole.
+  ex.server.cwds[1] = '/w/p1/conf';
+  ex.document.querySelector('[aria-label="Up one directory"]').click();
+  await wait(20);
+  sendOf(exRow('other')).click();
+  await wait(20);
+  assert.equal(ex.pasted.at(-1), '/w/other');
+  ex.document.querySelector('.terminal-explorer-follow-link').click();
+  await wait(20);
+  assert.equal(ex.document.querySelector('.terminal-explorer-where').textContent, '/w/p1/conf');
+  assert.equal(ex.document.querySelector('[aria-label="Follow the shell"]').getAttribute('aria-pressed'), 'true');
+  // Another shell in the pane is followed in its turn, and a directory that cannot be
+  // listed says why rather than showing nothing.
+  [...ex.document.querySelectorAll('.terminal-tab [role="tab"]')][1].click();
+  await wait(30);
+  assert.ok(ex.requests.includes('GET /_terminal/files?shell=2'), ex.requests.join(', '));
+  assert.equal(ex.document.querySelector('.terminal-explorer-problem').textContent, 'open /w/p1/out: permission denied');
+  assert.equal(exFooter(), 'Following Shell 2 of p1');
+  // A path dropped on a pane goes into that pane.
+  [...ex.document.querySelectorAll('.terminal-tab [role="tab"]')][0].click();
+  await wait(30);
+  const dropping = new ex.window.Event('drop', { bubbles: true, cancelable: true });
+  Object.defineProperty(dropping, 'dataTransfer', { value: { types: ['application/x-rotari-explorer-path'], getData: () => '/w/p1/conf/train.yaml' } });
+  ex.document.querySelector('.terminal-pane').dispatchEvent(dropping);
+  await wait(20);
+  assert.equal(ex.pasted.at(-1), 'train.yaml');
+  // Where the panes would be too narrow beside it, it is a drawer, closed by Escape or by
+  // doing something with a row.
+  const narrow = ex.window.HTMLElement.prototype.getBoundingClientRect;
+  ex.window.HTMLElement.prototype.getBoundingClientRect = function () {
+    return this.classList.contains('terminal-body') ? { width: 500, height: 300, left: 0, top: 0, right: 500, bottom: 300 } : narrow.call(this);
+  };
+  ex.server.observers.forEach((callback) => callback([]));
+  assert.equal(exPanel().classList.contains('terminal-explorer-drawer'), true);
+  assert.equal(ex.document.querySelector('.terminal-explorer-scrim').hidden, false);
+  exRow('train.yaml').click();
+  key('Escape');
+  assert.equal(exAside().hidden, true, 'Escape left the drawer');
+  assert.equal(exToggle.getAttribute('aria-pressed'), 'false');
+  exToggle.click();
+  await wait(30);
+  sendOf(exRow('train.yaml')).click();
+  await wait(20);
+  assert.equal(exAside().hidden, true, 'sending left the drawer');
+  ex.window.HTMLElement.prototype.getBoundingClientRect = narrow;
+  }
   process.exit(0);
 })().catch((error) => { console.error(error.stack || String(error)); process.exit(1); });
 `

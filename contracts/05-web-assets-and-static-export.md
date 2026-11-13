@@ -1461,6 +1461,39 @@ level by `TestIdleLimitAppliesToTheShellsTogether` and
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-42** With `rotari web --allow-terminal`, the terminal panel has an Explorer: a tree of the files where the
+focused pane's shell is, opened by the first button of its bar, as a column at the left of the panel's body or, where
+the panes would have too little room beside it, as a drawer over them that closes on Escape and after a row is used.
+While **Follow** is on, its root is the shell's directory, looked up on the server and listed again with the panel's
+shells, shortly after Enter is typed in that pane, when another shell is shown there, and on **Refresh**; **Up**
+shows the parent and turns Follow off, and nothing limits how far up or down it goes. `GET
+/_terminal/files?shell=ID` lists the directory a running shell is in now (404 for a shell not running), and
+`?path=/ABS` any directory; one of the two, and the path absolute and valid UTF-8 without NUL (400 otherwise). It is
+served only where the terminal is (404 without it), behind its token, `Host` check, and HTTPS or a direct loopback
+connection (WEB-34). The answer is the directory, its immediate entries, folders (and links to folders) first and
+then by name, each with its kind (`dir`, `file`, `symlink`, `other`) and, for a link, its target and the kind of what
+it reaches (`missing` if nothing), at most 2,000 of them, and `total`; a name or target that is not valid UTF-8 comes
+with U+FFFD in place of its bad bytes and is marked `not_utf8` or `target_not_utf8`. A directory that cannot be
+listed, and a shell whose directory is unknown or not valid UTF-8, are a 422 saying why, never an empty listing. The
+tree shows such a refusal in place, says how many entries it leaves out with a link to the folder in the Table viewer,
+shows control characters in names as escapes, and offers nothing for a name marked `not_utf8`. A row's buttons and
+menu send its path to the terminal, relative to the shell's directory when under it and otherwise absolute, through
+the send buttons' rules (one word, quoted as `shellQuote` does, refused with a note for control characters); open it
+in the Table viewer; or copy it whole or from the shell's directory. A row dropped on a pane sends its path to that
+pane. Opening asks `POST /api/tableview-sources` with `{"path": "/ABS"}`, which needs the terminal (403 without)
+and HTTPS or a direct loopback connection (403 otherwise), takes either `path` or `shell` (400 for both), follows
+symbolic links (400 for a path that does not resolve), and pins the folder, or a file's folder with the file's name
+answered as `child`, as WEB-39 pins a shell's directory but reading under `/`; the page opens it in a tab opened at
+once and closes that tab if refused. Implemented in `internal/webui/terminal_files.go`, `serveExplorerTableView` in
+`internal/webui/table_view_shell.go`, and the Explorer in `web_shell.js`; covered by
+[`TestTerminalExplorerListsAndOpensFiles`](../conformance/05-web/terminal_explorer_test.go), the unit tests
+`TestTerminalFilesListADirectory`, `TestTerminalFilesSayHowManyTheyLeaveOut`, `TestTerminalFilesRefuseWithTheReason`,
+and `TestTableViewOnAnExplorerDirectory`, and `TestTerminalPanel`.
+
+The send buttons (WEB-33's panel, the copy buttons' send buttons) and the commands copy buttons show quote a value
+with `shellQuote` in `web_shell.js`: in single quotes, with each `'` and `\` outside them as `\'` and `\\`, which
+POSIX shells, tcsh, and fish read alike; a value of only letters, digits, and `_/.:=@%+,-` goes in as it is.
+
 **WEB-41** A live server's `POST /_server/shutdown` stops it as SIGTERM does, whether it was detached or not: it
 answers 202 first, then closes launches, shells, and the listener in the same order, and a detached server removes its
 record. It needs job control (403 without), a JSON content type (415 otherwise, so a cross-site form cannot send it),
@@ -1502,7 +1535,7 @@ packages.
 **WEB-39** With `rotari web --allow-terminal`, with or without `--allow-exec`, the
 Table viewer may show the directory a running shell is in. `POST
 /api/tableview-sources` with `{"shell": ID}`, and nothing else (400 for another
-field, such as a path), looks the shell's directory up on the server as WEB-38
+field; a `path` instead is the Explorer's, WEB-42), looks the shell's directory up on the server as WEB-38
 does and answers a random `source` id and that `dir`; it is refused, saying why,
 for a shell not running (400) and a server without the terminal (403).
 `/tableview/?source=ID` then shows that directory, pinned when the id was issued:

@@ -1698,3 +1698,238 @@ html.terminal-open .output-panel.terminal-launch {
   color: var(--muted);
   opacity: 0.7;
 }
+
+/* The Explorer: a column at the left of the panel's body, or a drawer over the panes when
+   the body has no room for both (web_shell.js decides, as panel.terminal-explorer-drawer). */
+.terminal-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.terminal-body .terminal-panes {
+  min-width: 0;
+}
+.terminal-explorer {
+  position: relative;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: var(--terminal-explorer-width, 260px);
+  min-height: 0;
+  border-right: 1px solid var(--line);
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-size: 12.5px;
+}
+.terminal-explorer[hidden],
+.terminal-explorer-scrim[hidden] {
+  display: none;
+}
+#terminal-panel.terminal-explorer-drawer .terminal-explorer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  box-shadow: var(--shadow-pop);
+}
+.terminal-explorer-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+  background: var(--overlay);
+  opacity: 0.3;
+}
+.terminal-explorer-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px 2px 10px;
+}
+.terminal-explorer-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-explorer button.terminal-icon,
+.terminal-bar button.terminal-explorer-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 3px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-2);
+}
+.terminal-explorer button.terminal-icon:hover,
+.terminal-explorer button[aria-pressed="true"],
+.terminal-bar button.terminal-explorer-toggle[aria-pressed="true"] {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.terminal-explorer button[aria-pressed="true"],
+.terminal-bar button.terminal-explorer-toggle[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.terminal-explorer-close {
+  display: none;
+}
+#terminal-panel.terminal-explorer-drawer .terminal-explorer-close {
+  display: inline-flex;
+}
+.terminal-explorer-where {
+  overflow: hidden;
+  padding: 0 10px 6px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-explorer-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 4px 4px;
+}
+.terminal-explorer-tree:focus {
+  outline: none;
+}
+.terminal-explorer-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 4px 0 calc(4px + var(--level, 0) * 14px);
+  border-radius: 3px;
+  white-space: nowrap;
+  cursor: default;
+}
+.terminal-explorer-row:hover {
+  background: var(--surface-2);
+}
+.terminal-explorer-row[aria-selected="true"] {
+  background: var(--highlight);
+  box-shadow: inset 2px 0 0 var(--focus);
+}
+.terminal-explorer-row:focus-visible {
+  outline: 1px solid var(--focus);
+  outline-offset: -1px;
+}
+.terminal-explorer-chevron,
+.terminal-explorer-kind {
+  display: inline-flex;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+.terminal-explorer-chevron svg,
+.terminal-explorer-kind svg,
+.terminal-explorer-actions svg {
+  width: 14px;
+  height: 14px;
+}
+.terminal-explorer-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.terminal-explorer-link .terminal-explorer-name {
+  font-style: italic;
+}
+.terminal-explorer-target {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+/* A control character in a name, shown as its escape. */
+.terminal-explorer-escape {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: var(--s-warn-bg);
+  color: var(--s-warn);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.terminal-explorer-unnamed .terminal-explorer-name {
+  color: var(--muted);
+}
+.terminal-explorer-actions {
+  display: none;
+  flex: none;
+  gap: 2px;
+  margin-left: auto;
+}
+.terminal-explorer-row:hover .terminal-explorer-actions,
+.terminal-explorer-row[aria-selected="true"] .terminal-explorer-actions {
+  display: flex;
+}
+.terminal-explorer .terminal-explorer-actions button.terminal-icon {
+  padding: 2px;
+}
+.terminal-explorer-note {
+  padding: 3px 4px 3px calc(22px + var(--level, 0) * 14px);
+  color: var(--muted);
+  font-size: 12px;
+}
+.terminal-explorer-problem {
+  color: var(--s-bad);
+}
+.terminal-explorer-more,
+.terminal-explorer-follow-link {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.terminal-explorer-footer {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  padding: 4px 10px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.terminal-explorer-footer .terminal-explorer-follow-link {
+  margin-left: auto;
+}
+.terminal-explorer-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  z-index: 12;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.terminal-explorer-resizer:hover,
+.terminal-explorer-resizer:focus-visible {
+  background: var(--line);
+  outline: none;
+}
+#terminal-panel.terminal-explorer-drawer .terminal-explorer-resizer {
+  display: none;
+}
+/* Where a path dragged from the Explorer would go. */
+.terminal-pane-drop {
+  box-shadow: inset 0 0 0 2px var(--focus);
+}

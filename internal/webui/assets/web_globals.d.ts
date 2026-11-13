@@ -10,6 +10,8 @@ declare const diagnosisGuidance: { noMatchNext: string; unavailableNext: string;
 
 // Defined by web_shell.js, which runs before the page script.
 declare function notificationUnavailableReason(): string;
+// web_shell.js, which every page loads before the application script.
+declare function shellQuote(value: unknown): string;
 
 // Static-export data that web_static_bootstrap.js puts on the window.
 interface Window {

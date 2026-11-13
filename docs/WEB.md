@@ -213,11 +213,35 @@ the shell opens in your home directory and its first line says why. A shell that
 Copy buttons have a send button beside them that types the same thing into the tab being shown, in the
 focused pane if the panel is split, without running it: press Enter in the terminal to run it. A suggested command, such as how to run the queue,
 goes in as one line with its comments and alternatives left out. A value such as a run ID or a path
-goes in as one word, quoted if it needs to be, so it can finish a command you have started typing. It
-goes to whatever is running there, such as `vim`. If the project has no shell, the button says so and
+goes in as one word, quoted if it needs to be, so it can finish a command you have started typing: in single
+quotes, with any `'` or `\` outside them as `\'` or `\\`, which sh, bash, zsh, tcsh, and fish all read the same
+way. It goes to whatever is running there, such as `vim`. If the project has no shell, the button says so and
 starts none. A log or other text of several lines goes in as pasted text, without colors and up to
 256 KiB, and only where the program takes it as such, such as a recent `bash` or `zsh` prompt or an
 editor; elsewhere each line would run, so the button says so and sends nothing.
+
+The **Explorer** icon at the left end of the panel's bar shows the files where the shell in the pane with the keys
+is, as an editor's file tree beside its terminal. It is a column at the left of the panel, whose right edge you can
+drag; where the panes would have too little room beside it, as with the panel at a side, it opens over them
+instead and closes again once you open or send something, or press Escape. The browser remembers whether it is
+open and how wide.
+
+While **Follow** (the link icon) is on, the tree shows the shell's directory and moves with it: it looks again a
+moment after you press Enter in that pane, every few seconds while the panel is in view, when the pane shows
+another shell, and when you press **Refresh**. **Up** shows the directory above and turns Follow off, so the
+tree stays where you put it while the shell moves on; the line at its foot then says where the shell is, with a
+**Follow** button to go back. You can go up and down anywhere, as the shell can.
+
+Click a folder to open or close it, and double-click a file, or press Enter on it, to open it in the Table viewer
+in a new tab; the arrow keys move through the tree. Pointing at a row shows two buttons: send its path to the
+terminal, and open it in the Table viewer. Right-click offers those, **Copy the path**, and **Copy the path from
+here**, relative to the shell's directory. You can also drag a row onto a pane to type its path there. A path goes
+in as the send buttons above send a value: relative to the shell's directory when the file is under it, otherwise
+whole, quoted if it needs to be, and not run until you press Enter. A name with a line break or other control
+character shows it as an escape such as `\n` and is not sent. A name that is not valid UTF-8 shows a
+replacement character and offers nothing, since the page cannot name it back to the server. A folder of more
+than 2,000 entries shows the first 2,000 and offers the rest in the Table viewer, and a folder that cannot be
+read says why. A symbolic link shows where it points, and opens what it points to.
 
 The **Clear** icon empties the tab's screen and scrollback, and what would be shown again after following a
 link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing

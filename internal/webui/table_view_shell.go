@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 
@@ -98,16 +99,20 @@ func (s site) shellDirectory(id string) (string, terminal.ShellInfo, error) {
 	return dir, *shell, nil
 }
 
-// shellTableViewRequest names a running shell and nothing else.
+// shellTableViewRequest names a running shell, or for the terminal's Explorer an
+// absolute path, and nothing else.
 type shellTableViewRequest struct {
 	Shell string `json:"shell"`
+	Path  string `json:"path"`
 }
 
 // shellTableViewSource is what POST /api/tableview-sources answers: the
-// source id and the directory pinned under it.
+// source id and the directory pinned under it, and for a file the Explorer
+// named, the file's name in it to open as child.
 type shellTableViewSource struct {
 	Source string `json:"source"`
 	Dir    string `json:"dir"`
+	Child  string `json:"child,omitempty"`
 }
 
 func (s site) registerShellTableViewRoutes(mux *http.ServeMux) {
@@ -121,6 +126,10 @@ func (s site) registerShellTableViewRoutes(mux *http.ServeMux) {
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&body); err != nil {
 			writeLaunchError(writer, http.StatusBadRequest, webLaunchError{Error: "invalid request: it names only a running shell: " + err.Error()})
+			return
+		}
+		if body.Path != "" {
+			s.serveExplorerTableView(writer, request, body)
 			return
 		}
 		if body.Shell == "" {
@@ -143,6 +152,47 @@ func (s site) registerShellTableViewRoutes(mux *http.ServeMux) {
 		source.trail = append(source.trail, "shell "+strconv.Itoa(shell.Number))
 		writeWebJSON(writer, shellTableViewSource{Source: s.shellTableViews.add(source), Dir: dir})
 	})
+}
+
+// serveExplorerTableView pins what the terminal's Explorer names: a directory, or a
+// file's directory with the file as its child. Whoever can use the terminal can read
+// anything there, so it needs the terminal on and the connection the terminal itself
+// needs. Symbolic links are followed first, as a shell would, since the viewer opens
+// files through os.Root, which refuses a link to an absolute path; the viewer then reads
+// under /, so that the media a file names are found wherever they are.
+func (s site) serveExplorerTableView(writer http.ResponseWriter, request *http.Request, body shellTableViewRequest) {
+	if body.Shell != "" {
+		writeLaunchError(writer, http.StatusBadRequest, webLaunchError{Error: "name either a running shell or a path, not both"})
+		return
+	}
+	if s.Terminal == nil {
+		writeLaunchError(writer, http.StatusForbidden, webLaunchError{Error: "a path from the Explorer needs the terminal, which this server does not offer; restart with `rotari web --allow-terminal`"})
+		return
+	}
+	if !allowsBrowserSession(request) {
+		writeLaunchError(writer, http.StatusForbidden, webLaunchError{Error: "a path from the Explorer requires HTTPS or a direct connection to localhost, as the terminal does"})
+		return
+	}
+	if err := checkTerminalDir(body.Path); err != nil {
+		writeLaunchError(writer, http.StatusBadRequest, webLaunchError{Error: err.Error()})
+		return
+	}
+	path, err := filepath.EvalSymlinks(filepath.Clean(body.Path))
+	if err != nil {
+		writeLaunchError(writer, http.StatusBadRequest, webLaunchError{Error: err.Error()})
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		writeLaunchError(writer, http.StatusBadRequest, webLaunchError{Error: err.Error()})
+		return
+	}
+	dir, child := path, ""
+	if !info.IsDir() {
+		dir, child = filepath.Dir(path), filepath.Base(path)
+	}
+	source := tableViewSource{target: tableview.Target{Path: dir, Roots: []string{string(filepath.Separator)}}, directory: true, name: dir, trail: []string{"Explorer"}}
+	writeWebJSON(writer, shellTableViewSource{Source: s.shellTableViews.add(source), Dir: dir, Child: child})
 }
 
 // tableViewSourceOf resolves a /tableview/ query: a shell's pinned source by

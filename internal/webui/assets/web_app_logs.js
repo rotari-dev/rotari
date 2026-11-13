@@ -389,9 +389,6 @@ async function toggleReportRedaction() {
   showReportOutput();
   await fetchAIReport(redact);
 }
-function shellQuote(v) {
-  return "'" + String(v || "").replace(/'/g, "'\\''") + "'";
-}
 function ensureOutputBox() {
   let output = document.getElementById("log");
   if (!output) {
