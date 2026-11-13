@@ -134,13 +134,6 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           requests.push('GET ' + address);
           return Promise.resolve({ ok: true, status: 200, json: async () => server.launchers || { available: false, reason: 'Launching is disabled on this server.', hint: 'Restart with rotari web --allow-exec.' } });
         }
-        if (address.startsWith('/_terminal/files/upload?')) {
-          const query = new URLSearchParams(address.slice(address.indexOf('?') + 1));
-          (server.uploads ||= []).push([query.get('dir'), query.get('name'), (init.headers || {})['Content-Type'], init.body?.constructor?.name]);
-          const refused = server.refuseUpload?.[query.get('name')];
-          if (refused) return Promise.resolve({ ok: false, status: 409, text: async () => refused });
-          return Promise.resolve({ ok: true, status: 200, json: async () => ({ path: query.get('dir') + '/' + query.get('name') }) });
-        }
         if (address.startsWith('/_terminal/files/')) {
           const op = address.slice('/_terminal/files/'.length);
           const body = JSON.parse(init.body);
@@ -200,6 +193,22 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           return Promise.resolve({ ok: true, status: 200, json: async () => ({ basedir, project, dir: project ? '/w/' + project : basedir ? '/w' : home }) });
         }
         return new Promise(() => {});
+      };
+      // Uploads go through XMLHttpRequest, for their progress. One held (server.holdUploads)
+      // waits for the test to report progress and finish it.
+      window.XMLHttpRequest = class {
+        constructor() { this.upload = {}; this.headers = {}; (server.xhrs ||= []).push(this); }
+        open(method, url) { this.method = method; this.url = url; }
+        setRequestHeader(name, value) { this.headers[name] = value; }
+        send(body) { this.body = body; if (!server.holdUploads) this.finish(); }
+        finish() {
+          const query = new URLSearchParams(this.url.slice(this.url.indexOf('?') + 1));
+          (server.uploads ||= []).push([query.get('dir'), query.get('name'), this.headers['Content-Type'], this.body?.constructor?.name]);
+          const refused = server.refuseUpload?.[query.get('name')];
+          this.status = refused ? 409 : 200;
+          this.responseText = refused || JSON.stringify({ path: query.get('dir') + '/' + query.get('name') });
+          Promise.resolve().then(() => this.onload());
+        }
       };
       window.setInterval = (callback, delay) => { if (delay === 5000) polls.push(callback); if (delay === 60000) aliveTimers.push(callback); return 1; };
       window.confirm = () => true;
@@ -3183,6 +3192,21 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(ex.server.uploads.some((upload) => upload[1] === 'dataset'), false, 'a folder was uploaded');
   assert.ok(notes.includes('Folders are not uploaded: dataset. The files are.'), notes.join(' | '));
   assert.equal(exNote(), 'Uploaded three.txt to /w/p1/conf.');
+  // A large upload says how far it has come, in the footer and its bar.
+  ex.server.holdUploads = true;
+  fromDesktop('drop', exRow('conf'), [], ['big.bin']);
+  await wait(10);
+  const held = ex.server.xhrs.at(-1);
+  assert.deepEqual([held.method, held.url, held.headers['Content-Type']], ['POST', '/_terminal/files/upload?dir=%2Fw%2Fp1%2Fconf&name=big.bin', 'application/octet-stream']);
+  assert.equal(exFooter(), 'Uploading big.bin...');
+  held.upload.onprogress({ lengthComputable: true, loaded: 3 * 1048576, total: 12 * 1048576 });
+  assert.equal(exFooter(), 'Uploading big.bin: 25% (3.0 MiB of 12.0 MiB)');
+  assert.equal(ex.document.querySelector('.terminal-explorer-progress').value, 0.25);
+  ex.server.holdUploads = false;
+  held.finish();
+  await wait(20);
+  assert.equal(ex.document.querySelector('.terminal-explorer-progress'), null, 'the bar stayed after the upload');
+  assert.equal(exNote(), 'Uploaded big.bin to /w/p1/conf.');
   // Dropped on a pane instead, nothing opens in place of the page.
   const besideTree = fromDesktop('drop', ex.document.querySelector('.terminal-pane'), [], ['four.txt']);
   assert.equal(besideTree.defaultPrevented, true, 'a file dropped on a pane was left to the browser');

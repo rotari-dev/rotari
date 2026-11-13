@@ -440,16 +440,6 @@ async function renderArtifactPreview(index, child, type) {
           "</p>"),
   );
 }
-function formatBytes(size) {
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-  let value = size;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-  return (unit ? value.toFixed(1) : String(value)) + " " + units[unit];
-}
 async function fetchArtifactJSON(path, index, child, extra) {
   const response = await fetch(artifactPath(path, index, child, extra));
   const body = await response.text();

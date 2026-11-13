@@ -202,6 +202,17 @@ async function copyJobsValue(button) {
 function shellQuote(value) {
   return "'" + String(value ?? "").replace(/['\\]/g, "'\\$&'") + "'";
 }
+// formatBytes says a size in binary units, as the artifact list and the Explorer's upload do.
+function formatBytes(size) {
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let value = size;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return (unit ? value.toFixed(1) : String(value)) + " " + units[unit];
+}
 function shellWord(value) {
   value = String(value ?? "");
   return /^[A-Za-z0-9_\/.:=@%+,-]+$/.test(value) ? value : shellQuote(value);
@@ -3256,6 +3267,7 @@ function shellWord(value) {
     toggle: null,
     body: null,
     busy: "", // A change waiting for the server, said in the footer.
+    progress: null, // How far an upload has come, from 0 to 1, for the footer's bar.
     clipboard: null, // { path, folder, cut } until pasted.
     dragging: "", // The path of a row being dragged.
     hoverTimer: undefined,
@@ -3875,41 +3887,80 @@ function shellWord(value) {
     link.click();
     link.remove();
   };
+  // sendUpload posts one file, saying how much has gone as it goes, which fetch cannot.
+  // It answers the status and text, or null when the connection failed.
+  const sendUpload = (address, file, progress) =>
+    new Promise((resolve) => {
+      const request = new XMLHttpRequest();
+      request.open("POST", address);
+      request.setRequestHeader("Content-Type", "application/octet-stream");
+      request.upload.onprogress = (event) => {
+        if (event.lengthComputable) progress(event.loaded, event.total);
+      };
+      request.onload = () =>
+        resolve({
+          ok: request.status >= 200 && request.status < 300,
+          status: request.status,
+          text: request.responseText,
+        });
+      request.onerror = request.onabort = () => resolve(null);
+      request.send(file);
+    });
+  // showExplorerBusy says in the footer what waits, with a bar for how far it has come,
+  // without drawing the tree again for each step.
+  const showExplorerBusy = (text, done) => {
+    explorer.busy = text;
+    explorer.progress = done;
+    if (!explorer.footer) return;
+    explorer.footer.replaceChildren(text);
+    if (done !== null && done !== undefined) {
+      const bar = document.createElement("progress");
+      bar.className = "terminal-explorer-progress";
+      bar.max = 1;
+      bar.value = done;
+      explorer.footer.append(bar);
+    }
+    explorer.footer.title = text;
+  };
   const uploadFiles = async (files, into) => {
     if (!files.length || !into) return;
     const failed = [];
     for (const [index, file] of files.entries()) {
-      explorer.busy =
+      const which =
         "Uploading " +
         file.name +
-        (files.length > 1 ? ", " + (index + 1) + " of " + files.length : "") +
-        "...";
-      renderExplorer();
-      let response;
-      try {
-        response = await serverFetch(
-          filesPath +
-            "/upload?dir=" +
-            encodeURIComponent(into) +
-            "&name=" +
-            encodeURIComponent(file.name),
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/octet-stream" },
-            body: file,
-          },
-        );
-      } catch {}
-      if (!response?.ok)
+        (files.length > 1 ? ", " + (index + 1) + " of " + files.length : "");
+      showExplorerBusy(which + "...", 0);
+      const answer = await sendUpload(
+        filesPath +
+          "/upload?dir=" +
+          encodeURIComponent(into) +
+          "&name=" +
+          encodeURIComponent(file.name),
+        file,
+        (sent, total) =>
+          showExplorerBusy(
+            which +
+              ": " +
+              Math.floor((sent / total) * 100) +
+              "% (" +
+              formatBytes(sent) +
+              " of " +
+              formatBytes(total) +
+              ")",
+            sent / total,
+          ),
+      );
+      if (!answer?.ok)
         failed.push(
           file.name +
             ": " +
-            (response
-              ? ((await response.text()) || "").trim() ||
-                "status " + response.status
+            (answer
+              ? (answer.text || "").trim() || "status " + answer.status
               : "the server did not answer"),
         );
     }
+    explorer.progress = null;
     explorer.busy = "";
     const uploaded = files.length - failed.length;
     if (failed.length)
@@ -4051,7 +4102,7 @@ function shellWord(value) {
     if (!explorer.selected && first) first.tabIndex = 0;
     if (hadFocus) (rowOf(explorer.selected) || first)?.focus();
     explorer.footer.replaceChildren();
-    if (explorer.busy) explorer.footer.append(explorer.busy);
+    if (explorer.busy) showExplorerBusy(explorer.busy, explorer.progress);
     else if (!shell) explorer.footer.append("This pane shows no shell.");
     else if (explorer.follow) explorer.footer.append("Following " + label);
     else {

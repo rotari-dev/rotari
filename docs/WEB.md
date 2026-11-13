@@ -262,7 +262,8 @@ large folder starts at once and takes as long as it takes; the browser shows its
 are left out, and if a file in it cannot be read, the download fails rather than leaving one out. In Chrome and Edge
 you can also drag a row out of the browser onto your desktop. **Upload...** in the menu of a folder, a file (its
 folder), or the tree's empty part picks files to send there, and you can drop files from your desktop onto a
-folder or the tree, holding them over a closed folder to open it. A file whose name is taken there is not uploaded,
+folder or the tree, holding them over a closed folder to open it. While a file goes up, the foot of the Explorer
+says which, how much of it has gone, and shows a bar. A file whose name is taken there is not uploaded,
 and the Explorer says so; a folder dropped among files is not uploaded either.
 
 The **Clear** icon empties the tab's screen and scrollback, and what would be shown again after following a

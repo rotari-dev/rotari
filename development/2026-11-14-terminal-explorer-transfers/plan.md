@@ -32,7 +32,9 @@ both from the menu and by dragging between the tree and the desktop.
    with the file as an `application/octet-stream` body (415 otherwise, which a form from another site cannot
    send), both behind the terminal's checks. `internal/fileops` gains `WriteNew` and `WriteZip`.
 7. **Feedback.** Uploads go one at a time; the footer says which (`Uploading a.csv, 2 of 3...`), and a note at the
-   end says how many uploaded and why any did not.
+   end says how many uploaded and why any did not. (Added 2026-11-14 at the user's request:) the footer also says
+   how far each has come, `25% (3.0 MiB of 12.0 MiB)`, with a bar. `fetch` reports no upload progress, so uploads
+   use `XMLHttpRequest`; the footer alone is redrawn for each step, not the tree.
 
 ## Phases
 

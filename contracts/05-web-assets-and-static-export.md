@@ -1477,7 +1477,8 @@ rather than ending a short archive. Anything but a file or folder is 400, a path
 /_terminal/files/upload?dir=/ABS&name=NAME` writes the body, which must be `application/octet-stream` (415), as the
 new file, under a temporary name in that folder first and then renamed into place without replacing, so a broken
 upload leaves nothing; a name taken is 409, a bad name (as WEB-43) 400, and other failures 422, each with the reason,
-and success answers `{"path"}`. Uploads go one at a time, the footer naming the file, and a note says how many
+and success answers `{"path"}`. Uploads go one at a time through `XMLHttpRequest`, the footer naming the file and how far it has come, as a
+percentage, the bytes sent of the total, and a bar, and a note says how many
 uploaded and why any did not. Both routes are served only where the terminal is, behind its checks. Implemented in
 `internal/fileops` (`WriteNew`, `WriteZip`), `serveTerminalDownload` and `serveTerminalUpload` in
 `internal/webui/terminal_files.go`, and the Explorer in `web_shell.js`; covered by

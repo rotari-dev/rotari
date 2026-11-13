@@ -1917,3 +1917,11 @@ html.terminal-open .output-panel.terminal-launch {
 .terminal-explorer-cut {
   opacity: 0.55;
 }
+/* How far an upload has come. */
+.terminal-explorer-progress {
+  flex: none;
+  width: 72px;
+  height: 6px;
+  margin-left: auto;
+  accent-color: var(--focus);
+}
