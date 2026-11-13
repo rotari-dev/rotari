@@ -96,3 +96,24 @@ hid the handle), the drawer covered the terminal's text, and they asked for the 
 differences that are on `main` too. Not seen in a real browser.
 
 **Remaining:** Decision 10's menu items, if wanted.
+
+## 2026-11-13 23:29 +09:00 — `baeda2a4` Tell shells their size only when an edge drag ends
+
+**Change:** `internal/webui/assets/web_shell.js`: `holdResizes` and `releaseResizes` around the drags of the
+panel's edge (`buildResizer`), a split between panes (`buildSplitHandle`), and the Explorer's edge
+(`buildExplorerResizer`, which also gains `pointercancel`). While one runs, `term.onResize` keeps the last size in
+the pane's `heldResize` instead of sending it; when it ends, each pane with a held size sends that one. The screens
+still fit themselves as the drag goes. `TestTerminalPanel` checks that two sizes during an Explorer drag send
+nothing, that the drag's end sends the last one alone, and that a later size is sent at once. `docs/WEB.md` says so.
+
+**Reason:** The user saw extra prompt lines while dragging the Explorer's edge. Each size reached the shell as
+`SIGWINCH`, and bash or zsh drew its prompt again against a screen xterm.js had just folded to the new width;
+a drag sends many sizes. The user agreed to send only the last one. A single change of width can still leave one
+line where the prompt wraps, which is the shell's doing.
+
+**Plan impact:** None; the panel's own resizer and splits get the same behavior, as agreed.
+
+**Validation:** `go test ./internal/webui/ -run 'TestTerminalPanel$'` (go1.25.8, Node v24): pass. Prettier
+3.9.8 reports only the two `confirmEndingShells` differences that are on `main` too. Not seen in a real browser.
+
+**Remaining:** None.
