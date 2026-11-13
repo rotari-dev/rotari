@@ -223,7 +223,9 @@ editor; elsewhere each line would run, so the button says so and sends nothing.
 The **Explorer** shows the files where the shell in the pane with the keys is, as an editor's file tree beside its
 terminal. It opens with the panel, as a column at its left wherever the panel is, and the panes make room for it.
 Drag its right edge to change its width, as far as leaves the panes 200 pixels. The icon at the left end of the
-panel's bar closes it and opens it again; the browser remembers whether it is open and how wide.
+panel's bar closes it and opens it again; the browser remembers whether it is open and how wide. While you drag an
+edge, of the Explorer, the panel, or a pane, the shells are told the new size only when you let go: a shell
+draws its prompt again at each size it hears of, which can leave stray prompt lines, so this keeps it to once.
 
 While **Follow** (the link icon) is on, the tree shows the shell's directory and moves with it: it looks again a
 moment after you press Enter in that pane, every few seconds while the panel is in view, when the pane shows

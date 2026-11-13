@@ -3088,9 +3088,18 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(exAside().hidden, false);
   assert.equal(exPanel().style.getPropertyValue('--terminal-explorer-width'), '220px');
   const exHandle = ex.document.querySelector('.terminal-explorer-resizer');
+  // While it is dragged, the shell hears only of the last size, when the drag ends.
+  const resizesSent = () => ex.sockets.at(-1).sent.filter((data) => typeof data === 'string' && data.includes('"resize"'));
+  const resizesBefore = resizesSent().length;
   exHandle.onpointerdown({ preventDefault() {}, pointerId: 1 });
   exHandle.onpointermove({ clientX: 190 });
+  ex.terminals.at(-1).resize({ rows: 24, cols: 61 });
+  ex.terminals.at(-1).resize({ rows: 24, cols: 58 });
+  assert.equal(resizesSent().length, resizesBefore, 'a drag told the shell of every size');
   exHandle.onpointerup();
+  assert.deepEqual(resizesSent().slice(resizesBefore).map((data) => JSON.parse(data)), [{ type: 'resize', rows: 24, cols: 58 }]);
+  ex.terminals.at(-1).resize({ rows: 24, cols: 70 });
+  assert.equal(resizesSent().length, resizesBefore + 2, 'a size after the drag waited');
   assert.equal(exPanel().style.getPropertyValue('--terminal-explorer-width'), '180px');
   assert.equal(ex.window.localStorage.getItem('rotari-terminal-explorer-width'), '180');
   exHandle.onpointerdown({ preventDefault() {}, pointerId: 1 });

@@ -420,6 +420,7 @@ function shellWord(value) {
     socket: null,
     shown: null, // The ID of the shell this pane shows.
     pendingSend: null, // A command waiting for this pane to connect to a shell.
+    heldResize: null, // The last size a drag gave it, for its shell when the drag ends.
     connectSerial: 0,
     waitingToOpen: false,
     retryTimer: undefined,
@@ -640,6 +641,7 @@ function shellWord(value) {
     resizer.onpointerdown = (event) => {
       event.preventDefault();
       resizer.setPointerCapture?.(event.pointerId);
+      holdResizes();
       const place = panelPlace();
       const axis = panelAxis();
       const start = currentSize(axis);
@@ -658,6 +660,7 @@ function shellWord(value) {
           resizer.onpointercancel =
             null;
         saveSize(axis);
+        releaseResizes();
       };
     };
     resizer.onkeydown = (event) => {
@@ -714,6 +717,22 @@ function shellWord(value) {
   };
   const fitPanes = () => {
     for (const pane of panes) pane.fit.fit();
+  };
+  // While an edge is dragged, the screens follow it but their shells are not told: each
+  // new size makes a shell draw its prompt again, which a screen just folded to a new width
+  // shows as stray lines, and a drag goes through many sizes. Each shell hears of the last
+  // one when the drag ends.
+  let dragging = false;
+  const holdResizes = () => {
+    dragging = true;
+  };
+  const releaseResizes = () => {
+    dragging = false;
+    for (const pane of panes) {
+      const held = pane.heldResize;
+      pane.heldResize = null;
+      if (held) send(pane, JSON.stringify({ type: "resize", ...held }));
+    }
   };
   const send = (pane, data) => {
     if (pane.socket?.readyState === WebSocket.OPEN) pane.socket.send(data);
@@ -3162,6 +3181,7 @@ function shellWord(value) {
     handle.onpointerdown = (event) => {
       event.preventDefault();
       handle.setPointerCapture?.(event.pointerId);
+      holdResizes();
       handle.onpointermove = (move) => {
         const box = panesBox.getBoundingClientRect();
         const { boundary } = handle;
@@ -3177,6 +3197,7 @@ function shellWord(value) {
           handle.onpointercancel =
             null;
         rememberLayout();
+        releaseResizes();
         focused.term.focus();
       };
     };
@@ -3783,10 +3804,15 @@ function shellWord(value) {
     handle.onpointerdown = (event) => {
       event.preventDefault();
       handle.setPointerCapture?.(event.pointerId);
+      holdResizes();
       const left = explorer.body.getBoundingClientRect().left;
       handle.onpointermove = (move) => resizeTo(move.clientX - left);
-      handle.onpointerup = () => {
-        handle.onpointermove = handle.onpointerup = null;
+      handle.onpointerup = handle.onpointercancel = () => {
+        handle.onpointermove =
+          handle.onpointerup =
+          handle.onpointercancel =
+            null;
+        releaseResizes();
       };
     };
     handle.onkeydown = (event) => {
@@ -4098,9 +4124,10 @@ function shellWord(value) {
         Uint8Array.from(data, (character) => character.charCodeAt(0)),
       ),
     );
-    term.onResize(({ rows, cols }) =>
-      send(pane, JSON.stringify({ type: "resize", rows, cols })),
-    );
+    term.onResize(({ rows, cols }) => {
+      if (dragging) pane.heldResize = { rows, cols };
+      else send(pane, JSON.stringify({ type: "resize", rows, cols }));
+    });
     // A pane just removed or out of sight measures as nothing.
     pane.observer = new ResizeObserver(() => {
       if (!panel.hidden && viewport.clientWidth) fit.fit();
