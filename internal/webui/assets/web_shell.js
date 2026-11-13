@@ -340,6 +340,9 @@ function shellWord(value) {
   const defaultFontSize = 13;
   const minFontSize = 8;
   const maxFontSize = 32;
+  // Lines each pane keeps: room for the default replay of lines of 26 bytes or more,
+  // at about 12 bytes a cell, some 24 MB for a 200-column pane when full.
+  const terminalScrollback = 10000;
   const shellsPath = "/_terminal/shells";
   const projectsPath = "/_terminal/projects";
   // How often a page in view picks up shells started or ended from elsewhere, for its tabs
@@ -4572,7 +4575,10 @@ function shellWord(value) {
   // openTerminal gives a pane its screen, inside its viewport.
   const openTerminal = (pane) => {
     const { viewport } = pane;
+    // xterm.js keeps 1000 lines by default, fewer than the 256 KiB replayed after a
+    // link usually holds, so what the server kept would be cut short here.
     const term = new window.Terminal({
+      scrollback: terminalScrollback,
       cursorBlink: true,
       fontFamily: fontFamily(),
       fontSize: savedFontSize(),

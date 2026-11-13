@@ -1687,7 +1687,7 @@ Every question to end shells, from a tab, its menu, or All shells, says how many
 three commands, or that nothing does, or why that is not known. A page loaded with the panel left open starts
 nothing, and offers to, so browsing leaves no shells behind. Shells live on the server: each page load
 lists them and attaches to the one this browser tab last showed for the project, or the first,
-replaying recent output, so following a link ends none of them. Up to four panes show the project's shells, as columns each holding rows. **Split right** adds a column of
+replaying recent output into a pane that keeps 10,000 lines, so following a link ends none of them. Up to four panes show the project's shells, as columns each holding rows. **Split right** adds a column of
 the whole height beside the pane with the keys, and **Split down** a row under it, showing a shell in no pane,
 or a new one if there is none, in the new pane, which takes the keys. Neither starts a shell past the limit, and a
 split that would leave a pane under 200 by 100 pixels is refused, saying so. **Close pane** closes the pane with the

@@ -527,7 +527,7 @@ and it does not replace `tmux` or your terminal emulator. See [Terminal](WEB.md#
 
 Yes. The shells run in the `rotari web` process on the host, not in the browser. Reloading the page,
 following links, closing the tab, or opening the page in another tab or browser connects to the same
-shells, which show their last 256 KiB of output again; programs in them, such as `vim`, keep running.
+shells, which show their last 256 KiB of output again, up to 10,000 lines; programs in them, such as `vim`, keep running.
 
 They all end, with what runs in their foregrounds, when you sign out, when `rotari web` stops, or
 3 hours (`--terminal-idle-timeout`) after the last `rotari web` page closes. A computer that sleeps

@@ -89,6 +89,17 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the first shell to keep its state', screenHas('again-kept'));
   await collect();
 
+  // Output of more lines than xterm.js keeps by default comes back whole: the
+  // replay holds all of it, and so must the scrollback it is written into.
+  await typeLine('i=0; while [ $i -lt 3000 ]; do i=$((i+1)); echo "line-$i."; done; echo "printed-$((i))"');
+  await until('the long output', screenHas('printed-3000'));
+  await page.evaluate('document.querySelectorAll(".terminal-tab [role=tab]")[1].click()');
+  await until('the second tab again', screenHas('second-[]'));
+  await page.evaluate('document.querySelectorAll(".terminal-tab [role=tab]")[0].click()');
+  await until('the long output replayed', screenHas('printed-3000'));
+  await page.evaluate('document.querySelector(".xterm-viewport").scrollTop = 0');
+  await until('the first line of the long output in the scrollback', screenHas('line-1.'));
+
   // A project's page has tabs of its own, and starts none by itself.
   await page.evaluate('location.href = "/project/p1"');
   await until('the project page', 'location.pathname === "/project/p1" && document.querySelector(".terminal-action")?.textContent === "Start a shell"');

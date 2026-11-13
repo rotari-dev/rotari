@@ -322,7 +322,8 @@ rotari web --allow-terminal
 - **Following links:** shells live on the server, so they carry on as you move between pages, and
   the panel shows recent output again. This includes full-screen programs such as `vim`.
 - **Tabs you are not looking at:** their programs keep running. Switching to one shows up to its
-  last 256 KiB of output again, as following a link does, not its whole scrollback.
+  last 256 KiB of output again, as following a link does, not its whole scrollback. Each pane keeps
+  up to 10,000 lines, so a replay of shorter lines starts later.
 - **Several browser tabs:** each browser tab shows one shell and remembers which. Two can use
   different shells at once. If one opens a shell another is using, it takes it, and the other says
   so and offers to take it back.
@@ -342,7 +343,7 @@ rotari web --allow-terminal
   | `--terminal-idle-timeout` | `3h` | How long the shells last after the last page closes. At least `2m`. |
   | `--terminal-max-shells` | `32` | Shells at once. |
   | `--terminal-max-shells-per-project` | `8` | Shells of one project, or of one state directory's own pages, at once. |
-  | `--terminal-replay-size` | `256KiB` | Recent output kept per shell, up to `64MiB`. More uses more memory. |
+  | `--terminal-replay-size` | `256KiB` | Recent output kept per shell, up to `64MiB`. More uses more memory. A pane shows at most the last 10,000 lines of it. |
   | `--terminal-shell` | `$SHELL`, or `/bin/sh` | The shell to run. |
 
 - **Keys:** a browser keeps some keys for itself, such as Ctrl-W, which do not reach the shell.
@@ -389,7 +390,7 @@ which keeps about 1 MiB and one older `.log.1`. If it cannot start, for example 
 Running `rotari web` in `tmux` or `screen` on the host works too, if you prefer.
 
 Even so, signing out, stopping `rotari web`, or restarting the host ends every shell, and a shell shows only
-its last 256 KiB of output (`--terminal-replay-size`) when you come back. For work that must survive those,
+its last 256 KiB of output (`--terminal-replay-size`), at most 10,000 lines, when you come back. For work that must survive those,
 run it with `rotari run`, or in `tmux` inside the shell.
 
 ## Artifacts
