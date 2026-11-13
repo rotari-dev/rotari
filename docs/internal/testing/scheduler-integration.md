@@ -12,7 +12,8 @@ or production-image recommendation.
   IBM by hand. With a downloaded package,
   [scripts/scheduler-integration.sh](../../../scripts/scheduler-integration.sh)
   `lsf` runs the scheduler container tests against it in a local Docker
-  container.
+  container. They last passed against LSF Community Edition 10.1.0.15 on
+  2026-11-13.
 - SGE is also covered by unit tests using fake commands. The
   [Scheduler integration workflow](../../../.github/workflows/scheduler-integration.yml)
   tests it against a digest-pinned CentOS 7 Grid Engine image last published

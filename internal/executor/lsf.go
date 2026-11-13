@@ -121,6 +121,13 @@ func readLSFMetadata(store state.Store, jobDir string) (lsfJobMetadata, error) {
 	return metadata, nil
 }
 
+// lsfJobName is schedulerJobName with [ and ] replaced by ( and ): bsub reads
+// a job name containing [ ] as a job array specification, so a command preview
+// such as `[ "$X" = 2 ]` made LSF refuse the job with "Bad job name".
+func lsfJobName(job model.JobSpec) string {
+	return strings.NewReplacer("[", "(", "]", ")").Replace(schedulerJobName(job))
+}
+
 func submitLSFJob(store state.Store, logf func(string, ...any), runDir string, job model.JobSpec, options []string) (lsfJobMetadata, error) {
 	return submitLSFJobWithPolicies(store, logf, runDir, job, options, schedulerSubmissionRetries, schedulerSubmissionSpacing, 0)
 }
@@ -150,7 +157,7 @@ func submitLSFJobWithPolicies(store state.Store, logf func(string, ...any), runD
 	if err != nil {
 		return lsfJobMetadata{}, err
 	}
-	args := append([]string{"bsub", "-J", schedulerJobName(job)}, expandedOptions...)
+	args := append([]string{"bsub", "-J", lsfJobName(job)}, expandedOptions...)
 	if job.EnvMode == model.EnvModeNone {
 		args = append(args, "-env", "none")
 	} else {

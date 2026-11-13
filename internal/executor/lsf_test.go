@@ -381,3 +381,33 @@ printf 'RUN\n'
 		t.Fatalf("scheduler state = %q, want running", got)
 	}
 }
+
+// bsub reads a job name containing [ ] as a job array specification, so LSF
+// Community Edition 10.1 refused a retried array task whose command preview
+// held `[ "$ROTARI_ARRAY_TASK_ID" = 2 ]` with "Bad job name. Job not
+// submitted." The fake bsub refuses such a name the same way.
+func TestSubmitLSFJobNameHasNoArrayBrackets(t *testing.T) {
+	binDir := t.TempDir()
+	argumentsPath := filepath.Join(t.TempDir(), "bsub-args")
+	writeExecutable(t, binDir, "bsub", fmt.Sprintf(`#!/bin/sh
+printf '%%s\n' "$@" > %q
+cat >/dev/null
+case "$2" in
+*\[*\]*) echo 'Bad job name. Job not submitted.' >&2; exit 255 ;;
+esac
+printf 'Job <123> is submitted to default queue.\n'
+`, argumentsPath))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	job := model.JobSpec{ID: "abc123", AttemptID: "att_run-1-abc123-0", LogMode: model.LogModeSeparate, Command: []string{"sh", "-c", `if [ "$ROTARI_ARRAY_TASK_ID" = 2 ]; then exit 1; fi`}}
+	if _, err := submitLSFJob(testStore(), testLogf, t.TempDir(), job, nil); err != nil {
+		t.Fatal(err)
+	}
+	arguments, err := os.ReadFile(argumentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "-J\nrotari show att_run-1-abc123-0 (sh -c if ( \"$ROTARI_ARRAY_TASK_ID\" = 2 ); then exit 1; fi)\n"; !strings.Contains(string(arguments), want) {
+		t.Fatalf("bsub arguments = %q, want %q", arguments, want)
+	}
+}
