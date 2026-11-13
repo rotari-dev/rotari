@@ -3194,8 +3194,9 @@ function shellWord(value) {
     };
     return handle;
   };
-  // The Explorer: a tree of the files where the focused pane's shell is, at the left of the
-  // panel's body, or over the panes as a drawer when the body has no room for both. While
+  // The Explorer: a tree of the files where the focused pane's shell is, in a column at the
+  // left of the panel's body, beside the panes wherever the panel is. It is open unless
+  // someone closed it, which the browser remembers. While
   // Follow is on, its root is the shell's directory, looked up on the server; Up shows the
   // parent and turns Follow off. It lists only what a folder holds, a folder at a time, and
   // lists again with the panel's shells, shortly after Enter in the focused pane, and when
@@ -3206,8 +3207,8 @@ function shellWord(value) {
   const filesPath = "/_terminal/files";
   const explorerDefaultWidth = 260;
   const explorerMinWidth = 160;
-  // The panes beside a column keep at least this much; with less, the Explorer is a drawer.
-  const explorerPanesRoom = 480;
+  // The panes beside it keep at least this much, however wide it is dragged.
+  const explorerPanesRoom = 200;
   const explorer = {
     open: false,
     follow: true,
@@ -3228,13 +3229,13 @@ function shellWord(value) {
     footer: null,
     followButton: null,
     toggle: null,
-    scrim: null,
     body: null,
-    drawer: false,
   };
   try {
-    explorer.open = localStorage.getItem(explorerOpenKey) === "1";
-  } catch {}
+    explorer.open = localStorage.getItem(explorerOpenKey) !== "0";
+  } catch {
+    explorer.open = true;
+  }
   const explorerIcons = {
     explorer: ["M1.5 3.5h4.5l1.5 1.5h6.5v8h-12.5z", "M1.5 6.5h12.5"],
     up: ["M8 13V3", "M4 7l4-4 4 4"],
@@ -3245,7 +3246,6 @@ function shellWord(value) {
     ],
     refresh: ["M13 8a5 5 0 1 1-1.5-3.5", "M13 2.5V5h-2.5"],
     collapse: ["M4 10l4-4 4 4"],
-    close: ["M4 4l8 8", "M12 4l-8 8"],
     send: ["M2.5 8h10", "M9 4.5L12.5 8 9 11.5"],
     open: [
       { x: 2, y: 2.5, width: 12, height: 11, rx: 1 },
@@ -3416,10 +3416,6 @@ function shellWord(value) {
         renderExplorer();
       });
   };
-  // A drawer is only for picking something, so doing anything with a row closes it.
-  const closeExplorerDrawer = () => {
-    if (explorer.drawer) setExplorerOpen(false);
-  };
   const openInViewer = async (path) => {
     // A tab opened only after the answer would be a pop-up to the browser, so it opens now.
     const tab = window.open("about:blank", "_blank");
@@ -3452,10 +3448,8 @@ function shellWord(value) {
     if (tab) tab.location.href = new URL(address, location.href).href;
     else
       showNote("The browser blocked the new tab for the Table viewer.", 6000);
-    closeExplorerDrawer();
   };
   const sendExplorerPath = async (path) => {
-    closeExplorerDrawer();
     await window.sendToTerminalAndSay(pathFromShell(path), { word: true });
   };
   const copyExplorerText = async (text) => {
@@ -3726,13 +3720,6 @@ function shellWord(value) {
         else if (current.folder) toggleFolder(current.path);
         else openInViewer(current.path);
         return;
-      case "Escape":
-        if (explorer.drawer) {
-          event.preventDefault();
-          setExplorerOpen(false);
-          focused.term?.focus();
-        }
-        return;
     }
   };
   const savedExplorerWidth = () => {
@@ -3755,22 +3742,13 @@ function shellWord(value) {
     panel.style.setProperty("--terminal-explorer-width", clamped + "px");
     return clamped;
   };
-  // applyExplorer shows the Explorer as a column, a drawer, or not at all.
+  // applyExplorer shows the Explorer or hides it, at the width last chosen as far as the
+  // panes leave room.
   const applyExplorer = () => {
     if (!explorer.element) return;
-    const room = explorer.body.getBoundingClientRect().width;
-    const width = savedExplorerWidth();
-    explorer.drawer =
-      room > 0 && room < Math.max(width, explorerMinWidth) + explorerPanesRoom;
-    panel.classList.toggle("terminal-explorer-open", explorer.open);
-    panel.classList.toggle(
-      "terminal-explorer-drawer",
-      explorer.open && explorer.drawer,
-    );
     explorer.element.hidden = !explorer.open;
-    explorer.scrim.hidden = !(explorer.open && explorer.drawer);
     explorer.toggle.setAttribute("aria-pressed", String(explorer.open));
-    applyExplorerWidth(explorer.drawer ? Math.min(width, 280) : width);
+    applyExplorerWidth(savedExplorerWidth());
   };
   const setExplorerOpen = (open) => {
     explorer.open = open;
@@ -3837,15 +3815,6 @@ function shellWord(value) {
     explorer.followButton.title =
       "Follow the shell: the tree moves when this pane's shell changes directory";
     explorer.followButton.setAttribute("aria-pressed", String(explorer.follow));
-    const close = explorerIconButton(
-      "Close the Explorer",
-      explorerIcons.close,
-      () => {
-        setExplorerOpen(false);
-        focused.term?.focus();
-      },
-    );
-    close.classList.add("terminal-explorer-close");
     head.append(
       explorer.title,
       explorerIconButton("Up one directory", explorerIcons.up, explorerUp),
@@ -3857,7 +3826,6 @@ function shellWord(value) {
         explorer.expanded.clear();
         renderExplorer();
       }),
-      close,
     );
     explorer.where = document.createElement("div");
     explorer.where.className = "terminal-explorer-where";
@@ -3876,17 +3844,10 @@ function shellWord(value) {
       explorer.footer,
       buildExplorerResizer(),
     );
-    aside.onkeydown = (event) => {
-      if (event.key === "Escape" && explorer.drawer && event.target === aside)
-        explorerKeys(event);
-    };
     explorer.element = aside;
-    explorer.scrim = document.createElement("div");
-    explorer.scrim.className = "terminal-explorer-scrim";
-    explorer.scrim.onclick = () => setExplorerOpen(false);
     explorer.body = document.createElement("div");
     explorer.body.className = "terminal-body";
-    explorer.body.append(aside, explorer.scrim, panesBox);
+    explorer.body.append(aside, panesBox);
     new ResizeObserver(() => applyExplorer()).observe(explorer.body);
     return explorer.body;
   };

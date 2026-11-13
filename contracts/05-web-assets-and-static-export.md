@@ -1462,8 +1462,9 @@ including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
 **WEB-42** With `rotari web --allow-terminal`, the terminal panel has an Explorer: a tree of the files where the
-focused pane's shell is, opened by the first button of its bar, as a column at the left of the panel's body or, where
-the panes would have too little room beside it, as a drawer over them that closes on Escape and after a row is used.
+focused pane's shell is: a column at the left of the panel's body wherever the panel is, beside the panes, which keep
+at least 200 pixels however far its edge is dragged. It is open unless closed with the first button of the bar, and
+the browser remembers that and its width.
 While **Follow** is on, its root is the shell's directory, looked up on the server and listed again with the panel's
 shells, shortly after Enter is typed in that pane, when another shell is shown there, and on **Refresh**; **Up**
 shows the parent and turns Follow off, and nothing limits how far up or down it goes. `GET

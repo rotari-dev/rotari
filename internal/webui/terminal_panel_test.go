@@ -46,7 +46,7 @@ const home = '/home/u';
 const plain = (id, number) => ({ id, number, basedir: '', project: '', dir: home, link: '/activity' });
 const ofBasedir = (id, number, basedir = '/b') => ({ id, number, basedir, project: '', dir: '/w', link: basedir === '/b' ? '/' : '/_basedir/' + basedir.slice(1) + '/' });
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
-const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/activity', maximized = false, fontSize = '' } = {}) => {
+const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/activity', maximized = false, fontSize = '', explorer = '' } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
   // xterm.js parses what it is given later; a test can hold that back.
   const parser = { held: false, waiting: [], release() { this.held = false; this.waiting.splice(0).forEach((parse) => parse()); } };
@@ -96,6 +96,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       if (stored) window.localStorage.setItem('rotari-terminal-open', stored);
       if (maximized) window.localStorage.setItem('rotari-terminal-maximized', '1');
       if (fontSize) window.localStorage.setItem('rotari-terminal-font-size', fontSize);
+      if (explorer) window.localStorage.setItem('rotari-terminal-explorer', explorer);
       if (remembered) window.sessionStorage.setItem(remembered[0], remembered[1]);
       if (opener) Object.defineProperty(window, 'opener', { configurable: true, value: opener });
       if (split) window.sessionStorage.setItem(split[0], split[1]);
@@ -134,7 +135,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           return Promise.resolve({ ok: true, status: 200, json: async () => server.launchers || { available: false, reason: 'Launching is disabled on this server.', hint: 'Restart with rotari web --allow-exec.' } });
         }
         if (address.startsWith('/_terminal/files?')) {
-          requests.push('GET ' + address);
+          // Apart from requests: the Explorer is open by default, on every page that opens the panel.
+          (server.fileRequests ||= []).push('GET ' + address);
           const query = new URLSearchParams(address.slice(address.indexOf('?') + 1));
           const dir = query.has('shell') ? server.cwds?.[query.get('shell')] : query.get('path');
           const refuse = (text) => Promise.resolve({ ok: false, status: 422, text: async () => text });
@@ -2932,16 +2934,27 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const exFooter = () => ex.document.querySelector('.terminal-explorer-footer').textContent;
   const exNote = () => ex.document.querySelector('.terminal-send-note')?.textContent;
   assert.equal(ex.document.querySelector('.terminal-bar').firstElementChild, exToggle, 'the Explorer button is not first in the bar');
-  assert.equal(exToggle.getAttribute('aria-pressed'), 'false');
-  assert.equal(exAside().hidden, true, 'the Explorer exOpened by itself');
-  assert.equal(ex.requests.some((request) => request.includes('/_terminal/files')), false, 'a closed Explorer listed files');
+  // It opens with the panel unless it was closed, which the browser remembers.
+  assert.equal(exToggle.getAttribute('aria-pressed'), 'true');
+  assert.equal(exAside().hidden, false, 'the Explorer did not open with the panel');
+  assert.equal(exAside().contains(ex.document.activeElement), false, 'opening with the panel took the keys from the shell');
+  exToggle.click();
+  assert.equal(ex.window.localStorage.getItem('rotari-terminal-explorer'), '0');
+  assert.deepEqual([exToggle.getAttribute('aria-pressed'), exAside().hidden], ['false', true]);
+  const closedBefore = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], explorer: '0' });
+  closedBefore.server.cwds = { 1: '/w/p1' };
+  await wait(50);
+  assert.equal(closedBefore.document.querySelector('.terminal-explorer').hidden, true, 'a closed Explorer opened again');
+  closedBefore.server.fileRequests = [];
+  closedBefore.polls.forEach((poll) => poll());
+  await wait(20);
+  assert.deepEqual(closedBefore.server.fileRequests, [], 'a closed Explorer listed files');
   exToggle.click();
   await wait(30);
   assert.equal(ex.window.localStorage.getItem('rotari-terminal-explorer'), '1');
   assert.equal(exToggle.getAttribute('aria-pressed'), 'true');
   assert.equal(exAside().hidden, false);
-  assert.equal(exPanel().classList.contains('terminal-explorer-drawer'), false, 'the panel at the bottom made a drawer');
-  assert.ok(ex.requests.includes('GET /_terminal/files?shell=1'), ex.requests.join(', '));
+  assert.ok(ex.server.fileRequests.includes('GET /_terminal/files?shell=1'), ex.server.fileRequests.join(', '));
   assert.equal(ex.document.querySelector('.terminal-explorer-title').textContent, 'p1');
   assert.equal(ex.document.querySelector('.terminal-explorer-where').textContent, '/w/p1');
   assert.equal(exFooter(), 'Following Shell 1 of p1');
@@ -2957,7 +2970,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   // A folder opens in place, a level down.
   exRow('conf').click();
   await wait(20);
-  assert.ok(ex.requests.includes('GET /_terminal/files?path=%2Fw%2Fp1%2Fconf'), ex.requests.join(', '));
+  assert.ok(ex.server.fileRequests.includes('GET /_terminal/files?path=%2Fw%2Fp1%2Fconf'), ex.server.fileRequests.join(', '));
   assert.deepEqual([exRow('train.yaml').getAttribute('aria-level'), exRow('conf').getAttribute('aria-expanded'), exRow('conf').getAttribute('aria-selected')], ['2', 'true', 'true']);
   // A folder with more than the server lists says so, and offers the Table viewer.
   exRow('shared').click();
@@ -3054,7 +3067,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   // listed says why rather than showing nothing.
   [...ex.document.querySelectorAll('.terminal-tab [role="tab"]')][1].click();
   await wait(30);
-  assert.ok(ex.requests.includes('GET /_terminal/files?shell=2'), ex.requests.join(', '));
+  assert.ok(ex.server.fileRequests.includes('GET /_terminal/files?shell=2'), ex.server.fileRequests.join(', '));
   assert.equal(ex.document.querySelector('.terminal-explorer-problem').textContent, 'open /w/p1/out: permission denied');
   assert.equal(exFooter(), 'Following Shell 2 of p1');
   // A path dropped on a pane goes into that pane.
@@ -3065,24 +3078,30 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   ex.document.querySelector('.terminal-pane').dispatchEvent(dropping);
   await wait(20);
   assert.equal(ex.pasted.at(-1), 'train.yaml');
-  // Where the panes would be too narrow beside it, it is a drawer, closed by Escape or by
-  // doing something with a row.
+  // It stays a column however narrow the panel, as at a side, leaving the panes 200
+  // pixels, and its edge drags to any width they leave room for.
   const narrow = ex.window.HTMLElement.prototype.getBoundingClientRect;
   ex.window.HTMLElement.prototype.getBoundingClientRect = function () {
-    return this.classList.contains('terminal-body') ? { width: 500, height: 300, left: 0, top: 0, right: 500, bottom: 300 } : narrow.call(this);
+    return this.classList.contains('terminal-body') ? { width: 420, height: 300, left: 10, top: 0, right: 430, bottom: 300 } : narrow.call(this);
   };
   ex.server.observers.forEach((callback) => callback([]));
-  assert.equal(exPanel().classList.contains('terminal-explorer-drawer'), true);
-  assert.equal(ex.document.querySelector('.terminal-explorer-scrim').hidden, false);
-  exRow('train.yaml').click();
-  key('Escape');
-  assert.equal(exAside().hidden, true, 'Escape left the drawer');
-  assert.equal(exToggle.getAttribute('aria-pressed'), 'false');
-  exToggle.click();
-  await wait(30);
+  assert.equal(exAside().hidden, false);
+  assert.equal(exPanel().style.getPropertyValue('--terminal-explorer-width'), '220px');
+  const exHandle = ex.document.querySelector('.terminal-explorer-resizer');
+  exHandle.onpointerdown({ preventDefault() {}, pointerId: 1 });
+  exHandle.onpointermove({ clientX: 190 });
+  exHandle.onpointerup();
+  assert.equal(exPanel().style.getPropertyValue('--terminal-explorer-width'), '180px');
+  assert.equal(ex.window.localStorage.getItem('rotari-terminal-explorer-width'), '180');
+  exHandle.onpointerdown({ preventDefault() {}, pointerId: 1 });
+  exHandle.onpointermove({ clientX: 400 });
+  assert.equal(exPanel().style.getPropertyValue('--terminal-explorer-width'), '220px', 'the panes lost their room');
+  exHandle.onpointerup();
+  // Using a row leaves it open, and nothing covers the panes.
   sendOf(exRow('train.yaml')).click();
   await wait(20);
-  assert.equal(exAside().hidden, true, 'sending left the drawer');
+  assert.equal(exAside().hidden, false, 'sending closed the Explorer');
+  assert.equal(ex.document.querySelector('.terminal-explorer-scrim'), null);
   ex.window.HTMLElement.prototype.getBoundingClientRect = narrow;
   }
   process.exit(0);

@@ -31,10 +31,11 @@ panel at the bottom, the panel at a side, and the details).
 
 ## Decisions
 
-1. **Where.** A column at the left of the panel's body, beside the panes, with its own resize handle; its button is
-   the first in the bar. Where the body is too narrow for both (the panel at a side, or a narrow window), the
-   Explorer instead opens over the panes as a drawer and closes after a file is opened or sent, or on Escape.
-   Whether it is open, and its width, are remembered by the browser.
+1. **Where.** A column at the left of the panel's body, beside the panes, wherever the panel is, with its own resize
+   handle; the panes keep at least 200 pixels. Its button is the first in the bar. It is open unless closed, and
+   whether it is open, and its width, are remembered by the browser. (Changed on 2026-11-13 after the user tried it:
+   the first version opened over the panes as a drawer where the body was narrower than the Explorer and 480
+   pixels, which at a side hid the terminal's text and could not be resized, and it started closed.)
 2. **One Explorer per panel**, following the focused pane's shell. Its root is the shell's directory while
    **Follow** is on. **Up** shows the parent directory and turns Follow off; the tree then stays where it is when
    the shell moves, and the footer says where the shell is, with a **Follow** button back. Nothing limits how far up
@@ -83,7 +84,7 @@ panel at the bottom, the panel at a side, and the details).
 
 1. **Server.** `/_terminal/files` in `internal/webui` (`terminal_files.go`), and `path` on
    `/api/tableview-sources`. Unit tests beside them.
-2. **Panel.** The Explorer in web_shell.js and web_shell.css: column and drawer, Follow and Up, the tree with
+2. **Panel.** The Explorer in web_shell.js and web_shell.css: the column, Follow and Up, the tree with
    keys, the row buttons and menu, drag to a pane, the refusals, and the quoting change with `shellQuote` moved.
    JSDOM tests in `TestTerminalPanel`.
 3. **Contracts and docs.** A new WEB-42 for the Explorer and its API; WEB-39 says a source may name a directory
@@ -98,7 +99,7 @@ panel at the bottom, the panel at a side, and the details).
   file, and an unreadable directory refused with the reason; no terminal is 404; plain HTTP to another host is
   403. `path` sources: a folder pinned, a file pinned in its folder with `child`, a link followed, refused without the terminal, over plain HTTP from another host, or with both `path` and `shell`.
 - Conformance under WEB-42 through the binary, and WEB-39 extended.
-- JSDOM: the column at the bottom and the drawer at a side; Follow moving with the shell and Up stopping it; the
+- JSDOM: open by default and remembered closed; the column kept and clamped in a narrow panel, and its edge dragged; Follow moving with the shell and Up stopping it; the
   path sent relative and absolute, quoted, and refused for control characters and non-UTF-8 names; a drop on a
   pane; the menu's copies; the limit's note; a refused listing shown in the tree. `shellWord` and `shellQuote`
   for `'`, `\`, and plain values.

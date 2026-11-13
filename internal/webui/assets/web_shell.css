@@ -1699,8 +1699,7 @@ html.terminal-open .output-panel.terminal-launch {
   opacity: 0.7;
 }
 
-/* The Explorer: a column at the left of the panel's body, or a drawer over the panes when
-   the body has no room for both (web_shell.js decides, as panel.terminal-explorer-drawer). */
+/* The Explorer: a column at the left of the panel's body, beside the panes. */
 .terminal-body {
   position: relative;
   display: flex;
@@ -1722,24 +1721,8 @@ html.terminal-open .output-panel.terminal-launch {
   color: var(--text);
   font-size: 12.5px;
 }
-.terminal-explorer[hidden],
-.terminal-explorer-scrim[hidden] {
+.terminal-explorer[hidden] {
   display: none;
-}
-#terminal-panel.terminal-explorer-drawer .terminal-explorer {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 20;
-  box-shadow: var(--shadow-pop);
-}
-.terminal-explorer-scrim {
-  position: absolute;
-  inset: 0;
-  z-index: 19;
-  background: var(--overlay);
-  opacity: 0.3;
 }
 .terminal-explorer-head {
   display: flex;
@@ -1778,12 +1761,6 @@ html.terminal-open .output-panel.terminal-launch {
 .terminal-explorer button[aria-pressed="true"],
 .terminal-bar button.terminal-explorer-toggle[aria-pressed="true"] {
   box-shadow: inset 0 0 0 1px var(--line);
-}
-.terminal-explorer-close {
-  display: none;
-}
-#terminal-panel.terminal-explorer-drawer .terminal-explorer-close {
-  display: inline-flex;
 }
 .terminal-explorer-where {
   overflow: hidden;
@@ -1925,9 +1902,6 @@ html.terminal-open .output-panel.terminal-launch {
 .terminal-explorer-resizer:focus-visible {
   background: var(--line);
   outline: none;
-}
-#terminal-panel.terminal-explorer-drawer .terminal-explorer-resizer {
-  display: none;
 }
 /* Where a path dragged from the Explorer would go. */
 .terminal-pane-drop {

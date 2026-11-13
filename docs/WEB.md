@@ -220,11 +220,10 @@ starts none. A log or other text of several lines goes in as pasted text, withou
 256 KiB, and only where the program takes it as such, such as a recent `bash` or `zsh` prompt or an
 editor; elsewhere each line would run, so the button says so and sends nothing.
 
-The **Explorer** icon at the left end of the panel's bar shows the files where the shell in the pane with the keys
-is, as an editor's file tree beside its terminal. It is a column at the left of the panel, whose right edge you can
-drag; where the panes would have too little room beside it, as with the panel at a side, it opens over them
-instead and closes again once you open or send something, or press Escape. The browser remembers whether it is
-open and how wide.
+The **Explorer** shows the files where the shell in the pane with the keys is, as an editor's file tree beside its
+terminal. It opens with the panel, as a column at its left wherever the panel is, and the panes make room for it.
+Drag its right edge to change its width, as far as leaves the panes 200 pixels. The icon at the left end of the
+panel's bar closes it and opens it again; the browser remembers whether it is open and how wide.
 
 While **Follow** (the link icon) is on, the tree shows the shell's directory and moves with it: it looks again a
 moment after you press Enter in that pane, every few seconds while the panel is in view, when the pane shows
