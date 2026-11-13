@@ -1021,3 +1021,92 @@ func TestProcessesAreTheShellsTree(t *testing.T) {
 		t.Errorf("Processes() of an unknown shell: %v, want ErrNoShell", err)
 	}
 }
+
+// awaitHistory waits until a group's history is want, newest first.
+func awaitHistory(t *testing.T, keeper *Keeper, group string, want ...string) {
+	t.Helper()
+	dirs := func() []string {
+		var dirs []string
+		for _, entry := range keeper.History(group) {
+			dirs = append(dirs, entry.Dir)
+		}
+		return dirs
+	}
+	for deadline := time.Now().Add(testWait); !slices.Equal(dirs(), want); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("History(%q) = %q, want %q", group, dirs(), want)
+		}
+	}
+}
+
+// A group's history is where its shells have been, seen at the prompt after Enter, each
+// directory once and newest first, shared by the group and no other.
+func TestHistoryIsWhereAGroupsShellsHaveBeen(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	start, err := filepath.EvalSymlinks(keeper.DefaultDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := filepath.Join(start, "a"), filepath.Join(start, "b")
+	first, err := keeper.Start(StartOptions{Group: "g", Rows: 24, Cols: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := watchShell(t, keeper, first.ID)
+	awaitHistory(t, keeper, "g", start)
+	seen.run(t, `mkdir a b && cd a && echo "in-$((1+1))"`, "in-2")
+	awaitHistory(t, keeper, "g", a, start)
+	seen.run(t, `cd .. && echo "up-$((1+1))"`, "up-2")
+	awaitHistory(t, keeper, "g", start, a)
+	// A command in front holds the reading off until the prompt after it, where the
+	// shell has moved on.
+	seen.run(t, `sleep 0.4; cd b; echo "later-$((1+1))"`, "later-2")
+	awaitHistory(t, keeper, "g", b, start, a)
+	// Output without Enter, as while typing, reads nothing.
+	seen.run(t, `echo "same-$((1+1))"`, "same-2")
+	awaitHistory(t, keeper, "g", b, start, a)
+
+	// Another shell of the group adds where it starts; another group has its own.
+	second, err := keeper.Start(StartOptions{Group: "g", Dir: a, Rows: 24, Cols: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := keeper.Start(StartOptions{Group: "h", Rows: 24, Cols: 80}); err != nil {
+		t.Fatal(err)
+	}
+	awaitHistory(t, keeper, "g", a, b, start)
+	awaitHistory(t, keeper, "h", start)
+	if entries := keeper.History("g"); entries[0].EnteredAt.Before(entries[1].EnteredAt) {
+		t.Errorf("History is not newest first: %v", entries)
+	}
+
+	// A shell ending leaves the history; ending them all forgets it.
+	if err := keeper.End(second.ID); err != nil {
+		t.Fatal(err)
+	}
+	awaitHistory(t, keeper, "g", a, b, start)
+	keeper.EndAll()
+	awaitHistory(t, keeper, "g")
+	awaitHistory(t, keeper, "h")
+}
+
+// A group keeps its 20 most recent directories.
+func TestHistoryKeepsTwentyDirectories(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	start, err := filepath.EvalSymlinks(keeper.DefaultDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := watch(t, keeper)
+	awaitHistory(t, keeper, "", start)
+	want := []string{start}
+	for i := 1; i <= historyLimit; i++ {
+		seen.run(t, fmt.Sprintf(`mkdir -p %[1]d && cd %[1]d && echo "at-$((%[1]d+1000))"`, i), strconv.Itoa(i+1000))
+		dir := filepath.Join(want[0], strconv.Itoa(i))
+		want = append([]string{dir}, want...)
+		if len(want) > historyLimit {
+			want = want[:historyLimit]
+		}
+		awaitHistory(t, keeper, "", want...)
+	}
+}

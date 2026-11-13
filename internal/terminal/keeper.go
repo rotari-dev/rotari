@@ -22,6 +22,13 @@ const (
 	// process that outlives the shell holds the terminal open, so the read
 	// would otherwise never end.
 	exitFlush = 200 * time.Millisecond
+	// historyLimit is how many directories a group's history keeps.
+	historyLimit = 20
+	// dirSettle is how long a shell back at its prompt after Enter prints nothing before
+	// its directory is read. The line typed is echoed before the command runs, so the
+	// first output after Enter comes too soon; the prompt that follows the command is the
+	// last.
+	dirSettle = 150 * time.Millisecond
 )
 
 // stallLimit is how long a reader may take nothing while the program waits for it.
@@ -122,6 +129,13 @@ type ShellInfo struct {
 	StartedAt, ActiveAt time.Time
 }
 
+// DirEntry is a directory that shells of a group have been in.
+type DirEntry struct {
+	Dir string
+	// EnteredAt is when one of them last went there.
+	EnteredAt time.Time
+}
+
 // Keeper holds shells, which outlive the attachments that show them: callers come
 // and go, and each new one sees recent output. A shell with nothing attached sends
 // its output only to its ring, so a program never waits. An attached reader that falls
@@ -134,10 +148,12 @@ type ShellInfo struct {
 type Keeper struct {
 	options KeeperOptions
 
-	mu         sync.Mutex
-	closed     bool
-	lastID     int
-	shells     []*keptShell // By group, and within one in the order someone arranged.
+	mu     sync.Mutex
+	closed bool
+	lastID int
+	shells []*keptShell // By group, and within one in the order someone arranged.
+	// history is each group's directories, newest first; see History.
+	history    map[string][]DirEntry
 	idleTimer  *time.Timer
 	idleSerial int
 }
@@ -154,6 +170,14 @@ type keptShell struct {
 	// attachment ended, and as output arrived.
 	busy     bool
 	finished chan struct{}
+	// dirPending says Enter was typed, or the shell started, and its directory has not
+	// been read since at its prompt; dirSerial counts those, so that a read begun before
+	// another Enter does not settle it. dir is the directory last read, and dirTimer
+	// waits for the prompt to settle.
+	dirPending bool
+	dirSerial  int
+	dir        string
+	dirTimer   *time.Timer
 }
 
 // NewKeeper returns a Keeper with no shells yet.
@@ -224,6 +248,8 @@ func (keeper *Keeper) Start(start StartOptions) (ShellInfo, error) {
 		session:  session,
 		ring:     outputRing{limit: keeper.options.RingSize},
 		finished: make(chan struct{}),
+		// The first prompt says where the shell starts.
+		dirPending: true,
 	}
 	shell.ring.write([]byte(start.Banner))
 	// A new shell goes after the others of its group.
@@ -386,6 +412,9 @@ func (keeper *Keeper) deliver(shell *keptShell, output []byte) {
 	}
 	if err == nil {
 		shell.busy = busy
+		if shell.dirPending && !busy {
+			keeper.settleDir(shell)
+		}
 	}
 	if attachment == nil {
 		return
@@ -429,9 +458,74 @@ func signal(events chan struct{}) {
 	}
 }
 
+// settleDir reads the shell's directory once its output has paused at its prompt; the
+// caller holds mu.
+func (keeper *Keeper) settleDir(shell *keptShell) {
+	if shell.dirTimer == nil {
+		shell.dirTimer = time.AfterFunc(dirSettle, func() { keeper.readDir(shell) })
+		return
+	}
+	shell.dirTimer.Reset(dirSettle)
+}
+
+// readDir puts the shell's directory at the front of its group's history when it has
+// moved. A command in the foreground leaves it pending, for the prompt after it.
+func (keeper *Keeper) readDir(shell *keptShell) {
+	keeper.mu.Lock()
+	busy, err := shell.session.busy()
+	serial := shell.dirSerial
+	pending := shell.dirPending && err == nil && !busy && keeper.find(shell.info.ID) == shell
+	keeper.mu.Unlock()
+	if !pending {
+		return
+	}
+	// Outside the lock: finding it may run a program.
+	dir, err := shell.session.Dir()
+	keeper.mu.Lock()
+	defer keeper.mu.Unlock()
+	if keeper.find(shell.info.ID) != shell {
+		return
+	}
+	if err != nil {
+		// Left pending, for the next prompt.
+		keeper.log("terminal: cannot read a shell's directory for its group's history: " + err.Error())
+		return
+	}
+	if shell.dirSerial == serial {
+		shell.dirPending = false
+	}
+	if dir == shell.dir {
+		return
+	}
+	shell.dir = dir
+	entries := slices.DeleteFunc(keeper.history[shell.info.Group], func(entry DirEntry) bool { return entry.Dir == dir })
+	entries = slices.Insert(entries, 0, DirEntry{Dir: dir, EnteredAt: time.Now()})
+	if len(entries) > historyLimit {
+		entries = entries[:historyLimit]
+	}
+	if keeper.history == nil {
+		keeper.history = make(map[string][]DirEntry)
+	}
+	keeper.history[shell.info.Group] = entries
+}
+
+// History is the directories a group's shells have been in, newest first, each once, up
+// to 20. A shell's directory counts when it is back at its prompt after Enter, and where
+// it started counts too; one changed by a program in front of the shell, such as a nested
+// shell or ssh, does not. A shell ending leaves the history, and EndAll forgets every
+// group's. Nothing of it is kept outside memory.
+func (keeper *Keeper) History(group string) []DirEntry {
+	keeper.mu.Lock()
+	defer keeper.mu.Unlock()
+	return slices.Clone(keeper.history[group])
+}
+
 func (keeper *Keeper) finish(shell *keptShell) {
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
+	if shell.dirTimer != nil {
+		shell.dirTimer.Stop()
+	}
 	keeper.log("terminal: shell ended: " + shell.session.Result().String())
 	keeper.shells = slices.DeleteFunc(keeper.shells, func(other *keptShell) bool { return other == shell })
 	if shell.attached != nil {
@@ -609,8 +703,8 @@ func (keeper *Keeper) End(id string) error {
 	return nil
 }
 
-// EndAll ends every shell and returns once they have. Each may take a moment to hang
-// up, so they end together rather than in turn.
+// EndAll ends every shell and returns once they have, and forgets every group's
+// history. Each may take a moment to hang up, so they end together rather than in turn.
 func (keeper *Keeper) EndAll() {
 	keeper.mu.Lock()
 	shells := slices.Clone(keeper.shells)
@@ -623,6 +717,9 @@ func (keeper *Keeper) EndAll() {
 		})
 	}
 	ending.Wait()
+	keeper.mu.Lock()
+	keeper.history = nil
+	keeper.mu.Unlock()
 }
 
 // Close ends the shells and refuses further ones.
@@ -701,6 +798,11 @@ func (attachment *Attachment) Write(input []byte) (int, error) {
 	}
 	attachment.keeper.mu.Lock()
 	attachment.shell.info.ActiveAt = time.Now()
+	// Enter may run a cd, seen at the prompt that follows.
+	if bytes.ContainsAny(input, "\r\n") {
+		attachment.shell.dirPending = true
+		attachment.shell.dirSerial++
+	}
 	attachment.keeper.mu.Unlock()
 	return attachment.shell.session.Write(input)
 }
