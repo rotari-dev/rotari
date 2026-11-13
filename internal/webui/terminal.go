@@ -344,17 +344,11 @@ func (s site) terminalShellResponse(shell terminal.ShellInfo) terminalShellRespo
 		return response
 	}
 	response.BaseDir, response.Project = baseDir, project
-	for _, entry := range s.basedirEntries() {
-		if entry.Path == baseDir {
-			prefix := ""
-			if !entry.Current {
-				prefix = basedirRoutePrefix + entry.ID
-			}
-			// A basedir's shells show on its All projects.
-			response.Link = prefix + "/"
-			if project != "" {
-				response.Link = prefix + "/project/" + url.PathEscape(project)
-			}
+	if prefix, ok := s.basedirLinkPrefix(baseDir); ok {
+		// A basedir's shells show on its All projects.
+		response.Link = prefix + "/"
+		if project != "" {
+			response.Link = prefix + "/project/" + url.PathEscape(project)
 		}
 	}
 	return response
@@ -480,6 +474,10 @@ func (s site) serveTerminalShell(writer http.ResponseWriter, request *http.Reque
 	}
 	if id, ok := strings.CutSuffix(id, "/"+terminalDirsName); ok {
 		s.serveTerminalDirs(writer, request, id)
+		return
+	}
+	if id, ok := strings.CutSuffix(id, "/"+terminalLinksName); ok {
+		s.serveTerminalLinks(writer, request, id)
 		return
 	}
 	switch request.Method {
