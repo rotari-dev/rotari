@@ -220,6 +220,23 @@ taken on 2026-11-11.
 | [TensorBoard](https://www.tensorflow.org/tensorboard) | scalars, images, graphs, and other summaries | the job writes event files | event files on disk | no |
 | rotari | each job's command, status, attempts, logs, and artifact paths | rotari runs the job; no code changes | files in the basedir | yes: local, SSH, Slurm, PBS, LSF, SGE |
 
+Polyaxon is the one tracker here whose relation to rotari depends on where
+the jobs run:
+
+- **On Kubernetes, choose one or the other.** Kubernetes is the container
+  platform of most cloud and company ML infrastructure: a job is a container
+  image described in YAML, not a script submitted to a batch scheduler, and
+  users work through its API rather than by logging in to a cluster. There
+  Polyaxon runs the jobs as well as recording them, with Polyaxonfile jobs,
+  DAGs, schedules, and searches, so it covers rotari's part too; rotari has
+  no Kubernetes executor.
+- **On Slurm, PBS, LSF, SGE, or SSH hosts, use both.** This is where rotari
+  is meant to run: batch clusters, typically at universities and computing
+  centers, and machines reached over SSH.
+  Polyaxon cannot run jobs there: installed with pip or Docker Compose
+  instead of on Kubernetes, it only tracks. Rotari runs the jobs, and their
+  code logs to the Polyaxon server, as with MLflow.
+
 How they fit together:
 
 - **Rotari runs, the tracker records.** A job started by rotari logs to the
@@ -248,6 +265,6 @@ How they fit together:
   the choice under the expected concurrency.
 
 Choose a tracker for comparing metrics and managing models; keep rotari for
-running the jobs that produce them. Consider ClearML's agents, W&B Sweeps, or
-Polyaxon instead of rotari when the tracker should also decide and dispatch
-the runs.
+running the jobs that produce them. Consider ClearML's agents, W&B Sweeps, or,
+on Kubernetes, Polyaxon instead of rotari when the tracker should also decide
+and dispatch the runs.
