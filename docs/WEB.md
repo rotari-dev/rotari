@@ -303,20 +303,38 @@ rotari web --allow-terminal
 The shells belong to the `rotari web` process, not to your browser. To have them, and what runs in them,
 outlast a closed laptop, a dropped connection, or a night away, keep that process alive and give it time:
 
-1. **Run `rotari web` where it outlives your login,** such as in `tmux` or `screen` on the host. If you
-   start it in an SSH session, it stops when that session ends, and every shell ends with it.
+1. **Start `rotari web` with `--detach`.** It starts the server in the background, where it outlives your SSH
+   session, and returns once the server listens:
 
-   ```sh
-   tmux new -s rotari-web            # on the host; later, tmux attach -t rotari-web
-   rotari web --allow-terminal --terminal-idle-timeout 24h
+   ```console
+   $ rotari web --detach --allow-terminal --terminal-idle-timeout 24h
+   --allow-terminal requires authentication. Sign in with user name "rotari" and this token as the password:
+     3f9c…
+   Set ROTARI_WEB_AUTH_TOKEN to keep one token across restarts.
+   rotari web listening at http://127.0.0.1:8080 in the background (PID 12345)
+   Log: ~/.local/state/rotari/master/web/HOST.log
+   Stop it with: kill 12345
    ```
 
-   Detach with Ctrl-B D and close the SSH session; the server, and its shells, keep running. Reach it
-   again through your usual SSH forward.
+   Close the SSH session; the server, and its shells, keep running. Reach it again through your usual SSH
+   forward.
 2. **Make `--terminal-idle-timeout` longer than you will be away.** It counts from the last page closing,
    so a laptop that sleeps overnight needs more than the 3-hour default. It can also go under `[web]` in a
    config as `terminal-idle-timeout = "24h"`, or in `ROTARI_WEB_TERMINAL_IDLE_TIMEOUT` (see
    [above](#setting-them-in-a-config-or-the-environment)).
+
+**Finding it again:** run the same command. While a detached server runs on this host, `--detach` starts no
+other: it prints that server's URL and PID (`already running since ...`), or fails naming the options that
+differ from the running server's and its PID. A token generated at start is not shown again, so keep it, or set
+`ROTARI_WEB_AUTH_TOKEN` before starting to choose your own. There is one detached server per user and host;
+a plain `rotari web` still starts beside it, and says it is there, but its shells are its own.
+
+**Stopping it:** `kill PID`, which ends its shells as stopping `rotari web` always does. If it was killed
+without a chance to clean up, the next `--detach` starts a new one. Its output goes to the log named above,
+which keeps about 1 MiB and one older `.log.1`. If it cannot start, for example because `--port` is taken,
+`--detach` fails with the reason and the log's path.
+
+Running `rotari web` in `tmux` or `screen` on the host works too, if you prefer.
 
 Even so, signing out, stopping `rotari web`, or restarting the host ends every shell, and a shell shows only
 its last 256 KiB of output (`--terminal-replay-size`) when you come back. For work that must survive those,

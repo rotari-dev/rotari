@@ -3461,6 +3461,18 @@ CLI_SCHEMA: dict[str, Any] = {
                     "value_name": "PORT",
                 },
                 {
+                    "command_line_only": True,
+                    "description": "start the live server in the background, "
+                    "where it outlives the session that started "
+                    "it, and return once it listens, printing its "
+                    "URL, PID, and log; if one already runs on "
+                    "this host for this user, report it instead, "
+                    "or fail if its options differ; stop it with "
+                    "kill PID; cannot be combined with "
+                    "--static-dir",
+                    "name": "detach",
+                },
+                {
                     "description": "generate a static web UI",
                     "environment": "ROTARI_WEB_STATIC_DIR",
                     "name": "static-dir",

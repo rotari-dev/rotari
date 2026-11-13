@@ -36,6 +36,8 @@ func webArgs(t *testing.T, f pairFixture, output string, flags []pairFlag) []str
 			args = append(args, "--allow-exec")
 		case "allow-terminal":
 			args = append(args, "--allow-terminal")
+		case "detach":
+			args = append(args, "--detach")
 		default:
 			value, ok := values[flag.Name]
 			if !ok {
@@ -108,7 +110,7 @@ func webServerOnlyFlags(flags []pairFlag) []string {
 	var names []string
 	for _, flag := range flags {
 		switch flag.Name {
-		case "allow-control", "allow-exec", "allow-terminal", "allowed-host", "artifact-root", "auth-token", "host", "port", "terminal-idle-timeout", "terminal-max-shells", "terminal-max-shells-per-project", "terminal-replay-size", "terminal-shell":
+		case "allow-control", "allow-exec", "allow-terminal", "allowed-host", "artifact-root", "auth-token", "detach", "host", "port", "terminal-idle-timeout", "terminal-max-shells", "terminal-max-shells-per-project", "terminal-replay-size", "terminal-shell":
 			names = append(names, flag.Name)
 		}
 	}
@@ -195,7 +197,7 @@ func TestCLIFlagPairWeb(t *testing.T) {
 func TestCLIFlagPairWebStaticServerOptions(t *testing.T) {
 	covers(t, "WEB-3")
 	f := newPairFixture(t)
-	for _, name := range []string{"allow-control", "allow-exec", "allow-terminal", "allowed-host", "artifact-root", "auth-token", "host", "port", "terminal-idle-timeout", "terminal-max-shells", "terminal-max-shells-per-project", "terminal-replay-size", "terminal-shell"} {
+	for _, name := range []string{"allow-control", "allow-exec", "allow-terminal", "allowed-host", "artifact-root", "auth-token", "detach", "host", "port", "terminal-idle-timeout", "terminal-max-shells", "terminal-max-shells-per-project", "terminal-replay-size", "terminal-shell"} {
 		t.Run(name, func(t *testing.T) {
 			result, _ := invokeStaticWeb(t, f, []pairFlag{{Name: name}}, filepath.Join(f.E.Root, "static-rejected"))
 			if !strings.Contains(result.Stderr, "only apply to the live web server") {

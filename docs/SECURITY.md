@@ -208,10 +208,15 @@ and a launched service's own pages, which that policy does not cover, can reach 
 call the API. Treat them as trusted code either way.
 
 Shells outlive their connections, like a launched VS Code server, so ones left open stay reachable
-to anyone with your session while any page stays open and for up to 30 minutes after, or what
+to anyone with your session while any page stays open and for up to 3 hours after, or what
 `--terminal-idle-timeout` says, and recent
 output is replayed to them. A page left open keeps them for as long as its sign-in lasts, up to 12
 hours. Signing out ends them all.
+
+A server started with `rotari web --detach` outlives your login, and with the terminal on it stays a way
+into the host, behind its token, until you stop it. Running `rotari web --detach` again shows whether one
+is running; stop one you no longer use with `kill PID`. The token it generates reaches the server in its
+environment, not its command line, and its record under the master directory holds only a digest of it.
 
 ## Limits
 

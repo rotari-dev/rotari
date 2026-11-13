@@ -6,8 +6,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
+
+	leasefile "github.com/rotari-dev/rotari/internal/lease"
 )
 
 // Acquire waits for a held lease in steps of leaseRetryDelay. A supervisor
@@ -33,7 +34,7 @@ func Acquire(dir string, fileMode os.FileMode) (func(), error) {
 	}
 	start := time.Now()
 	for {
-		err = syscall.Flock(int(lease.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		err = leasefile.TryLock(lease)
 		if err == nil {
 			break
 		}
@@ -41,9 +42,9 @@ func Acquire(dir string, fileMode os.FileMode) (func(), error) {
 		if _, statErr := os.Lstat(PIDPath(dir)); errors.Is(statErr, os.ErrNotExist) {
 			limit = finishingLeaseWait
 		}
-		if !errors.Is(err, syscall.EWOULDBLOCK) || time.Since(start) >= limit {
+		if !errors.Is(err, leasefile.ErrHeld) || time.Since(start) >= limit {
 			_ = lease.Close()
-			if errors.Is(err, syscall.EWOULDBLOCK) {
+			if errors.Is(err, leasefile.ErrHeld) {
 				return nil, ErrAlreadyRunning
 			}
 			return nil, fmt.Errorf("failed to lock server lease: %w", err)
@@ -76,15 +77,8 @@ func Withdraw(dir string) error {
 // directory, and its recorded PID, which is 0 while it is being written.
 // It never creates the lease file.
 func Running(dir string) (int, bool) {
-	lease, err := os.Open(LockPath(dir))
-	if err != nil {
-		return 0, false
-	}
-	defer lease.Close()
-	if err := syscall.Flock(int(lease.Fd()), syscall.LOCK_SH|syscall.LOCK_NB); !errors.Is(err, syscall.EWOULDBLOCK) {
-		if err == nil {
-			_ = syscall.Flock(int(lease.Fd()), syscall.LOCK_UN)
-		}
+	// A lease that cannot be probed reads as no supervisor, as it always has.
+	if held, err := leasefile.Probe(LockPath(dir), nil); err != nil || !held {
 		return 0, false
 	}
 	data, err := os.ReadFile(PIDPath(dir))

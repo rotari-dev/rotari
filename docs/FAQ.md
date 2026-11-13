@@ -532,8 +532,8 @@ shells, which show their last 256 KiB of output again; programs in them, such as
 They all end, with what runs in their foregrounds, when you sign out, when `rotari web` stops, or
 3 hours (`--terminal-idle-timeout`) after the last `rotari web` page closes. A computer that sleeps
 counts as closing its pages, and so does a sign-in that has expired. A `rotari run` started in a shell
-carries on regardless. To keep shells overnight or through a dropped SSH connection, run `rotari web`
-in `tmux` and make the timeout longer; see
+carries on regardless. To keep shells overnight or through a dropped SSH connection, start the server
+with `rotari web --detach` and make the timeout longer; see
 [Keeping shells through a disconnect](WEB.md#keeping-shells-through-a-disconnect).
 
 ### What does the Recent jobs link show?

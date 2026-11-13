@@ -1461,6 +1461,24 @@ level by `TestIdleLimitAppliesToTheShellsTogether` and
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-40** `rotari web --detach` (command line only; rejected with `--static-dir`) starts the
+live server in a session of its own, with no terminal and its output in `<masterdir>/web/<host>.log`, and returns only
+once it listens, printing `rotari web listening at URL in the background (PID N)`, the log, and `kill N` as the way to
+stop it; a server that exits or does not listen within 30 seconds makes it fail with the reason, the end of the log,
+and the log's path, and is stopped. A token it needs and was not given is generated, printed once, and reaches the
+server in its environment, never in its arguments; the server's record, `<masterdir>/web/<host>.json` (mode 0600),
+holds a digest of the token, never the token. There is at most one detached server per user and host: while one
+holds the host's lease, `--detach` reports it (`already running since ...`, without the token) and starts none, or,
+when the options given differ from its own, fails naming them and the PID. Liveness is the server's `flock` lease, so
+a server killed without cleaning up does not count and its record is removed when found; only the current host's
+files count, and a lease that cannot be probed is an error, never "not running". SIGTERM shuts it down as WEB-34 says
+and removes its record. Its shells see neither the token nor the mark of the detached process. A `rotari web` without
+`--detach` is unchanged and not counted, and says on stderr which detached server runs on the host. The log keeps
+about 1 MiB and one rotated `.log.1`, rotated when a server starts and, while it runs, copied and truncated in place,
+never relying on `rotari gc`. Implemented in `cmd/rotari/web_detach.go`, `internal/webdetach`, and `internal/lease`;
+covered by the tests in [conformance/05-web/web_detach_test.go](../conformance/05-web/web_detach_test.go) and the unit
+tests of those packages.
+
 **WEB-39** With `rotari web --allow-terminal`, with or without `--allow-exec`, the
 Table viewer may show the directory a running shell is in. `POST
 /api/tableview-sources` with `{"shell": ID}`, and nothing else (400 for another

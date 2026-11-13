@@ -778,6 +778,7 @@ serve the web status UI
 | `-b` / `--basedir` | `DIR` | `ROTARI_BASEDIR` | state directory |
 | `--host` | `HOST` | `ROTARI_WEB_HOST` | HTTP listen host (live server only; cannot be combined with --static-dir); with --allow-exec or --allow-terminal, not read from a workspace, basedir, or project config |
 | `--port` | `PORT` | `ROTARI_WEB_PORT` | HTTP listen port (live server only; cannot be combined with --static-dir) |
+| `--detach` | `` | `CLI only` | start the live server in the background, where it outlives the session that started it, and return once it listens, printing its URL, PID, and log; if one already runs on this host for this user, report it instead, or fail if its options differ; stop it with kill PID; cannot be combined with --static-dir |
 | `--static-dir` | `DIR` | `ROTARI_WEB_STATIC_DIR` | generate a static web UI |
 | `--allow-control` | `` | `ROTARI_WEB_ALLOW_CONTROL` | enable job control (copy/change/remove/cancel/clear) in the live server; false makes it read-only; incompatible with --static-dir |
 | `--auth-token` | `TOKEN` | `ROTARI_WEB_AUTH_TOKEN` | require this token in Authorization: Bearer or X-Rotari-Token on the live server; cannot be combined with --static-dir; prefer ROTARI_WEB_AUTH_TOKEN for secrets; with --allow-exec or --allow-terminal, not read from a workspace, basedir, or project config |

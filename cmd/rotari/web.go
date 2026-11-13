@@ -20,6 +20,7 @@ import (
 	"github.com/rotari-dev/rotari/internal/notificationlog"
 	"github.com/rotari-dev/rotari/internal/runwatch"
 	stateinternal "github.com/rotari-dev/rotari/internal/state"
+	"github.com/rotari-dev/rotari/internal/webdetach"
 	"github.com/rotari-dev/rotari/internal/weblog"
 	"github.com/rotari-dev/rotari/internal/webui"
 )
@@ -54,6 +55,22 @@ func cmdWeb(args []string) int {
 		}
 		return generateStaticWeb(flags.staticDir, options)
 	}
+	if flags.detach {
+		if !takeWebDetachedChild() {
+			return startDetachedWeb(flags, baseDir)
+		}
+		child, err := holdWebDetached()
+		if errors.Is(err, webdetach.ErrRunning) {
+			printErrorf("%v; run rotari web --detach again to see it", err)
+			return 1
+		}
+		if err != nil {
+			printErrorf("cannot detach rotari web: %v", err)
+			return 1
+		}
+		defer child.close()
+		flags.detached = child
+	}
 	return serveWeb(flags, baseDir, options)
 }
 
@@ -74,6 +91,10 @@ type webCommandFlags struct {
 	artifactRoots []string
 	// staticArtifactContents copies artifact files into a static export.
 	staticArtifactContents bool
+	// detach starts the server in the background; detached is set in that
+	// background process.
+	detach   bool
+	detached *webDetachedChild
 }
 
 func parseWebFlags(args []string) (webCommandFlags, int) {
@@ -88,6 +109,7 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 	var artifactRoots stringSliceFlag
 	cliValue(fs, &artifactRoots, "artifact-root")
 	staticArtifactContents := cliBool(fs, "static-artifact-contents", false)
+	detach := cliBool(fs, "detach", false)
 	// The terminal and launch options read the environment and config
 	// strictly, and webTrustedOptions only trusted configs.
 	configured := readWebConfigured(fs)
@@ -163,7 +185,7 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 			return webCommandFlags{}, 1
 		}
 	}
-	flags := webCommandFlags{basedir: *basedir, host: *host, port: *port, staticDir: *staticDir, authToken: *authToken, allowControl: *allowControl, notifications: *notifications, staticArtifactContents: *staticArtifactContents,
+	flags := webCommandFlags{basedir: *basedir, host: *host, port: *port, staticDir: *staticDir, authToken: *authToken, allowControl: *allowControl, notifications: *notifications, staticArtifactContents: *staticArtifactContents, detach: *detach,
 		allowExec: *allowExec, allowedHosts: allowedHosts, allowTerminal: *allowTerminal, terminal: terminalSettings}
 	for _, root := range artifactRoots {
 		absolute, err := filepath.Abs(root)
@@ -255,10 +277,6 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 		options.Terminal = keeper
 	}
 	if flags.allowExec || flags.allowTerminal {
-		option := "--allow-exec"
-		if !flags.allowExec {
-			option = "--allow-terminal"
-		}
 		if flags.authToken == "" {
 			var err error
 			if flags.authToken, err = newWebAuthToken(); err != nil {
@@ -266,21 +284,13 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 				return 1
 			}
 			flags.authGenerated = true
-			fmt.Fprintf(os.Stderr, "%s requires authentication. Sign in with user name %q and this token as the password:\n  %s\nSet %s to keep one token across restarts.\n", option, "rotari", flags.authToken, envWebAuthToken)
-		} else {
-			fmt.Fprintf(os.Stderr, "%s requires authentication. Sign in with user name %q and the configured token as the password.\n", option, "rotari")
 		}
+		printWebSignIn(flags, flags.authToken, flags.authGenerated)
 	}
 	if options.Launches != nil {
 		printLaunchRegistry(options.Launches.Registry)
 	}
-	if !webui.IsLoopbackHost(flags.host) && flags.authToken == "" {
-		controlWarning := "registered basedir paths, job logs, artifact files under job working directories and --artifact-root, and environment variable names"
-		if flags.allowControl {
-			controlWarning = "registered basedir paths, job logs, artifact files under job working directories and --artifact-root, environment variable names, and job control (cancel/suspend/resume/change/remove/copy) operations"
-		}
-		printErrorf("WARNING: --host %s exposes %s over unauthenticated HTTP.", flags.host, controlWarning)
-	}
+	warnUnauthenticatedHost(flags, flags.authToken)
 	if flags.authToken != "" {
 		options.AuthEnabled = true
 	}
@@ -308,6 +318,15 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 	if err != nil {
 		printErrorf("web server failed: %v", err)
 		return 1
+	}
+	if flags.detached != nil {
+		if err := flags.detached.listening(flags, baseDir, listener.Addr()); err != nil {
+			_ = listener.Close()
+			printErrorf("web server failed: %v", err)
+			return 1
+		}
+	} else {
+		noteDetachedWeb()
 	}
 	server := &http.Server{Handler: handler}
 	if webLog != nil {
@@ -350,8 +369,21 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 	return 0
 }
 
+// warnUnauthenticatedHost warns when a server without a token listens beyond
+// loopback.
+func warnUnauthenticatedHost(flags webCommandFlags, token string) {
+	if webui.IsLoopbackHost(flags.host) || token != "" {
+		return
+	}
+	controlWarning := "registered basedir paths, job logs, artifact files under job working directories and --artifact-root, and environment variable names"
+	if flags.allowControl {
+		controlWarning = "registered basedir paths, job logs, artifact files under job working directories and --artifact-root, environment variable names, and job control (cancel/suspend/resume/change/remove/copy) operations"
+	}
+	printErrorf("WARNING: --host %s exposes %s over unauthenticated HTTP.", flags.host, controlWarning)
+}
+
 func webStaticServerOptions(fs *flag.FlagSet) []string {
-	return staticServerOptions(fs, "web", append([]string{"allow-control", "allow-exec", "allow-terminal", "allowed-host", "artifact-root", "auth-token", "host", "port"}, webTerminalOptions...))
+	return staticServerOptions(fs, "web", append([]string{"allow-control", "allow-exec", "allow-terminal", "allowed-host", "artifact-root", "auth-token", "detach", "host", "port"}, webTerminalOptions...))
 }
 
 // staticServerOptions lists the names, options of command that only a live

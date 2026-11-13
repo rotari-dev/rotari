@@ -2180,6 +2180,9 @@
           "value_name": "PORT"
         },
         {
+          "name": "detach"
+        },
+        {
           "name": "static-dir",
           "value_name": "DIR"
         },
