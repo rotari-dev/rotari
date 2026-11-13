@@ -1877,11 +1877,16 @@ function shellWord(value) {
       return;
     }
     preferShell(shell);
+    goToPage(shell.link);
+  };
+  // goToPage takes the page to a path of this server. A window of the panel's own takes
+  // the page it belongs to there too, and follows it.
+  const goToPage = (path) => {
     if (inWindow) {
-      tellOpener({ type: "rotari-terminal-go", path: shell.link });
-      location.assign(windowPath + shell.link);
+      tellOpener({ type: "rotari-terminal-go", path });
+      location.assign(windowPath + path);
     } else {
-      location.assign(shell.link);
+      location.assign(path);
     }
   };
   // Where a shell is now comes from the server for each card. When it cannot say, the card
@@ -2313,14 +2318,8 @@ function shellWord(value) {
         runName,
     );
     button.onclick = () => {
-      const path = link + "/run/" + encodeURIComponent(run.run_id);
       closeOverview();
-      if (inWindow) {
-        tellOpener({ type: "rotari-terminal-go", path });
-        location.assign(windowPath + path);
-      } else {
-        location.assign(path);
-      }
+      goToPage(link + "/run/" + encodeURIComponent(run.run_id));
     };
     return button;
   };
@@ -3551,13 +3550,13 @@ function shellWord(value) {
     )
       closeDirs();
   });
-  const dirsURL = (id, name) =>
+  const shellURL = (id, name) =>
     shellsPath + "/" + encodeURIComponent(id) + "/" + name;
   // fetchShellJSON is a shell's dirs or preview, or the reason it could not be had.
   const fetchShellJSON = async (id, name) => {
     let response;
     try {
-      response = await serverFetch(dirsURL(id, name));
+      response = await serverFetch(shellURL(id, name));
     } catch {}
     if (!response) return { error: "the server did not answer" };
     if (!response.ok) {
@@ -3773,6 +3772,192 @@ function shellWord(value) {
     if (explorer.open) refreshExplorer();
     else setExplorerOpen(true);
   };
+  // Links in a shell's output: run IDs, job IDs, and paths. The page picks out words of
+  // their forms and the server answers which of them name something, so that a git hash
+  // that looks like a job ID stays text. A run or job takes the page there, or opens a new
+  // tab with Ctrl or Cmd; a directory opens in the Explorer, and a file in the Table
+  // viewer. Answers are kept per shell: a run or job for the page's life, anything else
+  // for a few seconds, since files come and go and the shell moves.
+  const linkForms = [
+    /\b[0-9]{8}-[0-9]{6}-[0-9a-f]{8}\b/g,
+    /\b[0-9a-f]{9}(?:-[0-9]+)?\b/g,
+    /[^\s"'`<>()[\]{},;|]*\/[^\s"'`<>()[\]{},;|]*/g,
+  ];
+  // The server's limit on candidates in one request.
+  const linkAskLimit = 64;
+  const linkAnswerLife = 5000;
+  const linkAnswers = new Map();
+  let linksFailedNoted = false;
+  // linkCandidates are the words of a line that may be links, where they are in it.
+  const linkCandidates = (text) => {
+    const found = new Map();
+    for (const form of linkForms) {
+      for (const match of text.matchAll(form)) {
+        // A full stop, comma, or colon after a word ends the sentence, not the path.
+        const word = match[0].replace(/[.,:;!?]+$/, "");
+        if (!word || word.includes("://") || /^\/+$/.test(word)) continue;
+        const start = match.index;
+        found.set(start + ":" + word.length, {
+          text: word,
+          start,
+          end: start + word.length,
+        });
+      }
+    }
+    return [...found.values()];
+  };
+  // askLinks is what the server says each text is, null for none, or null altogether when
+  // it could not be asked.
+  const askLinks = async (id, texts) => {
+    const now = Date.now();
+    const key = (text) => id + "\n" + text;
+    const unknown = texts
+      .filter((text) => !(linkAnswers.get(key(text))?.until > now))
+      .slice(0, linkAskLimit);
+    if (unknown.length) {
+      let answer;
+      try {
+        const response = await serverFetch(shellURL(id, "links"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ candidates: unknown }),
+        });
+        answer = response.ok ? await response.json() : null;
+      } catch {}
+      if (!answer) {
+        if (!linksFailedNoted) {
+          linksFailedNoted = true;
+          showNote(
+            "The server did not say which words in the terminal are links, so none are shown.",
+            6000,
+          );
+        }
+        return null;
+      }
+      const asked = Date.now();
+      for (const text of unknown)
+        linkAnswers.set(key(text), {
+          link: null,
+          until: asked + linkAnswerLife,
+        });
+      for (const link of answer.links || [])
+        linkAnswers.set(key(link.text), {
+          link,
+          until:
+            link.kind === "run" || link.kind === "job"
+              ? Infinity
+              : asked + linkAnswerLife,
+        });
+    }
+    return texts.map((text) => linkAnswers.get(key(text))?.link || null);
+  };
+  // joinedLine is a line of the screen with the lines it wraps onto, and the cell of each
+  // character, so that a link may run across the wrap.
+  const joinedLine = (term, y) => {
+    const buffer = term.buffer.active;
+    let first = y - 1;
+    while (first > 0 && buffer.getLine(first)?.isWrapped) first--;
+    let text = "";
+    const cells = [];
+    for (let row = first; ; row++) {
+      const line = buffer.getLine(row);
+      if (!line || (row > first && !line.isWrapped)) break;
+      for (let x = 0; x < line.length; x++) {
+        const cell = line.getCell(x);
+        // The second half of a wide character has no text of its own.
+        if (!cell || cell.getWidth() === 0) continue;
+        const chars = cell.getChars() || " ";
+        for (let i = 0; i < chars.length; i++)
+          cells.push({ x: x + 1, y: row + 1 });
+        text += chars;
+      }
+    }
+    return { text, cells };
+  };
+  const linkTitle = (link) =>
+    ({
+      run:
+        "Open this run of " +
+        link.project +
+        "; Ctrl- or Cmd-click opens a new tab",
+      job:
+        "Open this job of " +
+        link.project +
+        "; Ctrl- or Cmd-click opens a new tab",
+      dir: "Show " + link.path + " in the Explorer",
+      file: "Open " + link.path + " in the Table viewer",
+    })[link.kind] || "";
+  const followOutputLink = (link, event) => {
+    if (link.kind === "dir") showDirInExplorer(link.path);
+    else if (link.kind === "file") openInViewer(link.path);
+    else if (event?.ctrlKey || event?.metaKey)
+      window.open(link.link, "_blank", "noopener");
+    else goToPage(link.link);
+  };
+  // outputLinkProvider gives xterm.js the links on a line of a pane, as the pointer
+  // reaches it.
+  const outputLinkProvider = (pane) => ({
+    provideLinks(y, callback) {
+      const id = pane.shown;
+      if (id === null || !pane.term) {
+        callback(undefined);
+        return;
+      }
+      const { text, cells } = joinedLine(pane.term, y);
+      const found = linkCandidates(text).filter((candidate) =>
+        cells
+          .slice(candidate.start, candidate.end)
+          .some((cell) => cell.y === y),
+      );
+      if (!found.length) {
+        callback(undefined);
+        return;
+      }
+      const texts = [...new Set(found.map((candidate) => candidate.text))];
+      askLinks(id, texts).then((answers) => {
+        if (!answers || pane.shown !== id) {
+          callback(undefined);
+          return;
+        }
+        const linked = found
+          .map((candidate) => ({
+            candidate,
+            link: answers[texts.indexOf(candidate.text)],
+          }))
+          .filter((item) => item.link);
+        // A longer link holds a shorter one, as a path holds a run ID.
+        const size = (item) => item.candidate.end - item.candidate.start;
+        const kept = linked.filter(
+          (item) =>
+            !linked.some(
+              (other) =>
+                other.candidate.start <= item.candidate.start &&
+                other.candidate.end >= item.candidate.end &&
+                size(other) > size(item),
+            ),
+        );
+        callback(
+          kept.length
+            ? kept.map(({ candidate, link }) => ({
+                range: {
+                  start: cells[candidate.start],
+                  end: cells[candidate.end - 1],
+                },
+                text: candidate.text,
+                decorations: { pointerCursor: true, underline: true },
+                activate: (event) => followOutputLink(link, event),
+                hover: () => {
+                  pane.viewport.title = linkTitle(link);
+                },
+                leave: () => {
+                  pane.viewport.removeAttribute("title");
+                },
+              }))
+            : undefined,
+        );
+      });
+    },
+  });
   const rowOf = (path) =>
     [...(explorer.tree?.children || [])].find(
       (row) => row.explorerPath === path,
@@ -4869,6 +5054,7 @@ function shellWord(value) {
         window.open(uri, "_blank", "noopener"),
       ),
     );
+    term.registerLinkProvider(outputLinkProvider(pane));
     term.open(viewport);
     fit.fit();
     term.onData((data) => {

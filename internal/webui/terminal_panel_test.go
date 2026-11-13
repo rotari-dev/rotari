@@ -55,6 +55,14 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     requests.push(method + ' ' + url);
     const refused = (code, text) => Promise.resolve({ ok: false, status: code, text: async () => text });
     if (status() !== 200) return refused(status(), 'refused');
+    const linksAsked = /\/_terminal\/shells\/([^/]+)\/links$/.exec(url);
+    if (linksAsked) {
+      const candidates = JSON.parse(body).candidates;
+      (server.linkAsks ||= []).push(candidates);
+      if (server.linksStatus) return refused(server.linksStatus, 'links refused');
+      const links = candidates.filter((text) => server.links?.[text]).map((text) => ({ text, ...server.links[text] }));
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ links }) });
+    }
     const dirsAsked = /\/_terminal\/shells\/([^/]+)\/dirs$/.exec(url);
     if (dirsAsked) {
       const id = decodeURIComponent(dirsAsked[1]);
@@ -235,11 +243,18 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       if (!stubs) return;
       window.Terminal = class {
         rows = 24; cols = 80;
-        buffer = { active: { type: 'normal' } };
+        // A test sets lines, each a string or { text, wrapped }, for the link provider to read.
+        buffer = { active: { type: 'normal', getLine: (y) => {
+          const line = this.lines?.[y];
+          if (line === undefined) return undefined;
+          const text = typeof line === 'string' ? line : line.text;
+          return { isWrapped: Boolean(line.wrapped), length: this.cols, getCell: (x) => ({ getChars: () => text[x] || '', getWidth: () => 1 }) };
+        } } };
         modes = { bracketedPasteMode: false };
         options = {};
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
-        loadAddon(addon) { (this.addons ||= []).push(addon); } open() {} focus() { this.focuses = (this.focuses || 0) + 1; }
+        loadAddon(addon) { (this.addons ||= []).push(addon); } open() {}
+        registerLinkProvider(provider) { (this.linkProviders ||= []).push(provider); } focus() { this.focuses = (this.focuses || 0) + 1; }
         reset() { written.length = 0; this.writes = []; }
         dispose() { this.disposed = true; }
         write(data, done) {
@@ -3446,6 +3461,91 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.deepEqual([...rd.document.querySelectorAll('.terminal-dirs-heading')].map((item) => item.textContent), ['Recent']);
   assert.match(rdBox().textContent, /No directories yet/);
   rdKey('Escape');
+  }
+
+  // Links in the output: the words of a line that the server says name a run, a job, a
+  // directory, or a file, asked once and kept; a run or job takes the page there, or a new
+  // tab with Ctrl, and a path opens in the Explorer or the Table viewer.
+  {
+  const run = '20261114-000700-aaaaaaaa';
+  const lk = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  lk.server.cwds = { 1: '/w/p1' };
+  lk.server.files = { '/w/p1': [], '/w/p1/out': [] };
+  lk.server.links = {
+    [run]: { kind: 'run', project: 'p1', link: '/project/p1/run/' + run },
+    aaaaaaaa1: { kind: 'job', project: 'p1', link: '/project/p1/run/' + run + '?job_id=aaaaaaaa1' },
+    'out/x.csv:3': { kind: 'file', path: '/w/p1/out/x.csv' },
+    'out/': { kind: 'dir', path: '/w/p1/out' },
+    ['/w/p1/runs/' + run + '/log']: { kind: 'file', path: '/w/p1/runs/' + run + '/log' },
+    '/w/p1/out/': { kind: 'dir', path: '/w/p1/out' },
+  };
+  const lkOpened = [];
+  lk.window.open = (...args) => { lkOpened.push(args); return { location: {}, close() {} }; };
+  await wait(50);
+  lk.sockets.at(-1).onopen?.();
+  const lkTerm = lk.terminals.at(-1);
+  assert.equal(lkTerm.linkProviders?.length, 1, 'the pane has no link provider');
+  const linksOn = (y) => new Promise((resolve) => lkTerm.linkProviders[0].provideLinks(y, resolve));
+  // The links come from the page's realm, so they are copied into this one to compare.
+  const shape = (links) => Array.from(links || [], (link) => [link.text, link.range.start.x, link.range.start.y, link.range.end.x, link.range.end.y]);
+  lkTerm.lines = [
+    'run ' + run + ' done; job aaaaaaaa1 and deadbeef0',
+    'see out/x.csv:3. or out/ or https://example.com/a/b',
+    'log /w/p1/runs/' + run + '/log',
+    'nothing here',
+  ];
+  assert.deepEqual(shape(await linksOn(1)), [[run, 5, 1, 28, 1], ['aaaaaaaa1', 40, 1, 48, 1]]);
+  assert.deepEqual(Array.from(lk.server.linkAsks.at(-1)), [run, 'aaaaaaaa1', 'deadbeef0'], 'the candidates asked');
+  // A sentence's full stop is left off, and a web address is the web links addon's.
+  assert.deepEqual(shape(await linksOn(2)), [['out/x.csv:3', 5, 2, 15, 2], ['out/', 21, 2, 24, 2]]);
+  assert.ok(!lk.server.linkAsks.at(-1).some((text) => text.includes('example.com')), 'a web address was asked about');
+  // A path holding a run ID is one link.
+  assert.deepEqual(shape(await linksOn(3)), [['/w/p1/runs/' + run + '/log', 5, 3, 43, 3]]);
+  const asksBefore = lk.server.linkAsks.length;
+  assert.equal(await linksOn(4), undefined);
+  // A run or job asked once is not asked again.
+  await linksOn(1);
+  assert.equal(lk.server.linkAsks.length, asksBefore, 'a line without candidates, or a known run, was asked about');
+  // A link may run across a wrapped line.
+  lkTerm.lines = [{ text: 'x'.repeat(76) + ' /w/' }, { text: 'p1/out/ end', wrapped: true }];
+  assert.deepEqual(shape(await linksOn(2)), [['/w/p1/out/', 78, 1, 7, 2]]);
+  // Hovering says what a link opens.
+  lkTerm.lines = ['run ' + run + ' done; job aaaaaaaa1', 'see out/x.csv:3 or out/'];
+  const [runLink, jobLink] = await linksOn(1);
+  const [fileLink, dirLink] = await linksOn(2);
+  const lkViewport = lk.document.querySelector('.terminal-viewport');
+  runLink.hover();
+  assert.equal(lkViewport.title, 'Open this run of p1; Ctrl- or Cmd-click opens a new tab');
+  fileLink.hover();
+  assert.equal(lkViewport.title, 'Open /w/p1/out/x.csv in the Table viewer');
+  fileLink.leave();
+  assert.equal(lkViewport.hasAttribute('title'), false);
+  // Ctrl- or Cmd-click opens a run or job in a new tab.
+  runLink.activate({ ctrlKey: true });
+  jobLink.activate({ metaKey: true });
+  assert.deepEqual(lkOpened.map((args) => args[0]), ['/project/p1/run/' + run, '/project/p1/run/' + run + '?job_id=aaaaaaaa1']);
+  // A directory opens in the Explorer without following the shell, and a file in the Table viewer.
+  dirLink.activate({});
+  await wait(30);
+  assert.equal(lk.document.querySelector('.terminal-explorer-where').textContent, '/w/p1/out');
+  fileLink.activate({});
+  await wait(30);
+  assert.ok(lk.requests.includes('POST /api/tableview-sources {"path":"/w/p1/out/x.csv"}'), lk.requests.join(', '));
+  // A plain click in the panel's own window takes its page there, and the window along.
+  const lkTold = [];
+  const lkWin = load(process.argv[6], { path: '/_terminal/window/project/p1', shells: [inProject('1', 1, 'p1')], opener: { closed: false, postMessage: (message) => lkTold.push(JSON.parse(JSON.stringify(message))) } });
+  lkWin.server.links = lk.server.links;
+  await wait(50);
+  const winTerm = lkWin.terminals.at(-1);
+  winTerm.lines = ['run ' + run];
+  const [winRun] = await new Promise((resolve) => winTerm.linkProviders[0].provideLinks(1, resolve));
+  winRun.activate({});
+  assert.ok(lkTold.some((message) => message.type === 'rotari-terminal-go' && message.path === '/project/p1/run/' + run), JSON.stringify(lkTold));
+  // When the server cannot be asked, nothing is a link, and a note says so once.
+  lk.server.linksStatus = 500;
+  lkTerm.lines = ['other 20261114-000800-bbbbbbbb'];
+  assert.equal(await linksOn(1), undefined);
+  assert.match(lk.document.querySelector('.terminal-send-note').textContent, /did not say which words in the terminal are links/);
   }
   process.exit(0);
 })().catch((error) => { console.error(error.stack || String(error)); process.exit(1); });
