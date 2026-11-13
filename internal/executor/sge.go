@@ -210,6 +210,9 @@ func waitSGEJob(store state.Store, runDir string, job sgeJobMetadata) model.JobR
 	return waitForSchedulerResult(store, jobDir, job.JobID, job.Command, schedulerPollingPolicy{
 		AccountingWait: sgeAccountingWait, PollInterval: time.Second,
 		UnavailableError: "Grid Engine accounting result and wrapper status are unavailable",
+		// qacct has no record of a job that never started, such as one
+		// deleted with qdel while queued.
+		NotStartedError: "the job left the Grid Engine queue before it started, and Grid Engine keeps no accounting record of such a job; it was probably deleted while queued",
 		JobState: func() schedulerQuery {
 			state, err := sgeJobState(job.SGEJobID)
 			return schedulerQuery{State: state, Err: err}

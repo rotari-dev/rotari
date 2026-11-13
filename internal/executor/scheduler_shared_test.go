@@ -541,3 +541,54 @@ func TestSchedulerWaitReadsItsAttemptStatus(t *testing.T) {
 		})
 	}
 }
+
+// A scheduler that keeps no accounting record of a job deleted before it
+// started, as Grid Engine does, leaves nothing but the queue's history: when
+// the job was only ever pending and its wrapper never wrote a status, the
+// result says it left the queue before starting instead of "unavailable".
+func TestWaitForSchedulerResultReportsJobThatLeftQueueBeforeStarting(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		states  []string
+		started bool
+		want    string
+	}{
+		{name: "only pending", states: []string{"pending", "pending"}, want: "left the queue before it started"},
+		{name: "never seen", want: "left the queue before it started"},
+		{name: "seen running", states: []string{"pending", "running"}, want: "scheduler status is unavailable"},
+		{name: "wrapper started", states: []string{"pending"}, started: true, want: "scheduler status is unavailable"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := testStore()
+			jobDir := t.TempDir()
+			if test.started {
+				if err := state.WriteJSON(filepath.Join(jobDir, "status.json"), WrapperStatus{Phase: "running"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			now := time.Date(2026, time.November, 13, 12, 0, 0, 0, time.UTC)
+			queries := 0
+			result := waitForSchedulerResult(store, jobDir, "job-1", []string{"true"}, schedulerPollingPolicy{
+				AccountingWait: time.Minute, PollInterval: time.Second,
+				UnavailableError: "scheduler status is unavailable",
+				NotStartedError:  "left the queue before it started",
+				JobState: func() schedulerQuery {
+					queries++
+					if queries <= len(test.states) {
+						return schedulerQuery{State: test.states[queries-1]}
+					}
+					return schedulerQuery{}
+				},
+				Accounting: func() schedulerAccounting { return schedulerAccounting{} },
+				Timing: schedulerTiming{
+					Now:    func() time.Time { return now },
+					Sleep:  func(delay time.Duration) { now = now.Add(30 * time.Second) },
+					Jitter: func(delay time.Duration) time.Duration { return delay },
+				},
+			})
+			if result.ExitCode != 1 || result.Error != test.want {
+				t.Fatalf("result = %+v, want exit 1 and %q", result, test.want)
+			}
+		})
+	}
+}

@@ -387,9 +387,14 @@ type schedulerPollingPolicy struct {
 	AccountingWait   time.Duration
 	PollInterval     time.Duration
 	UnavailableError string
-	JobState         func() schedulerQuery
-	Accounting       func() schedulerAccounting
-	Timing           schedulerTiming
+	// NotStartedError, when set, replaces UnavailableError for a job that
+	// left the queue before it started: the queue never showed it in a state
+	// other than pending and its wrapper never wrote a status. A scheduler
+	// that keeps no accounting record of a job deleted while queued sets it.
+	NotStartedError string
+	JobState        func() schedulerQuery
+	Accounting      func() schedulerAccounting
+	Timing          schedulerTiming
 }
 
 const schedulerPollingBackoffMax = 30 * time.Second
@@ -444,6 +449,9 @@ func waitForSchedulerResult(store state.Store, jobDir, jobID string, command []s
 	events := newSchedulerEventLog(store, jobDir, timing.Now)
 	var accountingDeadline time.Time
 	failures := 0
+	// onlyPending stays true while every state the queue or accounting
+	// reported for the job was pending.
+	onlyPending := true
 	for {
 		if result, finished := wrapperJobResult(store, statusPath, jobID, command); finished {
 			events.result("wrapper", result.ExitCode, result.Error)
@@ -452,12 +460,13 @@ func waitForSchedulerResult(store state.Store, jobDir, jobID string, command []s
 		schedulerQueryGate.wait("query", 0)
 		query := policy.JobState()
 		events.observe("queue", query.State, query.Err)
+		onlyPending = onlyPending && (query.State == "" || query.State == "pending")
 		if query.State != "" {
 			failures = 0
 			accountingDeadline = time.Time{}
 			WriteSchedulerStatus(store, jobDir, query.State, timing.Now())
 		} else {
-			result, resolved, accountingFailed := policy.resolveMissingSchedulerState(store, jobDir, statusPath, jobID, command, timing, &accountingDeadline, events)
+			result, resolved, accountingFailed := policy.resolveMissingSchedulerState(store, jobDir, statusPath, jobID, command, timing, &accountingDeadline, &onlyPending, events)
 			if resolved {
 				return result
 			}
@@ -500,7 +509,7 @@ func wrapperJobResult(store state.Store, statusPath, jobID string, command []str
 	return jobResultFromStatus(jobID, command, status), true
 }
 
-func (policy schedulerPollingPolicy) resolveMissingSchedulerState(store state.Store, jobDir, statusPath, jobID string, command []string, timing schedulerTiming, accountingDeadline *time.Time, events *schedulerEventLog) (model.JobResult, bool, bool) {
+func (policy schedulerPollingPolicy) resolveMissingSchedulerState(store state.Store, jobDir, statusPath, jobID string, command []string, timing schedulerTiming, accountingDeadline *time.Time, onlyPending *bool, events *schedulerEventLog) (model.JobResult, bool, bool) {
 	// Nudge NFS clients to discard stale cache entries before reading the
 	// scheduler-independent wrapper result a second time.
 	_, _ = os.ReadDir(jobDir)
@@ -523,11 +532,16 @@ func (policy schedulerPollingPolicy) resolveMissingSchedulerState(store state.St
 	}
 	events.observe("accounting", accounting.State, accounting.Err)
 	if accounting.State != "" {
+		*onlyPending = *onlyPending && accounting.State == "pending"
 		*accountingDeadline = time.Time{}
 		WriteSchedulerStatus(store, jobDir, accounting.State, timing.Now())
 		return model.JobResult{}, false, false
 	}
 	if timing.Now().After(*accountingDeadline) {
+		if _, started := LoadWrapperStatus(store, statusPath); policy.NotStartedError != "" && *onlyPending && !started {
+			events.result("unavailable", 1, policy.NotStartedError)
+			return model.JobResult{ID: jobID, Command: command, ExitCode: 1, Error: policy.NotStartedError}, true, accountingFailed
+		}
 		events.result("unavailable", 1, policy.UnavailableError)
 		return model.JobResult{ID: jobID, Command: command, ExitCode: 1, Error: policy.UnavailableError}, true, accountingFailed
 	}

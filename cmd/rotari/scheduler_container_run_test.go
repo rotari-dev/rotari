@@ -356,7 +356,9 @@ func TestSchedulerContainerCancelledPendingJobReadsAsCancelled(t *testing.T) {
 }
 
 // A queued job deleted outside rotari leaves no cancel marker, so its result
-// comes from the scheduler's accounting record alone.
+// comes from the scheduler's accounting record alone. Grid Engine keeps no
+// accounting record of a job that never started, so for SGE the result says
+// the job left the queue before it started.
 func TestSchedulerContainerJobDeletedInQueueFails(t *testing.T) {
 	project := newContainerProject(t)
 	if project.config.executor == "pbs" {
@@ -371,6 +373,13 @@ func TestSchedulerContainerJobDeletedInQueueFails(t *testing.T) {
 		t.Fatalf("deleting job %s exit = %d\n%s", nativeID, code, output)
 	}
 	result, accounting := project.heldJobResult(nativeID)
+	if project.config.executor == "sge" {
+		if result.ExitCode == 0 || !strings.Contains(result.Error, "left the Grid Engine queue before it started") {
+			t.Fatalf("held = %#v, want a non-zero exit code and an error saying the job left the queue before it started\n%s", result, accounting)
+		}
+		t.Logf("held = %#v\n%s", result, accounting)
+		return
+	}
 	if result.ExitCode == 0 || strings.Contains(result.Error, "unavailable") {
 		t.Fatalf("held = %#v, want a non-zero exit code read from the scheduler's accounting\n%s", result, accounting)
 	}

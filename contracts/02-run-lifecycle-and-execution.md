@@ -1191,6 +1191,16 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   `TestPBSAccountingReadsTorqueAndOpenPBSRecords` in
   [internal/executor/pbs_test.go](../internal/executor/pbs_test.go) and, with
   job history on, `TestSchedulerContainerJobDeletedInQueueFails`.
+  Grid Engine's `qacct` keeps no record of a job that never started. An SGE
+  job that leaves the queue having been seen only as pending, whose wrapper
+  never wrote a status, and that has no accounting record when the accounting
+  wait ends records a non-zero exit code and an error saying it left the Grid
+  Engine queue before it started, probably deleted while queued, instead of
+  the unavailable error; its `scheduler_events.jsonl` result source is still
+  `unavailable`. Covered by
+  `TestWaitForSchedulerResultReportsJobThatLeftQueueBeforeStarting` in
+  [internal/executor/scheduler_shared_test.go](../internal/executor/scheduler_shared_test.go)
+  and `TestSchedulerContainerJobDeletedInQueueFails`.
   A job rotari cancels reads as cancelled (CAN-5) even when the scheduler
   keeps no accounting for it, as PBS without job history does: the cancel
   records its marker before asking the scheduler to delete the job, in
