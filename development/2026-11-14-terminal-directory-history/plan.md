@@ -1,8 +1,8 @@
 # Plan: Recent directories in the Web terminal
 
 Created: 2026-11-14
-Status: Accepted by the user on 2026-11-14, with the open questions answered as proposed. Phase 1 (the Keeper)
-phase 2 (`/_terminal/shells/ID/dirs`), and phase 3 (the panel) are done; phase 4 (WEB-45, docs) is next. See [work-log.md](work-log.md).
+Status: Implemented (all four phases) on 2026-11-14; see [work-log.md](work-log.md). Not tried in a real browser:
+there is none on this machine, and the `TestTerminalPanelInBrowser` step runs only in CI.
 
 ## Goal
 

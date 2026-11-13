@@ -72,3 +72,21 @@
   0-7`). Not tried in a real browser: none here, and `TestTerminalPanelInBrowser` is extended in phase 4.
 - **Remaining:** phase 4: WEB-45 and its conformance test, a `TestTerminalPanelInBrowser` step, and the docs
   (WEB.md, FAQ, SECURITY.md). Until then the feature is undocumented on local `main`.
+
+## 2026-11-14 03:17 +09:00 — WEB-45, conformance, and docs (`e5202dc26632`)
+
+- **Change:** WEB-45 in `contracts/05-web-assets-and-static-export.md` and its row in `contracts/README.md`.
+  `conformance/05-web/terminal_dirs_test.go` (`TestTerminalRecentDirectories`) runs the binary: a finished run,
+  a project shell that `cd`s, the history and the run's directory from `/dirs`, a second shell sharing the history,
+  404 for a shell not running and without the terminal, 405 for POST. `TestTerminalPanelInBrowser` (WEB-33) gains a
+  step: `cd` twice, open the dropdown, choose the older directory, and run the typed `cd`. `docs/WEB.md` (Terminal),
+  `docs/FAQ.md` (why a job runner has a terminal), and `docs/SECURITY.md` (the Web terminal) describe the list and
+  that its directories stay in memory.
+- **Reason:** plan phase 4.
+- **Plan impact:** the plan is implemented.
+- **Validation:** `go test ./conformance/05-web -run TestTerminalRecentDirectories` and `go test ./conformance -run
+  TestContract` passed; `go vet ./...` clean and `go test ./...` passed with Node 24 and `NODE_PATH` (under
+  `taskset -c 0-7`). The browser step was not run: there is no Chrome here, so `TestTerminalPanelInBrowser` skipped;
+  it runs in CI.
+- **Remaining:** none in this plan. Watch CI for the browser step after a push. Blocks and links for rotari IDs,
+  proposed with this feature, have no plans yet.
