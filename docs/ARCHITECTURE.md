@@ -140,7 +140,7 @@ flowchart LR
    [internal/webui/terminal.go](../internal/webui/terminal.go) serves them at `/_terminal/shells`,
    `/_terminal/here`, and `/_terminal/ws`, groups them by project, by basedir for a basedir's own pages, or as of no project, and serves the panel's own window
    at `/_terminal/window`; `/_terminal/projects` says what each project with shells last ran, counted by the run page's Jobs card groups
-   (`jobCountGroup`, in Go and JS alike); `/_terminal/shells/ID/preview` says where a shell is and what it runs, which
+   (`jobCountGroup`, in Go and JS alike); `/_terminal/shells/ID/dirs` the directories of its group's history and where its project's recent runs started ([internal/webui/terminal_dirs.go](../internal/webui/terminal_dirs.go)); `/_terminal/shells/ID/preview` says where a shell is and what it runs, which
    [internal/terminal](../internal/terminal) finds from its process without attaching; the panel's Explorer lists a
    shell's directory or any other at `/_terminal/files`, changes, downloads, and uploads files under `/_terminal/files/` through
    [internal/fileops](../internal/fileops),

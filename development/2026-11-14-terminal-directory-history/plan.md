@@ -2,7 +2,7 @@
 
 Created: 2026-11-14
 Status: Accepted by the user on 2026-11-14, with the open questions answered as proposed. Phase 1 (the Keeper)
-is done; phase 2 (`/_terminal/dirs`) is next. See [work-log.md](work-log.md).
+and phase 2 (`/_terminal/shells/ID/dirs`) are done; phase 3 (the panel) is next. See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -47,6 +47,8 @@ IDs); each has a plan of its own. Blocks may later group commands by directory; 
    directory changed in a program in front, such as a nested shell, `ssh`, or `tmux`, as the Explorer's Follow does
    not see them either, and a directory left before the prompt returns. OSC 7 from the shell is not read here; it
    belongs with Blocks, which needs shell setup anyway.
+   Where a shell starts is entered when it starts, not at its first prompt, since a line typed at once would move
+   it first (found while implementing).
 5. **Kept in memory only, and briefly.** Each group keeps its 20 most recent distinct directories, newest first,
    with when each was last entered. They are never written to disk. A shell ending leaves its group's history; all
    of them go whenever every shell ends (signing out, the idle limit, `rotari web` stopping), in `Keeper.EndAll`.
@@ -57,10 +59,15 @@ IDs); each has a plan of its own. Blocks may later group commands by directory; 
    its run ID and when it started. A basedir's own pages offer the workspace directory, as a new shell there
    starts; pages of no project offer none. A directory missing on this host is listed greyed out with "not on this
    host", rather than left out.
-7. **API.** `GET /_terminal/dirs?shell=ID` answers `{"history": [{"dir", "entered_at"}], "runs": [{"dir", "run",
-   "started_at", "missing"}]}` for the shell's group, behind the terminal's own checks (the token, `Host`/`Origin`,
-   HTTPS or a direct loopback connection). An unknown shell is 404; a run that cannot be read fails the request
-   with the reason, rather than giving a shorter list. The page asks each time the dropdown opens.
+7. **API.** `GET /_terminal/shells/ID/dirs`, beside the shell's `preview`, answers for the shell's group, behind
+   the terminal's own checks (the token, `Host`/`Origin`, HTTPS or a direct loopback connection):
+   `{"history": [{"dir", "entered_at"}], "runs": [{"dir", "run", "started_at", "error"}], "runs_error",
+   "workspace": {"dir", "error"}}`. Every directory also carries `not_utf8`, `missing` (not a directory on this host
+   now), and `stat_error`. An unknown shell is 404. A run whose context cannot be read, or names no directory, is
+   listed with its `error` in place of a directory, and runs that cannot be listed at all give `runs_error` beside
+   the history; neither is left out. The page asks each time the dropdown opens. (Changed while implementing on
+   2026-11-14: the plan had `/_terminal/dirs?shell=ID`, and a run that could not be read failing the whole request,
+   which would have hidden the history over one broken run.)
 8. **Where it is.** A **Recent directories** icon in the panel's bar, acting on the focused pane as **Clear** does,
    so it works with the Explorer closed; the Explorer's path line opens the same dropdown. The dropdown has a
    filter field, then **Recent** and **Runs** sections. Arrow keys, Enter, and Escape work as in the All shells

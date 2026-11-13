@@ -478,6 +478,10 @@ func (s site) serveTerminalShell(writer http.ResponseWriter, request *http.Reque
 		s.serveTerminalPreview(writer, request, id)
 		return
 	}
+	if id, ok := strings.CutSuffix(id, "/"+terminalDirsName); ok {
+		s.serveTerminalDirs(writer, request, id)
+		return
+	}
 	switch request.Method {
 	case http.MethodDelete:
 		if err := s.Terminal.End(id); errors.Is(err, terminal.ErrNoShell) {

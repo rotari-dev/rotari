@@ -30,6 +30,12 @@ const (
 // wraps it.
 func terminalServer(t *testing.T, shell string) (*httptest.Server, *terminal.Keeper) {
 	t.Helper()
+	return terminalServerAt(t, shell, t.TempDir())
+}
+
+// terminalServerAt is terminalServer with its basedir at baseDir.
+func terminalServerAt(t *testing.T, shell, baseDir string) (*httptest.Server, *terminal.Keeper) {
+	t.Helper()
 	home := t.TempDir()
 	keeper, err := terminal.NewKeeper(terminal.KeeperOptions{
 		Shell:      terminal.Options{Shell: shell, Dir: home, Env: []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "PS1=$ "}},
@@ -42,7 +48,7 @@ func terminalServer(t *testing.T, shell string) (*httptest.Server, *terminal.Kee
 		t.Fatal(err)
 	}
 	t.Cleanup(keeper.Close)
-	handler := Handler(Options{BaseDir: t.TempDir(), Terminal: keeper})
+	handler := Handler(Options{BaseDir: baseDir, Terminal: keeper})
 	server := httptest.NewServer(WithExecGuard(WithAuthToken(handler, terminalTestToken, AuthOptions{OnSignOut: []func(){keeper.EndAll}}), nil))
 	t.Cleanup(server.Close)
 	return server, keeper
