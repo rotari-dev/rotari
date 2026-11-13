@@ -131,6 +131,8 @@ func (s site) serveTerminal(writer http.ResponseWriter, request *http.Request) {
 		s.serveTerminalProjects(writer, request)
 	case path == terminalFilesPath:
 		s.serveTerminalFiles(writer, request)
+	case strings.HasPrefix(path, terminalFilesPath+"/"):
+		s.serveTerminalFileChange(writer, request, strings.TrimPrefix(path, terminalFilesPath+"/"))
 	case path == terminalWindowPath || strings.HasPrefix(path, terminalWindowPath+"/"):
 		serveTerminalWindow(writer, request)
 	case strings.HasPrefix(path, terminalShellsPath+"/"):

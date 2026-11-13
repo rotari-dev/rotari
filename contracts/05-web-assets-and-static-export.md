@@ -1463,6 +1463,30 @@ level by `TestIdleLimitAppliesToTheShellsTogether` and
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-43** With `rotari web --allow-terminal`, the terminal's Explorer (WEB-42) changes files: **New File** and
+**New Folder** in its head and menu, and **Rename** (F2), **Delete** (the Delete key), **Cut**, **Copy**, and
+**Paste** (Ctrl+X, C, V) in a row's menu, with New File, New Folder, and Paste on the tree's empty part. A new or
+pasted item goes into the folder chosen, a file's folder, or the tree's top. Names are asked with the browser's
+prompt, and deletions and moves by dragging are confirmed first: a folder's deletion names how many entries it holds
+directly, from one listing, and says everything below goes. A row dragged onto a folder, a file's row (its folder),
+or the tree's empty part (its top) moves there after confirming; one held over a closed folder for 700 ms opens it;
+a drop on a pane still types the path. Copy is for files: a folder's Copy is disabled, and Ctrl+C on one says to use
+`cp -r`. The routes are `POST /_terminal/files/mkdir` and `create` with `path`, `move` with `from` and `to`, `copy`
+with `from`, `to`, and `unique`, and `delete` with `path`, each a JSON body (415 otherwise; unknown fields 400),
+served only where the terminal is (404 without it) behind its token, `Host` and `Origin` checks, and HTTPS or a
+direct loopback connection, each answering `{"path"}`, the path made or changed. Paths are absolute, valid UTF-8,
+and NUL-free (400), and a new name is refused when empty, `.`, `..`, or holding `/`, `\`, or a control character
+(400). Nothing that exists is replaced (409, with `renameat2` and `RENAME_NOREPLACE` on Linux, or a check before
+renaming where that is not supported); a move into itself (400) or to where it is (409) is refused, and a move
+between file systems is refused, saying to use `mv`, rather than copied. Copying a folder or anything but a regular
+file or a link is refused (400); a link is copied as the link, a file with its permission bits, and a failed copy
+leaves nothing. With `unique`, a taken name gives `name copy.ext`, then `name copy 2.ext`; without it, 409. Delete
+removes a folder with everything in it and a link without its target, refuses `/` (400), and a path not there is an
+error (422), as is any other failure, with the reason. Implemented in `internal/fileops`,
+`serveTerminalFileChange` in `internal/webui/terminal_files.go`, and the Explorer in `web_shell.js`; covered by
+[`TestTerminalExplorerChangesFiles`](../conformance/05-web/terminal_explorer_test.go), the tests of
+`internal/fileops`, `TestTerminalFilesChange`, and `TestTerminalPanel`.
+
 **WEB-42** With `rotari web --allow-terminal`, the terminal panel has an Explorer: a tree of the files where the
 focused pane's shell is: a column at the left of the panel's body wherever the panel is, beside the panes, which keep
 at least 200 pixels however far its edge is dragged. It is open unless closed with the first button of the bar, and

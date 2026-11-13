@@ -3255,6 +3255,11 @@ function shellWord(value) {
     followButton: null,
     toggle: null,
     body: null,
+    busy: "", // A change waiting for the server, said in the footer.
+    clipboard: null, // { path, folder, cut } until pasted.
+    dragging: "", // The path of a row being dragged.
+    hoverTimer: undefined,
+    hoverPath: "", // A closed folder held over while dragging.
   };
   try {
     explorer.open = localStorage.getItem(explorerOpenKey) !== "0";
@@ -3286,6 +3291,8 @@ function shellWord(value) {
     chevronDown: ["M4 6l4 4 4-4"],
     folder: ["M1.5 3.5h4.5l1.5 1.5h6.5v8h-12.5z"],
     file: ["M3.5 1.5h6l3 3v10h-9z", "M9.5 1.5v3h3"],
+    newFile: ["M3.5 1.5h6l3 3v4", "M3.5 1.5v13h5", "M12 10.5v4", "M10 12.5h4"],
+    newFolder: ["M8 12.5H1.5v-9h4.5l1.5 1.5h6.5v3", "M12 9.5v4", "M10 11.5h4"],
   };
   const joinPath = (dir, name) => (dir === "/" ? "/" : dir + "/") + name;
   const parentOf = (path) => path.slice(0, path.lastIndexOf("/")) || "/";
@@ -3592,8 +3599,17 @@ function shellWord(value) {
       row.ondragstart = (event) => {
         event.dataTransfer.setData(explorerPathType, path);
         event.dataTransfer.setData("text/plain", path);
-        event.dataTransfer.effectAllowed = "copy";
+        // Copied into a pane as its path, moved within the tree.
+        event.dataTransfer.effectAllowed = "copyMove";
+        explorer.dragging = path;
       };
+      row.ondragend = () => {
+        explorer.dragging = "";
+        clearDragMarks();
+      };
+      takesDrops(row, folder ? path : dir, folder && !open);
+      if (explorer.clipboard?.cut && explorer.clipboard.path === path)
+        row.classList.add("terminal-explorer-cut");
     }
     row.onclick = () => {
       selectRow(path);
@@ -3618,6 +3634,7 @@ function shellWord(value) {
           true,
         ],
         ["Send the path to the terminal", () => sendExplorerPath(path), true],
+        ...explorerChangeChoices(path, folder),
         ["Copy the path", () => copyExplorerText(path), true],
         [
           "Copy the path from here",
@@ -3629,6 +3646,219 @@ function shellWord(value) {
     explorer.visible.push({ path, folder, named, parent: dir, level });
     return row;
   };
+  // Changes to files: each is one request to the server, which refuses, with the reason,
+  // anything that would replace what exists; a refusal shows as a note, and the tree is
+  // listed again afterwards either way. Names are asked with prompt and deletions and
+  // moves by dragging confirmed with confirm, as the panel does for its tabs and shells.
+  // The clipboard is the Explorer's own: what was cut or copied, until pasted.
+  const explorerHoverOpen = 700;
+  const changeFiles = async (op, body) => {
+    let response;
+    try {
+      response = await serverFetch(filesPath + "/" + op, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch {}
+    if (response?.ok) return (await response.json()).path;
+    const reason = response
+      ? ((await response.text()) || "").trim() || "status " + response.status
+      : "the server did not answer";
+    return { error: reason };
+  };
+  // explorerChange runs one change, says why it failed if it did, and lists the tree again,
+  // selecting what the change made and opening the folder it went into.
+  const explorerChange = async (what, op, body, into) => {
+    explorer.busy = what + "...";
+    renderExplorer();
+    const done = await changeFiles(op, body);
+    explorer.busy = "";
+    if (typeof done !== "string") {
+      showNote(what + " failed: " + done.error, 6000);
+      renderExplorer();
+      await refreshExplorer();
+      return null;
+    }
+    if (into && into !== explorer.root) explorer.expanded.add(into);
+    if (op !== "delete") explorer.selected = done;
+    await refreshExplorer();
+    return done;
+  };
+  // Where something new or pasted goes: the selected folder, a selected file's folder, or
+  // the top of the tree.
+  const explorerTarget = () => {
+    const row = explorer.visible.find(
+      (item) => item.path === explorer.selected,
+    );
+    if (!row) return explorer.root;
+    return row.folder ? row.path : row.parent;
+  };
+  const newExplorerItem = async (op, into = explorerTarget()) => {
+    if (!into) return;
+    const kind = op === "mkdir" ? "folder" : "file";
+    const name = prompt("Name of the new " + kind + " in " + into + ":", "");
+    if (!name) return;
+    await explorerChange(
+      "Making " + name,
+      op,
+      { path: joinPath(into, name) },
+      into,
+    );
+  };
+  const renameExplorerItem = async (path) => {
+    const name = prompt("New name for " + path + ":", baseName(path));
+    if (!name || name === baseName(path)) return;
+    await explorerChange("Renaming " + baseName(path), "move", {
+      from: path,
+      to: joinPath(parentOf(path), name),
+    });
+  };
+  const deleteExplorerItem = async (path, folder) => {
+    let question = "Delete " + path + "? This cannot be undone.";
+    if (folder) {
+      // One listing, for how much it holds directly; its depth is not walked.
+      const listed = await listDirectory("path=" + encodeURIComponent(path));
+      const held = listed.error
+        ? "what it holds"
+        : listed.total === 1
+          ? "the 1 entry in it"
+          : "the " + listed.total + " entries in it";
+      question =
+        "Delete the folder " +
+        path +
+        ", " +
+        held +
+        ", and everything below? This cannot be undone.";
+    }
+    if (!confirm(question)) return;
+    if (explorer.clipboard && under(explorer.clipboard.path, path))
+      explorer.clipboard = null;
+    await explorerChange("Deleting " + baseName(path), "delete", { path });
+  };
+  const setExplorerClipboard = (path, folder, cut) => {
+    explorer.clipboard = { path, folder, cut };
+    renderExplorer();
+    showNote(
+      (cut ? "Cut " : "Copied ") + path + ". Paste it into a folder.",
+      2500,
+    );
+  };
+  const pasteExplorerItem = async (into = explorerTarget()) => {
+    const held = explorer.clipboard;
+    if (!held || !into) return;
+    const to = joinPath(into, baseName(held.path));
+    if (held.cut) {
+      const moved = await explorerChange(
+        "Moving " + baseName(held.path),
+        "move",
+        { from: held.path, to },
+        into,
+      );
+      if (moved) explorer.clipboard = null;
+      renderExplorer();
+      return;
+    }
+    await explorerChange(
+      "Copying " + baseName(held.path),
+      "copy",
+      { from: held.path, to, unique: parentOf(held.path) === into },
+      into,
+    );
+  };
+  // moveByDrag moves what was dragged into a folder, after asking.
+  const moveByDrag = async (path, into) => {
+    if (!movableInto(path, into)) return;
+    if (!confirm("Move " + path + " into " + into + "?")) return;
+    await explorerChange(
+      "Moving " + baseName(path),
+      "move",
+      { from: path, to: joinPath(into, baseName(path)) },
+      into,
+    );
+  };
+  // A folder can take what is dragged unless it is already there, or is it or below it.
+  const movableInto = (path, into) =>
+    Boolean(path && into) && parentOf(path) !== into && !under(into, path);
+  const clearDragMarks = () => {
+    clearTimeout(explorer.hoverTimer);
+    explorer.hoverTimer = undefined;
+    explorer.hoverPath = "";
+    for (const marked of explorer.tree?.querySelectorAll(
+      ".terminal-explorer-drop",
+    ) || [])
+      marked.classList.remove("terminal-explorer-drop");
+    explorer.tree?.classList.remove("terminal-explorer-drop");
+  };
+  // takesDrops lets a row, or the tree's empty part, take a row dragged within the tree:
+  // a folder takes it, a file's row gives it to its folder, and a closed folder held over
+  // opens after a moment.
+  const takesDrops = (element, folder, closedFolder) => {
+    // The tree's own folder is its top, which moves with the shell.
+    const target = () => (typeof folder === "function" ? folder() : folder);
+    element.addEventListener("dragover", (event) => {
+      const into = target();
+      if (!explorer.dragging) return;
+      if (element === explorer.tree && event.target !== explorer.tree) return;
+      if (!movableInto(explorer.dragging, into)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer && (event.dataTransfer.dropEffect = "move");
+      if (!element.classList.contains("terminal-explorer-drop")) {
+        clearDragMarks();
+        element.classList.add("terminal-explorer-drop");
+      }
+      if (closedFolder && explorer.hoverPath !== into) {
+        explorer.hoverPath = into;
+        explorer.hoverTimer = setTimeout(() => {
+          if (explorer.dragging && !explorer.expanded.has(into))
+            toggleFolder(into);
+        }, explorerHoverOpen);
+      }
+    });
+    element.addEventListener("dragleave", (event) => {
+      const into = target();
+      if (event.target === element) {
+        element.classList.remove("terminal-explorer-drop");
+        if (explorer.hoverPath === into) {
+          clearTimeout(explorer.hoverTimer);
+          explorer.hoverPath = "";
+        }
+      }
+    });
+    element.addEventListener("drop", (event) => {
+      if (!explorer.dragging) return;
+      if (element === explorer.tree && event.target !== explorer.tree) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const path = explorer.dragging;
+      explorer.dragging = "";
+      clearDragMarks();
+      moveByDrag(path, target());
+    });
+  };
+  // The menu of a row's changes, after its other choices.
+  const explorerChangeChoices = (path, folder) => [
+    [
+      "New File...",
+      () => newExplorerItem("create", folder ? path : parentOf(path)),
+      true,
+    ],
+    [
+      "New Folder...",
+      () => newExplorerItem("mkdir", folder ? path : parentOf(path)),
+      true,
+    ],
+    ["Cut", () => setExplorerClipboard(path, folder, true), true],
+    ["Copy", () => setExplorerClipboard(path, folder, false), !folder],
+    [
+      "Paste",
+      () => pasteExplorerItem(folder ? path : parentOf(path)),
+      Boolean(explorer.clipboard),
+    ],
+    ["Rename...", () => renameExplorerItem(path), true],
+    ["Delete...", () => deleteExplorerItem(path, folder), true],
+  ];
   // drawEntries puts a directory's rows into the tree, and below each open folder its own.
   const drawEntries = (dir, level, rows) => {
     const listing = explorer.listings.get(dir);
@@ -3692,7 +3922,8 @@ function shellWord(value) {
     if (!explorer.selected && first) first.tabIndex = 0;
     if (hadFocus) (rowOf(explorer.selected) || first)?.focus();
     explorer.footer.replaceChildren();
-    if (!shell) explorer.footer.append("This pane shows no shell.");
+    if (explorer.busy) explorer.footer.append(explorer.busy);
+    else if (!shell) explorer.footer.append("This pane shows no shell.");
     else if (explorer.follow) explorer.footer.append("Following " + label);
     else {
       explorer.footer.append(
@@ -3756,6 +3987,27 @@ function shellWord(value) {
         else if (current.folder) toggleFolder(current.path);
         else openInViewer(current.path);
         return;
+      case "F2":
+        if (!current?.named) return;
+        event.preventDefault();
+        renameExplorerItem(current.path);
+        return;
+      case "Delete":
+        if (!current?.named) return;
+        event.preventDefault();
+        deleteExplorerItem(current.path, current.folder);
+        return;
+    }
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key === "v") {
+      event.preventDefault();
+      pasteExplorerItem();
+    } else if ((key === "c" || key === "x") && current?.named) {
+      event.preventDefault();
+      if (key === "c" && current.folder)
+        showNote("Folders are not copied here; use cp -r in the shell.", 6000);
+      else setExplorerClipboard(current.path, current.folder, key === "x");
     }
   };
   const savedExplorerWidth = () => {
@@ -3860,6 +4112,12 @@ function shellWord(value) {
       explorer.title,
       explorerIconButton("Up one directory", explorerIcons.up, explorerUp),
       explorer.followButton,
+      explorerIconButton("New File", explorerIcons.newFile, () =>
+        newExplorerItem("create"),
+      ),
+      explorerIconButton("New Folder", explorerIcons.newFolder, () =>
+        newExplorerItem("mkdir"),
+      ),
       explorerIconButton("Refresh", explorerIcons.refresh, () =>
         refreshExplorer(),
       ),
@@ -3876,6 +4134,20 @@ function shellWord(value) {
     explorer.tree.setAttribute("aria-label", "Files");
     explorer.tree.tabIndex = -1;
     explorer.tree.onkeydown = explorerKeys;
+    // The tree's empty part stands for the top of the tree.
+    takesDrops(explorer.tree, () => explorer.root, false);
+    explorer.tree.oncontextmenu = (event) => {
+      if (event.target !== explorer.tree || !explorer.root) return;
+      openPanelMenu(event, [
+        ["New File...", () => newExplorerItem("create", explorer.root), true],
+        ["New Folder...", () => newExplorerItem("mkdir", explorer.root), true],
+        [
+          "Paste",
+          () => pasteExplorerItem(explorer.root),
+          Boolean(explorer.clipboard),
+        ],
+      ]);
+    };
     explorer.footer = document.createElement("div");
     explorer.footer.className = "terminal-explorer-footer";
     aside.append(

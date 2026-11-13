@@ -1907,3 +1907,13 @@ html.terminal-open .output-panel.terminal-launch {
 .terminal-pane-drop {
   box-shadow: inset 0 0 0 2px var(--focus);
 }
+/* A folder, or the tree's empty part, that a dragged row would move into. */
+.terminal-explorer-row.terminal-explorer-drop,
+.terminal-explorer-tree.terminal-explorer-drop {
+  background: var(--highlight);
+  box-shadow: inset 0 0 0 1px var(--focus);
+}
+/* Cut, waiting to be pasted. */
+.terminal-explorer-cut {
+  opacity: 0.55;
+}

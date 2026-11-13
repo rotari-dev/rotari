@@ -97,6 +97,12 @@ var boundaryRules = []boundaryRule{
 		forbidden: []string{"net/http"},
 	},
 	{
+		pkg:       "internal/fileops",
+		reason:    "fileops changes files as a terminal's file pane does, knowing nothing of jobs, runs, or HTTP",
+		allowed:   []string{},
+		forbidden: []string{"net/http"},
+	},
+	{
 		pkg:    "conformance",
 		reason: "conformance checks the binary and Web API from outside the code",
 		// conformance/support is the conformance packages' own harness,

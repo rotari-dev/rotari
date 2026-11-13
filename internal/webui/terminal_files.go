@@ -1,9 +1,11 @@
 package webui
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -11,6 +13,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/rotari-dev/rotari/internal/fileops"
 	"github.com/rotari-dev/rotari/internal/terminal"
 )
 
@@ -182,5 +185,73 @@ func terminalFileKind(mode fs.FileMode) string {
 		return terminalFileFile
 	default:
 		return terminalFileOther
+	}
+}
+
+// The Explorer's changes, each a POST of JSON under terminalFilesPath, served only where
+// the terminal is: mkdir and create take path; move takes from and to; copy takes from,
+// to, and unique (a name of its own when to is taken, for a copy pasted beside its
+// file); delete takes path. Each answers the path it made or changed, or the reason it
+// did not. internal/fileops holds the rules.
+type terminalFileChange struct {
+	Path   string `json:"path"`
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Unique bool   `json:"unique"`
+}
+
+func (s site) serveTerminalFileChange(writer http.ResponseWriter, request *http.Request, op string) {
+	writer.Header().Set("Cache-Control", "no-store")
+	if request.Method != http.MethodPost {
+		writer.Header().Set("Allow", http.MethodPost)
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	// A form from another site cannot send JSON without a preflight, which is never granted.
+	if mediaType, _, _ := mime.ParseMediaType(request.Header.Get(headerContentType)); mediaType != "application/json" {
+		http.Error(writer, "a change to files needs a JSON body", http.StatusUnsupportedMediaType)
+		return
+	}
+	var change terminalFileChange
+	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&change); err != nil {
+		http.Error(writer, "invalid request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	paths := map[string][]string{"mkdir": {change.Path}, "create": {change.Path}, "delete": {change.Path}, "move": {change.From, change.To}, "copy": {change.From, change.To}}[op]
+	if paths == nil {
+		http.NotFound(writer, request)
+		return
+	}
+	for _, path := range paths {
+		if err := checkTerminalDir(path); err != nil {
+			http.Error(writer, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	done := filepath.Clean(paths[len(paths)-1])
+	var err error
+	switch op {
+	case "mkdir":
+		err = fileops.Mkdir(done)
+	case "create":
+		err = fileops.CreateFile(done)
+	case "delete":
+		err = fileops.Remove(done)
+	case "move":
+		err = fileops.Move(change.From, done)
+	case "copy":
+		done, err = fileops.CopyFile(change.From, done, change.Unique)
+	}
+	switch {
+	case errors.Is(err, fileops.ErrBadName):
+		http.Error(writer, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, fs.ErrExist), errors.Is(err, fileops.ErrAlreadyThere):
+		http.Error(writer, err.Error(), http.StatusConflict)
+	case err != nil:
+		http.Error(writer, err.Error(), http.StatusUnprocessableEntity)
+	default:
+		writeTerminalJSON(writer, http.StatusOK, map[string]string{"path": done})
 	}
 }

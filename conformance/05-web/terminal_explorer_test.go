@@ -170,3 +170,90 @@ func TestTerminalExplorerListsAndOpensFiles(t *testing.T) {
 		t.Errorf("a path without the terminal: (%d, %s)", got.Status, got.Body)
 	}
 }
+
+// The Explorer changes files as a terminal's file pane does, never replacing what exists,
+// and only where the terminal is served.
+func TestTerminalExplorerChangesFiles(t *testing.T) {
+	covers(t, "WEB-43")
+	e := terminalEnv(t)
+	base := e.StartWeb("--allow-terminal")
+	dir := filepath.Join(e.Root, "changed here")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "data.csv"), []byte("a,b\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	at := func(name string) string { return filepath.Join(dir, name) }
+	change := func(op, body string, headers map[string]string) support.HTTPResult {
+		all := map[string]string{"X-Rotari-Token": launchToken, "Content-Type": "application/json"}
+		for key, value := range headers {
+			all[key] = value
+		}
+		return e.HTTPDo(http.MethodPost, base+"/_terminal/files/"+op, all, body)
+	}
+	quote := func(value string) string {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(encoded)
+	}
+	for _, step := range []struct {
+		op, body string
+		status   int
+		want     string
+	}{
+		{"mkdir", `{"path":` + quote(at("out")) + `}`, http.StatusOK, `"path":` + quote(at("out"))},
+		{"create", `{"path":` + quote(at("out/notes.md")) + `}`, http.StatusOK, at("out/notes.md")},
+		{"move", `{"from":` + quote(at("out/notes.md")) + `,"to":` + quote(at("readme.md")) + `}`, http.StatusOK, at("readme.md")},
+		{"copy", `{"from":` + quote(at("data.csv")) + `,"to":` + quote(at("data.csv")) + `,"unique":true}`, http.StatusOK, at("data copy.csv")},
+		{"copy", `{"from":` + quote(at("data.csv")) + `,"to":` + quote(at("out/data.csv")) + `}`, http.StatusOK, at("out/data.csv")},
+		{"delete", `{"path":` + quote(at("readme.md")) + `}`, http.StatusOK, at("readme.md")},
+		{"move", `{"from":` + quote(at("data.csv")) + `,"to":` + quote(at("out/data.csv")) + `}`, http.StatusConflict, "exists"},
+		{"create", `{"path":` + quote(at("data copy.csv")) + `}`, http.StatusConflict, "exists"},
+		{"move", `{"from":` + quote(at("out")) + `,"to":` + quote(at("out/in")) + `}`, http.StatusBadRequest, "into itself"},
+		{"copy", `{"from":` + quote(at("out")) + `,"to":` + quote(at("out2")) + `}`, http.StatusBadRequest, "cp -r"},
+		{"mkdir", `{"path":` + quote(at(`a\b`)) + `}`, http.StatusBadRequest, ""},
+		{"delete", `{"path":"/"}`, http.StatusBadRequest, ""},
+		{"delete", `{"path":` + quote(at("gone")) + `}`, http.StatusUnprocessableEntity, "no such file"},
+	} {
+		if got := change(step.op, step.body, nil); got.Status != step.status || !strings.Contains(got.Body, step.want) {
+			t.Errorf("%s %s: (%d, %s), want %d saying %q", step.op, step.body, got.Status, got.Body, step.status, step.want)
+		}
+	}
+	for path, want := range map[string]string{"data.csv": "a,b\n", "data copy.csv": "a,b\n", "out/data.csv": "a,b\n"} {
+		content, err := os.ReadFile(at(path))
+		if err != nil || string(content) != want {
+			t.Errorf("%s: %q %v", path, content, err)
+		}
+	}
+	// The source's permission bits, less what the umask takes, and never more.
+	if info, err := os.Stat(at("out/data.csv")); err != nil || info.Mode().Perm()&^0o640 != 0 {
+		t.Errorf("the copy's permissions: %v %v", info, err)
+	}
+	for _, gone := range []string{"readme.md", "out/notes.md", "out2"} {
+		if _, err := os.Lstat(at(gone)); !os.IsNotExist(err) {
+			t.Errorf("%s is there: %v", gone, err)
+		}
+	}
+	// A JSON body, the terminal's connection checks, and the terminal itself.
+	if got := change("mkdir", `{"path":`+quote(at("form"))+`}`, map[string]string{"Content-Type": "application/x-www-form-urlencoded"}); got.Status != http.StatusUnsupportedMediaType {
+		t.Errorf("a form: (%d, %s)", got.Status, got.Body)
+	}
+	if got := change("mkdir", `{"path":`+quote(at("proxied"))+`}`, map[string]string{"X-Forwarded-For": "192.0.2.1"}); got.Status != http.StatusForbidden {
+		t.Errorf("through a plain proxy: (%d, %s)", got.Status, got.Body)
+	}
+	if got := change("mkdir", `{"path":`+quote(at("elsewhere"))+`}`, map[string]string{"Origin": "http://attacker.example"}); got.Status != http.StatusForbidden {
+		t.Errorf("from another site: (%d, %s)", got.Status, got.Body)
+	}
+	plain := support.NewEnv(t).StartWeb()
+	if got := e.HTTPDo(http.MethodPost, plain+"/_terminal/files/mkdir", map[string]string{"Content-Type": "application/json"}, `{"path":`+quote(at("x"))+`}`); got.Status != http.StatusNotFound {
+		t.Errorf("without the terminal: (%d, %s)", got.Status, got.Body)
+	}
+	for _, refused := range []string{"form", "proxied", "elsewhere", "x"} {
+		if _, err := os.Lstat(at(refused)); !os.IsNotExist(err) {
+			t.Errorf("a refused request made %s", refused)
+		}
+	}
+}

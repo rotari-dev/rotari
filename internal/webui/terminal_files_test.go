@@ -3,6 +3,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -167,5 +168,101 @@ func TestTerminalShellStartsInANamedDirectory(t *testing.T) {
 	}
 	if shells := listTerminalShells(t, server); len(shells) != 1 {
 		t.Errorf("refused starts left %d shells, want 1", len(shells))
+	}
+}
+
+// terminalChange posts a change to files as the Explorer does.
+func terminalChange(t *testing.T, server *httptest.Server, op string, body any) (int, string) {
+	t.Helper()
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := http.NewRequest(http.MethodPost, server.URL+terminalFilesPath+"/"+op, strings.NewReader(string(encoded)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("X-Rotari-Token", terminalTestToken)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	answer, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return response.StatusCode, string(answer)
+}
+
+func TestTerminalFilesChange(t *testing.T) {
+	server, _ := terminalServer(t, "/bin/sh")
+	dir := t.TempDir()
+	at := func(name string) string { return filepath.Join(dir, name) }
+	if err := os.WriteFile(at("data.csv"), []byte("a,b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	steps := []struct {
+		op     string
+		body   map[string]any
+		status int
+		want   string
+	}{
+		{"mkdir", map[string]any{"path": at("out")}, http.StatusOK, `{"path":"` + at("out") + `"}`},
+		{"create", map[string]any{"path": at("out/notes.md")}, http.StatusOK, `"path":"` + at("out/notes.md") + `"`},
+		{"move", map[string]any{"from": at("out/notes.md"), "to": at("out/readme.md")}, http.StatusOK, at("out/readme.md")},
+		{"copy", map[string]any{"from": at("data.csv"), "to": at("data.csv"), "unique": true}, http.StatusOK, at("data copy.csv")},
+		{"copy", map[string]any{"from": at("data.csv"), "to": at("out/data.csv")}, http.StatusOK, at("out/data.csv")},
+		{"delete", map[string]any{"path": at("data copy.csv")}, http.StatusOK, at("data copy.csv")},
+		// Refusals, each with its reason.
+		{"mkdir", map[string]any{"path": at("out")}, http.StatusConflict, "file exists"},
+		{"move", map[string]any{"from": at("data.csv"), "to": at("out/data.csv")}, http.StatusConflict, "file exists"},
+		{"move", map[string]any{"from": at("out"), "to": at("out/inner")}, http.StatusBadRequest, "into itself"},
+		{"move", map[string]any{"from": at("data.csv"), "to": at("data.csv")}, http.StatusConflict, "already there"},
+		{"copy", map[string]any{"from": at("out"), "to": at("out2")}, http.StatusBadRequest, "cp -r"},
+		{"copy", map[string]any{"from": at("data.csv"), "to": at("out/data.csv")}, http.StatusConflict, "file exists"},
+		{"create", map[string]any{"path": at(`a\b`)}, http.StatusBadRequest, "holds / or"},
+		{"create", map[string]any{"path": "relative"}, http.StatusBadRequest, "not absolute"},
+		{"delete", map[string]any{"path": at("gone")}, http.StatusUnprocessableEntity, "no such file"},
+		{"delete", map[string]any{"path": "/"}, http.StatusBadRequest, "is not removed"},
+		{"delete", map[string]any{"path": at("x"), "recursive": true}, http.StatusBadRequest, "unknown field"},
+		{"chmod", map[string]any{"path": at("x")}, http.StatusNotFound, ""},
+	}
+	for _, step := range steps {
+		status, body := terminalChange(t, server, step.op, step.body)
+		if status != step.status || !strings.Contains(body, step.want) {
+			t.Errorf("%s %v: status %d: %s, want %d saying %q", step.op, step.body, status, body, step.status, step.want)
+		}
+	}
+	listing := terminalFiles(t, server, "path="+url.QueryEscape(dir))
+	var names []string
+	for _, entry := range listing.Entries {
+		names = append(names, entry.Name)
+	}
+	if strings.Join(names, ",") != "out,data.csv" {
+		t.Errorf("left %v", names)
+	}
+	inner := terminalFiles(t, server, "path="+url.QueryEscape(at("out")))
+	if len(inner.Entries) != 2 || inner.Entries[0].Name != "data.csv" || inner.Entries[1].Name != "readme.md" {
+		t.Errorf("out holds %+v", inner.Entries)
+	}
+	// JSON only, POST only.
+	request, err := http.NewRequest(http.MethodPost, server.URL+terminalFilesPath+"/mkdir", strings.NewReader("path="+at("form")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("X-Rotari-Token", terminalTestToken)
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusUnsupportedMediaType {
+		t.Errorf("a form: status %d", response.StatusCode)
+	}
+	if status, _ := terminalRequest(t, server, http.MethodGet, terminalFilesPath+"/mkdir"); status != http.StatusMethodNotAllowed {
+		t.Errorf("GET: status %d", status)
 	}
 }

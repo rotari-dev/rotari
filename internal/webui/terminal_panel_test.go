@@ -134,6 +134,14 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           requests.push('GET ' + address);
           return Promise.resolve({ ok: true, status: 200, json: async () => server.launchers || { available: false, reason: 'Launching is disabled on this server.', hint: 'Restart with rotari web --allow-exec.' } });
         }
+        if (address.startsWith('/_terminal/files/')) {
+          const op = address.slice('/_terminal/files/'.length);
+          const body = JSON.parse(init.body);
+          (server.fileChanges ||= []).push([op, body, (init.headers || {})['Content-Type']]);
+          if (server.refuseChange) return Promise.resolve({ ok: false, status: 409, text: async () => server.refuseChange });
+          const path = op === 'copy' && body.unique ? body.to.replace(/(\.[^./]*)?$/, ' copy$1') : body.to || body.path;
+          return Promise.resolve({ ok: true, status: 200, json: async () => ({ path }) });
+        }
         if (address.startsWith('/_terminal/files?')) {
           // Apart from requests: the Explorer is open by default, on every page that opens the panel.
           (server.fileRequests ||= []).push('GET ' + address);
@@ -3003,10 +3011,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     row.dispatchEvent(new ex.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
     return [...ex.document.querySelectorAll('.terminal-tab-menu button')];
   };
-  assert.deepEqual(menuOf(exRow('train.yaml')).map((item) => [item.textContent, item.disabled]), [['Open in the Table viewer', false], ['Open in a new terminal tab', false], ['Send the path to the terminal', false], ['Copy the path', false], ['Copy the path from here', false]]);
-  menuOf(exRow('train.yaml'))[4].click();
+  assert.deepEqual(menuOf(exRow('train.yaml')).map((item) => [item.textContent, item.disabled]), [['Open in the Table viewer', false], ['Open in a new terminal tab', false], ['Send the path to the terminal', false], ['New File...', false], ['New Folder...', false], ['Cut', false], ['Copy', false], ['Paste', true], ['Rename...', false], ['Delete...', false], ['Copy the path', false], ['Copy the path from here', false]]);
+  menuOf(exRow('train.yaml'))[11].click();
   await wait(10);
-  menuOf(exRow('train.yaml'))[3].click();
+  menuOf(exRow('train.yaml'))[10].click();
   await wait(10);
   assert.deepEqual(exCopied, ['conf/train.yaml', '/w/p1/conf/train.yaml']);
   // A new tab opens in a folder, or in a file's folder, as a shell of the page's project.
@@ -3019,7 +3027,109 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(ex.document.querySelector('.terminal-tab [aria-selected="true"]').textContent, String(exStarted.number));
   [...ex.document.querySelectorAll('.terminal-tab [role="tab"]')][0].click();
   await wait(30);
-  // A file opens in the Table viewer in a tab exOpened at once, so that no pop-up is blocked.
+  // Changes to files: each a JSON request, with the names asked and the deletions and
+  // moves by dragging confirmed first.
+  const lastChange = () => ex.server.fileChanges?.at(-1);
+  const changesSoFar = () => ex.server.fileChanges?.length || 0;
+  const prompts = [];
+  let promptAnswer = '';
+  ex.window.prompt = (question, value) => { prompts.push([question, value]); return promptAnswer; };
+  const asked = [];
+  let confirmAnswer = true;
+  ex.window.confirm = (question) => { asked.push(question); return confirmAnswer; };
+  assert.equal(menuOf(exRow('conf')).find((item) => item.textContent === 'Copy').disabled, true, 'a folder offered Copy');
+  ex.document.body.click();
+  ex.document.querySelector('.terminal-tab-menu')?.remove();
+  exRow('conf').focus();
+  if (exRow('conf').getAttribute('aria-selected') !== 'true') exRow('conf').click();
+  if (exRow('conf').getAttribute('aria-expanded') !== 'true') exRow('conf').click();
+  await wait(20);
+  promptAnswer = 'out';
+  ex.document.querySelector('[aria-label="New Folder"]').click();
+  await wait(20);
+  assert.deepEqual(prompts.at(-1), ['Name of the new folder in /w/p1/conf:', '']);
+  assert.deepEqual(lastChange(), ['mkdir', { path: '/w/p1/conf/out' }, 'application/json']);
+  const keyOn = (name, options = {}) => ex.document.querySelector('.terminal-explorer-tree').dispatchEvent(new ex.window.KeyboardEvent('keydown', { key: name, bubbles: true, ...options }));
+  exRow('train.yaml').click();
+  promptAnswer = 'train2.yaml';
+  keyOn('F2');
+  await wait(20);
+  assert.deepEqual(prompts.at(-1), ['New name for /w/p1/conf/train.yaml:', 'train.yaml']);
+  assert.deepEqual(lastChange().slice(0, 2), ['move', { from: '/w/p1/conf/train.yaml', to: '/w/p1/conf/train2.yaml' }]);
+  let before = changesSoFar();
+  promptAnswer = 'train.yaml';
+  exRow('train.yaml').click();
+  keyOn('F2');
+  await wait(20);
+  assert.equal(changesSoFar(), before, 'renaming to the same name asked the server');
+  // A folder's deletion says how much it holds directly, and nothing happens unless confirmed.
+  exRow('conf').click();
+  await wait(20);
+  if (exRow('conf').getAttribute('aria-expanded') !== 'true') { exRow('conf').click(); await wait(20); }
+  confirmAnswer = false;
+  keyOn('Delete');
+  await wait(20);
+  assert.equal(asked.at(-1), 'Delete the folder /w/p1/conf, the 1 entry in it, and everything below? This cannot be undone.');
+  assert.equal(changesSoFar(), before, 'a deletion not confirmed went ahead');
+  confirmAnswer = true;
+  keyOn('Delete');
+  await wait(20);
+  assert.deepEqual(lastChange().slice(0, 2), ['delete', { path: '/w/p1/conf' }]);
+  // Copy is for files: pasted beside its file it gets a name of its own.
+  exRow('a b.csv').click();
+  keyOn('c', { ctrlKey: true });
+  keyOn('v', { ctrlKey: true });
+  await wait(20);
+  assert.deepEqual(lastChange().slice(0, 2), ['copy', { from: '/w/p1/a b.csv', to: '/w/p1/a b.csv', unique: true }]);
+  exRow('conf').click();
+  await wait(20);
+  before = changesSoFar();
+  keyOn('c', { ctrlKey: true });
+  assert.match(exNote(), /Folders are not copied here; use cp -r/);
+  // Cut and Paste move it, and the clipboard empties.
+  menuOf(exRow('a b.csv')).find((item) => item.textContent === 'Cut').click();
+  assert.equal(exRow('a b.csv').classList.contains('terminal-explorer-cut'), true);
+  menuOf(exRow('conf')).find((item) => item.textContent === 'Paste').click();
+  await wait(20);
+  assert.deepEqual(lastChange().slice(0, 2), ['move', { from: '/w/p1/a b.csv', to: '/w/p1/conf/a b.csv' }]);
+  assert.equal(menuOf(exRow('conf')).find((item) => item.textContent === 'Paste').disabled, true, 'a cut was pasted twice');
+  ex.document.querySelector('.terminal-tab-menu')?.remove();
+  // A refusal says why.
+  ex.server.refuseChange = 'mkdir /w/p1/x: file exists';
+  promptAnswer = 'x';
+  ex.document.querySelector('.terminal-explorer-tree').dispatchEvent(new ex.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+  const rootMenu = [...ex.document.querySelectorAll('.terminal-tab-menu button')];
+  assert.deepEqual(rootMenu.map((item) => item.textContent), ['New File...', 'New Folder...', 'Paste']);
+  rootMenu[1].click();
+  await wait(20);
+  assert.deepEqual(lastChange().slice(0, 2), ['mkdir', { path: '/w/p1/x' }]);
+  assert.equal(exNote(), 'Making x failed: mkdir /w/p1/x: file exists');
+  delete ex.server.refuseChange;
+  // A row dragged onto a folder moves into it after asking; held over a closed folder,
+  // the folder opens.
+  const dragEvent = (type, target) => {
+    const event = new ex.window.Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: { types: ['application/x-rotari-explorer-path'], setData() {}, effectAllowed: '', dropEffect: '' } });
+    target.dispatchEvent(event);
+    return event;
+  };
+  dragEvent('dragstart', exRow('a b.csv'));
+  assert.equal(dragEvent('dragover', exRow('a b.csv')).defaultPrevented, false, 'a row took a drop into its own folder');
+  assert.equal(dragEvent('dragover', exRow('conf')).defaultPrevented, true);
+  assert.equal(exRow('conf').classList.contains('terminal-explorer-drop'), true);
+  dragEvent('drop', exRow('conf'));
+  await wait(20);
+  assert.equal(asked.at(-1), 'Move /w/p1/a b.csv into /w/p1/conf?');
+  assert.deepEqual(lastChange().slice(0, 2), ['move', { from: '/w/p1/a b.csv', to: '/w/p1/conf/a b.csv' }]);
+  dragEvent('dragstart', exRow('a b.csv'));
+  assert.equal(exRow('shared').getAttribute('aria-expanded'), 'false');
+  dragEvent('dragover', exRow('shared'));
+  await wait(750);
+  assert.equal(exRow('shared').getAttribute('aria-expanded'), 'true', 'holding over a closed folder did not open it');
+  dragEvent('dragend', exRow('a b.csv'));
+  exRow('shared').click();
+  await wait(20);
+  // A file opens in the Table viewer in a tab opened at once, so that no pop-up is blocked.
   ex.server.tableviewSource = { source: 'E 1', dir: '/w/p1', child: 'a b.csv' };
   exRow('a b.csv').dispatchEvent(new ex.window.MouseEvent('dblclick', { bubbles: true }));
   await wait(20);

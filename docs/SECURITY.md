@@ -209,7 +209,10 @@ call the API. Treat them as trusted code either way.
 
 The terminal panel's Explorer lists any directory the page names and lets the Table viewer open any file, by
 path, under the same token, `Host` check, and HTTPS-or-loopback rule as the shell. That reads nothing a shell
-on the same server could not, so it widens nothing; without `--allow-terminal`, neither is offered.
+on the same server could not, so it widens nothing; without `--allow-terminal`, neither is offered. The
+Explorer's changes to files (making, renaming, moving, copying, deleting) are the same: `POST` requests with a JSON
+body, which a page on another site cannot send without a preflight the server never grants, behind the same
+checks, and nothing a shell could not do.
 
 Shells outlive their connections, like a launched VS Code server, so ones left open stay reachable
 to anyone with your session while any page stays open and for up to 3 hours after, or what

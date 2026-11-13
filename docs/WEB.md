@@ -245,6 +245,18 @@ replacement character and offers nothing, since the page cannot name it back to 
 than 2,000 entries shows the first 2,000 and offers the rest in the Table viewer, and a folder that cannot be
 read says why. A symbolic link shows where it points, and opens what it points to.
 
+The Explorer also changes files, as a terminal application's file pane does. **New File** and **New Folder** in
+its head, or in the menu of a row or of the tree's empty part, ask for a name and make an empty file or a folder
+in the folder you chose (a file's own folder, for a file, or the top of the tree). A row's menu also has **Rename**
+(F2), **Delete** (the Delete key), **Cut**, **Copy**, and **Paste** (Ctrl+X, Ctrl+C, Ctrl+V). Drag a row onto a
+folder to move it there; hold it over a closed folder for a moment to open that folder first, or drop it on the
+tree's empty part to move it to the top. Deleting and moving by dragging ask first; deleting a folder says how many
+entries it holds directly and that everything in it goes, and cannot be undone. Nothing ever replaces a file or
+folder of the same name: the Explorer says so instead. A name cannot hold `/`, `\`, or a control character. A
+move between file systems, such as onto another disk, is refused: use `mv` in the shell, which can copy. Copy is
+for files: a copy pasted beside its file is named `name copy.ext`, then `name copy 2.ext`; for a folder, use
+`cp -r` in the shell.
+
 The **Clear** icon empties the tab's screen and scrollback, and what would be shown again after following a
 link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing
 while a full-screen program such as `vim` runs, and says so.
