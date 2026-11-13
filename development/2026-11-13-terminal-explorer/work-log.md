@@ -132,3 +132,32 @@ form VS Code uses for collapsing the folders in its Explorer.
 browser.
 
 **Remaining:** None.
+
+## 2026-11-14 00:31 +09:00 — `2e6305c7` Open a new terminal tab in a folder from the Explorer
+
+**Change:**
+
+- `internal/webui/terminal.go`: `POST /_terminal/shells` takes `dir`. `terminalStartDir` refuses it (400 with
+  the reason) beside `run`, when it is not absolute, valid UTF-8, and NUL-free (`checkTerminalDir`), and when it
+  is not an existing directory. A good one replaces the place's directory and its fallback note, and keeps the
+  place's group and environment, so the shell is still the page's project's.
+- `internal/webui/assets/web_shell.js`: `startShell` and `newShell` take an optional directory, and the Explorer's
+  menu has **Open in a new terminal tab**, second, which starts one in the folder, or in a file's folder, and
+  shows it in the focused pane. A refusal shows in the pane as any failed start does.
+- Tests: `TestTerminalShellStartsInANamedDirectory` (new; the shell's directory, and five refusals that start
+  nothing); `TestTerminalExplorerListsAndOpensFiles` now also covers WEB-34 for `dir`; `TestTerminalPanel` checks
+  the menu's order, and that the item on a file posts its folder as `dir` with the project and shows the new tab.
+- WEB-34 note and row (`dir`, and the test), WEB-42 note and row, `docs/WEB.md`, and plan decision 10.
+
+**Reason:** The user asked for opening a folder in the terminal from the menu, in the current tab and in a new
+one, then dropped the current tab: it would mean typing `cd` into whatever the shell runs, and deciding from the
+process table whether a prompt is in front is not reliable, with `ssh` for one.
+
+**Plan impact:** Decision 10 now holds the new tab; moving the current tab is recorded as dropped, and Launch in
+for a folder stays out.
+
+**Validation:** `tsc -p internal/webui/tsconfig.json`: pass. `go vet` and `go test ./internal/webui/
+./conformance/05-web/` (under `taskset -c 0-11`, go1.25.8, Node v24): pass. Prettier 3.9.8 reports only the two
+`confirmEndingShells` differences that are on `main` too. Not seen in a real browser.
+
+**Remaining:** None.
