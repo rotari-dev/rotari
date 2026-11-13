@@ -80,8 +80,9 @@ by submitting it as one native scheduler array. SGE, local, and SSH use
 independent jobs. See [Array and matrix jobs](RUNNING.md#array-and-matrix-jobs).
 For individual scheduler jobs, the default job name is
 `rotari show ATTEMPT_ID (COMMAND)`; long names are truncated to 96 bytes.
-SGE replaces each character Grid Engine rejects in a job name (newline, tab,
-carriage return, `/`, `:`, `@`, `\`, `*`, and `?`) with `_`.
+SGE keeps only ASCII letters, digits, `_`, `-`, and `.` in the name and replaces
+every other character with `_`, because Grid Engine rejects names with `/`,
+spaces, or parentheses.
 Native Slurm arrays keep the shared name `rotari-array`.
 
 Use `--env KEY=VALUE` with `add` to save environment variables on a job. They

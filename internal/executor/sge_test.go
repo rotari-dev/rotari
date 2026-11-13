@@ -37,7 +37,7 @@ func TestSubmitSGEJobWithFakeGridEngine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"-terse", "-N\nrotari show att_run-1-job-1-0 (echo hello)", "-o\n" + filepath.Join(jobDir, state.StdoutFileName), "-e\n" + filepath.Join(jobDir, state.StderrFileName), "-q\nshort", "-V"} {
+	for _, want := range []string{"-terse", "-N\nrotari_show_att_run-1-job-1-0__echo_hello_", "-o\n" + filepath.Join(jobDir, state.StdoutFileName), "-e\n" + filepath.Join(jobDir, state.StderrFileName), "-q\nshort", "-V"} {
 		if !strings.Contains(string(args), want) {
 			t.Errorf("qsub args %q do not include %q", args, want)
 		}
@@ -157,17 +157,18 @@ func TestWaitSGEJobUsesWrapperStatus(t *testing.T) {
 	}
 }
 
-// Grid Engine rejects a job name containing a newline, tab, carriage return,
-// or any of / : @ \ * ? (verify_str_key with QSUB_TABLE), and qsub itself
-// refuses a -N argument containing /. Command previews routinely contain such
-// characters, for example a path, so the name must not carry them through.
+// Grid Engine rejects more of a job name than its documentation suggests: qsub
+// refuses / in -N, and SGE 8.1.9's qmaster answered "Error reading answer list
+// from qmaster" to a name with spaces and parentheses. Command previews
+// routinely contain such characters, so the name keeps only ASCII letters,
+// digits, _, -, and .
 func TestSubmitSGEJobNameOmitsCharactersGridEngineRejects(t *testing.T) {
 	binDir := t.TempDir()
 	argumentsPath := filepath.Join(t.TempDir(), "qsub-args")
 	writeExecutable(t, binDir, "qsub", fmt.Sprintf("#!/bin/sh\nprintf '%%s\\0' \"$@\" > %q\nprintf '12345\\n'\n", argumentsPath))
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	job := model.JobSpec{ID: "job-1", AttemptID: "att_run-1-job-1-0", Command: []string{"sh", "-c", "touch '/tmp/a b' && echo user@host:*?\\\t\r\nend"}, LogMode: model.LogModeSeparate}
+	job := model.JobSpec{ID: "job-1", AttemptID: "att_run-1-job-1-0", Command: []string{"sh", "-c", "touch '/tmp/a b' && echo user@host:*?\\\t\r\nend (あ)"}, LogMode: model.LogModeSeparate}
 	policy := sgeSubmissionPolicy{retry: schedulerSubmissionRetryPolicy{}, spacing: newSchedulerSubmissionGate(0)}
 	if _, err := submitSGEJobWithPolicies(testStore(), testLogf, t.TempDir(), job, nil, policy); err != nil {
 		t.Fatal(err)
@@ -186,10 +187,12 @@ func TestSubmitSGEJobNameOmitsCharactersGridEngineRejects(t *testing.T) {
 	if name == "" {
 		t.Fatalf("qsub args %q have no -N", args)
 	}
-	if strings.ContainsAny(name, "\n\t\r/:@\\*?") {
-		t.Fatalf("job name %q contains a character Grid Engine rejects", name)
+	for _, r := range name {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-' || r == '.') {
+			t.Fatalf("job name %q contains %q, which Grid Engine may reject", name, r)
+		}
 	}
-	if want := "rotari show att_run-1-job-1-0 (sh -c touch '_tmp_a b' && echo user_host_"; !strings.HasPrefix(name, want) {
+	if want := "rotari_show_att_run-1-job-1-0__sh_-c_touch___tmp_a_b_____echo_user_host_"; !strings.HasPrefix(name, want) {
 		t.Fatalf("job name = %q, want prefix %q", name, want)
 	}
 }

@@ -166,21 +166,19 @@ func submitSGEJobWithPolicies(store state.Store, logf func(string, ...any), runD
 	return metadata, nil
 }
 
-// sgeJobRejectedNameCharacters are the characters Grid Engine refuses in a job
-// name: qsub rejects / in -N, and qmaster's verify_str_key (QSUB_TABLE) also
-// rejects the rest.
-const sgeJobRejectedNameCharacters = "\n\t\r/:@\\*?"
-
-// sgeJobName is schedulerJobName with each character Grid Engine rejects
-// replaced by _, so that a command preview containing a path or similar text
-// does not make qsub refuse the job. The name starts with "rotari", so it
-// never starts with the digit Grid Engine also rejects.
+// sgeJobName is schedulerJobName with every character other than an ASCII
+// letter, digit, _, -, or . replaced by _. Grid Engine refuses more of a job
+// name than its documentation and verify_str_key suggest: qsub rejects / in
+// -N, and SGE 8.1.9 answered "Error reading answer list from qmaster" to
+// "rotari show att_probe-0 (true)", which differs from an accepted name only
+// in its spaces and parentheses. The name starts with "rotari", so it never
+// starts with the digit Grid Engine also rejects.
 func sgeJobName(job model.JobSpec) string {
 	return strings.Map(func(r rune) rune {
-		if strings.ContainsRune(sgeJobRejectedNameCharacters, r) {
-			return '_'
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-' || r == '.' {
+			return r
 		}
-		return r
+		return '_'
 	}, schedulerJobName(job))
 }
 
