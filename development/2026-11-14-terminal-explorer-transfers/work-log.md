@@ -61,3 +61,30 @@ Explorer now invites dragging files in, and a miss would have left the page.
   synthetic events.
 
 **Remaining:** Uploading folders, and progress for one large upload (`fetch` reports none), if wanted.
+
+## 2026-11-14 01:55 +09:00 — `e930ab41` Show how far an Explorer upload has come
+
+**Change:**
+
+- `internal/webui/assets/web_shell.js`: `sendUpload` posts a file with `XMLHttpRequest` and reports
+  `upload.onprogress`. `showExplorerBusy` redraws only the footer: the text, such as
+  `Uploading big.bin: 25% (3.0 MiB of 12.0 MiB)`, and a `<progress>` bar. `uploadFiles` uses both.
+  `explorer.progress` keeps the bar across a full redraw and is cleared at the end.
+- `formatBytes` moved from `web_app_artifacts.js` to a global in `web_shell.js`, which every page loads before the
+  application script, as `shellQuote` did; `web_globals.d.ts` declares it. The Table viewer's own copy stays: that
+  page does not load `web_shell.js`.
+- `web_shell.css`: the bar.
+- `TestTerminalPanel`: uploads go through a fake `XMLHttpRequest` in place of the fetch fake. A held upload's
+  request line and content type, the footer before and after a progress event, the bar's value, and the bar gone
+  after it finishes are checked.
+- WEB-44 note, `docs/WEB.md`, and plan decision 7.
+
+**Reason:** The user asked for progress on uploads, which the previous entry left as remaining.
+
+**Plan impact:** Decision 7 gains the progress.
+
+**Validation:** `tsc`: pass. `go vet` and `go test ./internal/webui/ ./conformance/05-web/` (`taskset -c 0-11`,
+go1.25.8, Node v24): pass; these cover the artifact list's use of `formatBytes` on the live and static pages.
+Prettier 3.9.8: only the two `confirmEndingShells` differences that are on `main` too. Not seen in a real browser.
+
+**Remaining:** Uploading folders, if wanted.
