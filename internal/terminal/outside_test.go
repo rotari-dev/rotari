@@ -64,16 +64,21 @@ func TestServerShellsSeesWhatRunsFromOutside(t *testing.T) {
 	if _, err := fmt.Fprintf(shell, "sleep 31 &\n"); err != nil {
 		t.Fatal(err)
 	}
-	background := awaitActivity(t, shell, "a background sleep", func(activity ShellActivity) bool { return len(activity.Background) == 1 })
-	if background.Foreground != "" || !strings.Contains(background.Background[0].Command, "sleep 31") {
+	// Until it execs, the forked child still runs the shell.
+	background := awaitActivity(t, shell, "a background sleep", func(activity ShellActivity) bool {
+		return len(activity.Background) == 1 && strings.Contains(activity.Background[0].Command, "sleep 31")
+	})
+	if background.Foreground != "" {
 		t.Errorf("with a background sleep: %+v", background)
 	}
 
 	if _, err := fmt.Fprintf(shell, "sleep 32\n"); err != nil {
 		t.Fatal(err)
 	}
-	busy := awaitActivity(t, shell, "a foreground sleep", func(activity ShellActivity) bool { return activity.Foreground != "" })
-	if busy.Foreground != "sleep 32" || len(busy.Background) != 1 {
+	// The shell hands the terminal to the command's group as it forks it, so for a moment
+	// the group has no process to name ("a command"), or one still running the shell.
+	busy := awaitActivity(t, shell, "a foreground sleep", func(activity ShellActivity) bool { return activity.Foreground == "sleep 32" })
+	if len(busy.Background) != 1 {
 		t.Errorf("with a foreground sleep: %+v", busy)
 	}
 }
