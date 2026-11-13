@@ -644,6 +644,34 @@ main {
 .content > .topbar .settings-actions button:hover:not(:disabled) {
   background: var(--surface-2);
 }
+/* Stop server, above the About section; its selectors outweigh both top bars' toolbar
+   buttons, as the About section's do. */
+.settings-stop {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.settings-panel .settings-stop button {
+  width: 100%;
+  min-height: 0;
+  padding: 7px 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--s-bad);
+  text-align: left;
+}
+.settings-panel .settings-stop button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.settings-stop-status {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.settings-stop-status:empty {
+  display: none;
+}
 
 /* The page's title and its facts. */
 .page-head {

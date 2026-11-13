@@ -82,7 +82,7 @@ func TestWebDetachRunsInTheBackground(t *testing.T) {
 	e := terminalEnv(t)
 	server, first := startDetached(t, e, "--allow-terminal")
 	record, log := detachedFiles(t, e)
-	if !strings.Contains(first.Stdout, "Log: "+log) || !strings.Contains(first.Stdout, "kill "+strconv.Itoa(server.pid)) {
+	if !strings.Contains(first.Stdout, "Log: "+log) || !strings.Contains(first.Stdout, "rotari web --shutdown") {
 		t.Errorf("--detach did not name its log and how to stop it:\n%s", first.Stdout)
 	}
 	if session := sessionOf(t, server.pid); session != server.pid {
@@ -104,7 +104,7 @@ func TestWebDetachRunsInTheBackground(t *testing.T) {
 		t.Errorf("a second --detach did not report the running server %v:\n%s", server, again)
 	}
 	other := e.Rotari("web", "--detach", "--port", "0")
-	if other.Code == 0 || !strings.Contains(other.Stderr, "--allow-terminal") || !strings.Contains(other.Stderr, "kill "+strconv.Itoa(server.pid)) {
+	if other.Code == 0 || !strings.Contains(other.Stderr, "--allow-terminal") || !strings.Contains(other.Stderr, "PID "+strconv.Itoa(server.pid)) || !strings.Contains(other.Stderr, "--shutdown") {
 		t.Errorf("--detach with other options did not fail naming them and the PID:\n%s", other)
 	}
 

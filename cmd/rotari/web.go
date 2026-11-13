@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -30,6 +31,9 @@ func cmdWeb(args []string) int {
 	flags, code := parseWebFlags(args)
 	if code != 0 {
 		return code
+	}
+	if flags.shutdown {
+		return shutdownDetachedWeb(flags.yes)
 	}
 	baseDir, _, err := stateinternal.ResolveBaseDir(flags.basedir)
 	if err != nil {
@@ -95,6 +99,9 @@ type webCommandFlags struct {
 	// background process.
 	detach   bool
 	detached *webDetachedChild
+	// shutdown stops this host's detached server instead of serving; yes does so
+	// without asking.
+	shutdown, yes bool
 }
 
 func parseWebFlags(args []string) (webCommandFlags, int) {
@@ -110,6 +117,8 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 	cliValue(fs, &artifactRoots, "artifact-root")
 	staticArtifactContents := cliBool(fs, "static-artifact-contents", false)
 	detach := cliBool(fs, "detach", false)
+	shutdown := cliBool(fs, "shutdown", false)
+	yes := cliBool(fs, "yes", false)
 	// The terminal and launch options read the environment and config
 	// strictly, and webTrustedOptions only trusted configs.
 	configured := readWebConfigured(fs)
@@ -124,6 +133,9 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 	fs.Var(&allowedHosts, "allowed-host", webFlagUsage("allowed-host"))
 	if err := cliParse(fs, args); err != nil {
 		return webCommandFlags{}, 1
+	}
+	if *shutdown || *yes {
+		return parseWebShutdownFlags(fs, *shutdown, *yes)
 	}
 	for _, name := range webTrustedOptions {
 		warnIgnoredWebConfig(fs, name, configured.ignored[name], false)
@@ -303,6 +315,10 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 		webLog = weblog.New(masterDir, "web", os.Stderr)
 		defer webLog.Close()
 	}
+	// One shutdown, however it is asked for: SIGINT, SIGTERM, or the Web UI.
+	shutdownRequested := make(chan struct{})
+	var shutdownOnce sync.Once
+	options.Shutdown = func() { shutdownOnce.Do(func() { close(shutdownRequested) }) }
 	handler := webui.Handler(options)
 	if flags.authToken != "" {
 		var onSignOut []func()
@@ -350,7 +366,10 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 		})
 	}
 	go func() {
-		<-interruptSignal()
+		select {
+		case <-interruptSignal():
+		case <-shutdownRequested:
+		}
 		// Stop launches before the listener, so none starts meanwhile.
 		if options.Launches != nil {
 			_ = options.Launches.Manager.Close()
@@ -383,7 +402,7 @@ func warnUnauthenticatedHost(flags webCommandFlags, token string) {
 }
 
 func webStaticServerOptions(fs *flag.FlagSet) []string {
-	return staticServerOptions(fs, "web", append([]string{"allow-control", "allow-exec", "allow-terminal", "allowed-host", "artifact-root", "auth-token", "detach", "host", "port"}, webTerminalOptions...))
+	return staticServerOptions(fs, "web", append([]string{"allow-control", "allow-exec", "allow-terminal", "allowed-host", "artifact-root", "auth-token", "detach", "host", "port", "shutdown", "yes"}, webTerminalOptions...))
 }
 
 // staticServerOptions lists the names, options of command that only a live

@@ -3468,9 +3468,24 @@ CLI_SCHEMA: dict[str, Any] = {
                     "URL, PID, and log; if one already runs on "
                     "this host for this user, report it instead, "
                     "or fail if its options differ; stop it with "
-                    "kill PID; cannot be combined with "
+                    "--shutdown; cannot be combined with "
                     "--static-dir",
                     "name": "detach",
+                },
+                {
+                    "command_line_only": True,
+                    "description": "stop this host's detached server (see "
+                    "--detach): list what runs in its shells and "
+                    "ask first when anything does, send it "
+                    "SIGTERM, and wait for it to stop; takes no "
+                    "other server option",
+                    "name": "shutdown",
+                },
+                {
+                    "command_line_only": True,
+                    "description": "with --shutdown, stop the server without "
+                    "asking, even when its shells run something",
+                    "name": "yes",
                 },
                 {
                     "description": "generate a static web UI",

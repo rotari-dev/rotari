@@ -27,8 +27,8 @@ func processCommand(pid int) (string, error) {
 	return command, nil
 }
 
-// processes lists this host's processes, each with its parent and command line, from
-// /proc. A process that ends while it is read is left out.
+// processes lists this host's processes, each with its parent, command line, and
+// terminal facts, from /proc. A process that ends while it is read is left out.
 func processes() ([]Process, error) {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
@@ -51,19 +51,27 @@ func processes() ([]Process, error) {
 		if end < 0 || start < 0 || end+2 > len(stat) {
 			continue
 		}
+		// After the name: state, ppid, pgrp, session, tty_nr, tpgid.
 		fields := strings.Fields(string(stat[end+2:]))
-		if len(fields) < 2 {
+		if len(fields) < 6 {
 			continue
 		}
-		ppid, err := strconv.Atoi(fields[1])
-		if err != nil {
+		var numbers [5]int
+		valid := true
+		for index := range numbers {
+			if numbers[index], err = strconv.Atoi(fields[index+1]); err != nil {
+				valid = false
+			}
+		}
+		if !valid {
 			continue
 		}
 		command, err := processCommand(pid)
 		if err != nil {
 			command = "[" + string(stat[start+1:end]) + "]"
 		}
-		listed = append(listed, Process{PID: pid, PPID: ppid, Command: command})
+		listed = append(listed, Process{PID: pid, PPID: numbers[0], Command: command,
+			group: numbers[1], sessionLeader: numbers[2] == pid, hasTerminal: numbers[3] != 0, terminalGroup: numbers[4]})
 	}
 	return listed, nil
 }

@@ -167,6 +167,17 @@ type livePage struct {
 	terminal bool
 	// about is which rotari serves the page, at the foot of its Settings menu.
 	about About
+	// stoppable offers Stop server in the Settings menu.
+	stoppable bool
+}
+
+// stopServerControl is the Settings menu's Stop server, which web_shell.js asks about
+// and sends to POST /_server/shutdown.
+func (page livePage) stopServerControl() string {
+	if !page.stoppable {
+		return ""
+	}
+	return `<div class="settings-stop"><button id="stop-server-button" type="button">Stop server</button><span id="stop-server-status" class="settings-stop-status" role="status"></span></div>`
 }
 
 // aboutSection says, at the foot of the Settings menu, which rotari serves the page: its
@@ -230,6 +241,7 @@ func composeWebPage(page livePage, executors []string, notifications bool, boots
 		scriptNonceSlot, scriptNonceAttribute(page.nonce),
 		"__ROTARI_TERMINAL_CONTROL__", page.terminalControl(),
 		"__ROTARI_ABOUT__", page.aboutSection(),
+		"__ROTARI_STOP_SERVER__", page.stopServerControl(),
 		"__ROTARI_BASEDIRS__", string(basedirJSON),
 		"__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllNotificationBasedirs"),
 		"__ROTARI_EXECUTORS__", string(executorJSON),
@@ -346,6 +358,7 @@ func jobsPage(page livePage, homePath string, projects []string, rows []joblist.
 		scriptNonceSlot, scriptNonceAttribute(page.nonce),
 		"__ROTARI_TERMINAL_CONTROL__", page.terminalControl(),
 		"__ROTARI_ABOUT__", page.aboutSection(),
+		"__ROTARI_STOP_SERVER__", page.stopServerControl(),
 		"__ROTARI_JOBS_PROJECTS__", sidebar.String(),
 		"__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllJobsNotificationBasedirs"),
 		"__ROTARI_BASEDIR_SCROLL_KEY__", scrollKey,

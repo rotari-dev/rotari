@@ -2183,6 +2183,12 @@
           "name": "detach"
         },
         {
+          "name": "shutdown"
+        },
+        {
+          "name": "yes"
+        },
+        {
           "name": "static-dir",
           "value_name": "DIR"
         },

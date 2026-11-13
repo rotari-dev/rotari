@@ -1461,10 +1461,22 @@ level by `TestIdleLimitAppliesToTheShellsTogether` and
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-41** A live server's `POST /_server/shutdown` stops it as SIGTERM does, whether it was detached or not: it
+answers 202 first, then closes launches, shells, and the listener in the same order, and a detached server removes its
+record. It needs job control (403 without), a JSON content type (415 otherwise, so a cross-site form cannot send it),
+and `POST` (405 otherwise); with a token, it needs the token as every route does. A server built without it, such as a
+static export, has no route (404). Live application and Recent jobs pages with job control show **Stop server** in
+the Settings menu, above the version. It asks first, as signing out does: it names what runs in each shell when the
+terminal is on, says when that could not be checked, and otherwise asks whether to stop the server at all. It then
+sends the request and says beside the button that the server stopped, or why it did not, leaving the button usable
+again. Implemented in `internal/webui/shutdown.go`, the shutdown wiring of `serveWeb` in `cmd/rotari/web.go`, and
+`stopServer` in `web_shell.js`; covered by [`TestServerShutdownRoute`](../conformance/05-web/web_shutdown_test.go),
+the unit test `TestShutdownRoute`, and `TestTerminalPanel`.
+
 **WEB-40** `rotari web --detach` (command line only; rejected with `--static-dir`) starts the
 live server in a session of its own, with no terminal and its output in `<masterdir>/web/<host>.log`, and returns only
-once it listens, printing `rotari web listening at URL in the background (PID N)`, the log, and `kill N` as the way to
-stop it; a server that exits or does not listen within 30 seconds makes it fail with the reason, the end of the log,
+once it listens, printing `rotari web listening at URL in the background (PID N)`, the log, and `rotari web --shutdown`
+as the way to stop it; a server that exits or does not listen within 30 seconds makes it fail with the reason, the end of the log,
 and the log's path, and is stopped. A token it needs and was not given is generated, printed once, and reaches the
 server in its environment, never in its arguments; the server's record, `<masterdir>/web/<host>.json` (mode 0600),
 holds a digest of the token, never the token. There is at most one detached server per user and host: while one
@@ -1475,9 +1487,17 @@ files count, and a lease that cannot be probed is an error, never "not running".
 and removes its record. Its shells see neither the token nor the mark of the detached process. A `rotari web` without
 `--detach` is unchanged and not counted, and says on stderr which detached server runs on the host. The log keeps
 about 1 MiB and one rotated `.log.1`, rotated when a server starts and, while it runs, copied and truncated in place,
-never relying on `rotari gc`. Implemented in `cmd/rotari/web_detach.go`, `internal/webdetach`, and `internal/lease`;
-covered by the tests in [conformance/05-web/web_detach_test.go](../conformance/05-web/web_detach_test.go) and the unit
-tests of those packages.
+never relying on `rotari gc`. `rotari web --shutdown` (command line only, taking no other option but `--yes` and
+`--config`; `--yes` alone is an error) stops this host's detached server: with none it says so and exits 0. Before
+stopping, it lists the server's shells that run something in their foreground or in the background, read from the
+process table, since it cannot ask the server, or says that this could not be checked. When there is anything to list
+it asks at a terminal, and without one it fails unless `--yes` is given. It then sends SIGTERM and returns only once
+the server's lease is released, saying it stopped, or fails naming the PID after 30 seconds. Implemented in
+`cmd/rotari/web_detach.go`, `cmd/rotari/web_shutdown.go`, `internal/webdetach`, `internal/lease`, and
+`ServerShells` in `internal/terminal`; covered by the tests in
+[conformance/05-web/web_detach_test.go](../conformance/05-web/web_detach_test.go) and
+[`TestWebShutdownStopsTheDetachedServer`](../conformance/05-web/web_shutdown_test.go), and the unit tests of those
+packages.
 
 **WEB-39** With `rotari web --allow-terminal`, with or without `--allow-exec`, the
 Table viewer may show the directory a running shell is in. `POST

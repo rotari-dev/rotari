@@ -38,6 +38,10 @@ func webArgs(t *testing.T, f pairFixture, output string, flags []pairFlag) []str
 			args = append(args, "--allow-terminal")
 		case "detach":
 			args = append(args, "--detach")
+		case "shutdown":
+			args = append(args, "--shutdown")
+		case "yes":
+			args = append(args, "--yes")
 		default:
 			value, ok := values[flag.Name]
 			if !ok {
@@ -125,6 +129,20 @@ func invokeStaticWeb(t *testing.T, f pairFixture, flags []pairFlag, output strin
 	}
 	before := webSourceState(t, f.E.Root, output)
 	result := pairInvoke(t, f.E, webArgs(t, f, output, flags)...)
+	// --shutdown takes no other option, and --yes only comes with it, so each is refused
+	// beside --static-dir, naming itself, before anything is read or written.
+	if webHasFlag(flags, "shutdown") || webHasFlag(flags, "yes") {
+		if result.Code != 1 || result.Stdout != "" || (!strings.Contains(result.Stderr, "--shutdown") && !strings.Contains(result.Stderr, "--yes")) {
+			t.Fatalf("--shutdown or --yes beside --static-dir was not refused: %s", result)
+		}
+		if _, err := os.Stat(output); !os.IsNotExist(err) {
+			t.Fatalf("a refused --shutdown created output: %v", err)
+		}
+		if after := webSourceState(t, f.E.Root, output); !reflect.DeepEqual(before, after) {
+			t.Fatalf("a refused --shutdown changed source state: %s", result)
+		}
+		return result, map[string]string{}
+	}
 	serverOnly := webServerOnlyFlags(flags)
 	if len(serverOnly) > 0 {
 		want := "--" + strings.Join(serverOnly, ", --") + " cannot be combined with --static-dir"

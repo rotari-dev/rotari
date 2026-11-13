@@ -61,28 +61,37 @@ func processCommand(pid int) (string, error) {
 	return command, nil
 }
 
-// processes lists this host's processes, each with its parent and command line, as ps
-// reports them.
+// processes lists this host's processes, each with its parent, command line, and
+// terminal facts, as ps reports them.
 func processes() ([]Process, error) {
-	output, err := ask("/bin/ps", "-A", "-o", "pid=,ppid=,command=")
+	output, err := ask("/bin/ps", "-A", "-o", "pid=,ppid=,pgid=,tpgid=,tty=,stat=,command=")
 	if err != nil {
 		return nil, err
 	}
 	var listed []Process
 	for line := range strings.SplitSeq(output, "\n") {
 		fields := strings.Fields(line)
-		if len(fields) < 3 {
+		if len(fields) < 7 {
 			continue
 		}
-		pid, err1 := strconv.Atoi(fields[0])
-		ppid, err2 := strconv.Atoi(fields[1])
-		if err1 != nil || err2 != nil {
+		var numbers [4]int
+		valid := true
+		for index := range numbers {
+			if numbers[index], err = strconv.Atoi(fields[index]); err != nil {
+				valid = false
+			}
+		}
+		if !valid {
 			continue
 		}
 		command := strings.TrimSpace(line)
-		command = strings.TrimSpace(strings.TrimPrefix(command, fields[0]))
-		command = strings.TrimSpace(strings.TrimPrefix(command, fields[1]))
-		listed = append(listed, Process{PID: pid, PPID: ppid, Command: command})
+		for _, field := range fields[:6] {
+			command = strings.TrimSpace(strings.TrimPrefix(command, field))
+		}
+		listed = append(listed, Process{PID: numbers[0], PPID: numbers[1], Command: command,
+			// ps marks a session leader with s in its state, and a process with no
+			// terminal with ?? as its tty.
+			group: numbers[2], terminalGroup: numbers[3], hasTerminal: fields[4] != "??", sessionLeader: strings.Contains(fields[5], "s")})
 	}
 	return listed, nil
 }

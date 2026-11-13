@@ -215,8 +215,12 @@ hours. Signing out ends them all.
 
 A server started with `rotari web --detach` outlives your login, and with the terminal on it stays a way
 into the host, behind its token, until you stop it. Running `rotari web --detach` again shows whether one
-is running; stop one you no longer use with `kill PID`. The token it generates reaches the server in its
+is running; stop one you no longer use with `rotari web --shutdown`. The token it generates reaches the server in its
 environment, not its command line, and its record under the master directory holds only a digest of it.
+
+Anyone who may control jobs can also stop the server: **Stop server** in Settings sends `POST /_server/shutdown`,
+which needs job control, and the token when the server has one. It also needs a JSON content type, which a page on
+another site cannot send without a preflight the server never grants.
 
 ## Limits
 

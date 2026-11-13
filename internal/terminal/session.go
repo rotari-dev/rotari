@@ -185,6 +185,11 @@ type Process struct {
 	// Depth is how far below the shell it is: 1 for the shell's own children.
 	Depth   int
 	Command string
+	// group is its process group; sessionLeader and hasTerminal say whether it leads
+	// its session and has a controlling terminal, and terminalGroup is that terminal's
+	// foreground process group. ServerShells reads them.
+	group, terminalGroup       int
+	sessionLeader, hasTerminal bool
 }
 
 // Descendants are the processes below the shell, its children first, each followed by
@@ -199,24 +204,7 @@ func (session *Session) Descendants() ([]Process, error) {
 	if err != nil {
 		return nil, err
 	}
-	children := map[int][]Process{}
-	for _, process := range all {
-		children[process.PPID] = append(children[process.PPID], process)
-	}
-	var below []Process
-	var walk func(pid, depth int)
-	walk = func(pid, depth int) {
-		for _, child := range children[pid] {
-			if child.PID == pid {
-				continue
-			}
-			child.Depth = depth
-			below = append(below, child)
-			walk(child.PID, depth+1)
-		}
-	}
-	walk(session.command.Process.Pid, 1)
-	return below, nil
+	return descendantsOf(all, session.command.Process.Pid), nil
 }
 
 // busy says something other than the shell holds the terminal's foreground: a command

@@ -3956,7 +3956,13 @@ async function copyJobsValue(button) {
       ")"
     );
   };
-  const confirmSignOut = async (form) => {
+  // confirmEndingShells asks before something that ends every shell, naming what runs in
+  // them, or that this could not be checked; ending is "Signing out" or "Stopping the
+  // server", and question what to ask. With nothing running, or on a page without the
+  // terminal, it asks quietQuestion, or nothing when that is empty.
+  const confirmEndingShells = async (ending, question, offered, quietQuestion) => {
+    const quiet = () => !quietQuestion || confirm(quietQuestion);
+    if (!offered) return quiet();
     let problem = "";
     let listed = [];
     try {
@@ -3967,40 +3973,79 @@ async function copyJobsValue(button) {
     } catch {
       problem = "the server did not answer";
     }
-    if (problem) {
-      if (
-        !confirm(
-          "Whether anything is running in a shell could not be checked: " +
-            problem +
-            ". Signing out ends every shell. Sign out anyway?",
-        )
-      )
-        return;
-    } else {
-      const lines = (await Promise.all(listed.map(signOutLine))).filter(
-        Boolean,
+    if (problem)
+      return confirm(
+        "Whether anything is running in a shell could not be checked: " +
+          problem +
+          ". " +
+          ending +
+          " ends every shell. " +
+          question,
       );
-      if (lines.length) {
-        const shown = lines.slice(0, 5);
-        if (lines.length > 5)
-          shown.push("  and " + (lines.length - 5) + " more");
-        const head =
-          lines.length === 1
-            ? "Something is running in a shell"
-            : "Something is running in " + lines.length + " shells";
-        if (
-          !confirm(
-            head +
-              ":\n" +
-              shown.join("\n") +
-              "\nSigning out ends every shell, and what runs in it. Sign out anyway?",
-          )
-        )
-          return;
-      }
-    }
+    const lines = (await Promise.all(listed.map(signOutLine))).filter(Boolean);
+    if (!lines.length) return quiet();
+    const shown = lines.slice(0, 5);
+    if (lines.length > 5) shown.push("  and " + (lines.length - 5) + " more");
+    const head =
+      lines.length === 1
+        ? "Something is running in a shell"
+        : "Something is running in " + lines.length + " shells";
+    return confirm(
+      head +
+        ":\n" +
+        shown.join("\n") +
+        "\n" +
+        ending +
+        " ends every shell, and what runs in it. " +
+        question,
+    );
+  };
+  const confirmSignOut = async (form) => {
+    if (!(await confirmEndingShells("Signing out", "Sign out anyway?", true, "")))
+      return;
     signingOut = true;
     form.submit();
+  };
+  // Stop server asks, even with nothing running, since the page loses its server, then
+  // sends the request and says what happened beside the button.
+  const stopServer = async (button, offered) => {
+    const status = document.getElementById("stop-server-status");
+    const say = (text) => {
+      if (status) status.textContent = text;
+    };
+    const asked = await confirmEndingShells(
+      "Stopping the server",
+      "Stop the rotari web server anyway?",
+      offered,
+      "Stop the rotari web server? This page will lose its connection.",
+    );
+    if (!asked) return;
+    button.disabled = true;
+    say("Stopping...");
+    try {
+      const response = await serverFetch("/_server/shutdown", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (response.status !== 202) {
+        button.disabled = false;
+        say(
+          "Not stopped: " +
+            ((await response.text()).trim() || "status " + response.status),
+        );
+        return;
+      }
+    } catch {
+      button.disabled = false;
+      say("Not stopped: the server did not answer.");
+      return;
+    }
+    say("The server stopped. Start rotari web again to use this page.");
+    const banner = document.getElementById("disconnect-banner");
+    if (banner)
+      banner.textContent =
+        "rotari web was stopped from this page. Start it again and reload to continue.";
   };
   const guardSignOut = () =>
     document.addEventListener(
@@ -4025,6 +4070,11 @@ async function copyJobsValue(button) {
   };
   document.addEventListener("DOMContentLoaded", () => {
     const offered = inWindow || document.getElementById("terminal-button");
+    const stopButton = document.getElementById("stop-server-button");
+    if (stopButton)
+      stopButton.addEventListener("click", () =>
+        stopServer(stopButton, Boolean(offered)),
+      );
     if (offered) {
       if (!inWindow) {
         addJobsSendButtons();

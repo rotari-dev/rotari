@@ -152,6 +152,11 @@ flowchart LR
    writes `<masterdir>/web/<host>.json`; [internal/webdetach](../internal/webdetach/) finds, records, and compares
    detached servers and keeps the log bounded, and [internal/lease](../internal/lease/) holds and probes the lease for it
    and for the run supervisor's `server.lock`.
+   `rotari web --shutdown` ([cmd/rotari/web_shutdown.go](../cmd/rotari/web_shutdown.go)) finds that server the same
+   way. It reads what its shells run from the process table (`terminal.ServerShells`), since it has no token to ask
+   the server, then sends SIGTERM and waits for the lease. `POST /_server/shutdown`
+   ([internal/webui/shutdown.go](../internal/webui/shutdown.go)) calls `Options.Shutdown`, which `serveWeb` wires to
+   the same shutdown as SIGINT and SIGTERM.
 - **Jobs and wrappers.** Local jobs are child processes of the supervisor.
   Scheduler jobs run elsewhere through a generated wrapper script that writes
   the attempt's `status.json`, which the supervisor polls.

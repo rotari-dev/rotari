@@ -20,10 +20,10 @@ func TestTerminalPanel(t *testing.T) {
 	dir := t.TempDir()
 	withTerminal := filepath.Join(dir, "with.html")
 	without := filepath.Join(dir, "without.html")
-	if err := os.WriteFile(withTerminal, []byte(composeWebPage(livePage{nonce: "page-nonce", terminal: true, about: About{Version: "rotari v9", Executable: "/opt/rotari bin/rotari"}}, nil, false, "", "")), 0o600); err != nil {
+	if err := os.WriteFile(withTerminal, []byte(composeWebPage(livePage{nonce: "page-nonce", terminal: true, about: About{Version: "rotari v9", Executable: "/opt/rotari bin/rotari"}, stoppable: true}, nil, false, "", "")), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(without, []byte(composeWebPage(livePage{nonce: "page-nonce"}, nil, false, "", "")), 0o600); err != nil {
+	if err := os.WriteFile(without, []byte(composeWebPage(livePage{nonce: "page-nonce", stoppable: true}, nil, false, "", "")), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	jobsWithTerminal := filepath.Join(dir, "jobs.html")
@@ -104,6 +104,11 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
         if (address.includes('xterm-license')) {
           const answer = { ok: status() === 200, status: status() };
           return server.licenseHeld ? new Promise((resolve) => server.licenseHeld.push(() => resolve(answer))) : Promise.resolve(answer);
+        }
+        if (address === '/_server/shutdown') {
+          requests.push(init.method + ' ' + address + ' ' + (init.headers || {})['Content-Type'] + ' ' + init.body);
+          const code = server.shutdownStatus || 202;
+          return Promise.resolve({ ok: code < 300, status: code, text: async () => (code === 202 ? '{}' : 'refused') });
         }
         if (address === '/_terminal/alive') {
           alive.push(init.method);
@@ -786,6 +791,51 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   unsureForm.dispatchEvent(new unsureSignOut.window.Event('submit', { bubbles: true, cancelable: true }));
   await wait(30);
   assert.deepEqual(unsureAsked, ['Whether anything is running in a shell could not be checked: refused. Signing out ends every shell. Sign out anyway?']);
+
+  // Stop server in the Settings menu asks as signing out does, naming what runs, and asks
+  // even with nothing running, since the page loses its server; it sends a JSON request
+  // and says beside the button what happened. A refusal says why and leaves it usable.
+  const stopping = load(process.argv[1], { shells: [{ ...inProject('1', 1, 'p1'), running: true }] });
+  await wait(50);
+  const stopButton = stopping.document.getElementById('stop-server-button');
+  assert.ok(stopButton, 'no Stop server button');
+  const stopAsked = [];
+  const stopRequests = () => stopping.requests.filter((request) => request.includes('/_server/'));
+  stopping.window.confirm = (text) => { stopAsked.push(text); return false; };
+  stopButton.click();
+  await wait(30);
+  assert.deepEqual(stopAsked, ['Something is running in a shell:\n  Shell 1 of p1: a command\nStopping the server ends every shell, and what runs in it. Stop the rotari web server anyway?']);
+  assert.deepEqual(stopRequests(), [], 'declining stopped the server');
+  stopping.server.shutdownStatus = 403;
+  stopping.window.confirm = () => true;
+  stopButton.click();
+  await wait(30);
+  const stopStatus = () => stopping.document.getElementById('stop-server-status').textContent;
+  assert.equal(stopStatus(), 'Not stopped: refused');
+  assert.equal(stopButton.disabled, false);
+  stopping.server.shutdownStatus = 202;
+  stopButton.click();
+  await wait(30);
+  assert.deepEqual(stopRequests(), ['POST /_server/shutdown application/json {}', 'POST /_server/shutdown application/json {}']);
+  assert.match(stopStatus(), /^The server stopped\./);
+  assert.equal(stopButton.disabled, true);
+  assert.match(stopping.document.getElementById('disconnect-banner').textContent, /stopped from this page/);
+  const idleStop = load(process.argv[1], { shells: [inProject('3', 3, 'p1')] });
+  await wait(50);
+  const idleAsked = [];
+  idleStop.window.confirm = (text) => { idleAsked.push(text); return false; };
+  idleStop.document.getElementById('stop-server-button').click();
+  await wait(30);
+  assert.deepEqual(idleAsked, ['Stop the rotari web server? This page will lose its connection.']);
+  const plainStop = load(process.argv[2]);
+  await wait(50);
+  const plainAsked = [];
+  plainStop.window.confirm = (text) => { plainAsked.push(text); return true; };
+  plainStop.document.getElementById('stop-server-button').click();
+  await wait(30);
+  assert.deepEqual(plainAsked, ['Stop the rotari web server? This page will lose its connection.']);
+  assert.equal(plainStop.requests.filter((request) => request.startsWith('GET /_terminal')).length, 0, 'a page without the terminal listed shells');
+  assert.deepEqual(plainStop.requests.filter((request) => request.includes('/_server/')), ['POST /_server/shutdown application/json {}']);
 
   // A card says when its shell started and how long it has been idle, by the server's clock,
   // and a tab's tooltip says so as the pointer reaches it.

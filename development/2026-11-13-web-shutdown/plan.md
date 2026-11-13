@@ -1,7 +1,7 @@
 # Plan: Stopping a background rotari web
 
 Created: 2026-11-13
-Status: Proposed. First of two plans following [`rotari web --detach`](../2026-11-13-web-detach/plan.md); the second is
+Status: Implemented; see [work-log.md](work-log.md). First of the plans following [`rotari web --detach`](../2026-11-13-web-detach/plan.md); the second is
 [a run-style client for rotari web](../2026-11-13-web-client/plan.md).
 
 ## Goal
@@ -47,7 +47,8 @@ user found crude. Both ways say what is still running in its shells before endin
    runs, no question is asked.
 4. **Exclusive.** `--shutdown` takes only `--yes` (and global options such as `--config`). With any server option,
    or with `--detach` or `--static-dir`, it is an error rather than an option silently ignored.
-5. **Stop button in Settings.** Live pages with job control on get **Stop server** in the Settings menu, above the
+5. **Stop button in Settings.** (Implementation: with nothing running, or without the terminal, it still asks
+   whether to stop the server, since the page loses it; signing out keeps not asking then.) Live pages with job control on get **Stop server** in the Settings menu, above the
    About section. It asks as sign-out does: what runs in each shell, or that this could not be checked. On
    confirmation it sends `POST /_server/shutdown`. The server answers 202, then shuts down through the same path as
    SIGTERM (a detached one also removes its record), and the page says the server stopped and offers no further

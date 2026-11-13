@@ -48,6 +48,10 @@ type Options struct {
 	Launches *LaunchOptions
 	// Terminal is set when rotari web runs with --allow-terminal.
 	Terminal *terminal.Keeper
+	// Shutdown stops the live server as SIGTERM does; POST /_server/shutdown and the
+	// Settings menu's Stop server call it when job control is on. Nil for a static
+	// export, which has neither.
+	Shutdown func()
 	// About says which rotari serves the pages, in their Settings menu; empty for a
 	// static export and when nothing says.
 	About About

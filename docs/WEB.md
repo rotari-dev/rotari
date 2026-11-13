@@ -128,6 +128,9 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 - **Notifications:** the in-page inbox and optional desktop popups; see
   [Notifications](NOTIFICATIONS.md#browser-notifications).
 - **Theme:** `Settings` selects Light, Dark, or System.
+- **Stop server:** with job control on, `Settings` can stop the `rotari web` serving the page, detached or not. It
+  asks first, naming what runs in the terminal's shells, since stopping ends them. From the command line,
+  `rotari web --shutdown` does the same for a [detached server](#keeping-shells-through-a-disconnect).
 - **Which rotari:** the foot of `Settings` shows the version of the `rotari web` serving the page and the path of
   its binary, with buttons to copy the path or send it to the terminal.
 
@@ -313,7 +316,7 @@ outlast a closed laptop, a dropped connection, or a night away, keep that proces
    Set ROTARI_WEB_AUTH_TOKEN to keep one token across restarts.
    rotari web listening at http://127.0.0.1:8080 in the background (PID 12345)
    Log: ~/.local/state/rotari/master/web/HOST.log
-   Stop it with: kill 12345
+   Stop it with: rotari web --shutdown
    ```
 
    Close the SSH session; the server, and its shells, keep running. Reach it again through your usual SSH
@@ -329,8 +332,10 @@ differ from the running server's and its PID. A token generated at start is not 
 `ROTARI_WEB_AUTH_TOKEN` before starting to choose your own. There is one detached server per user and host;
 a plain `rotari web` still starts beside it, and says it is there, but its shells are its own.
 
-**Stopping it:** `kill PID`, which ends its shells as stopping `rotari web` always does. If it was killed
-without a chance to clean up, the next `--detach` starts a new one. Its output goes to the log named above,
+**Stopping it:** `rotari web --shutdown`, or **Stop server** in the Web UI's Settings menu. Either ends its shells,
+as stopping `rotari web` always does, so either first lists what runs in them and asks. Without a terminal,
+`--shutdown` then needs `--yes`. `--shutdown` returns once the server has stopped, and says so when none was running.
+If the server was killed without a chance to clean up, the next `--detach` starts a new one. Its output goes to the log named above,
 which keeps about 1 MiB and one older `.log.1`. If it cannot start, for example because `--port` is taken,
 `--detach` fails with the reason and the log's path.
 
