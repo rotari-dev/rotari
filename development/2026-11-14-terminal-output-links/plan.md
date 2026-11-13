@@ -1,8 +1,8 @@
 # Plan: Links for run IDs, job IDs, and paths in the Web terminal
 
 Created: 2026-11-14
-Status: Accepted by the user on 2026-11-14, with the open questions answered as proposed. Phase 1 (the server) is done; phase 2
-(the panel) is next. See [work-log.md](work-log.md).
+Status: Accepted by the user on 2026-11-14, with the open questions answered as proposed. Phases 1 (the server) and 2 (the
+panel) are done; phase 3 (WEB-46, docs) is next. See [work-log.md](work-log.md).
 
 ## Goal
 
