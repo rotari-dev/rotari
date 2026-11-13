@@ -128,7 +128,11 @@ sge)
         --volume "$state_dir:/state" \
         drmaa/gridengine@sha256:bebb328113b2f4b6eb14d01d18f4a5714ffd3c41659df6b0013d7e1b63588415 \
         /bin/bash -lc 'exec sleep infinity' >/dev/null
-    scheduler_user=root
+    # Grid Engine refuses to run jobs of users below min_uid and min_gid (100
+    # by default), so root's first job fails, marks all.q QERROR, and leaves
+    # every later job pending. Submit as an ordinary user, as on a real cluster.
+    docker exec "$container" useradd --create-home testuser
+    scheduler_user=testuser
     scheduler_setup='. /opt/sge/default/common/settings.sh'
     ready='qstat -xml && qconf -sql | grep -qx all.q'
     ;;
