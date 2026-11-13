@@ -3266,7 +3266,12 @@ function shellWord(value) {
       "M9 11.5L7.5 13A2.5 2.5 0 0 1 4 9.5L5.5 8",
     ],
     refresh: ["M13 8a5 5 0 1 1-1.5-3.5", "M13 2.5V5h-2.5"],
-    collapse: ["M4 10l4-4 4 4"],
+    // Folders closed into one: a box in front of another, with a minus, as editors draw it.
+    collapse: [
+      "M5.5 3.5V2.5h8v8h-1",
+      { x: 2.5, y: 5.5, width: 8, height: 8, rx: 1 },
+      "M4.5 9.5h4",
+    ],
     send: ["M2.5 8h10", "M9 4.5L12.5 8 9 11.5"],
     open: [
       { x: 2, y: 2.5, width: 12, height: 11, rx: 1 },
