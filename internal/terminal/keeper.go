@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"cmp"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -248,8 +250,14 @@ func (keeper *Keeper) Start(start StartOptions) (ShellInfo, error) {
 		session:  session,
 		ring:     outputRing{limit: keeper.options.RingSize},
 		finished: make(chan struct{}),
-		// The first prompt says where the shell starts.
-		dirPending: true,
+	}
+	// Where the shell starts counts at once, since a line typed before its first prompt
+	// settles would move it first. The kernel names a directory without its symbolic
+	// links, so this does too; if it cannot, the first prompt says.
+	if dir, err := startDir(options.Dir); err == nil {
+		keeper.enterDir(shell, dir)
+	} else {
+		shell.dirPending = true
 	}
 	shell.ring.write([]byte(start.Banner))
 	// A new shell goes after the others of its group.
@@ -494,6 +502,23 @@ func (keeper *Keeper) readDir(shell *keptShell) {
 	if shell.dirSerial == serial {
 		shell.dirPending = false
 	}
+	keeper.enterDir(shell, dir)
+}
+
+// startDir is where a shell given dir starts, as the kernel names it.
+func startDir(dir string) (string, error) {
+	if dir == "" {
+		var err error
+		if dir, err = os.Getwd(); err != nil {
+			return "", err
+		}
+	}
+	return filepath.EvalSymlinks(dir)
+}
+
+// enterDir puts dir at the front of the shell's group's history if the shell has moved
+// there; the caller holds mu.
+func (keeper *Keeper) enterDir(shell *keptShell, dir string) {
 	if dir == shell.dir {
 		return
 	}

@@ -1110,3 +1110,16 @@ func TestHistoryKeepsTwentyDirectories(t *testing.T) {
 		awaitHistory(t, keeper, "", want...)
 	}
 }
+
+// Where a shell starts counts even when a line typed at once moves it before its first
+// prompt settles.
+func TestHistoryKeepsTheStartOfAShellMovedAtOnce(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	start, err := filepath.EvalSymlinks(keeper.DefaultDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := watch(t, keeper)
+	seen.run(t, `mkdir a && cd a && echo "moved-$((1+1))"`, "moved-2")
+	awaitHistory(t, keeper, "", filepath.Join(start, "a"), start)
+}
