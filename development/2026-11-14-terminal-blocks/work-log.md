@@ -60,3 +60,27 @@
 - **Validation:** `tsc` clean; prettier unchanged. `TestTerminalPanel` passed, then `go test ./internal/webui
   ./conformance/05-web`.
 - **Remaining:** phase 4 (WEB-47, docs, the browser step).
+
+## 2026-11-14 15:40 +09:00 — Contracts and docs
+
+- **Change:** contract **WEB-48** (the note before WEB-47 in `contracts/05-web-assets-and-static-export.md`, and its
+  row), covered by `TestTerminalPanelInBrowser`, which now names WEB-33 and WEB-48. Its new step, on the project
+  page after the run link: a `/bin/sh` `PS1` holding `D;$?`, `A`, and `B`, and a `c` function printing `C`; `c false`,
+  `c long` (60 lines), and `c true`, one at a time so that none is echoed before its prompt; red and green marks with
+  different, non-transparent colours, the green one left of `.xterm-screen` and the element under the pointer there;
+  the overview ruler present; Ctrl+Shift+ArrowUp twice and ArrowDown once putting `$ c long`, `$ c false`, and
+  `$ c long` on the top row; a real click on the green mark opening the four-item menu, and **Type command again**
+  typing `c true`, which ` && echo "again-$((5+5))"` then completes and runs; and after a reload, the blocks back
+  with `c true\nExit 0` and no time. docs/WEB.md's Terminal section describes blocks and gives lines for bash (4.4
+  or later: `PROMPT_COMMAND` for `D` and `A`, keeping `$?` for whatever follows; `PS1` for `B`; `PS0` for `C`) and
+  zsh (`precmd` first, `preexec`, `PS1`), and notes fish 4 and oh-my-posh; docs/FAQ.md and docs/SECURITY.md say what
+  blocks are and that false marks change only the display.
+- **Reason:** plan phase 4.
+- **Plan impact:** the contract is WEB-48, since WEB-47 was taken by the `rotari web` client in the meantime.
+- **Validation:** the `sh` line from the step, and the bash and zsh lines from WEB.md, were run in a pty here (dash,
+  bash 5.1, zsh): `D;0 A B C D;1 A B C D;0 A B` for `false` then `true`, and no `C` for an empty line. The step's
+  script passes `node --check`, and its string is the `sh` line tested. `TestContractStatus` passed, and so did
+  `go test ./internal/webui ./conformance/05-web ./conformance`. The browser step itself has not run: there is no
+  Chrome here, so its first run is CI's.
+- **Remaining:** nothing in this plan. Directory grouping, exit codes on the server, and the other non-goals are left
+  to plans of their own.

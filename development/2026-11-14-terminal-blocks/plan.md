@@ -1,8 +1,8 @@
 # Plan: Blocks in the Web terminal
 
 Created: 2026-11-14
-Status: Accepted by the user on 2026-11-14, with the open questions answered as proposed. Phases 1 (parsing and the
-block model), 2 (display), and 3 (moving and acting) are done; phase 4 (contracts and docs) is next. See [work-log.md](work-log.md).
+Status: Implemented (all four phases) on 2026-11-14, after the user accepted it with the open questions answered as
+proposed; the browser step runs only in CI. See [work-log.md](work-log.md). See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -68,7 +68,7 @@ Grouping blocks by directory, discussed with recent directories, would build on 
    rules as the send buttons, so a false mark can at worst put text in front of you. Copy writes to the clipboard
    only when you choose it. SECURITY.md says so.
 6. **No server change.** No route, option, or Keeper change. The contract is about what the panel does with the
-   marks (a new WEB-47), and the ring's keeping of raw bytes (WEB-33) is what brings them back.
+   marks (a new WEB-48; WEB-47 went to another thread's work first), and the ring's keeping of raw bytes (WEB-33) is what brings them back.
 
 ## Phases
 
@@ -80,7 +80,7 @@ Grouping blocks by directory, discussed with recent directories, would build on 
    the decorations asked for; a look in a real browser is only possible in CI's browser step.
 3. **Moving and acting.** The keys through `attachCustomKeyEventHandler`, the mark's menu, copy and select, and
    typing the command again through `sendToTerminalAndSay`. JSDOM tests.
-4. **Contracts and docs.** WEB-47 and its row; a `TestTerminalPanelInBrowser` step whose `/bin/sh` prompt sends the
+4. **Contracts and docs.** WEB-48 and its row; a `TestTerminalPanelInBrowser` step whose `/bin/sh` prompt sends the
    marks (`PS1` holding `A`, `B`, and `D;$?`, with `C` printed by the command, since `sh` has no hook before a
    command) and checks a red mark for `false`, a green one for `true`, and Ctrl+Shift+ArrowUp; the Terminal section
    of [docs/WEB.md](../../docs/WEB.md) with the bash and zsh lines, [docs/FAQ.md](../../docs/FAQ.md), and
