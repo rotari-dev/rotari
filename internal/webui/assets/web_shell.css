@@ -1634,6 +1634,51 @@ html.terminal-open .output-panel.terminal-launch {
   padding: 4px 0 0 6px;
   background: var(--terminal-background);
 }
+/* Blocks: a shell that marks its commands gets a gutter left of the text, where each
+   prompt's mark says how its command ended, and a line between commands. */
+.terminal-viewport.terminal-viewport-blocks {
+  padding-left: 16px;
+}
+.xterm-screen .xterm-decoration-container .xterm-decoration.terminal-block {
+  left: 0;
+  pointer-events: none;
+}
+.terminal-block-separated::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -10px;
+  right: 0;
+  border-top: 1px solid var(--terminal-bright-black);
+  opacity: 0.35;
+}
+.terminal-block-mark {
+  position: absolute;
+  top: 50%;
+  left: -13px;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  pointer-events: auto;
+  cursor: default;
+}
+.terminal-block-mark[hidden] {
+  display: none;
+}
+.terminal-block-mark[data-state="ok"] {
+  background: var(--terminal-green);
+}
+.terminal-block-mark[data-state="failed"] {
+  background: var(--terminal-red);
+}
+.terminal-block-mark[data-state="running"] {
+  background: var(--terminal-white);
+}
+.terminal-block-mark[data-state="unknown"] {
+  border: 1.5px solid var(--terminal-white);
+}
 /* A project's last run, under its name in All shells: its lifecycle in the run's tone, and
    its jobs in progress, pending, and failed, a zero dimmed. */
 .terminal-overview-project-state {

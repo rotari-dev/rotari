@@ -652,7 +652,11 @@ function shellWord(value) {
     return colours;
   };
   const applyTheme = () => {
-    for (const pane of panes) if (pane.term) pane.term.options.theme = theme();
+    for (const pane of panes) {
+      if (!pane.term) continue;
+      pane.term.options.theme = theme();
+      recolourBlocks(pane);
+    }
   };
   const fontFamily = () =>
     getComputedStyle(root).getPropertyValue("--font-mono").trim() ||
@@ -2655,7 +2659,11 @@ function shellWord(value) {
       // After the replay, so that it lands at the end of what is on screen.
       const sending = Boolean(pane.pendingSend);
       term.write(new Uint8Array(event.data), () => {
-        if (replay && pane.socket === current) pane.blocksLive = true;
+        if (replay && pane.socket === current) {
+          pane.blocksLive = true;
+          // A shell whose replay brought no marks needs no gutter.
+          if (!pane.blocks.length) showBlockGutter(pane, false);
+        }
         if (sending) deliverSend(pane);
       });
     };
@@ -5051,9 +5059,96 @@ function shellWord(value) {
     x: term.buffer.active.cursorX,
   });
   const disposeBlock = (block) => {
+    block.decoration?.dispose();
     for (const place of [block.prompt, block.input, block.output, block.end])
       place?.marker?.dispose();
   };
+  // blockState is what a block's mark shows: nothing at a prompt with no command yet, or
+  // none at all; running; ok or failed by its exit code; unknown with none given.
+  const blockState = (block) => {
+    if (!block.output) return "prompt";
+    if (!block.ended) return "running";
+    if (block.exit === null) return "unknown";
+    return block.exit === 0 ? "ok" : "failed";
+  };
+  const blockDuration = (ms) => {
+    const seconds = Math.round(ms / 1000);
+    if (ms < 10000) return (ms / 1000).toFixed(1) + " s";
+    if (seconds < 3600)
+      return Math.floor(seconds / 60) + " min " + (seconds % 60) + " s";
+    return (
+      Math.floor(seconds / 3600) +
+      " h " +
+      Math.floor((seconds % 3600) / 60) +
+      " min"
+    );
+  };
+  // blockTitle is what hovering a block's mark says: its command line, how it ended, and
+  // for a command seen running here, how long it took.
+  const blockTitle = (block) => {
+    const state = blockState(block);
+    let end;
+    if (state === "running") end = "Running";
+    else if (state === "unknown")
+      end = block.end
+        ? "Ended without an exit code"
+        : "No exit code: another prompt came first";
+    else end = "Exit " + block.exit;
+    if (state !== "running" && block.endedAt !== null)
+      end += " after " + blockDuration(block.endedAt - block.startedAt);
+    const command = block.command();
+    return command ? command + "\n" + end : end;
+  };
+  // A failed command is marked on the scroll bar too, in the theme's red.
+  const blockRulerWidth = 10;
+  const blockRulerColour = () =>
+    getComputedStyle(root).getPropertyValue("--terminal-red").trim() || "red";
+  // paintBlock makes a block's decoration show its state, where xterm.js has drawn it.
+  const paintBlock = (block, element = block.decoration?.element) => {
+    if (!element) return;
+    // The decoration spans the prompt's line, so that a separator can, but only its mark
+    // takes the pointer: the text under it stays the terminal's.
+    element.classList.add("terminal-block");
+    element.style.width = "100%";
+    element.classList.toggle("terminal-block-separated", block.separated);
+    let mark = element.querySelector(".terminal-block-mark");
+    if (!mark) {
+      mark = document.createElement("span");
+      mark.className = "terminal-block-mark";
+      element.append(mark);
+    }
+    const state = blockState(block);
+    mark.dataset.state = state;
+    mark.hidden = state === "prompt";
+    if (state === "prompt") mark.removeAttribute("title");
+    else mark.title = blockTitle(block);
+  };
+  // decorateBlock (re)makes a block's decoration: on its prompt's line, and on the scroll
+  // bar once it has failed, which xterm.js takes only when a decoration is made.
+  const decorateBlock = (pane, block) => {
+    const { term } = pane;
+    block.decoration?.dispose();
+    const failed = blockState(block) === "failed";
+    if (failed && !term.options.overviewRulerWidth)
+      term.options.overviewRulerWidth = blockRulerWidth;
+    block.decoration = term.registerDecoration({
+      marker: block.prompt.marker,
+      x: 0,
+      width: 1,
+      ...(failed && {
+        overviewRulerOptions: { color: blockRulerColour(), position: "full" },
+      }),
+    });
+    block.decoration?.onRender((element) => paintBlock(block, element));
+  };
+  // The scroll bar's marks keep the colour they were made with, so a new theme remakes them.
+  const recolourBlocks = (pane) => {
+    for (const block of pane.blocks || [])
+      if (blockState(block) === "failed") decorateBlock(pane, block);
+  };
+  // The gutter, left of the text, holds the marks; a shell that sends none has none.
+  const showBlockGutter = (pane, shown) =>
+    pane.viewport.classList.toggle("terminal-viewport-blocks", shown);
   // dropBlocks forgets a pane's blocks, as when its screen is reset for a replay.
   const dropBlocks = (pane) => {
     const blocks = pane.blocks || [];
@@ -5072,7 +5167,10 @@ function shellWord(value) {
     const now = pane.blocksLive ? Date.now() : null;
     if (kind === "A") {
       // A prompt without D before it ends the last command without an exit code.
-      if (last && !last.ended) last.ended = true;
+      if (last && !last.ended) {
+        last.ended = true;
+        paintBlock(last);
+      }
       const block = {
         prompt: blockPlace(term),
         input: null,
@@ -5083,6 +5181,10 @@ function shellWord(value) {
         startedAt: null,
         endedAt: null,
         command: () => blockCommand(pane, block),
+        // A separator sets a prompt apart from the last command's output, not from an
+        // empty prompt before it.
+        separated: Boolean(last?.output),
+        decoration: null,
       };
       const marker = block.prompt.marker;
       if (!marker || marker.isDisposed) return true;
@@ -5093,6 +5195,8 @@ function shellWord(value) {
         disposeBlock(block);
       });
       blocks.push(block);
+      showBlockGutter(pane, true);
+      decorateBlock(pane, block);
     } else if (!last || last.ended) {
       // A mark of a block whose prompt is not here, or after its end, has nothing to add to.
     } else if (kind === "B" && !last.input && !last.output) {
@@ -5100,12 +5204,15 @@ function shellWord(value) {
     } else if (kind === "C" && !last.output) {
       last.output = blockPlace(term);
       last.startedAt = now;
+      paintBlock(last);
     } else if (kind === "D") {
       last.end = blockPlace(term);
       last.ended = true;
       last.endedAt = last.startedAt === null ? null : now;
       const exit = rest[0] === undefined ? NaN : Number(rest[0]);
       last.exit = rest[0] !== "" && Number.isInteger(exit) ? exit : null;
+      if (blockState(last) === "failed") decorateBlock(pane, last);
+      else paintBlock(last);
     }
     return true;
   };
@@ -5145,6 +5252,8 @@ function shellWord(value) {
       fontFamily: fontFamily(),
       fontSize: savedFontSize(),
       theme: theme(),
+      // Blocks' marks are decorations, which xterm.js 5.5 offers only as a proposed API.
+      allowProposedApi: true,
     });
     const fit = new window.FitAddon.FitAddon();
     pane.term = term;

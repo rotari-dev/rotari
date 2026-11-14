@@ -275,6 +275,22 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           this.markers.push(marker);
           return marker;
         }
+        // A decoration is drawn when a test calls render, as xterm.js draws one in view.
+        decorations = [];
+        registerDecoration(options) {
+          if (!this.options.allowProposedApi) throw new Error('You must set the allowProposedApi option to true to use proposed API');
+          if (options.marker.isDisposed) return undefined;
+          const renders = [];
+          const decoration = {
+            options, element: undefined, isDisposed: false,
+            onRender: (listener) => { renders.push(listener); return { dispose() {} }; },
+            dispose: () => { if (decoration.isDisposed) return; decoration.isDisposed = true; decoration.element?.remove(); },
+            render: () => { decoration.element ||= window.document.createElement('div'); renders.forEach((listener) => listener(decoration.element)); return decoration.element; },
+          };
+          options.marker.onDispose(() => decoration.dispose());
+          this.decorations.push(decoration);
+          return decoration;
+        }
         modes = { bracketedPasteMode: false };
         options = {};
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
@@ -3651,6 +3667,85 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   bkTerm.osc(133, 'A', 0, 0);
   bkTerm.clear();
   assert.equal(bkPane().blocks.length, 0, 'blocks outlived Clear');
+  }
+
+  // Blocks shown: a gutter only for a shell that marks, a mark per prompt in its state's
+  // colour that says on hover how the command ended, separators after output, and failures
+  // on the scroll bar in the theme's red.
+  {
+  const bd = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const bdSocket = bd.sockets.at(-1);
+  bdSocket.onopen?.();
+  const bdTerm = bd.terminals.at(-1);
+  const bdPane = () => bd.document.querySelector('.terminal-pane').terminalPane;
+  const gutter = () => bdPane().viewport.classList.contains('terminal-viewport-blocks');
+  assert.equal(bdTerm.options.allowProposedApi, true, 'decorations need the proposed API');
+  // A shell that sends no marks gets no gutter, decorations, or scroll bar marks.
+  bdSocket.onmessage({ data: new TextEncoder().encode('plain').buffer });
+  assert.equal(gutter(), false, 'a gutter without marks');
+  assert.equal(bdTerm.decorations.length, 0);
+  assert.equal(bdTerm.options.overviewRulerWidth, undefined, 'a scroll bar ruler without failures');
+  // shown is what the decoration of the n-th block shows once xterm.js draws it.
+  const shown = (n) => {
+    const block = bdPane().blocks[n];
+    const element = block.decoration.render();
+    const mark = element.querySelector('.terminal-block-mark');
+    return { state: mark.dataset.state, hidden: mark.hidden, title: mark.getAttribute('title'),
+      separated: element.classList.contains('terminal-block-separated'), spans: element.classList.contains('terminal-block'),
+      ruler: block.decoration.options.overviewRulerOptions?.color };
+  };
+  let now = 1000000;
+  bd.window.Date.now = () => now;
+  bd.document.documentElement.style.setProperty('--terminal-red', '#b3261e');
+  bdTerm.lines = ['$ make', 'built', '$ false', '$ sleep 9', '^C', '$ ', '$ vi', 'edited', ''];
+  bdTerm.osc(133, 'A', 0, 0);
+  assert.equal(gutter(), true, 'no gutter for a shell that marks');
+  assert.deepEqual(shown(0), { state: 'prompt', hidden: true, title: null, separated: false, spans: true, ruler: undefined });
+  bdTerm.osc(133, 'B', 2, 0);
+  bdTerm.osc(133, 'C', 0, 1);
+  assert.deepEqual(shown(0), { state: 'running', hidden: false, title: 'make\nRunning', separated: false, spans: true, ruler: undefined });
+  now += 1500;
+  bdTerm.osc(133, 'D;0', 0, 2);
+  assert.deepEqual(shown(0), { state: 'ok', hidden: false, title: 'make\nExit 0 after 1.5 s', separated: false, spans: true, ruler: undefined });
+  bdTerm.osc(133, 'A', 0, 2);
+  bdTerm.osc(133, 'B', 2, 2);
+  bdTerm.osc(133, 'C', 0, 3);
+  const running = bdPane().blocks[1].decoration;
+  now += 75000;
+  bdTerm.osc(133, 'D;1', 0, 3);
+  assert.ok(running.isDisposed, 'the decoration of a failure was not made again for the scroll bar');
+  assert.deepEqual(shown(1), { state: 'failed', hidden: false, title: 'false\nExit 1 after 1 min 15 s', separated: true, spans: true, ruler: '#b3261e' });
+  assert.equal(bdTerm.options.overviewRulerWidth, 10, 'no scroll bar ruler for a failure');
+  // Another prompt before D: the command ended without saying how.
+  bdTerm.osc(133, 'A', 0, 3);
+  bdTerm.osc(133, 'B', 2, 3);
+  bdTerm.osc(133, 'C', 0, 4);
+  bdTerm.osc(133, 'A', 0, 5);
+  assert.deepEqual(shown(2), { state: 'unknown', hidden: false, title: 'sleep 9\nNo exit code: another prompt came first', separated: true, spans: true, ruler: undefined });
+  // An empty prompt is no command: no mark, and no separator after it.
+  bdTerm.osc(133, 'A', 0, 6);
+  assert.equal(shown(3).hidden, true);
+  assert.equal(shown(3).separated, true, 'a prompt after output has no separator');
+  assert.equal(shown(4).separated, false, 'a prompt after an empty one has a separator');
+  bdTerm.osc(133, 'B', 2, 6);
+  bdTerm.osc(133, 'C', 0, 7);
+  bdTerm.osc(133, 'D', 0, 7);
+  assert.deepEqual(shown(4), { state: 'unknown', hidden: false, title: 'vi\nEnded without an exit code after 0.0 s', separated: false, spans: true, ruler: undefined });
+  // A new theme makes the scroll bar's marks again in its red.
+  const failed = bdPane().blocks[1].decoration;
+  bd.document.documentElement.style.setProperty('--terminal-red', '#f07a72');
+  bd.document.documentElement.dataset.theme = 'dark';
+  await wait(10);
+  assert.ok(failed.isDisposed, 'the old scroll bar mark outlived the theme');
+  assert.equal(shown(1).ruler, '#f07a72');
+  // A replay that brings no marks takes the gutter away, and the decorations with the blocks.
+  bd.document.querySelectorAll('.terminal-tab [role=tab]')[1].click();
+  await wait(50);
+  assert.equal(gutter(), true, 'the gutter went before the replay was done');
+  bd.sockets.at(-1).onmessage({ data: new TextEncoder().encode('plain').buffer });
+  assert.equal(gutter(), false, 'a gutter after a replay without marks');
+  assert.ok(bdTerm.decorations.every((decoration) => decoration.isDisposed), 'decorations outlived the replay');
   }
   process.exit(0);
 })().catch((error) => { console.error(error.stack || String(error)); process.exit(1); });
