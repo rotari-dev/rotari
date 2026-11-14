@@ -41,3 +41,22 @@
 - **Validation:** `tsc` clean; prettier unchanged. `go test ./internal/webui ./conformance/05-web` (see the commit).
   Not seen in a browser: none here; CI's browser step does not look at blocks until phase 4.
 - **Remaining:** phases 3 (moving and acting) and 4 (WEB-47, docs, the browser step).
+
+## 2026-11-14 15:00 +09:00 — Moving and acting
+
+- **Change:** `term.attachCustomKeyEventHandler` takes Ctrl+Shift+ArrowUp / ArrowDown on keydown, only with no Alt or
+  Meta, outside the alternate screen, and only when the pane has a block with a command; they scroll to the prompt
+  of the command before or after the top line (`moveToPrompt`), and down past the last goes to the bottom. Any other
+  key, and those keys in a shell without marks, reach the shell as before. Clicking a mark focuses its pane and opens
+  the panel's menu (`openPanelMenu`) with **Copy output**, **Copy command**, **Select output**, and **Type command
+  again**; the mark stops `mousedown` and `mouseup` so a click on it does not start a selection. A block's output
+  runs from `C` to `D`, or to the next prompt, or to the cursor while it runs (`blockOutputEnd`); **Select output**
+  uses `term.select`. **Type command again** goes through `typeAtPrompt`, the "only at the prompt" check that
+  `typeCd` had, now shared (`typeCd` calls it with "cd", so its messages are unchanged), and is off for a command of
+  more than one line. The Explorer's `copyExplorerText` became `copyText(text, said)` and is used by both.
+- **Reason:** plan phase 3.
+- **Plan impact:** decision 4 now says that typing again waits for the preview as recent directories does, that
+  multi-line commands are not typed again, and what a running command's output is.
+- **Validation:** `tsc` clean; prettier unchanged. `TestTerminalPanel` passed, then `go test ./internal/webui
+  ./conformance/05-web`.
+- **Remaining:** phase 4 (WEB-47, docs, the browser step).

@@ -2,7 +2,7 @@
 
 Created: 2026-11-14
 Status: Accepted by the user on 2026-11-14, with the open questions answered as proposed. Phases 1 (parsing and the
-block model) and 2 (display) are done; phase 3 (moving and acting) is next. See [work-log.md](work-log.md).
+block model), 2 (display), and 3 (moving and acting) are done; phase 4 (contracts and docs) is next. See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -59,7 +59,10 @@ Grouping blocks by directory, discussed with recent directories, would build on 
 4. **Moving and acting.** Ctrl+Shift+ArrowUp / ArrowDown scroll to the previous or next prompt and are not sent to
    the shell; nothing else is taken from the keyboard. Clicking a mark opens a small menu: **Copy output**, **Copy
    command**, **Select output** (so the browser's own copy and the existing actions work on it), and **Type command
-   again**, which goes through `sendToTerminalAndSay` and so never presses Enter.
+   again**, which goes through `sendToTerminalAndSay` and so never presses Enter, and, as choosing a recent
+   directory does, only once the shell's preview says nothing runs at its prompt. A command on lines of its own is
+   not typed again, since its text holds the shell's continuation prompts. A running command's output is what it has
+   printed so far.
 5. **Marks are only output.** Any program can print OSC 133, so a file shown with `cat` can draw false marks. They
    change nothing but the page's display; **Type command again** types the text shown, without Enter, under the same
    rules as the send buttons, so a false mark can at worst put text in front of you. Copy writes to the clipboard
