@@ -1,0 +1,5 @@
+# rotari's shell integration for zsh: the user's .zprofile (see .zshenv).
+ZDOTDIR=$__rotari_user
+[[ -r $ZDOTDIR/.zprofile ]] && source $ZDOTDIR/.zprofile
+__rotari_user=$ZDOTDIR
+ZDOTDIR=$__rotari_zdotdir

@@ -28,7 +28,13 @@ type startedShell struct {
 func startShell(t *testing.T, env ...string) *startedShell {
 	t.Helper()
 	home := t.TempDir()
-	session, err := Start(Options{Shell: "/bin/sh", Dir: home, Env: append([]string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "PS1=$ "}, env...), Rows: 24, Cols: 80})
+	return startShellWith(t, Options{Shell: "/bin/sh", Dir: home, Env: append([]string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "PS1=$ "}, env...), Rows: 24, Cols: 80})
+}
+
+// startShellWith starts a shell as options say and collects its output.
+func startShellWith(t *testing.T, options Options) *startedShell {
+	t.Helper()
+	session, err := Start(options)
 	if err != nil {
 		t.Fatal(err)
 	}

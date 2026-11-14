@@ -1,0 +1,27 @@
+# rotari's shell integration for zsh: the user's .zshrc (see .zshenv), then OSC 133 marks for
+# the Web terminal's blocks: D (the last command's end, with its exit status) and A (a
+# prompt) before each prompt, B (the command line) at the prompt's end, and C (the output)
+# before a command runs.
+ZDOTDIR=$__rotari_user
+[[ -r $ZDOTDIR/.zshrc ]] && source $ZDOTDIR/.zshrc
+__rotari_user=$ZDOTDIR
+ZDOTDIR=$__rotari_zdotdir
+
+__rotari_status=0
+# __rotari_keep runs first before each prompt: it keeps the command's status for the mark,
+# and gives it back to what runs after it.
+__rotari_keep() {
+	__rotari_status=$?
+	return $__rotari_status
+}
+# __rotari_prompt runs last. A prompt a theme rebuilt has lost B, which is put back.
+__rotari_prompt() {
+	print -n "\e]133;D;${__rotari_status}\a\e]133;A\a"
+	[[ $PS1 == *'133;B'* ]] || PS1="$PS1"$'%{\e]133;B\a%}'
+	return $__rotari_status
+}
+__rotari_preexec() {
+	print -n "\e]133;C\a"
+}
+precmd_functions=(__rotari_keep $precmd_functions __rotari_prompt)
+preexec_functions+=(__rotari_preexec)

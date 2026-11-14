@@ -1,0 +1,8 @@
+# rotari's shell integration for zsh: the user's .zlogin (see .zshenv), and ZDOTDIR as the user
+# had it, so that a zsh started from this one reads the user's files directly.
+ZDOTDIR=$__rotari_user
+[[ -r $ZDOTDIR/.zlogin ]] && source $ZDOTDIR/.zlogin
+if (( ! __rotari_had )) && [[ $ZDOTDIR == $HOME ]]; then
+	unset ZDOTDIR
+fi
+unset __rotari_zdotdir __rotari_had __rotari_user

@@ -87,6 +87,9 @@ type KeeperOptions struct {
 	GroupLimit int
 	// Log, if set, is told when a shell starts and ends, and never what it shows.
 	Log func(message string)
+	// ShellIntegration starts bash and zsh so that they mark their prompts and commands
+	// (see WriteIntegration), from files the Keeper writes now and removes on Close.
+	ShellIntegration bool
 }
 
 // StartOptions say how to start one shell.
@@ -196,6 +199,13 @@ func NewKeeper(options KeeperOptions) (*Keeper, error) {
 	}
 	if options.GroupLimit <= 0 {
 		return nil, errors.New("terminal group limit must be above zero")
+	}
+	if options.ShellIntegration {
+		dir, err := WriteIntegration()
+		if err != nil {
+			return nil, err
+		}
+		options.Shell.Integration = dir
 	}
 	return &Keeper{options: options}, nil
 }
@@ -761,6 +771,12 @@ func (keeper *Keeper) Close() {
 	keeper.stopIdleTimer()
 	keeper.mu.Unlock()
 	keeper.EndAll()
+	// Every shell has read its files by now, and no other will start.
+	if dir := keeper.options.Shell.Integration; dir != "" {
+		if err := os.RemoveAll(dir); err != nil {
+			keeper.log("cannot remove the shell integration's files: " + err.Error())
+		}
+	}
 }
 
 // Attachment is one caller's view of the shell.

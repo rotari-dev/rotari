@@ -1,0 +1,183 @@
+package terminal
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+)
+
+// integrated starts shell with the shell integration, in home, with env besides HOME and
+// PATH.
+func integrated(t *testing.T, shell, home string, env ...string) *startedShell {
+	t.Helper()
+	path, err := exec.LookPath(shell)
+	if err != nil {
+		t.Skipf("no %s here", shell)
+	}
+	dir, err := WriteIntegration()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	return startShellWith(t, Options{Shell: path, Dir: home, Integration: dir, Rows: 24, Cols: 80,
+		Env: append([]string{"HOME=" + home, "PATH=" + os.Getenv("PATH")}, env...)})
+}
+
+func writeFiles(t *testing.T, dir string, files map[string]string) {
+	t.Helper()
+	for name, content := range files {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+var oscMark = regexp.MustCompile("\x1b\\]133;([^\a]*)\a")
+
+// marksAfter types false, and returns the OSC 133 marks the shell printed by the prompt after it.
+func marksAfter(t *testing.T, shell *startedShell) []string {
+	t.Helper()
+	if _, err := shell.Write([]byte("false\n")); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(testWait); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		text := shell.text()
+		if at := strings.Index(text, "\x1b]133;D;1\a"); at >= 0 && strings.Contains(text[at:], "133;B\a") {
+			var marks []string
+			for _, match := range oscMark.FindAllStringSubmatch(text, -1) {
+				marks = append(marks, match[1])
+			}
+			return marks
+		}
+	}
+	t.Fatalf("no marks for false; the terminal shows:\n%q", shell.text())
+	return nil
+}
+
+// endsWith says whether marks end with want.
+func endsWith(marks []string, want ...string) bool {
+	return len(marks) >= len(want) && slices.Equal(marks[len(marks)-len(want):], want)
+}
+
+// Bash reads a login shell's files, keeps $? for the user's PROMPT_COMMAND, and marks a
+// prompt that a theme rebuilds each time.
+func TestBashIntegrationReadsTheLoginFilesAndMarks(t *testing.T) {
+	home := t.TempDir()
+	writeFiles(t, home, map[string]string{
+		".bash_profile": "export FROM_PROFILE=yes\nPROMPT_COMMAND='LAST=$?; PS1=\"theme> \";'\n",
+		// Only the first of these a login shell would read.
+		".profile": "export FROM_PROFILE=no\n",
+	})
+	shell := integrated(t, "bash", home)
+	// Bash before 4.4, as macOS has, prints no PS0, and so no C. The run clears what was
+	// shown, so the marks are checked from false's output on; the last B is the one put back
+	// in the theme's prompt.
+	want := []string{"C", "D;1", "A", "B"}
+	if version := shell.run(t, `echo $((BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1]))`); version < "404" && len(version) == 3 {
+		want = want[1:]
+	}
+	if marks := marksAfter(t, shell); !endsWith(marks, want...) {
+		t.Errorf("marks around false: %q, want them to end %q", marks, want)
+	}
+	if got := shell.run(t, `echo "$FROM_PROFILE-$LAST"`); got != "yes-1" {
+		t.Errorf("profile and status = %q, want yes-1", got)
+	}
+}
+
+// Zsh reads the user's files from where zsh would have: $HOME, a ZDOTDIR it was given, or
+// one the user's .zshenv sets; it leaves ZDOTDIR as it was, and marks as bash does.
+func TestZshIntegrationReadsTheUsersFilesAndMarks(t *testing.T) {
+	theme := "precmd_functions+=(__user_precmd)\n__user_precmd() { LAST=$?; PS1='theme> ' }\n"
+	for _, test := range []struct {
+		name  string
+		files map[string]string
+		env   []string
+		want  string
+	}{
+		{"home", map[string]string{".zshenv": "export FROM=env\n", ".zprofile": "FROM=$FROM-profile\n", ".zshrc": "FROM=$FROM-rc\n" + theme, ".zlogin": "FROM=$FROM-login\n"},
+			nil, "env-profile-rc-login-1-unset"},
+		{"given", map[string]string{"zd/.zshenv": "export FROM=env\n", "zd/.zshrc": "FROM=$FROM-rc\n" + theme, ".zshrc": "FROM=wrong\n"},
+			[]string{"ZDOTDIR=HOME/zd"}, "env-rc-1-HOME/zd"},
+		{"set in .zshenv", map[string]string{".zshenv": "export FROM=env\nZDOTDIR=$HOME/cfg\n", "cfg/.zshrc": "FROM=$FROM-rc\n" + theme, ".zshrc": "FROM=wrong\n"},
+			nil, "env-rc-1-HOME/cfg"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			home := t.TempDir()
+			writeFiles(t, home, test.files)
+			var env []string
+			for _, entry := range test.env {
+				env = append(env, strings.ReplaceAll(entry, "HOME", home))
+			}
+			shell := integrated(t, "zsh", home, env...)
+			if marks := marksAfter(t, shell); !endsWith(marks, "B", "C", "D;1", "A", "B") {
+				t.Errorf("marks around false: %q", marks)
+			}
+			want := strings.ReplaceAll(test.want, "HOME", home)
+			if got := shell.run(t, `echo "$FROM-$LAST-${ZDOTDIR-unset}-${ROTARI_USER_ZDOTDIR-}"`); got != want+"-" {
+				t.Errorf("files, status, ZDOTDIR = %q, want %q", got, want+"-")
+			}
+		})
+	}
+}
+
+// Only bash and zsh start otherwise, and only with the integration.
+func TestShellCommandWithIntegration(t *testing.T) {
+	env := []string{"HOME=/h", "ZDOTDIR=/z", "ROTARI_USER_ZDOTDIR=/forged"}
+	for _, test := range []struct {
+		shell, integration string
+		args, env          []string
+	}{
+		{"/bin/sh", "/i", []string{"-l"}, env},
+		{"/usr/bin/fish", "/i", []string{"-l"}, env},
+		{"/bin/bash", "", []string{"-l"}, env},
+		{"/bin/zsh", "", []string{"-l"}, env},
+		{"/bin/bash", "/i", []string{"--init-file", "/i/rotari.bash"}, env},
+		{"/usr/local/bin/zsh", "/i", []string{"-l"}, []string{"HOME=/h", "ZDOTDIR=/i/zsh", "ROTARI_USER_ZDOTDIR=/z"}},
+	} {
+		args, gotEnv := shellCommand(Options{Shell: test.shell, Integration: test.integration, Env: env})
+		if !slices.Equal(args, test.args) || !slices.Equal(gotEnv, test.env) {
+			t.Errorf("%s with %q: %q %q, want %q %q", test.shell, test.integration, args, gotEnv, test.args, test.env)
+		}
+	}
+	// zsh with no ZDOTDIR is told none of its own.
+	if _, got := shellCommand(Options{Shell: "zsh", Integration: "/i", Env: []string{"HOME=/h"}}); !slices.Equal(got, []string{"HOME=/h", "ZDOTDIR=/i/zsh"}) {
+		t.Errorf("zsh without ZDOTDIR: %q", got)
+	}
+}
+
+// The Keeper writes the files when it is made with the integration and removes them on Close.
+func TestKeeperWritesAndRemovesTheIntegration(t *testing.T) {
+	keeper, err := NewKeeper(KeeperOptions{Shell: Options{Shell: "/bin/sh", Dir: t.TempDir()}, RingSize: 1024, ShellLimit: 1, GroupLimit: 1, ShellIntegration: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := keeper.options.Shell.Integration
+	for _, name := range []string{"rotari.bash", "zsh/.zshenv", "zsh/.zprofile", "zsh/.zshrc", "zsh/.zlogin"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Error(err)
+		}
+	}
+	if info, err := os.Stat(dir); err != nil || info.Mode().Perm() != 0o700 {
+		t.Errorf("directory %s: %v, %v", dir, info, err)
+	}
+	keeper.Close()
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("after Close, %s: %v", dir, err)
+	}
+	plain, err := NewKeeper(KeeperOptions{Shell: Options{Shell: "/bin/sh"}, RingSize: 1024, ShellLimit: 1, GroupLimit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.options.Shell.Integration != "" {
+		t.Error("a Keeper without the integration wrote it")
+	}
+}

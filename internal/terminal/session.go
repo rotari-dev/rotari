@@ -27,6 +27,9 @@ var closeGrace = 5 * time.Second
 type Options struct {
 	// Shell is the program to run, as a login shell.
 	Shell string
+	// Integration, if set, is a directory WriteIntegration filled: bash and zsh then
+	// start with its files, which read the user's and mark prompts and commands.
+	Integration string
 	// Dir is the working directory.
 	Dir string
 	// Env is the shell's whole environment; nothing is inherited, so a caller
@@ -70,9 +73,10 @@ func Start(options Options) (*Session, error) {
 	if options.Rows == 0 || options.Cols == 0 {
 		return nil, fmt.Errorf("invalid terminal size %dx%d", options.Cols, options.Rows)
 	}
-	command := exec.Command(options.Shell, "-l")
+	args, env := shellCommand(options)
+	command := exec.Command(options.Shell, args...)
 	command.Dir = options.Dir
-	command.Env = append(append([]string{}, options.Env...), "TERM="+termType)
+	command.Env = append(env, "TERM="+termType)
 	started, err := pty.StartWithSize(command, &pty.Winsize{Rows: options.Rows, Cols: options.Cols})
 	if err != nil {
 		return nil, fmt.Errorf("start %s: %w", options.Shell, err)
