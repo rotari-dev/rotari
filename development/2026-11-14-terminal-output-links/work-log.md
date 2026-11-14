@@ -39,3 +39,22 @@
 - **Validation:** `tsc` clean; prettier applied. `go test ./internal/webui ./conformance/05-web` passed with Node 24
   and `NODE_PATH` (under `taskset -c 0-7`). Not tried in a real browser.
 - **Remaining:** phase 3: WEB-46, conformance, a `TestTerminalPanelInBrowser` step, and the docs.
+
+## 2026-11-14 04:30 +09:00 — WEB-46, conformance, and docs (`7188e662019a`)
+
+- **Change:** contract note WEB-46 (before WEB-45) and its status-table row. `TestTerminalOutputLinks` in
+  `conformance/05-web/terminal_links_test.go` asks a project shell's `/links` through the binary: the finished run,
+  a run ID that exists nowhere, a job of that run, a job only queued, a nine-hex word that is no job, a relative
+  file with `:3:7` in a directory whose name has a space, an absolute directory, a missing path, and a plain word;
+  then the limits (400), a non-JSON body (415), no token (403), a shell not running (404), GET (405), and a server
+  without the terminal (404). `TestTerminalPanelInBrowser` gains a step in the project's shell: it prints the run
+  ID, points at it until the pane's title names the run, clicks, and expects the run page with the shell still
+  there, then returns to the project page. The test passes the run ID to the script as `runID`. Docs: a paragraph
+  in WEB.md's Terminal section, a sentence in FAQ.md, and a paragraph in SECURITY.md; ARCHITECTURE.md already
+  named the route (phase 1).
+- **Reason:** plan phase 3.
+- **Plan impact:** none; the plan is implemented.
+- **Validation:** `TestTerminalOutputLinks -v` passed; `go test ./conformance` (contract table checks) passed;
+  `go test ./conformance/05-web ./internal/webui` passed with Node 24 and `NODE_PATH`. The browser step was only
+  syntax-checked with `node --check`: there is no Chrome here, so it runs in CI only.
+- **Remaining:** nothing in the plan. Not pushed.
