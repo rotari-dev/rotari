@@ -5335,6 +5335,41 @@ function shellWord(value) {
       if (cell) moveByClick(pane, cell.col, cell.row);
     });
   };
+  // The right-click menu: the panel's in place of the browser's, which Shift+right-click
+  // still opens, and none for a program that takes the mouse.
+  const openTerminalMenu = (pane, event) => {
+    const { term } = pane;
+    if (event.shiftKey || term.modes.mouseTrackingMode !== "none") return;
+    if (pane !== focused) focusPane(pane);
+    const selection = term.hasSelection() ? term.getSelection() : "";
+    openPanelMenu(event, [
+      ["Copy", () => copyText(selection, "the selection"), Boolean(selection)],
+      ["Paste", () => pasteClipboard(pane), true],
+      ["Select all", () => term.selectAll(), true],
+    ]);
+  };
+  // pasteClipboard pastes what the clipboard holds, as Ctrl+V would: bracketed when the
+  // program asked, and with no Enter of its own. The browser may refuse to let the page
+  // read it, though not to Ctrl+V.
+  const pasteClipboard = async (pane) => {
+    let text;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {}
+    if (typeof text !== "string") {
+      showNote(
+        "The browser did not let this page read the clipboard. Paste with Ctrl+V (Cmd+V on a Mac) instead.",
+        6000,
+      );
+      return;
+    }
+    if (!text) {
+      showNote("The clipboard holds no text.", 3000);
+      return;
+    }
+    pane.term.paste(text);
+    pane.term.focus();
+  };
   // hoverBlock follows the pointer over a pane's screen, or off it with no event, to show
   // the copy button of the block under it; none in vim or less.
   const hoverBlock = (pane, event) => {
@@ -5662,6 +5697,9 @@ function shellWord(value) {
     viewport.addEventListener("mousemove", (event) => hoverBlock(pane, event));
     viewport.addEventListener("mouseleave", () => hoverBlock(pane, null));
     clickToMove(pane);
+    viewport.addEventListener("contextmenu", (event) =>
+      openTerminalMenu(pane, event),
+    );
     fit.fit();
     term.onData((data) => {
       send(pane, new TextEncoder().encode(data));

@@ -298,6 +298,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
         attachCustomKeyEventHandler(handler) { this.keyHandler = handler; }
         modes = { bracketedPasteMode: false, applicationCursorKeysMode: false, mouseTrackingMode: 'none' };
         hasSelection() { return Boolean(this.selected); }
+        getSelection() { return this.selected || ''; }
+        selectAll() { this.allSelected = true; }
         options = {};
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
         loadAddon(addon) { (this.addons ||= []).push(addon); } open() {}
@@ -3854,6 +3856,65 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(click(40, 5), '', 'past the end, where the cursor is');
   cmTerm.buffer.active.cursorX = 2;
   assert.equal(click(40, 5), '\x1b[9998~8;', 'past the end, the line\'s end');
+  }
+
+  // The right-click menu: the panel's in place of the browser's, with Copy, Paste, and Select
+  // all; Shift+right-click and a program that takes the mouse keep theirs.
+  {
+  const rc = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const rcSocket = rc.sockets.at(-1);
+  rcSocket.onopen?.();
+  rcSocket.onmessage({ data: new TextEncoder().encode('plain').buffer });
+  const rcTerm = rc.terminals.at(-1);
+  const rcViewport = rc.document.querySelector('.terminal-pane').terminalPane.viewport;
+  const rcCopied = [];
+  let rcClipboard = async () => 'echo pasted';
+  Object.defineProperty(rc.window.navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => rcCopied.push(text), readText: () => rcClipboard() } });
+  // rightClick opens the menu, and says whether the browser's was kept from opening and what
+  // the panel's offers.
+  const rightClick = (keys = {}) => {
+    rc.document.querySelector('.terminal-tab-menu')?.remove();
+    const event = new rc.window.MouseEvent('contextmenu', { clientX: 200, clientY: 150, button: 2, bubbles: true, cancelable: true, ...keys });
+    rcViewport.dispatchEvent(event);
+    const items = [...rc.document.querySelectorAll('.terminal-tab-menu button')];
+    return { prevented: event.defaultPrevented, items: items.map((item) => [item.textContent, !item.disabled]) };
+  };
+  const rcChoose = async (label) => {
+    [...rc.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === label).click();
+    await wait(20);
+  };
+  const rcNote = () => rc.document.querySelector('.terminal-send-note')?.textContent;
+  assert.deepEqual(rightClick(), { prevented: true, items: [['Copy', false], ['Paste', true], ['Select all', true]] });
+  // Copy copies the selection.
+  rcTerm.selected = 'ls -l';
+  assert.deepEqual(rightClick().items[0], ['Copy', true]);
+  await rcChoose('Copy');
+  assert.deepEqual(rcCopied, ['ls -l']);
+  assert.equal(rcNote(), 'Copied the selection');
+  rcTerm.selected = false;
+  rightClick();
+  await rcChoose('Select all');
+  assert.equal(rcTerm.allSelected, true, 'Select all selected nothing');
+  // Paste pastes the clipboard as typing would, or says how to paste when it cannot be read.
+  const rcPasted = rc.pasted.length;
+  rightClick();
+  await rcChoose('Paste');
+  assert.deepEqual(rc.pasted.slice(rcPasted), ['echo pasted']);
+  rcClipboard = async () => { throw new Error('denied'); };
+  rightClick();
+  await rcChoose('Paste');
+  assert.match(rcNote(), /did not let this page read the clipboard\. Paste with Ctrl\+V \(Cmd\+V on a Mac\) instead/);
+  rcClipboard = async () => '';
+  rightClick();
+  await rcChoose('Paste');
+  assert.equal(rcNote(), 'The clipboard holds no text.');
+  assert.equal(rc.pasted.length, rcPasted + 1, 'a refused or empty clipboard pasted something');
+  // Shift+right-click is the browser's, and a program that takes the mouse gets the click.
+  assert.deepEqual(rightClick({ shiftKey: true }), { prevented: false, items: [] });
+  rcTerm.modes.mouseTrackingMode = 'vt200';
+  assert.deepEqual(rightClick(), { prevented: false, items: [] }, 'a program that takes the mouse got the menu');
+  rcTerm.modes.mouseTrackingMode = 'none';
   }
 
   // Blocks acted on: Commands lists the pane's commands, newest first, to go to one or copy
