@@ -119,3 +119,35 @@ is not known from it.
 **Validation:** `go vet ./...` for linux and darwin (arm64, amd64), and `./internal/projectrun` for freebsd: clean.
 On Linux, `internal/executor`, `internal/projectrun`, `conformance/04-coordination`, and `conformance/06-selectors`
 passed; the terminal confirmation tests passed `-count=3`. Nothing here ran on macOS.
+
+## 2026-11-14 — `09e3539b` and `d9312623`: the fifth macOS run
+
+The fifth macOS run (Go CI run 43579197496, at `dff5a0c8`) passed `conformance/02-lifecycle`, including
+`TestRerunOfAnInterruptedRun` and `TestNotesAnotherRotariBinary`, which the macOS process identity change was
+for. The Linux legs failed on `TestCLIFlagPairInventory`: the shell integration commit `05da109c` from another
+thread added a web flag without updating the inventory fingerprint. The user left that to that thread.
+
+**`09e3539b` Skip macOS-absent preconditions** (tests only):
+
+- `TestSSHExecutionProbeClassifiesRemoteProcessGroup` runs the SSH probe script on this machine; it now calls
+  `requireLinuxRemote`, like the other remote-side SSH tests.
+- `TestSchedulerArrayWrapperEnforcesTimeout` starts the wrapper outside a group of its own, so it relies on
+  `setsid(1)`, which macOS lacks and Linux compute nodes have; it skips without `setsid`.
+- `TestLocalJobTimeoutWorksWithoutUsablePs` is the BusyBox case, where `/proc` gives the group; without `/proc`
+  the wrapper uses `ps`, which on macOS accepts `-p`. It skips without `/proc`.
+- `TestWriteZip` wrote a file named `raw\xffname`, which APFS refuses (`illegal byte sequence`). It checks that
+  name only where the file system accepts it.
+
+**`d9312623` Say what the checks recorded when their tests fail** (tests only; not fixed yet):
+
+- `TestVerifyListenerAcceptsLaunchListener` failed with `another process listens on 127.0.0.1:…` and
+  `TestVerifyListenerRejectsNonLoopbackBind` with `no process in the launch listens`. Both go through
+  `listener_darwin.go` (`lsof -Fpn` and `getpgid`), which no test had run before. The cause cannot be told from
+  the messages, and the code decides whether a launch's port is trusted, so it is not changed blind: the tests now
+  log lsof's output, each process's group, and the listeners as read.
+- `TestCLIFlagPairCancel`: two pairs saw one requested job not finish within 10 s (`Jobs: 5` requested, four
+  finished). Whether a signal missed a job on macOS or the job was slow is unknown; a failure now lists each
+  unfinished job's attempt files, `status.json`, and `job.json`.
+
+**Validation:** `go vet` of the changed packages for linux and darwin/arm64: clean. On Linux the changed tests
+passed, and `TestCLIFlagPairCancel` passed in full.
