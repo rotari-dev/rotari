@@ -66,3 +66,16 @@
 - **Validation:** `TestTerminalInnerShellsMark` passed for zsh and bash; `TestContractStatus` passed; see the commit
   for the package runs.
 - **Remaining:** nothing in this plan.
+
+## 2026-11-15 10:20 +09:00 — CI: an array PROMPT_COMMAND
+
+- **Change:** when `PROMPT_COMMAND` is an array, `marks.bash` now rebuilds it as before and then makes it a string of the
+  same commands on lines, and exports it. `TestInnerShellsMark` gains bash inside bash with a `.bash_profile` that does
+  `PROMPT_COMMAND+=(...)`.
+- **Reason:** CI's `TestInnerShellsMark/bash_inside_bash` and `TestTerminalInnerShellsMark/bash` failed: the inner bash
+  marked nothing. CI's `/etc/profile.d/80-systemd-osc-context.sh` (whose `PS0` an earlier failure showed) makes
+  `PROMPT_COMMAND` an array, which bash cannot export, so the loader never reached the inner bash; bash inside zsh
+  passed, since zsh exports the loader as a string.
+- **Plan impact:** none.
+- **Validation:** the new case failed here as on CI before the change and passes after; the integration tests pass
+  twice in a row; see the commit for the package runs.
