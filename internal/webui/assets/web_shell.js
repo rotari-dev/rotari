@@ -3530,12 +3530,13 @@ function shellWord(value) {
   const sendExplorerPath = async (path) => {
     await window.sendToTerminalAndSay(pathFromShell(path), { word: true });
   };
-  const copyExplorerText = async (text) => {
+  // copyText copies text and says so, naming it as said, or as itself.
+  const copyText = async (text, said = text) => {
     try {
       if (navigator.clipboard?.writeText)
         await navigator.clipboard.writeText(text);
       else copyJobsValueFallback(text);
-      showNote("Copied " + text, 2500);
+      showNote("Copied " + said, 2500);
     } catch (error) {
       showNote("Copy failed: " + error.message, 6000);
     }
@@ -3749,34 +3750,39 @@ function shellWord(value) {
     }
     action("Copy the path", icons.copy, () => {
       closeDirs(true);
-      copyExplorerText(entry.dir);
+      copyText(entry.dir);
     });
     row.append(actions);
     return row;
   };
-  // typeCd types cd and the directory into the focused pane, once the shell is known to
-  // be at its prompt, and says why not otherwise.
-  const typeCd = async (id, dir) => {
-    closeDirs();
+  // typeAtPrompt types text into the focused pane, which shows shell id, once the shell is
+  // known to be at its prompt, so that it cannot land in vim or ssh, and says why not
+  // otherwise, naming the text as what.
+  const typeAtPrompt = async (id, text, what) => {
     const preview = await fetchShellJSON(id, "preview");
+    const notTyped = ", so " + what + " was not typed.";
     const refusal = preview.error
-      ? "Cannot tell what runs in this shell (" +
-        preview.error +
-        "), so cd was not typed."
+      ? "Cannot tell what runs in this shell (" + preview.error + ")" + notTyped
       : preview.command
-        ? preview.command + " is running in this shell, so cd was not typed."
+        ? preview.command + " is running in this shell" + notTyped
         : preview.command_error
           ? "Cannot tell what runs in this shell (" +
             preview.command_error +
-            "), so cd was not typed."
+            ")" +
+            notTyped
           : focused.shown !== id
-            ? "This pane shows another shell now, so cd was not typed."
+            ? "This pane shows another shell now" + notTyped
             : "";
     if (refusal) {
       showNote(refusal, 6000);
       return;
     }
-    await window.sendToTerminalAndSay("cd " + shellWord(dir));
+    await window.sendToTerminalAndSay(text);
+  };
+  // typeCd types cd and the directory into the focused pane, at the shell's prompt.
+  const typeCd = async (id, dir) => {
+    closeDirs();
+    await typeAtPrompt(id, "cd " + shellWord(dir), "cd");
   };
   const showDirInExplorer = (dir) => {
     closeDirs();
@@ -4121,10 +4127,10 @@ function shellWord(value) {
         ["Download", () => downloadExplorerItem(path), true],
         ["Upload...", () => chooseUploads(folder ? path : dir), true],
         ...explorerChangeChoices(path, folder),
-        ["Copy the path", () => copyExplorerText(path), true],
+        ["Copy the path", () => copyText(path), true],
         [
           "Copy the path from here",
-          () => copyExplorerText(pathFromShell(path)),
+          () => copyText(pathFromShell(path)),
           Boolean(explorer.shellDir) && under(path, explorer.shellDir),
         ],
       ]);
@@ -5104,7 +5110,7 @@ function shellWord(value) {
   const blockRulerColour = () =>
     getComputedStyle(root).getPropertyValue("--terminal-red").trim() || "red";
   // paintBlock makes a block's decoration show its state, where xterm.js has drawn it.
-  const paintBlock = (block, element = block.decoration?.element) => {
+  const paintBlock = (pane, block, element = block.decoration?.element) => {
     if (!element) return;
     // The decoration spans the prompt's line, so that a separator can, but only its mark
     // takes the pointer: the text under it stays the terminal's.
@@ -5115,6 +5121,12 @@ function shellWord(value) {
     if (!mark) {
       mark = document.createElement("span");
       mark.className = "terminal-block-mark";
+      // The mark is the block's, not a place in the text to select or click.
+      for (const type of ["mousedown", "mouseup"])
+        mark.addEventListener(type, (event) => event.stopPropagation());
+      mark.addEventListener("click", (event) =>
+        openBlockMenu(event, pane, block),
+      );
       element.append(mark);
     }
     const state = blockState(block);
@@ -5139,7 +5151,7 @@ function shellWord(value) {
         overviewRulerOptions: { color: blockRulerColour(), position: "full" },
       }),
     });
-    block.decoration?.onRender((element) => paintBlock(block, element));
+    block.decoration?.onRender((element) => paintBlock(pane, block, element));
   };
   // The scroll bar's marks keep the colour they were made with, so a new theme remakes them.
   const recolourBlocks = (pane) => {
@@ -5169,7 +5181,7 @@ function shellWord(value) {
       // A prompt without D before it ends the last command without an exit code.
       if (last && !last.ended) {
         last.ended = true;
-        paintBlock(last);
+        paintBlock(pane, last);
       }
       const block = {
         prompt: blockPlace(term),
@@ -5204,7 +5216,7 @@ function shellWord(value) {
     } else if (kind === "C" && !last.output) {
       last.output = blockPlace(term);
       last.startedAt = now;
-      paintBlock(last);
+      paintBlock(pane, last);
     } else if (kind === "D") {
       last.end = blockPlace(term);
       last.ended = true;
@@ -5212,7 +5224,7 @@ function shellWord(value) {
       const exit = rest[0] === undefined ? NaN : Number(rest[0]);
       last.exit = rest[0] !== "" && Number.isInteger(exit) ? exit : null;
       if (blockState(last) === "failed") decorateBlock(pane, last);
-      else paintBlock(last);
+      else paintBlock(pane, last);
     }
     return true;
   };
@@ -5241,6 +5253,97 @@ function shellWord(value) {
     block.input && block.output
       ? blockText(pane.term, block.input, block.output).trim()
       : "";
+  // blockOutputEnd is where a block's output ends: at D, or else where the next prompt
+  // starts, or else where the cursor is, while it runs.
+  const blockOutputEnd = (pane, block) => {
+    if (block.end) return block.end;
+    const next = pane.blocks[pane.blocks.indexOf(block) + 1];
+    if (next) return next.prompt;
+    const buffer = pane.term.buffer.active;
+    return {
+      marker: { line: buffer.baseY + buffer.cursorY },
+      x: buffer.cursorX,
+    };
+  };
+  const blockOutput = (pane, block) =>
+    block.output
+      ? blockText(pane.term, block.output, blockOutputEnd(pane, block))
+      : "";
+  // selectBlockOutput selects a block's output in the terminal, as dragging over it would.
+  const selectBlockOutput = (pane, block) => {
+    const { term } = pane;
+    const from = block.output;
+    const to = blockOutputEnd(pane, block);
+    const length =
+      (to.marker.line - from.marker.line) * term.cols + to.x - from.x;
+    if (from.marker.line < 0 || length <= 0) return;
+    term.select(from.x, from.marker.line, length);
+    term.focus();
+  };
+  // openBlockMenu is what clicking a block's mark offers. Typing the command again goes
+  // through the send buttons' rules: never Enter, and only at the shell's prompt.
+  const openBlockMenu = (event, pane, block) => {
+    event.stopPropagation();
+    if (pane !== focused) focusPane(pane);
+    const output = blockOutput(pane, block);
+    const command = block.command();
+    const oneLine = !command.includes("\n");
+    openPanelMenu(event, [
+      ["Copy output", () => copyText(output, "the output"), Boolean(output)],
+      [
+        "Copy command",
+        () => copyText(command, "the command"),
+        Boolean(command),
+      ],
+      ["Select output", () => selectBlockOutput(pane, block), Boolean(output)],
+      [
+        oneLine
+          ? "Type command again"
+          : "Type command again (only a one-line command)",
+        () => typeAtPrompt(pane.shown, command, "the command"),
+        Boolean(command) && oneLine,
+      ],
+    ]);
+  };
+  // moveToPrompt scrolls a pane to the prompt of the command before or after the top of
+  // what it shows, and past the last one, to the bottom.
+  const moveToPrompt = (pane, step) => {
+    const { term } = pane;
+    const top = term.buffer.active.viewportY;
+    const lines = pane.blocks
+      .filter((block) => block.output)
+      .map((block) => block.prompt.marker.line)
+      .filter((line) => line >= 0);
+    if (step < 0) {
+      const above = lines.filter((line) => line < top).at(-1);
+      if (above !== undefined) term.scrollToLine(above);
+    } else {
+      const below = lines.find((line) => line > top);
+      if (below !== undefined) term.scrollToLine(below);
+      else term.scrollToBottom();
+    }
+  };
+  // Ctrl+Shift+ArrowUp and ArrowDown move between commands, and reach the shell only where
+  // there are none to move between: in a shell that sends no marks, or in vim or less.
+  const blockKeys = (pane, event) => {
+    if (
+      event.type !== "keydown" ||
+      !event.ctrlKey ||
+      !event.shiftKey ||
+      event.altKey ||
+      event.metaKey ||
+      (event.key !== "ArrowUp" && event.key !== "ArrowDown")
+    )
+      return true;
+    if (
+      pane.term.buffer.active.type === "alternate" ||
+      !pane.blocks.some((block) => block.output)
+    )
+      return true;
+    event.preventDefault();
+    moveToPrompt(pane, event.key === "ArrowUp" ? -1 : 1);
+    return false;
+  };
   // openTerminal gives a pane its screen, inside its viewport.
   const openTerminal = (pane) => {
     const { viewport } = pane;
@@ -5271,6 +5374,7 @@ function shellWord(value) {
     term.parser.registerOscHandler(blockMark, (data) =>
       readBlockMark(pane, data),
     );
+    term.attachCustomKeyEventHandler((event) => blockKeys(pane, event));
     term.open(viewport);
     fit.fit();
     term.onData((data) => {

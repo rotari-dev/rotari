@@ -244,7 +244,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       window.Terminal = class {
         rows = 24; cols = 80;
         // A test sets lines, each a string or { text, wrapped }, for the link provider to read.
-        buffer = { active: { type: 'normal', cursorX: 0, cursorY: 0, getLine: (y) => {
+        buffer = { active: { type: 'normal', cursorX: 0, cursorY: 0, baseY: 0, viewportY: 0, getLine: (y) => {
           const line = this.lines?.[y];
           if (line === undefined) return undefined;
           const text = typeof line === 'string' ? line : line.text;
@@ -291,6 +291,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           this.decorations.push(decoration);
           return decoration;
         }
+        scrollToLine(line) { this.buffer.active.viewportY = line; }
+        scrollToBottom() { this.buffer.active.viewportY = this.buffer.active.baseY; this.bottomed = (this.bottomed || 0) + 1; }
+        select(column, row, length) { this.selection = { column, row, length }; }
+        attachCustomKeyEventHandler(handler) { this.keyHandler = handler; }
         modes = { bracketedPasteMode: false };
         options = {};
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
@@ -3746,6 +3750,91 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   bd.sockets.at(-1).onmessage({ data: new TextEncoder().encode('plain').buffer });
   assert.equal(gutter(), false, 'a gutter after a replay without marks');
   assert.ok(bdTerm.decorations.every((decoration) => decoration.isDisposed), 'decorations outlived the replay');
+  }
+
+  // Blocks acted on: Ctrl+Shift+ArrowUp and ArrowDown move between commands, and only where
+  // there are some; a mark's menu copies a command's output or line, selects the output, or
+  // types the line again at the shell's prompt.
+  {
+  const bp = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const bpSocket = bp.sockets.at(-1);
+  bpSocket.onopen?.();
+  const bpTerm = bp.terminals.at(-1);
+  const bpPane = () => bp.document.querySelector('.terminal-pane').terminalPane;
+  const bpCopied = [];
+  Object.defineProperty(bp.window.navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => bpCopied.push(text) } });
+  const key = (name, extra = {}) => {
+    const event = { type: 'keydown', key: name, ctrlKey: true, shiftKey: true, altKey: false, metaKey: false, prevented: false, preventDefault() { this.prevented = true; }, ...extra };
+    return { passed: bpTerm.keyHandler(event), prevented: event.prevented };
+  };
+  // A shell that sends no marks gets the keys, as before.
+  bpSocket.onmessage({ data: new TextEncoder().encode('plain').buffer });
+  assert.deepEqual(key('ArrowUp'), { passed: true, prevented: false }, 'keys taken from a shell without marks');
+  bpTerm.lines = ['$ make', 'built', 'ok', '$ false', 'bad', '$ echo a', '> b', 'a', 'b', '$ sleep 9', 'zz', ''];
+  bpTerm.osc(133, 'A', 0, 0); bpTerm.osc(133, 'B', 2, 0); bpTerm.osc(133, 'C', 0, 1); bpTerm.osc(133, 'D;0', 0, 3);
+  bpTerm.osc(133, 'A', 0, 3); bpTerm.osc(133, 'B', 2, 3); bpTerm.osc(133, 'C', 0, 4); bpTerm.osc(133, 'D;1', 0, 5);
+  bpTerm.osc(133, 'A', 0, 5); bpTerm.osc(133, 'B', 2, 5); bpTerm.osc(133, 'C', 0, 7); bpTerm.osc(133, 'D;0', 0, 9);
+  bpTerm.osc(133, 'A', 0, 9); bpTerm.osc(133, 'B', 2, 9); bpTerm.osc(133, 'C', 0, 10);
+  Object.assign(bpTerm.buffer.active, { cursorX: 2, cursorY: 10, viewportY: 11 });
+  // Up goes from prompt to prompt and stops at the first; down goes back, and past the last
+  // to the bottom.
+  const tops = [];
+  for (let i = 0; i < 5; i++) { assert.deepEqual(key('ArrowUp'), { passed: false, prevented: true }); tops.push(bpTerm.buffer.active.viewportY); }
+  assert.deepEqual(tops, [9, 5, 3, 0, 0]);
+  tops.length = 0;
+  for (let i = 0; i < 4; i++) { key('ArrowDown'); tops.push(bpTerm.buffer.active.viewportY); }
+  assert.deepEqual(tops, [3, 5, 9, 0]);
+  assert.equal(bpTerm.bottomed, 1, 'down past the last command did not go to the bottom');
+  // Nothing else is taken: other keys, a key let go, and keys in vim or less.
+  assert.equal(key('ArrowUp', { shiftKey: false }).passed, true, 'Ctrl+ArrowUp taken from the shell');
+  assert.equal(key('ArrowUp', { altKey: true }).passed, true);
+  assert.equal(key('ArrowLeft').passed, true);
+  assert.equal(key('ArrowUp', { type: 'keyup' }).passed, true);
+  bpTerm.buffer.active.type = 'alternate';
+  assert.equal(key('ArrowUp').passed, true, 'keys taken from vim');
+  bpTerm.buffer.active.type = 'normal';
+  // menu opens the n-th block's menu from its mark, which keeps the pointer from the text.
+  const menu = (n) => {
+    const element = bpPane().blocks[n].decoration.render();
+    const mark = element.querySelector('.terminal-block-mark');
+    let reached = false;
+    element.addEventListener('mousedown', () => (reached = true));
+    mark.dispatchEvent(new bp.window.MouseEvent('mousedown', { bubbles: true }));
+    assert.equal(reached, false, 'a press on a mark reached the terminal');
+    mark.dispatchEvent(new bp.window.MouseEvent('click', { bubbles: true }));
+    return [...bp.document.querySelectorAll('.terminal-tab-menu button')];
+  };
+  const choose = async (n, label) => {
+    menu(n).find((item) => item.textContent === label).click();
+    await wait(20);
+  };
+  assert.deepEqual(menu(0).map((item) => [item.textContent, item.disabled]), [
+    ['Copy output', false], ['Copy command', false], ['Select output', false], ['Type command again', false]]);
+  await choose(0, 'Copy output');
+  await choose(0, 'Copy command');
+  await choose(2, 'Copy output');
+  // A running command's output so far, up to the cursor.
+  await choose(3, 'Copy output');
+  assert.deepEqual(bpCopied, ['built\nok', 'make', 'a\nb', 'zz']);
+  assert.equal(bp.document.querySelector('.terminal-send-note').textContent, 'Copied the output');
+  await choose(0, 'Select output');
+  assert.deepEqual(bpTerm.selection, { column: 0, row: 1, length: 2 * 80 }, 'Select output took other lines');
+  // A command on lines of its own would be typed with its continuation prompts.
+  assert.deepEqual(menu(2).at(-1).textContent, 'Type command again (only a one-line command)');
+  assert.equal(menu(2).at(-1).disabled, true);
+  // Typing again asks what runs first, and never presses Enter.
+  await choose(1, 'Type command again');
+  assert.ok(bp.requests.includes('GET /_terminal/shells/1/preview'), 'it typed without asking what runs');
+  assert.equal(bp.pasted.at(-1), 'false');
+  const typed = bp.pasted.length;
+  bp.server.commands = { 1: 'vim' };
+  await choose(1, 'Type command again');
+  assert.equal(bp.pasted.length, typed, 'typed while vim runs');
+  assert.equal(bp.document.querySelector('.terminal-send-note').textContent, 'vim is running in this shell, so the command was not typed.');
+  // An empty prompt is no command, and its mark is hidden.
+  bpTerm.osc(133, 'A', 0, 11);
+  assert.equal(bpPane().blocks[4].decoration.render().querySelector('.terminal-block-mark').hidden, true);
   }
   process.exit(0);
 })().catch((error) => { console.error(error.stack || String(error)); process.exit(1); });
