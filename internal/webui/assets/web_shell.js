@@ -5315,6 +5315,16 @@ function shellWord(value) {
     } else if (kind === "C" && !last.output) {
       last.output = blockPlace(term);
       last.startedAt = now;
+      // C may say the command line, percent-encoded, as kitty sends it and rotari's zsh
+      // does; a line that does not decode is left to the screen's text.
+      const said = rest.find((part) => part.startsWith("cmdline_url="));
+      if (said !== undefined) {
+        try {
+          last.commandLine = decodeURIComponent(
+            said.slice("cmdline_url=".length),
+          );
+        } catch {}
+      }
       paintBlock(pane, last);
     } else if (kind === "D") {
       last.end = blockPlace(term);
@@ -5347,11 +5357,16 @@ function shellWord(value) {
     }
     return text.trimEnd();
   };
-  // blockCommand is a block's command line, as the shell shows it: from B to C.
-  const blockCommand = (pane, block) =>
-    block.input && block.output
+  // blockCommand is a block's command line, as the shell said it in C, or as the screen
+  // shows it from B to C.
+  // A command line the shell said in C is taken over the screen's, which a prompt may have
+  // redrawn before the command ran, as a transient prompt does.
+  const blockCommand = (pane, block) => {
+    if (block.commandLine !== undefined) return block.commandLine.trim();
+    return block.input && block.output
       ? blockText(pane.term, block.input, block.output).trim()
       : "";
+  };
   // blockOutputEnd is where a block's output ends: at D, or else where the next prompt
   // starts, or else where the cursor is, while it runs.
   const blockOutputEnd = (pane, block) => {

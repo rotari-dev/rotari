@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,6 +18,8 @@ import (
 )
 
 const testWait = 15 * time.Second
+
+var oscSequence = regexp.MustCompile("\x1b\\][^\a]*\a")
 
 // startedShell is a shell whose output a goroutine collects.
 type startedShell struct {
@@ -76,7 +79,8 @@ func (shell *startedShell) run(t *testing.T, command string) string {
 	for time.Now().Before(deadline) {
 		text := shell.text()
 		for _, line := range strings.Split(text, "\n") {
-			line = strings.TrimRight(line, "\r")
+			// An OSC sequence, such as a C mark saying the command line, is not shown.
+			line = oscSequence.ReplaceAllString(strings.TrimRight(line, "\r"), "")
 			if start := strings.Index(line, left); start >= 0 && strings.HasSuffix(line, right) && !strings.Contains(line, "printf") {
 				found = line[start+len(left) : len(line)-len(right)]
 			}

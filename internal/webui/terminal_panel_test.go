@@ -3658,6 +3658,17 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   bkTerm.osc(133, 'B', 2, 0);
   bkTerm.osc(133, 'C', 0, 3);
   assert.equal(blocks().at(-1).command, bkFull.slice(2) + 'bbbb\n> cccc');
+  // A command line said in C, as kitty and rotari's zsh say it, wins over the screen's, which
+  // a transient prompt may have redrawn; one that does not decode is left to the screen.
+  bkTerm.lines = ['$ ', '', 'out', '$ ls', '', ''];
+  bkTerm.osc(133, 'A', 0, 0);
+  bkTerm.osc(133, 'B', 2, 0);
+  bkTerm.osc(133, 'C;cmdline_url=echo%20%C3%A9%3Bx', 0, 2);
+  assert.equal(blocks().at(-1).command, 'echo \u00e9;x');
+  bkTerm.osc(133, 'A', 0, 3);
+  bkTerm.osc(133, 'B', 2, 3);
+  bkTerm.osc(133, 'C;cmdline_url=%E0%A4', 0, 4);
+  assert.equal(blocks().at(-1).command, 'ls', 'a line that does not decode');
   // Another shell's replay starts with no blocks, and none of the old markers are left.
   const bkMarkers = bkTerm.markers.length;
   bk.document.querySelectorAll('.terminal-tab [role=tab]')[1].click();

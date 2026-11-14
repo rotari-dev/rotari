@@ -34,8 +34,25 @@ if zmodload zsh/zle 2>/dev/null && autoload -Uz add-zle-hook-widget 2>/dev/null 
 	add-zle-hook-widget line-init __rotari_b 2>/dev/null; then
 	__rotari_line_init=1
 fi
+# __rotari_preexec says the command line too, as kitty does (C;cmdline_url= and the line
+# percent-encoded), since a prompt may redraw the line it was typed on before it runs, as
+# powerlevel10k's transient prompt does, leaving nothing between B and C on the screen.
 __rotari_preexec() {
-	print -n "\e]133;C\a"
+	emulate -L zsh
+	setopt no_multibyte
+	local text=${1:-$3} url= char hex
+	local -i i
+	for ((i = 1; i <= ${#text}; i++)); do
+		char=${text[i]}
+		if [[ $char == [A-Za-z0-9._~-] ]]; then
+			url+=$char
+		else
+			# A byte above 127 can read as negative, by the locale.
+			printf -v hex '%%%02X' $((#char & 255))
+			url+=$hex
+		fi
+	done
+	print -n "\e]133;C;cmdline_url=$url\a"
 }
 precmd_functions=(__rotari_keep $precmd_functions __rotari_prompt)
 preexec_functions+=(__rotari_preexec)

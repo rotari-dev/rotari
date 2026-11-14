@@ -1476,7 +1476,8 @@ blocks (WEB-48): before every prompt, `D;STATUS` with the last command's exit st
 prompt hooks, which see the command's status unchanged; `B` where the command line starts: in bash at the prompt's
 end, put back when a hook rebuilt the prompt without it, and in zsh when the line editor starts (its `line-init`
 hook), so that a theme rebuilding the prompt at any time keeps it, or at the prompt's end in a zsh before 5.3; and `C` before the first command run from a prompt (bash 4.4 or later by `PS0`, earlier bash by a
-`DEBUG` trap unless the user's files set one, when there is no `C`; zsh by `preexec`). Any other shell,
+`DEBUG` trap unless the user's files set one, when there is no `C`; zsh by `preexec`, as `C;cmdline_url=` and the
+command line percent-encoded byte by byte, as kitty sends it). Any other shell,
 and every shell with `--terminal-shell-integration=false` (or `terminal-shell-integration = false` in a config, or
 `ROTARI_WEB_TERMINAL_SHELL_INTEGRATION=false`, as WEB-36 reads them), starts as `-l` with nothing added. The option
 is refused without `--allow-terminal` and with `--static-dir`, and a detached server reports it as a difference
@@ -1489,8 +1490,9 @@ covered by [`TestTerminalShellIntegration`](../conformance/05-web/terminal_integ
 **WEB-48** With `rotari web --allow-terminal`, the panel reads the OSC 133 marks a shell or its prompt prints (bash
 and zsh print them by default, WEB-49):
 `A` (a prompt starts), `B` (its command line starts), `C` (the command's output starts), and `D` with an optional
-exit code (the command ended). Each `A` starts a block; its command line is the screen's text from `B` to `C`, wrapped
-lines joined, and its output the text from `C` to `D`, or to the next prompt, or to the cursor while it runs. A
+exit code (the command ended). Each `A` starts a block; its command line is what `C` says after `cmdline_url=`, percent-decoded as
+UTF-8 (as kitty sends it), or, without one or with one that does not decode, the screen's text from `B` to `C`,
+wrapped lines joined, and its output the text from `C` to `D`, or to the next prompt, or to the cursor while it runs. A
 prompt before `D` ends the last block without an exit code, as does `D` with none or with one that is not an
 integer. Marks while the alternate screen is shown, and marks with no block to belong to, are ignored. A block is
 dropped with its prompt's line, when it leaves the scrollback or **Clear** empties it, and every block when the pane

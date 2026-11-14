@@ -171,7 +171,7 @@ func TestZshIntegrationReadsTheUsersFilesAndMarks(t *testing.T) {
 				env = append(env, strings.ReplaceAll(entry, "HOME", home))
 			}
 			shell := integrated(t, "zsh", home, env...)
-			if marks := marksAfter(t, shell); !endsWith(marks, "B", "C", "D;1", "A", "B") {
+			if marks := marksAfter(t, shell); !endsWith(marks, "B", "C;cmdline_url=false", "D;1", "A", "B") {
 				t.Errorf("marks around false: %q", marks)
 			}
 			want := strings.ReplaceAll(test.want, "HOME", home)
@@ -191,8 +191,20 @@ func TestZshIntegrationMarksAThemeThatComesLater(t *testing.T) {
 		".zshrc":  "__later() { precmd_functions=(${precmd_functions:#__later} __theme) }\n__theme() { PS1='theme> ' }\nprecmd_functions+=(__later)\n",
 	})
 	shell := integrated(t, "zsh", home)
-	if marks := marksAfter(t, shell); !endsWith(marks, "B", "C", "D;1", "A", "B") {
+	if marks := marksAfter(t, shell); !endsWith(marks, "B", "C;cmdline_url=false", "D;1", "A", "B") {
 		t.Errorf("marks around false: %q", marks)
+	}
+	// zsh says the command line in C, percent-encoded byte by byte, as kitty does. (Bytes
+	// above 127 need a UTF-8 locale, which zsh's line editor reads them by and the test's
+	// environment may not have.)
+	if _, err := shell.Write([]byte("echo \"a b;100%\" >/dev/null\n")); err != nil {
+		t.Fatal(err)
+	}
+	const said = "133;C;cmdline_url=echo%20%22a%20b%3B100%25%22%20%3E%2Fdev%2Fnull\a"
+	for deadline := time.Now().Add(testWait); !strings.Contains(shell.text(), said); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("no %q; the terminal shows:\n%q", said, shell.text())
+		}
 	}
 	if got := shell.run(t, `print -l $precmd_functions | tail -1`); got != "__theme" {
 		t.Errorf("the last precmd hook is %q; the test's theme does not come after rotari's", got)
