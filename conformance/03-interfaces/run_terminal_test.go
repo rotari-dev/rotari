@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,7 +11,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
-	"unsafe"
+
+	"github.com/creack/pty"
 
 	"github.com/rotari-dev/rotari/conformance/support"
 )
@@ -128,25 +128,8 @@ func runInTerminal(t *testing.T, cmd *exec.Cmd, ready string, key byte) (string,
 	return text, code
 }
 
+// openTerminal opens a pseudo-terminal pair through creack/pty, which knows
+// each platform's way to allocate one.
 func openTerminal() (*os.File, *os.File, error) {
-	master, err := os.OpenFile("/dev/ptmx", os.O_RDWR|syscall.O_NOCTTY, 0)
-	if err != nil {
-		return nil, nil, err
-	}
-	unlock := 0
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), syscall.TIOCSPTLCK, uintptr(unsafe.Pointer(&unlock))); errno != 0 {
-		master.Close()
-		return nil, nil, errno
-	}
-	var number uint32
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), syscall.TIOCGPTN, uintptr(unsafe.Pointer(&number))); errno != 0 {
-		master.Close()
-		return nil, nil, errno
-	}
-	slave, err := os.OpenFile(fmt.Sprintf("/dev/pts/%d", number), os.O_RDWR|syscall.O_NOCTTY, 0)
-	if err != nil {
-		master.Close()
-		return nil, nil, err
-	}
-	return master, slave, nil
+	return pty.Open()
 }
