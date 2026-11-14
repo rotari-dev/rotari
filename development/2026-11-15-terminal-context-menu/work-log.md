@@ -33,3 +33,16 @@
   nothing; zsh's index; the block's copies on output and on a prompt, none on a prompt with no command yet) passed;
   `tsc` clean; prettier formatted.
 - **Remaining:** phase 3 (contracts, docs, the browser step).
+
+## 2026-11-15 04:40 +09:00 — Contracts and docs
+
+- **Change:** contract **WEB-51** and its row. `TestTerminalPanelInBrowser` covers it: in the bash tab of the click
+  step, after asking CDP to grant the page's browser context clipboard access (`Browser.grantPermissions`, ignored if
+  refused), it types `echo A$((2*3))DROPZ`, selects `DROP` with `term.select`, right-clicks the line with the browser's
+  mouse, checks the menu leads with `Cut+,Copy+,Paste+,Select all+`, chooses Cut, and runs the line: `A6Z` when the cut
+  was said, or `A6DROPZ` when the copy was refused, which proves nothing was removed. docs/WEB.md describes the menu.
+- **Reason:** plan phase 3.
+- **Plan impact:** none.
+- **Validation:** `TestContractStatus` passed; the browser script passes `node --check`; the step runs only in CI,
+  where whether the grant takes decides which of its two endings it checks.
+- **Remaining:** nothing in this plan.
