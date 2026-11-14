@@ -386,15 +386,16 @@ func completeWithZsh(t *testing.T, binDir string, lines [][]string) [][]string {
 
 // zshCompletionDriver takes the fpath directory and a file of command lines.
 // The markers are split in the typed definitions so the echoed input never
-// contains them.
+// contains them. Ctrl-G ends each completion: Ctrl-T, which BSD and macOS
+// terminals take as their status key, never reaches zsh there.
 const zshCompletionDriver = `
 zmodload zsh/zpty || exit 1
 zpty z zsh -f -i
 zpty -w z "PROMPT=; RPROMPT=; unset zle_bracketed_paste; unsetopt auto_list; LISTMAX=100000; fpath=(${(q)1} \$fpath); autoload -Uz compinit; compinit -u -D"
 zpty -w z 'compadd() { if [[ ${@[1,(i)(-|--)]} == *-(O|A|D)\ * ]]; then builtin compadd "$@"; return; fi; local -a __h; builtin compadd -A __h "$@"; local x; for x in $__h; do print -r -- "<C""AND>$x"; done; builtin compadd "$@" }'
-zpty -w z '_rotari_done() { print -r -- "<E""ND>"; BUFFER=; }; zle -N _rotari_done; bindkey "^T" _rotari_done; bindkey "^I" complete-word'
+zpty -w z '_rotari_done() { print -r -- "<E""ND>"; BUFFER=; }; zle -N _rotari_done; bindkey "^G" _rotari_done; bindkey "^I" complete-word'
 for line in "${(@f)$(<$2)}"; do
-    zpty -w -n z "$line"$'\t\x14'
+    zpty -w -n z "$line"$'\t\x07'
     while zpty -r z chunk; do
         print -rn -- "$chunk"
         [[ $chunk == *'<END>'* ]] && break
