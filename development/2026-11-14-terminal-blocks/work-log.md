@@ -165,3 +165,14 @@
   lowering the flag nowhere makes it fail with a `C` for the empty line. No bash 3.2 here: macOS CI's is the first.
   `TestContractStatus` passed; see the commit for the package runs.
 - **Remaining:** nothing in this plan.
+
+## 2026-11-14 20:40 +09:00 — CI: the flag-pair inventory
+
+- **Change:** `pairInventory` in `conformance/03-interfaces/flag_pairs_test.go` records `web` with 23 flags
+  (fingerprint `9203714407001852`), counting `--terminal-shell-integration`. The pair samples already had it (phase 6),
+  and the coverage document's 66 static-export pairs are unchanged, since the flag is refused with `--static-dir`.
+- **Reason:** CI's `TestCLIFlagPairInventory` failed with `web: schema changed`. Phase 6 ran `pairweb` but not
+  `./conformance/03-interfaces` itself, which holds the inventory.
+- **Plan impact:** none.
+- **Validation:** the failure reproduced here with the same fingerprint; `go test ./conformance/03-interfaces/...`
+  then passed.
