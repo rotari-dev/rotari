@@ -229,8 +229,8 @@ read your usual startup files and add prompt hooks that print the marks; they ch
 nothing a shell would not. `--terminal-shell-integration=false` starts bash and zsh as plain login shells.
 
 Blocks are read in the page alone, from the OSC 133 marks in the output it already shows; the server parses and
-keeps nothing for them, so it still records nothing that is typed. zsh's `C` mark carries the command line,
-percent-encoded, which passes through the server as all output does and is kept in the replayed output as its echo
+keeps nothing for them, so it still records nothing that is typed. The `C` mark of bash and zsh carries the command line,
+percent-encoded (bash's only when its history took the line), which passes through the server as all output does and is kept in the replayed output as its echo
 already is. Any program can print the marks, and a file
 shown with `cat` can draw false ones. They change only the page's display: **Copy output** and **Copy command**
 write to the clipboard only when chosen, and **Type command again** types the text shown, never with Enter and only

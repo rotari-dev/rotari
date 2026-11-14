@@ -1476,8 +1476,10 @@ blocks (WEB-48): before every prompt, `D;STATUS` with the last command's exit st
 prompt hooks, which see the command's status unchanged; `B` where the command line starts: in bash at the prompt's
 end, put back when a hook rebuilt the prompt without it, and in zsh when the line editor starts (its `line-init`
 hook), so that a theme rebuilding the prompt at any time keeps it, or at the prompt's end in a zsh before 5.3; and `C` before the first command run from a prompt (bash 4.4 or later by `PS0`, earlier bash by a
-`DEBUG` trap unless the user's files set one, when there is no `C`; zsh by `preexec`, as `C;cmdline_url=` and the
-command line percent-encoded byte by byte, as kitty sends it). Any other shell,
+`DEBUG` trap unless the user's files set one, when there is no `C`; zsh by `preexec`). `C` says the command line as
+kitty sends it, `C;cmdline_url=` and the line percent-encoded byte by byte: always in zsh, and in bash only when
+history has just taken the line (its last entry changed since the prompt), so that a line history leaves out by
+`HISTCONTROL` or `HISTIGNORE`, or with history off, gets a `C` that says none rather than the line before it. Any other shell,
 and every shell with `--terminal-shell-integration=false` (or `terminal-shell-integration = false` in a config, or
 `ROTARI_WEB_TERMINAL_SHELL_INTEGRATION=false`, as WEB-36 reads them), starts as `-l` with nothing added. The option
 is refused without `--allow-terminal` and with `--static-dir`, and a detached server reports it as a difference

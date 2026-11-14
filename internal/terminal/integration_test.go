@@ -68,28 +68,44 @@ func endsWith(marks []string, want ...string) bool {
 	return len(marks) >= len(want) && slices.Equal(marks[len(marks)-len(want):], want)
 }
 
-// Bash reads a login shell's files, keeps $? for the user's PROMPT_COMMAND, and marks a
-// prompt that a theme rebuilds each time.
+// Bash reads a login shell's files, keeps $? for the user's PROMPT_COMMAND, marks a prompt
+// that a theme rebuilds each time, and says the command line in C when history took it.
 func TestBashIntegrationReadsTheLoginFilesAndMarks(t *testing.T) {
 	home := t.TempDir()
 	writeFiles(t, home, map[string]string{
-		".bash_profile": "export FROM_PROFILE=yes\nPROMPT_COMMAND='LAST=$?; PS1=\"theme> \";'\n",
+		".bash_profile": "export FROM_PROFILE=yes\nPROMPT_COMMAND='LAST=$?; PS1=\"theme> \";'\nHISTCONTROL=ignorespace\nHISTTIMEFORMAT='%F '\n",
 		// Only the first of these a login shell would read.
 		".profile": "export FROM_PROFILE=no\n",
 	})
 	shell := integrated(t, "bash", home)
-	// Bash before 4.4, as macOS has, prints no PS0, and so no C. The run clears what was
-	// shown, so the marks are checked from false's output on; the last B is the one put back
-	// in the theme's prompt.
-	want := []string{"C", "D;1", "A", "B"}
-	if version := shell.run(t, `echo $((BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1]))`); version < "404" && len(version) == 3 {
-		want = want[1:]
-	}
+	// The marks are checked from false's output on; the last B is the one put back in the
+	// theme's prompt.
+	want := []string{"C;cmdline_url=false", "D;1", "A", "B"}
 	if marks := marksAfter(t, shell); !endsWith(marks, want...) {
 		t.Errorf("marks around false: %q, want them to end %q", marks, want)
 	}
 	if got := shell.run(t, `echo "$FROM_PROFILE-$LAST"`); got != "yes-1" {
 		t.Errorf("profile and status = %q, want yes-1", got)
+	}
+	// A line history leaves out is not said, rather than said as the one before it.
+	time.Sleep(300 * time.Millisecond)
+	shell.mu.Lock()
+	shell.output.Reset()
+	shell.mu.Unlock()
+	if _, err := shell.Write([]byte(" true\n")); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(testWait); !strings.Contains(shell.text(), "133;D;0\a"); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("no D;0 after a line history left out; the terminal shows:\n%q", shell.text())
+		}
+	}
+	var marks []string
+	for _, match := range oscMark.FindAllStringSubmatch(shell.text(), -1) {
+		marks = append(marks, match[1])
+	}
+	if !slices.Contains(marks, "C") || slices.ContainsFunc(marks, func(mark string) bool { return strings.HasPrefix(mark, "C;") }) {
+		t.Errorf("marks for a line history left out: %q, want a C that says no line", marks)
 	}
 }
 
@@ -135,7 +151,7 @@ func TestOldBashIntegrationMarksCommandsByTheDebugTrap(t *testing.T) {
 		marks = append(marks, match[1])
 	}
 	// The empty line's prompt has no C, and the pipeline one.
-	if !slices.Equal(marks, []string{"D;0", "A", "B", "C", "D;1", "A", "B"}) {
+	if !slices.Equal(marks, []string{"D;0", "A", "B", "C;cmdline_url=true%20%7C%20false", "D;1", "A", "B"}) {
 		t.Errorf("marks: %q", marks)
 	}
 	if got := shell.run(t, `echo "$LAST"`); got != "1" {

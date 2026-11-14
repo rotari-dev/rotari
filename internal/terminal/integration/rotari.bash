@@ -26,12 +26,43 @@ __rotari_keep() {
 # runs next is typed at the prompt, which the DEBUG trap of bash before 4.4 waits for.
 __rotari_prompt() {
 	__rotari_at_prompt=1
+	__rotari_history=$(builtin fc -l -0 2>/dev/null)
 	printf '\033]133;D;%s\007\033]133;A\007' "$__rotari_status"
 	case $PS1 in
 	*'133;B'*) ;;
 	*) PS1="$PS1"'\[\e]133;B\a\]' ;;
 	esac
 	return "$__rotari_status"
+}
+# __rotari_c prints C, saying the command line as kitty does (C;cmdline_url= and the line
+# percent-encoded), since a prompt may redraw the line it was typed on before it runs, as
+# a transient prompt does. Bash says the line only to history, so it is said only when
+# history has just taken it: a line that history leaves out, by HISTCONTROL or HISTIGNORE,
+# would be said as the one before it, and is left to the screen instead.
+__rotari_history=
+__rotari_c() {
+	local now line url= char hex i
+	now=$(builtin fc -l -0 2>/dev/null)
+	if [ -z "$now" ] || [ "$now" = "$__rotari_history" ]; then
+		printf '\033]133;C\007'
+		return
+	fi
+	line=$(builtin fc -ln -0 2>/dev/null)
+	line=${line#$'\t'}
+	line=${line# }
+	local LC_ALL=C
+	for ((i = 0; i < ${#line}; i++)); do
+		char=${line:i:1}
+		case $char in
+		[A-Za-z0-9._~-]) url+=$char ;;
+		*)
+			# A byte above 127 can read as negative, by the locale.
+			printf -v hex '%02X' "'$char"
+			url+="%${hex: -2}"
+			;;
+		esac
+	done
+	printf '\033]133;C;cmdline_url=%s\007' "$url"
 }
 if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
 	PROMPT_COMMAND=(__rotari_keep "${PROMPT_COMMAND[@]}" __rotari_prompt)
@@ -46,10 +77,17 @@ fi
 # ROTARI_BASH_DEBUG_TRAP lets rotari's tests take the old bash's way with a new one.
 unset ROTARI_BASH_DEBUG_TRAP
 if [ -z "$__rotari_old_bash" ]; then
-	# Bash prints PS0 before running a command line from 4.4 on.
+	# Bash prints PS0 before running a command line from 4.4 on, and expands what it holds
+	# there unless promptvars is off.
 	case ${PS0:-} in
-	*'133;C'*) ;;
-	*) PS0="${PS0:-}"'\e]133;C\a' ;;
+	*'133;C'* | *__rotari_c*) ;;
+	*)
+		if shopt -q promptvars; then
+			PS0="${PS0:-}"'$(__rotari_c)'
+		else
+			PS0="${PS0:-}"'\e]133;C\a'
+		fi
+		;;
 	esac
 elif [ -z "$(trap -p DEBUG)" ]; then
 	# Before 4.4, the DEBUG trap prints C before the first command after a prompt. A line
@@ -62,7 +100,7 @@ elif [ -z "$(trap -p DEBUG)" ]; then
 		*)
 			if [ -n "$__rotari_at_prompt" ]; then
 				__rotari_at_prompt=
-				printf '\033]133;C\007'
+				__rotari_c
 			fi
 			;;
 		esac
