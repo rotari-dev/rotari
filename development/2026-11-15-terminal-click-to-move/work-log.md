@@ -54,3 +54,22 @@
   it would have failed on its exact `\x1b]133;A\a` for zsh, fixed here before any push. `TestContractStatus` passed.
   The browser script passes `node --check`; the step runs only in CI.
 - **Remaining:** nothing in this plan; the right-click menu is the next plan.
+
+## 2026-11-15 05:30 +09:00 — The line's start after a redraw elsewhere
+
+- **Change:** rotari's zsh adds `__rotari_cursor` as a `line-pre-redraw` hook, printing `133;rotari_cursor=$CURSOR`
+  before each redraw. The panel records it on the prompt's block (`lineCursor`), and a new `commandLine` gives click to
+  move and Cut the line's start: `walkBack`, from the cursor by that many characters (counted as `charsFrom` counts),
+  when the shell said it; else `B`, unless a row between `B` and the cursor is not wrapped, when it returns null and
+  nothing moves rather than moving wrong. `clickTarget` and `cutPlace` use it. WEB-50, WEB-49, and WEB-51 say so; the
+  terminal tests' `marksAfter` leaves the cursor marks out.
+- **Reason:** the user found click to move, and Cut with it, worked only sometimes. zsh redraws the prompt elsewhere
+  without any mark after Ctrl+L and after listing completions (seen with a pty: no `A` or `B` for either; Ctrl+C does
+  send `D A B`), which left `B` on the old row, so the start and every count from it were wrong.
+- **Plan impact:** none; decision 1's "from `B`" becomes "from the line's start".
+- **Validation:** with a pty, zsh said `rotari_cursor=4`…`6` while typing, `6` after Ctrl+L, `5` after a left arrow,
+  and `6` around a completion list. `TestTerminalPanel` has a `B` left behind on an old row: no move without the
+  cursor's word, the right index with it, nothing on the redrawn prompt; passed. `TestZshIntegrationPutsTheCursorWhereClicked`
+  checks `rotari_cursor=7` after `echo ab` and Ctrl+L; the integration tests pass twice, and so does
+  `TestTerminalShellIntegration`. Bash has no hook for this, so after Ctrl+L or a completion list a click there does
+  nothing until the next prompt.
