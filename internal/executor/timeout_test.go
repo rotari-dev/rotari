@@ -426,6 +426,12 @@ func TestSSHWrapperTimeoutStopsRemoteCommand(t *testing.T) {
 }
 
 func TestSchedulerArrayWrapperEnforcesTimeout(t *testing.T) {
+	// Started outside a process group of its own, as a scheduler may start
+	// it, the wrapper becomes a group leader through setsid(1), which Linux
+	// compute nodes have and macOS does not.
+	if _, err := exec.LookPath("setsid"); err != nil {
+		t.Skipf("setsid(1) is unavailable: %v", err)
+	}
 	runDir := t.TempDir()
 	task := 1
 	jobDir := filepath.Join(runDir, "array-1")
@@ -468,7 +474,11 @@ func TestLocalJobTimeoutKillsLogForwarderAndCommand(t *testing.T) {
 
 func TestLocalJobTimeoutWorksWithoutUsablePs(t *testing.T) {
 	// BusyBox ps, as in some scheduler images, rejects -p; the wrapper must
-	// still recognize that it leads its process group.
+	// still recognize that it leads its process group, from /proc. Without
+	// /proc (macOS) ps is the only source, and its own ps accepts -p.
+	if _, err := os.Stat("/proc/self/stat"); err != nil {
+		t.Skipf("no /proc to read the process group from: %v", err)
+	}
 	fakeBin := t.TempDir()
 	if err := os.WriteFile(filepath.Join(fakeBin, "ps"), []byte("#!/bin/sh\necho 'ps: unrecognized option: p' >&2\nexit 1\n"), 0o755); err != nil {
 		t.Fatal(err)

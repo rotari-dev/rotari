@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -99,7 +100,15 @@ func TestWriteZip(t *testing.T) {
 	}
 	write(t, filepath.Join(dir, "a.csv"), "a\n", 0o644)
 	write(t, filepath.Join(dir, "deep", "er", "b.txt"), "b\n", 0o644)
-	write(t, filepath.Join(dir, "raw\xffname"), "r", 0o644)
+	// macOS (APFS) refuses names that are not UTF-8; check raw names only
+	// where the file system holds them.
+	rawName := true
+	if err := os.WriteFile(filepath.Join(dir, "raw\xffname"), []byte("r"), 0o644); errors.Is(err, syscall.EILSEQ) {
+		t.Logf("this file system refuses a non-UTF-8 name, so the archive is checked without one: %v", err)
+		rawName = false
+	} else if err != nil {
+		t.Fatal(err)
+	}
 	write(t, filepath.Join(root, "outside"), "secret", 0o644)
 	if err := os.Symlink(filepath.Join(root, "outside"), filepath.Join(dir, "link")); err != nil {
 		t.Fatal(err)
@@ -114,11 +123,14 @@ func TestWriteZip(t *testing.T) {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	want := []string{"results/", "results/a.csv", "results/deep/", "results/deep/er/", "results/deep/er/b.txt", "results/empty/", "results/raw\xffname"}
+	want := []string{"results/", "results/a.csv", "results/deep/", "results/deep/er/", "results/deep/er/b.txt", "results/empty/"}
+	if rawName {
+		want = append(want, "results/raw\xffname")
+	}
 	if strings.Join(names, "|") != strings.Join(want, "|") {
 		t.Errorf("entries %q, want %q", names, want)
 	}
-	if entries["results/deep/er/b.txt"] != "b\n" || entries["results/raw\xffname"] != "r" {
+	if entries["results/deep/er/b.txt"] != "b\n" || rawName && entries["results/raw\xffname"] != "r" {
 		t.Errorf("contents %q", entries)
 	}
 	if ZipName(dir) != "results.zip" || ZipName("/") != "root.zip" {

@@ -226,6 +226,7 @@ func TestSSHExecutionProbeUsesPrivateTokenAndBoundedQuery(t *testing.T) {
 }
 
 func TestSSHExecutionProbeClassifiesRemoteProcessGroup(t *testing.T) {
+	requireLinuxRemote(t)
 	runtimeDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
 	token := "0123456789abcdef0123456789abcdef"
