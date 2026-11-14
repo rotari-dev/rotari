@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -44,13 +45,17 @@ func TestTerminalExplorerListsAndOpensFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for path, content := range map[string]string{
+	files := map[string]string{
 		filepath.Join(dir, "scores.csv"):     "name,score\nalpha,1\n",
 		filepath.Join(dir, "two\nlines"):     "",
-		filepath.Join(dir, "raw\xffname"):    "",
 		filepath.Join(elsewhere, "far.csv"):  "name,score\nfaraway,2\n",
 		filepath.Join(dir, "conf", "a.yaml"): "",
-	} {
+	}
+	rawNames := support.NonUTF8NamesAllowed(t, dir)
+	if rawNames {
+		files[filepath.Join(dir, "raw\xffname")] = ""
+	}
+	for path, content := range files {
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -81,6 +86,10 @@ func TestTerminalExplorerListsAndOpensFiles(t *testing.T) {
 		{Name: "scores.csv", Kind: "file"},
 		{Name: "two\nlines", Kind: "file"},
 	}}
+	if !rawNames {
+		want.Total = 4
+		want.Entries = slices.DeleteFunc(want.Entries, func(entry explorerEntry) bool { return entry.NotUTF8 })
+	}
 	for _, query := range []string{"shell=" + url.QueryEscape(shell), "path=" + url.QueryEscape(real)} {
 		status, body := list(query)
 		var listing explorerListing

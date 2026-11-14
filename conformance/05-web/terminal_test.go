@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -20,7 +21,6 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-
 	"github.com/rotari-dev/rotari/conformance/support"
 )
 
@@ -586,8 +586,8 @@ func TestTerminalShellsFollowTheirProject(t *testing.T) {
 	runIn := func(project, dir string) {
 		t.Helper()
 		e.MustRotari("add", "-p", project, "--", "true")
-		command := e.Command("run", "-p", project, "--quiet")
-		command.Dir = dir
+		// In, not command.Dir, so PWD names dir as a shell would.
+		command := e.In(dir).Command("run", "-p", project, "--quiet")
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("run in %s: %v\n%s", dir, err, output)
 		}
@@ -849,6 +849,10 @@ func TestTerminalShellEndsWithTheServer(t *testing.T) {
 			base := regexp.MustCompile(`http://\S+`).FindString(scanner.Text())
 			if base == "" {
 				t.Fatalf("no address in %q", scanner.Text())
+			}
+			// setsid(1) is how a user leaves the shell's session here; macOS has none.
+			if _, err := exec.LookPath("setsid"); err != nil {
+				t.Skipf("setsid(1) is unavailable: %v", err)
 			}
 			page := openTerminalPage(t, base)
 			shellFile, detachedFile := filepath.Join(e.Root, "shell"), filepath.Join(e.Root, "detached")

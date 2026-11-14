@@ -3,6 +3,7 @@ package web
 import (
 	"bufio"
 	"bytes"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -151,6 +152,12 @@ func TestTerminalOptionsFromTrustedConfigs(t *testing.T) {
 	})
 
 	t.Run("without the terminal, a basedir config chooses the host", func(t *testing.T) {
+		// macOS configures only 127.0.0.1 on its loopback interface.
+		if probe, err := net.Listen("tcp", "127.0.0.2:0"); err != nil {
+			t.Skipf("127.0.0.2 cannot be bound here: %v", err)
+		} else {
+			probe.Close()
+		}
 		e := support.NewEnv(t)
 		writeConfig(t, filepath.Join(e.Base, "config.toml"), "[web]\nhost = \"127.0.0.2\"\n")
 		base, stderr := startWebWithStderr(t, e)

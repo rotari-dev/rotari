@@ -2,6 +2,7 @@ package support
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 // Process is one entry of the process table, as tests look at it from outside.
@@ -133,4 +135,28 @@ func ProcessEnvironment(pid int) ([]string, error) {
 		return nil, fmt.Errorf("ps -E -p %d: %w", pid, err)
 	}
 	return strings.Fields(string(out)), nil
+}
+
+// NonUTF8NamesAllowed reports whether the file system under dir holds a name
+// that is not UTF-8. macOS (APFS) refuses one with EILSEQ; there a test checks
+// everything else and leaves such names out.
+func NonUTF8NamesAllowed(t interface {
+	Helper()
+	Logf(string, ...any)
+	Fatal(...any)
+}, dir string) bool {
+	t.Helper()
+	probe := filepath.Join(dir, "probe\xff")
+	err := os.WriteFile(probe, nil, 0o600)
+	if errors.Is(err, syscall.EILSEQ) {
+		t.Logf("this file system refuses names that are not UTF-8: %v", err)
+		return false
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(probe); err != nil {
+		t.Fatal(err)
+	}
+	return true
 }
