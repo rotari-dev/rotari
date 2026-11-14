@@ -1,22 +1,16 @@
 package projectrun
 
 import (
-	"os"
 	"strconv"
 	"strings"
 
 	"github.com/rotari-dev/rotari/internal/model"
 )
 
-// readLoadAverage returns the host's load average, or nil where
-// /proc/loadavg is unavailable or malformed.
-func readLoadAverage() *model.LoadAverage {
-	data, err := os.ReadFile("/proc/loadavg")
-	if err != nil {
-		return nil
-	}
-	return parseLoadAverage(string(data))
-}
+// readLoadAverage returns the host's load average: from /proc/loadavg on
+// Linux and sysctl vm.loadavg on macOS, or nil where it is unavailable or
+// malformed. Load is observational, so its absence is not an error.
+func readLoadAverage() *model.LoadAverage { return platformLoadAverage() }
 
 func parseLoadAverage(data string) *model.LoadAverage {
 	fields := strings.Fields(data)
