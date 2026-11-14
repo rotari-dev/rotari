@@ -84,3 +84,40 @@
   Chrome here, so its first run is CI's.
 - **Remaining:** nothing in this plan. Directory grouping, exit codes on the server, and the other non-goals are left
   to plans of their own.
+
+## 2026-11-14 18:10 +09:00 — Revision: marks without editing startup files
+
+- **Change:** none in code; the plan. After phase 4 the user found adding lines to `~/.bashrc` or `~/.zshrc` more
+  than anyone would do, and asked for it to be an option, on by default. Decision 1 now has rotari start bash and
+  zsh with files of its own that read the user's, as VS Code does; settled question 1 records the change; phases 5
+  (the integration in `internal/terminal`), 6 (the option), and 7 (contract and docs) are added.
+- **Reason:** the user's request.
+- **Plan impact:** as above. The bash and zsh lines in docs/WEB.md become what the option does for you.
+
+## 2026-11-14 18:40 +09:00 — Shell integration
+
+- **Change:** `internal/terminal/integration/` holds `rotari.bash` and zsh's `zshenv`, `zprofile`, `zshrc`, and
+  `zlogin`, embedded (the zsh ones written as dot files, which go:embed would skip). `WriteIntegration` writes them
+  into a new 0700 directory under the temporary directory. `Options.Integration` names it; `shellCommand` then
+  starts a shell whose program is `bash` with `--init-file DIR/rotari.bash` (not `-l`, which `--init-file` would
+  ignore), and `zsh` with `-l`, `ZDOTDIR=DIR/zsh`, and the `ZDOTDIR` it was to have in `ROTARI_USER_ZDOTDIR` (a
+  `ROTARI_USER_ZDOTDIR` already in the environment is dropped); any other shell, and every shell without it, starts
+  with `-l` as before. `rotari.bash` reads `/etc/profile` and the first of `~/.bash_profile`, `~/.bash_login`,
+  `~/.profile`, then puts `__rotari_keep` first in `PROMPT_COMMAND` (string, joined by lines since the user's may end
+  with `;`, or array) and `__rotari_prompt` last, which prints `D;$status` and `A` and puts `B` back at the end of
+  `PS1` when missing; `PS0` gets `C`. The zsh files each set `ZDOTDIR` to the user's directory, source the user's file
+  of their name at top level (not in a function, where `typeset` would make the user's variables local), take any
+  `ZDOTDIR` it set, and point back; `.zshrc` adds `__rotari_keep` first and `__rotari_prompt` last in
+  `precmd_functions` and `__rotari_preexec` (`C`) in `preexec_functions`; `.zlogin` leaves `ZDOTDIR` as the user had
+  it, unset when it was and nothing set it. `KeeperOptions.ShellIntegration` makes `NewKeeper` write the directory
+  and `Close` remove it, logging a failure. The option is not wired to `rotari web` yet (phase 6).
+- **Reason:** plan phase 5.
+- **Plan impact:** none.
+- **Validation:** `TestBashIntegrationReadsTheLoginFilesAndMarks` (`.bash_profile` read and not `.profile`, `$?` kept
+  for the user's `PROMPT_COMMAND`, which also rebuilds `PS1`, and marks `C D;1 A B` for `false`; `D;1 A B` for bash
+  before 4.4, as macOS has), `TestZshIntegrationReadsTheUsersFilesAndMarks` (files from `$HOME`, from a given
+  `ZDOTDIR`, and from one `.zshenv` sets; all four in order; `$?` kept for a `precmd_functions` theme; `ZDOTDIR` as it
+  was; `ROTARI_USER_ZDOTDIR` gone), `TestShellCommandWithIntegration`, and `TestKeeperWritesAndRemovesTheIntegration`,
+  with bash 5.1 and zsh here; three runs in a row. Taking `return` out of `__rotari_keep`, or the line that puts `B`
+  back, fails the bash test. `go test ./internal/terminal` passed; `go build ./...` and `go vet` clean.
+- **Remaining:** phases 6 (the option) and 7 (contract and docs).
