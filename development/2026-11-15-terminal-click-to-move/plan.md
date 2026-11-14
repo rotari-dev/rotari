@@ -1,7 +1,7 @@
 # Plan: Click to move the cursor in the Web terminal's command line
 
 Created: 2026-11-15
-Status: Accepted by the user on 2026-11-15, with the open questions answered as proposed; phase 1 is done and phase 2 (zsh exactly) is next.
+Status: Accepted by the user on 2026-11-15, with the open questions answered as proposed; phases 1 and 2 are done and phase 3 (contracts and docs) is next.
 See [work-log.md](work-log.md).
 
 ## Goal

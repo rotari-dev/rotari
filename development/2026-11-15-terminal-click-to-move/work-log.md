@@ -21,3 +21,20 @@
   nothing; a wrapped line both ways) passed; `tsc` clean; prettier formatted. Not tried in a real browser: there is
   none here, and the browser step is phase 3.
 - **Remaining:** phases 2 (zsh exactly) and 3 (contracts, docs, the browser step).
+
+## 2026-11-15 02:10 +09:00 — zsh exactly
+
+- **Change:** rotari's `.zshrc` defines `__rotari_goto`, a widget bound to `ESC [ 9998 ~` in the `emacs`, `viins`, and
+  `vicmd` keymaps, which reads up to ten digits with `read -k` and, on a closing `;`, sets `CURSOR` to them, capped
+  at `${#BUFFER}`; anything else ends it doing nothing. When the widget is made, `__rotari_prompt` prints `A` as
+  `A;rotari_goto=1`. The panel records that on the block (`goto`), and `moveByClick` then sends `ESC [ 9998 ~`, the
+  target's character index from `B`, and `;`, instead of arrows.
+- **Reason:** plan phase 2: arrows past the typed text would take a zsh-autosuggestions suggestion, and `CURSOR`
+  cannot pass the buffer's end.
+- **Plan impact:** none.
+- **Validation:** with a pty and `LANG=C.UTF-8`, `echo 日本abc` then index 6 and `Z`, then index 99 and `Q`, ran
+  `echo 日Z本abcQ`, with a spy on `forward-char` never called. `TestZshIntegrationPutsTheCursorWhereClicked` does the
+  same with ASCII (the test's environment may have no UTF-8 locale) and passes three times in a row; the zsh tests now
+  expect `A;rotari_goto=1`. `TestTerminalPanel` has a shell that announced it told index 5 for the wide character and
+  8 past the end; passed. Not tried with the user's own zsh, which would add the test's lines to their history file.
+- **Remaining:** phase 3 (contracts, docs, the browser step).
