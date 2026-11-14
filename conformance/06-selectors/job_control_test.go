@@ -1,8 +1,10 @@
 package conformance
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +12,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/creack/pty"
+	"github.com/rotari-dev/rotari/conformance/support"
 )
 
 // Contract SEL-9: cancel, suspend, and resume resolve each form as "Job
@@ -170,27 +175,37 @@ func testTerminalConfirmationActsOnListedJobs(t *testing.T) {
 	}
 }
 
+// runJobControlWithTerminal runs rotari with a pseudo-terminal as its stdin,
+// stdout, and stderr, types input, and returns its exit error and everything it
+// printed. It opens the terminal itself rather than through script(1), whose
+// options differ between util-linux and the BSDs.
 func runJobControlWithTerminal(t *testing.T, f selectorFixture, input string, args ...string) (error, string) {
 	t.Helper()
-	script, err := exec.LookPath("script")
-	if err != nil {
-		t.Skipf("script utility is unavailable for PTY test: %v", err)
-	}
-	commandArgs := make([]string, 0, len(args)+1)
-	commandArgs = append(commandArgs, shellQuote(rotariBin))
-	for _, arg := range args {
-		commandArgs = append(commandArgs, shellQuote(arg))
-	}
-	cmd := exec.Command(script, "-q", "-e", "-c", strings.Join(commandArgs, " "), "/dev/null")
+	cmd := exec.Command(rotariBin, args...)
 	cmd.Dir = f.e.root
-	cmd.Env = f.e.vars
-	cmd.Stdin = strings.NewReader(input)
-	output, runErr := cmd.CombinedOutput()
-	return runErr, string(output)
-}
-
-func shellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+	cmd.Env = support.CommandEnv(f.e.vars, cmd.Dir)
+	terminal, err := pty.Start(cmd)
+	if err != nil {
+		t.Fatalf("start rotari on a pseudo-terminal: %v", err)
+	}
+	defer terminal.Close()
+	var output bytes.Buffer
+	copied := make(chan struct{})
+	go func() {
+		// Reading ends with an error (EIO on Linux) once rotari closes the terminal.
+		_, _ = io.Copy(&output, terminal)
+		close(copied)
+	}()
+	if _, err := terminal.Write([]byte(input)); err != nil {
+		t.Fatalf("type %q: %v", input, err)
+	}
+	runErr := cmd.Wait()
+	select {
+	case <-copied:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("rotari's terminal output did not end after it exited:\n%s", output.String())
+	}
+	return runErr, output.String()
 }
 
 func runJobControlCase(t *testing.T, tc jobControlCase, command string) {
