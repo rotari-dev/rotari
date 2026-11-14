@@ -93,3 +93,29 @@ lists them; they need their own plan.
 
 **Validation:** `go test ./cmd/rotari ./internal/state` passed on Linux (node v24); `GOOS=darwin go vet` of both
 clean.
+
+## 2026-11-14 — `aa4e9fbd`, `ed103582`, `ed0b85a8`: packages first seen in the fourth macOS run
+
+The fourth macOS run (Go CI run 43577862862, at `9452a07e`) showed packages not seen before. The pasted part did
+not include the `unlock` and `info` tests that the process identity change addresses, so whether they now pass
+is not known from it.
+
+- **`aa4e9fbd` Type into the job control confirmation through creack/pty** (`conformance/06-selectors`):
+  `TestJobControlSelectors/terminal_confirmation_*` ran `script -q -e -c …`, util-linux options that BSD `script`
+  rejects (`illegal option -- c`). The test now starts rotari on a pseudo-terminal itself. A Linux assumption in a
+  test.
+- **`ed103582` Say the SSH remote host must run Linux** (`internal/executor/ssh_test.go`, `docs/EXECUTORS.md`):
+  seven SSH tests run the remote scripts on the test machine. Those scripts use `setsid`, GNU `stat -c`, and
+  `/proc` (`invalid SSH job state owner`, exit 1), so the remote host must be Linux; the contract already says the
+  remote records a Linux `/proc` start time, but the user guide did not say it. Those tests now skip off Linux,
+  naming why, and EXECUTORS.md states the requirement. A Linux-only feature; supporting a macOS remote would be a
+  feature of its own.
+- **`ed0b85a8` Record the host load average on macOS** (`internal/projectrun`): `TestMalformedLoadSamplesAreSkipped`
+  (STATE-4) found no `load_samples.jsonl`, because the load came only from `/proc/loadavg`, so macOS runs recorded
+  none. macOS now reads `sysctl vm.loadavg` (`struct loadavg`: three `fixpt_t` and `fscale`). A product gap, small
+  and observational, so fixed here rather than in a plan of its own. Tests: `TestDecodeDarwinLoadAverage` (layout,
+  short record, zero scale) and `TestHostLoadAverageIsRead` on Linux and macOS.
+
+**Validation:** `go vet ./...` for linux and darwin (arm64, amd64), and `./internal/projectrun` for freebsd: clean.
+On Linux, `internal/executor`, `internal/projectrun`, `conformance/04-coordination`, and `conformance/06-selectors`
+passed; the terminal confirmation tests passed `-count=3`. Nothing here ran on macOS.
