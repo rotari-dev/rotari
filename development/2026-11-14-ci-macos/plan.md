@@ -1,7 +1,7 @@
 # Plan: Run the Go CI on macOS too
 
 Created: 2026-11-14
-Status: Proposed. Decided with the user on 2026-11-14.
+Status: In progress; see [work-log.md](work-log.md). Decided with the user on 2026-11-14.
 
 ## Goal
 
@@ -43,7 +43,10 @@ macOS out:
    - Browser tests: macOS runners include Chrome; check that `browserForTests` finds it (it looks on `PATH`, where
      the macOS app bundle is not), and set `ROTARI_TEST_CHROME` in the workflow if needed, so
      `ROTARI_REQUIRE_BROWSER_TESTS` stays on for both.
-2. **`race` stays Linux-only.** Data races rarely depend on the OS, and macOS minutes cost more.
+2. **No separate macOS `race` job; the macOS leg runs with `-race` once triaged** (decided 2026-11-14). Code that
+   runs only on macOS is never run by the Linux `race` job, and scheduling differs, so races there need macOS. The
+   macOS leg collects no coverage, so its one test run can carry `-race` instead of adding a job. It switches only
+   after the plain run passes, so a failure caused by macOS is not confused with one caused by `-race` timing.
 3. **Triage before requiring it.** The macOS leg starts with `continue-on-error: true`. Each failure is classified
    as in the Goal and fixed in its own commit. When the leg passes, `continue-on-error` is removed and it becomes a
    required check like the Linux leg.
@@ -58,8 +61,9 @@ macOS out:
 2. Triage: one commit per cause, each saying in its work-log entry whether it was a product bug, a Linux assumption
    in a test, or a Linux-only feature now skipped. Product bugs found here are also checked for other interfaces as
    AGENTS.md asks.
-3. Make the macOS leg required; update `docs/FAQ.md` or contributor docs if they describe what CI covers.
-4. Work log.
+3. Switch the macOS leg's test run to `-race` and fix what it finds.
+4. Make the macOS leg required; update `docs/FAQ.md` or contributor docs if they describe what CI covers.
+5. Work log.
 
 ## Risks
 
