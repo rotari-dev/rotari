@@ -341,7 +341,7 @@ func (r controlRun) cancelOutcome(t *testing.T, flags []pairFlag, want []string)
 }
 
 func TestCLIFlagPairCancel(t *testing.T) {
-	covers(t, "SEL-12")
+	covers(t, "CAN-4", "SEL-12")
 	start := time.Now()
 	c := controlCommand(t, "cancel")
 	// Rejections must act on nothing, so they share one run, checked after each.

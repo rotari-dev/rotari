@@ -986,11 +986,15 @@ the request, on the host that owns the run.
   fail the cancel. A cancelled job's wrapper sends SIGTERM to its command and
   records the job cancelled only once the command has exited, so a command
   may clean up first; a command still running 30 seconds later is recorded
-  cancelled and its process group killed. A whole-run `cancel --wait` therefore
+  cancelled and its process group killed. A command that exits sooner is
+  recorded without waiting out the rest of the grace period, even if it exits
+  while the cancellation watchdog is starting. A whole-run `cancel --wait` therefore
   returns with no process of the run's jobs left. Implemented by the status
   wrapper's `on_signal` in [internal/executor/wrapper.go](../internal/executor/wrapper.go);
   covered by `TestLocalCancelWaitsForCommandToExit`,
-  `TestLocalCancelKillsCommandIgnoringTerm`, and
+  `TestLocalCancelKillsCommandIgnoringTerm`,
+  `TestCancelWatchdogHandlesSignalBeforeTrap`,
+  `TestCancelWatchdogRetriesLostStopSignal`, and
   `TestCancelledJobsStopBeforeTheyAreRecorded`.
 - **CAN-2** A cancelled run still finishes: it writes its summary, every job
   has a recorded result, the running lock is removed, and the project returns
@@ -1008,7 +1012,7 @@ the request, on the host that owns the run.
 - **CAN-4** Cancelling one job (`rotari cancel JOB_ID`, or the Web UI's
   cancel-job) stops only that job. The rest of the run keeps running and
   finishes normally, and the run's `--retry` does not start the cancelled job
-  again.
+  again. `TestCLIFlagPairCancel` also checks selected matrix and array jobs.
 - **CAN-5** A job that a cancel stopped, whether the whole run's or its own,
   records a cancelled result: its error is `cancelled`, keeping an earlier
   error in parentheses. `--filter-failure-kind cancelled` selects it, and

@@ -114,7 +114,8 @@ disconnect setting still apply without a terminal input.
 Cancelling a run stops its unfinished jobs and prevents new jobs from starting.
 A cancelled job receives SIGTERM and may clean up before it exits; rotari
 records it cancelled once it has exited, or after 30 seconds, when it kills
-what is left.
+what is left. A command that exits sooner is recorded without waiting out the
+remaining grace period.
 The run is then recorded as `cancelled` with exit code 1, so `wait` and
 scripts that read the exit code treat it as a failure, and notifications
 report it as a failed run. Cancelling only selected jobs leaves the run

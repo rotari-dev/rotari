@@ -178,6 +178,8 @@ on_signal() {
     fi
     if [ -n "${job_pid:-}" ] && kill -0 "$job_pid" 2>/dev/null; then
         kill -TERM "$job_pid" 2>/dev/null || true
+        cancel_timer_stopped=
+        trap 'cancel_timer_stopped=1' USR2
         # Record the cancel only once the command has exited, so a command
         # that cleans up on SIGTERM is not reported stopped while it runs.
         # After the grace period, record it and kill what is left.
@@ -188,7 +190,13 @@ on_signal() {
         (
             trap '' TERM INT QUIT
             timer_previous=${!:-}
-            trap '[ "${!:-}" = "$timer_previous" ] || kill -KILL "$!" 2>/dev/null; exit 0' USR1
+            trap '[ "${!:-}" = "$timer_previous" ] || kill -KILL "$!" 2>/dev/null; kill -USR2 "$$" 2>/dev/null; exit 0' USR1
+            # The command may have exited and the wrapper may have sent USR1
+            # before this trap was installed.
+            if ! kill -0 "$job_pid" 2>/dev/null; then
+                kill -USR2 "$$" 2>/dev/null
+                exit 0
+            fi
             sleep ` + fmt.Sprint(timeoutGraceSeconds) + ` &
             wait "$!"
             write_status cancelled "$signal"
@@ -202,8 +210,14 @@ on_signal() {
         while kill -0 "$job_pid" 2>/dev/null; do
             wait "$job_pid" 2>/dev/null
         done
-        kill -USR1 "$cancel_killer" 2>/dev/null
+        # A signal sent while the timer is starting can be lost; retry until
+        # it acknowledges the stop or has already exited.
+        while [ -z "$cancel_timer_stopped" ] && kill -0 "$cancel_killer" 2>/dev/null; do
+            kill -USR1 "$cancel_killer" 2>/dev/null || break
+            sleep 0.01
+        done
         wait "$cancel_killer" 2>/dev/null
+        trap - USR2
     fi
 	finish_logs || true
 	write_status cancelled "$signal"

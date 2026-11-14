@@ -495,12 +495,19 @@ func TestLocalJobTimeoutWorksWithoutUsablePs(t *testing.T) {
 // returns it with that directory.
 func startCancelTestWrapper(t *testing.T, command func(jobDir string) string) (*exec.Cmd, string) {
 	t.Helper()
+	return startCancelTestWrapperWithScript(t, func(jobDir string) string {
+		return StatusWrapperScript([]string{"sh", "-c", command(jobDir)}, jobDir, nil, "", "")
+	})
+}
+
+func startCancelTestWrapperWithScript(t *testing.T, script func(jobDir string) string) (*exec.Cmd, string) {
+	t.Helper()
 	jobDir := filepath.Join(t.TempDir(), "job")
 	if err := os.MkdirAll(jobDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	wrapperPath := filepath.Join(jobDir, "local-wrapper.sh")
-	if err := os.WriteFile(wrapperPath, []byte(StatusWrapperScript([]string{"sh", "-c", command(jobDir)}, jobDir, nil, "", "")), 0o755); err != nil {
+	if err := os.WriteFile(wrapperPath, []byte(script(jobDir)), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("/bin/sh", wrapperPath)
