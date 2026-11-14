@@ -258,7 +258,11 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await collect();
 
   // A row under the right-hand pane, then a column beside it: four panes, as columns of rows.
+  // The Explorer, open by default, closes first: beside it, half of the narrower column is
+  // under the smallest pane, and the split would be refused for want of room.
   const paneCount = (count) => 'document.querySelectorAll(".xterm-helper-textarea").length === ' + count;
+  await page.evaluate(barButton('Explorer') + '.click()');
+  await until('the Explorer to close', 'document.querySelector(".terminal-explorer")?.hidden === true && ' + barButton('Explorer') + '.getAttribute("aria-pressed") === "false"');
   await page.evaluate('document.querySelectorAll(".xterm-helper-textarea")[1].focus()');
   await page.evaluate(barButton('Split down') + '.click()');
   await until('a third pane', paneCount(3));
