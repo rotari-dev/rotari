@@ -38,3 +38,19 @@
   expect `A;rotari_goto=1`. `TestTerminalPanel` has a shell that announced it told index 5 for the wide character and
   8 past the end; passed. Not tried with the user's own zsh, which would add the test's lines to their history file.
 - **Remaining:** phase 3 (contracts, docs, the browser step).
+
+## 2026-11-15 02:50 +09:00 — Contracts and docs
+
+- **Change:** contract **WEB-50** (the click: which clicks, where, how counted, and what is sent) with its row, and
+  WEB-49's note and row on zsh's widget and `A;rotari_goto=1`. `TestTerminalShellIntegration` expects zsh's `A` with
+  the parameter and types `echo abc`, index 5 and `Z`, index 99 and `Q`, through the binary, awaiting `ZabcQ`.
+  `TestTerminalPanelInBrowser` now covers WEB-50 too: in the `/bin/sh` tab it starts `bash --norc --noprofile -i`
+  (sh has no line editor to move), gives it a `PS1` with `A` and `B`, types `echo $((40+2))x` without Enter, clicks
+  the cell of `$` with the browser's mouse, types `X` and Enter, awaits `X42x`, and exits bash. docs/WEB.md says what a
+  click does, and the zsh-autosuggestions caveat for a zsh rotari did not start.
+- **Reason:** plan phase 3.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalShellIntegration` passed. It had not been run since phase 2, which changed zsh's `A`;
+  it would have failed on its exact `\x1b]133;A\a` for zsh, fixed here before any push. `TestContractStatus` passed.
+  The browser script passes `node --check`; the step runs only in CI.
+- **Remaining:** nothing in this plan; the right-click menu is the next plan.
