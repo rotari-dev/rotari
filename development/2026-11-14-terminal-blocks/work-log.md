@@ -259,3 +259,22 @@
   tests pass, twice in a row. zsh started through rotari's files with the user's own home and powerlevel10k here gave
   `D;0 A B C D;1 A B C D;0 A B C`. Bash keeps `B` in `PS1`, which a bash theme added after rotari's hook could still
   drop; none was reported.
+
+## 2026-11-15 00:20 +09:00 — zsh says the command line in C
+
+- **Change:** rotari's zsh `preexec` prints `C;cmdline_url=` and the command line (`$1`, else `$3`) percent-encoded
+  byte by byte (unreserved characters kept; `no_multibyte`, and each byte masked to 0–255, since a byte above 127
+  reads as negative by the locale), the form kitty uses. The panel's `C` handler decodes it (`decodeURIComponent`,
+  so as UTF-8) into `block.commandLine`, which `blockCommand` prefers to the screen's text; one that does not decode
+  is ignored. The terminal tests' `run` helper strips OSC sequences from a line before looking at it, since the `C`
+  mark, holding the typed `printf`, now shares the output's line. WEB-48, WEB-49, and docs/SECURITY.md say so.
+- **Reason:** after the `line-init` fix the user still saw "(no command line)". Their powerlevel10k has
+  `POWERLEVEL9K_TRANSIENT_PROMPT=always`: on Enter it prints `\r\r\e[A\e[J❯ echo hi`, moving up a line, clearing the
+  line `B` was on, and writing the command on the line above, so `B` to `C` held nothing. The screen cannot say the
+  command line then; the shell can.
+- **Plan impact:** decision 1 notes it.
+- **Validation:** the integration tests (zsh's marks now end `C;cmdline_url=false`; `echo "a b;100%" >/dev/null`
+  encoded as expected) pass twice; zsh with the user's own setup gave `C;cmdline_url=ls%20-d%20%2Ftmp` and
+  `C;cmdline_url=false`, and with `LANG=C.UTF-8` `é` as `%C3%A9`. With no locale, zsh's line editor itself turns such
+  bytes into `?` before the command runs, so the test uses ASCII. `TestTerminalPanel` has the decoded line winning
+  over a blank screen and an undecodable one falling back; see the commit for the runs.

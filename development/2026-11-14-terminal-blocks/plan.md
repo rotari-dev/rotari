@@ -46,7 +46,7 @@ Grouping blocks by directory, discussed with recent directories, would build on 
    adds the marks; zsh with `ZDOTDIR` pointing at rotari's files, each reading the user's own from where zsh would
    have (following a `ZDOTDIR` the user's `.zshenv` sets) at top level, the last adding the marks and putting
    `ZDOTDIR` back. The marks come from a first prompt hook that keeps `$?` and a last one that prints `D` and `A` and
-   puts `B` back at the end of a prompt a theme rebuilt (zsh prints `B` from its `line-init` hook instead); bash 4.4's `PS0`, a `DEBUG` trap in earlier bash (unless the
+   puts `B` back at the end of a prompt a theme rebuilt (zsh prints `B` from its `line-init` hook instead, and says the command line in `C` as kitty does); bash 4.4's `PS0`, a `DEBUG` trap in earlier bash (unless the
    user has one), and zsh's `preexec` print `C`. The scripts
    are written to a private temporary directory when the server starts and removed when it stops. Any other shell,
    and every shell with `--terminal-shell-integration=false`, starts with `-l` as before; fish 4 marks by itself.
