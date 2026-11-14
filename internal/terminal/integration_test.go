@@ -93,6 +93,51 @@ func TestBashIntegrationReadsTheLoginFilesAndMarks(t *testing.T) {
 	}
 }
 
+// Bash before 4.4 has no PS0: a DEBUG trap prints C before the command typed at a prompt,
+// once, and not for a line with no command; $? is kept for the user's PROMPT_COMMAND. A new
+// bash is made to take that way here, since no old one may be at hand.
+func TestOldBashIntegrationMarksCommandsByTheDebugTrap(t *testing.T) {
+	home := t.TempDir()
+	writeFiles(t, home, map[string]string{".bash_profile": "PROMPT_COMMAND='LAST=$?'\n"})
+	shell := integrated(t, "bash", home, "ROTARI_BASH_DEBUG_TRAP=1")
+	if got := shell.run(t, `echo "${PS0:-none}-${ROTARI_BASH_DEBUG_TRAP:-gone}"`); got != "none-gone" {
+		t.Errorf("PS0 and the test's variable = %q, want none-gone", got)
+	}
+	// An empty line, then a pipeline of two commands that fails, with what came before gone.
+	time.Sleep(300 * time.Millisecond)
+	shell.mu.Lock()
+	shell.output.Reset()
+	shell.mu.Unlock()
+	if _, err := shell.Write([]byte("\n")); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if _, err := shell.Write([]byte("true | false\n")); err != nil {
+		t.Fatal(err)
+	}
+	ended := func() bool {
+		text := shell.text()
+		at := strings.Index(text, "133;D;1\a")
+		return at >= 0 && strings.Contains(text[at:], "133;B\a")
+	}
+	for deadline := time.Now().Add(testWait); !ended(); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("no D;1; the terminal shows:\n%q", shell.text())
+		}
+	}
+	var marks []string
+	for _, match := range oscMark.FindAllStringSubmatch(shell.text(), -1) {
+		marks = append(marks, match[1])
+	}
+	// The empty line's prompt has no C, and the pipeline one.
+	if !slices.Equal(marks, []string{"D;0", "A", "B", "C", "D;1", "A", "B"}) {
+		t.Errorf("marks: %q", marks)
+	}
+	if got := shell.run(t, `echo "$LAST"`); got != "1" {
+		t.Errorf("the user's PROMPT_COMMAND saw $? = %q, want 1", got)
+	}
+}
+
 // Zsh reads the user's files from where zsh would have: $HOME, a ZDOTDIR it was given, or
 // one the user's .zshenv sets; it leaves ZDOTDIR as it was, and marks as bash does.
 func TestZshIntegrationReadsTheUsersFilesAndMarks(t *testing.T) {

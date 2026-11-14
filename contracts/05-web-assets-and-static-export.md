@@ -1427,7 +1427,7 @@ last. `POST` and
 `/_terminal/here`, which says where a new shell would go, take a page's place: `project`, with
 `basedir` for a mounted one (404 if unknown), and `run`, read on the server and never a path from the
 page; `basedir` with no project, empty for the server's own, is the place of that basedir's own pages, and
-`run` with no project is refused (400). A shell runs as `$SHELL -l` or `/bin/sh` with the server's environment less the Web token. With
+`run` with no project is refused (400). A shell runs as `$SHELL -l` or `/bin/sh` with the server's environment less the Web token, bash and zsh by default as WEB-49 says. With
 a project, it starts where `run`, or the project's latest run, started. If that cannot be found or
 does not exist on this host it starts in the home directory and says why in its first line, escaped,
 which replays with its output. A basedir's own shell, with `basedir` and no project, starts in the basedir's
@@ -1464,7 +1464,29 @@ limit is checked at the package level by `TestIdleLimitAppliesToTheShellsTogethe
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
-**WEB-48** With `rotari web --allow-terminal`, the panel reads the OSC 133 marks a shell or its prompt prints:
+**WEB-49** With `rotari web --allow-terminal` and `--terminal-shell-integration`, on by default, a shell whose program
+is named `bash` or `zsh` starts with rotari's own startup files, written when the server starts into a new directory
+only its user can read and removed when it stops; the user's files are not changed. bash runs with `--init-file`
+naming rotari's script, which reads `/etc/profile` and the first readable of `~/.bash_profile`, `~/.bash_login`, and
+`~/.profile`, as a login shell would. zsh runs with `-l` and `ZDOTDIR` naming rotari's directory, whose `.zshenv`,
+`.zprofile`, `.zshrc`, and `.zlogin` each read the user's file of that name, at top level, from where zsh would have:
+the `ZDOTDIR` the shell was to have, else `$HOME`, or a `ZDOTDIR` the user's `.zshenv` sets; afterwards `ZDOTDIR` is
+as it was (unset if it was and nothing set it). Then each marks its prompts and commands with OSC 133 for the panel's
+blocks (WEB-48): before every prompt, `D;STATUS` with the last command's exit status and `A`, after the user's own
+prompt hooks, which see the command's status unchanged; `B` at the prompt's end, put back when a hook rebuilt the
+prompt without it; and `C` before the first command run from a prompt (bash 4.4 or later by `PS0`, earlier bash by a
+`DEBUG` trap unless the user's files set one, when there is no `C`; zsh by `preexec`). Any other shell,
+and every shell with `--terminal-shell-integration=false` (or `terminal-shell-integration = false` in a config, or
+`ROTARI_WEB_TERMINAL_SHELL_INTEGRATION=false`, as WEB-36 reads them), starts as `-l` with nothing added. The option
+is refused without `--allow-terminal` and with `--static-dir`, and a detached server reports it as a difference
+when asked for otherwise (WEB-40). Implemented in `internal/terminal/integration.go` and the scripts beside it;
+covered by [`TestTerminalShellIntegration`](../conformance/05-web/terminal_integration_test.go) and the unit tests
+`TestBashIntegrationReadsTheLoginFilesAndMarks`, `TestOldBashIntegrationMarksCommandsByTheDebugTrap`,
+`TestZshIntegrationReadsTheUsersFilesAndMarks`,
+`TestShellCommandWithIntegration`, and `TestKeeperWritesAndRemovesTheIntegration`.
+
+**WEB-48** With `rotari web --allow-terminal`, the panel reads the OSC 133 marks a shell or its prompt prints (bash
+and zsh print them by default, WEB-49):
 `A` (a prompt starts), `B` (its command line starts), `C` (the command's output starts), and `D` with an optional
 exit code (the command ended). Each `A` starts a block; its command line is the screen's text from `B` to `C`, wrapped
 lines joined, and its output the text from `C` to `D`, or to the next prompt, or to the cursor while it runs. A
@@ -1734,7 +1756,7 @@ are read only from the command line, the environment, the global config, and a f
 `--host` and `--auth-token` when the terminal or launchers end up on. A workspace, basedir, or project config's value
 for them is ignored, the next place in the order (a trusted config, then the built-in default) supplying the value, and
 unless the command line or the environment replaces it anyway, `rotari web` says on stderr, before serving, which key,
-value, and file it ignored. It never shows a token. The `--terminal-*` limits and `--terminal-shell` are read from every
+value, and file it ignored. It never shows a token. The `--terminal-*` limits, `--terminal-shell`, and `--terminal-shell-integration` are read from every
 config. A value for these options from the environment or a config that does not parse is an error, and one out of
 range is when the terminal is on; either names the variable or file it came from, and the server does not start. An
 empty variable counts as unset. `rotari config` templates for a workspace, basedir, or project leave out the options

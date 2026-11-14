@@ -223,6 +223,11 @@ Links in a shell's output (`POST /_terminal/shells/ID/links`) are found the same
 screen, at most 64 at once, behind the same checks and with a JSON body, and the server answers which name a run, a
 job, or a path that exists. That tells nothing a shell on the server could not.
 
+So that bash and zsh print those marks, rotari starts them with its own startup files (`--terminal-shell-integration`,
+on by default), written when the server starts into a directory only you can read and removed when it stops. They
+read your usual startup files and add prompt hooks that print the marks; they change none of your files, and run
+nothing a shell would not. `--terminal-shell-integration=false` starts bash and zsh as plain login shells.
+
 Blocks are read in the page alone, from the OSC 133 marks in the output it already shows; the server parses and
 keeps nothing for them, so it still records nothing that is typed. Any program can print the marks, and a file
 shown with `cat` can draw false ones. They change only the page's display: **Copy output** and **Copy command**

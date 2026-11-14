@@ -47,7 +47,7 @@ environment variables are in
 | `--allow-control` | Job control on (default) or `=false` for read-only. |
 | `--allow-exec` | Let the UI launch registered commands; see below. |
 | `--allow-terminal` | Add a terminal panel; see below. |
-| `--terminal-idle-timeout`, `--terminal-max-shells`, `--terminal-max-shells-per-project`, `--terminal-replay-size`, `--terminal-shell` | With `--allow-terminal`, change its limits; see below. |
+| `--terminal-idle-timeout`, `--terminal-max-shells`, `--terminal-max-shells-per-project`, `--terminal-replay-size`, `--terminal-shell`, `--terminal-shell-integration` | With `--allow-terminal`, change its limits and how its shells start; see below. |
 | `--allowed-host NAME` | With `--allow-exec` or `--allow-terminal`, accept one more `Host` header name (repeatable). |
 | `--artifact-root DIR` | Also serve recorded artifact files under `DIR` (repeatable). |
 | `--detach`, `--disconnect-action`, `--shutdown` | Leave the server running in the background, and stop it; see [Stopping and detaching](#stopping-and-detaching). |
@@ -332,29 +332,16 @@ prompt without pressing Enter, only while nothing runs in the shell, as **Recent
 only in the page, from the output it shows, so they come back after following a link for as much output as is shown
 again. A shell that sends no marks looks as it always did.
 
-rotari does not change your shell's startup files. For bash 4.4 or later, add these lines to the end of
-`~/.bashrc` (if your `PROMPT_COMMAND` is an array, put `__rotari_mark` first in it instead):
-
-```bash
-__rotari_mark() { local status=$?; printf '\033]133;D;%s\007\033]133;A\007' "$status"; return "$status"; }
-PROMPT_COMMAND="__rotari_mark${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
-PS1="$PS1"'\[\e]133;B\a\]'
-PS0='\e]133;C\a'
-```
-
-For zsh, add these to the end of `~/.zshrc`:
-
-```zsh
-__rotari_precmd() { print -n "\e]133;D;$?\a\e]133;A\a" }
-__rotari_preexec() { print -n "\e]133;C\a" }
-precmd_functions=(__rotari_precmd $precmd_functions)
-preexec_functions+=(__rotari_preexec)
-PS1="$PS1"$'%{\e]133;B\a%}'
-```
-
-fish 4 sends the marks itself, and oh-my-posh does with its shell integration option on. Put the lines after
-anything that sets the prompt, such as a prompt theme. Any program can print the marks, so a file shown with `cat`
-can draw false ones; they change only what the page shows.
+bash and zsh mark their commands with nothing to set up: rotari starts them with startup files of its own, which
+read yours as the shell would (bash's `/etc/profile` and the first of `~/.bash_profile`, `~/.bash_login`, and
+`~/.profile`; zsh's `.zshenv`, `.zprofile`, `.zshrc`, and `.zlogin` from your `ZDOTDIR` or home) and then add the
+marks after your own prompt hooks, so a prompt theme such as starship or powerlevel10k keeps its look and its exit
+status. Your files are not changed. bash before 4.4, as macOS ships, gets its marks from a `DEBUG` trap, unless your
+files set one of their own, in which case its prompts get no marks. fish 4 sends the marks itself, and oh-my-posh does with
+its shell integration option on; other shells get no blocks. To start bash and zsh as plain login shells instead,
+pass `--terminal-shell-integration=false`, or set it in a config or the environment as the other terminal options
+are. Any program can print the marks, so a file shown with `cat` can draw false ones; they change only what the page
+shows.
 
 The **Clear** icon empties the tab's screen and scrollback, and what would be shown again after following a
 link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing
@@ -435,6 +422,7 @@ rotari web --allow-terminal
   | `--terminal-max-shells-per-project` | `8` | Shells of one project, or of one state directory's own pages, at once. |
   | `--terminal-replay-size` | `256KiB` | Recent output kept per shell, up to `64MiB`. More uses more memory. A pane shows at most the last 10,000 lines of it. |
   | `--terminal-shell` | `$SHELL`, or `/bin/sh` | The shell to run. |
+  | `--terminal-shell-integration` | `true` | Start bash and zsh with rotari's startup files, which read yours and mark commands for blocks. `false` starts them as plain login shells. |
 
 - **Keys:** a browser keeps some keys for itself, such as Ctrl-W, which do not reach the shell.
 - **Behind a reverse proxy:** the proxy must pass WebSocket connections to `/_terminal/ws`.
