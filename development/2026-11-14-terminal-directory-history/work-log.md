@@ -90,3 +90,19 @@
   it runs in CI.
 - **Remaining:** none in this plan. Watch CI for the browser step after a push. Blocks and links for rotari IDs,
   proposed with this feature, have no plans yet.
+
+## 2026-11-14 10:50 +09:00 — A directory left before its prompt settled (`73ae4483459a`)
+
+- **Change:** `Attachment.Write` calls `readDir` before passing on input with Enter, so a pending read happens at
+  once when the shell is at its prompt. `TestHistoryKeepsADirectoryLeftAtOnce` types the second `cd` as soon as the
+  first one's output shows. WEB-45's note says so.
+- **Reason:** CI's `TestTerminalPanelInBrowser` timed out at "the recent directories": the step types the second
+  line as soon as `one-4` shows, within `dirSettle` (150 ms) of the prompt; the second command's output kept
+  resetting the timer, so the shell was read only in `dir two` and `dir one` never entered. Reproduced over the
+  WebSocket without a browser; the new unit test failed three times in three before the fix. Pasted lines hit the
+  same thing.
+- **Plan impact:** none to the decisions; reading at the prompt still needs no shell setup. On darwin, where
+  finding the directory runs a program, the extra read happens only for Enter while a read is pending.
+- **Validation:** the new test passed 5 times in a row with the other history tests; `go test -race
+  ./internal/terminal`, and `go test ./conformance ./conformance/05-web -run 'TestTerminal|Contract'` passed. The
+  browser step itself runs only in CI.
