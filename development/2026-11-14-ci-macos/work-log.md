@@ -202,3 +202,23 @@ macOS (`development/ISSUES.md`).
 
 **State of the macOS leg:** what remains is the listener check and the cancel grace period (product, need a Mac),
 the bash integration tests (another thread), and the browser scrollback (unknown).
+
+## 2026-11-14 — `c44e2ffa`: the eighth macOS run
+
+The eighth run (Go CI run 43598377105, at `2bb8aa34`) failed on macOS, Ubuntu, and race; SonarCloud, which runs
+the Go tests with coverage, passed. The pasted log was the macOS one. A full `go test ./...` of `0dda7e06` (that tree
+plus later commits of other threads) passed on Linux here, so the Ubuntu and race failures are not reproduced; their
+logs were not seen.
+
+macOS: the `conformance/05-web` fixes of `a037d463` held. Left: the listener tests and the bash integration tests
+(recorded), `TestCLIFlagPairCancel` now in 3 of 154 pairs with the same evidence as before, and one new failure:
+
+**`c44e2ffa` Stop Chrome's group on macOS** (`scripts/web-browser.mjs`, test tooling):
+`TestLaunchChromeWaitsForDevToolsPortContents` threw `kill EPERM` from `stopProcessGroup`. macOS answers EPERM
+to `kill(-pgid, 0)` when every member of the group has exited but is not reaped, where Linux succeeds. The group
+is the script's own, so on macOS EPERM there is taken as gone.
+
+The same macOS behaviour means `state.ClassifyProcess`, which takes EPERM as "exists, not ours", reads such a
+group as alive or unknown; recorded in `development/ISSUES.md` with a note on the cancel entry.
+
+**Validation:** `node --check scripts/web-browser.mjs`. Not run on macOS.
