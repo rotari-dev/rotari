@@ -155,6 +155,10 @@ For `ssh`, the first `--executor-option` value is the destination (for example,
 specifies a directory on the remote host and can be changed later with
 `rotari change`.
 
+The remote host must run Linux: the script rotari runs there uses `setsid`,
+GNU `stat`, and `/proc` to start, track, and cancel the job's process group.
+The machine running `rotari` can be Linux or macOS.
+
 ```sh
 rotari add -p sweep \
   -e ssh \

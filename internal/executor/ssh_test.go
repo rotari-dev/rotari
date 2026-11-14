@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -15,6 +16,7 @@ import (
 )
 
 func TestSSHExecutorRunsRemoteCommandAndRecordsResult(t *testing.T) {
+	requireLinuxRemote(t)
 	binDir := t.TempDir()
 	helperDir := installTestRotari(t)
 	oldSSHCommandPath := SSHCommandPath
@@ -95,6 +97,7 @@ env -i PATH=%q:/usr/local/bin:/usr/bin:/bin sh "$ROTARI_SSH_SCRIPT"
 // A run gives each job an attempt ID, and Submit records the job in that
 // attempt's directory; Wait must read it from there too.
 func TestSSHExecutorWaitsForAttemptInItsDirectory(t *testing.T) {
+	requireLinuxRemote(t)
 	binDir := t.TempDir()
 	oldSSHCommandPath := SSHCommandPath
 	SSHCommandPath = filepath.Join(binDir, "ssh")
@@ -129,6 +132,7 @@ exec sh -s
 }
 
 func TestSSHExecutorCancelsRemoteProcessGroup(t *testing.T) {
+	requireLinuxRemote(t)
 	binDir := t.TempDir()
 	oldSSHCommandPath := SSHCommandPath
 	SSHCommandPath = filepath.Join(binDir, "ssh")
@@ -173,6 +177,7 @@ exit "$status"
 }
 
 func TestSSHWrapperPrunesOldStoppedRemoteState(t *testing.T) {
+	requireLinuxRemote(t)
 	runtimeDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
 	stateRoot := filepath.Join(runtimeDir, "rotari-"+fmt.Sprint(os.Getuid()))
@@ -236,6 +241,7 @@ func TestSSHWrapperPrunesOldStoppedRemoteState(t *testing.T) {
 // never delays a job however much of it a host has (F1 in the test-flakiness
 // plan: 891 retained directories delayed each start by 5 to 45 seconds).
 func TestSSHWrapperStartsTheJobBeforePruning(t *testing.T) {
+	requireLinuxRemote(t)
 	realStat, err := exec.LookPath("stat")
 	if err != nil {
 		t.Skipf("stat not found: %v", err)
@@ -302,6 +308,7 @@ exec %[4]s "$@"
 }
 
 func TestSSHCancelRefusesReusedPID(t *testing.T) {
+	requireLinuxRemote(t)
 	remoteDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", remoteDir)
 	token := "0123456789abcdef0123456789abcdef"
@@ -362,6 +369,7 @@ func TestSSHWrapperScriptChangesWorkingDirectory(t *testing.T) {
 // A submitted SSH job records a running phase on its target host, as the
 // local wrapper does, and keeps its start time once it finishes.
 func TestSSHExecutorRecordsRunningPhaseAtSubmission(t *testing.T) {
+	requireLinuxRemote(t)
 	binDir := t.TempDir()
 	oldSSHCommandPath := SSHCommandPath
 	SSHCommandPath = filepath.Join(binDir, "ssh")
@@ -394,5 +402,15 @@ exec sh -s
 	finished, ok := LoadWrapperStatus(testStore(), statusPath)
 	if !ok || finished.Phase != "finished" || finished.StartedAt != running.StartedAt || finished.FinishedAt == "" {
 		t.Fatalf("status after Wait = %#v, want finished with start time %q", finished, running.StartedAt)
+	}
+}
+
+// requireLinuxRemote skips a test that runs the SSH remote scripts on this
+// machine as if it were the remote host. Those scripts target a Linux host:
+// they use GNU stat, setsid(1), and /proc (docs/EXECUTORS.md).
+func requireLinuxRemote(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skipf("the SSH remote scripts need a Linux host (GNU stat, setsid, /proc), and this test runs them on %s", runtime.GOOS)
 	}
 }
