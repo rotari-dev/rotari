@@ -154,6 +154,31 @@ func TestWebTrustedOptionsComeOnlyFromTrustedConfigs(t *testing.T) {
 			quiet: []string{"ignoring"},
 		},
 		{
+			name:  "shell integration is on by default",
+			args:  []string{"--allow-terminal"},
+			check: func(flags webCommandFlags) bool { return flags.terminal.integration },
+			quiet: []string{"ignoring"},
+		},
+		{
+			name:   "shell integration is turned off from any config",
+			layers: []config.Loaded{configLayer("project", web(map[string]any{"terminal-shell-integration": false}))},
+			args:   []string{"--allow-terminal"},
+			check:  func(flags webCommandFlags) bool { return !flags.terminal.integration },
+			quiet:  []string{"ignoring"},
+		},
+		{
+			name:   "the environment turns shell integration off over a config",
+			layers: []config.Loaded{configLayer("global", web(map[string]any{"terminal-shell-integration": true}))},
+			env:    map[string]string{"ROTARI_WEB_TERMINAL_SHELL_INTEGRATION": "false"},
+			args:   []string{"--allow-terminal"},
+			check:  func(flags webCommandFlags) bool { return !flags.terminal.integration },
+		},
+		{
+			name:  "the command line turns shell integration off",
+			args:  []string{"--allow-terminal", "--terminal-shell-integration=false"},
+			check: func(flags webCommandFlags) bool { return !flags.terminal.integration },
+		},
+		{
 			name:   "the command line replaces a configured limit",
 			layers: []config.Loaded{configLayer("global", web(map[string]any{"terminal-max-shells": 0}))},
 			args:   []string{"--allow-terminal", "--terminal-max-shells", "4"},
@@ -208,6 +233,11 @@ func TestWebConfiguredBadValuesAreErrors(t *testing.T) {
 			name: "a variable that is not a boolean",
 			env:  map[string]string{"ROTARI_WEB_ALLOW_TERMINAL": "maybe"},
 			want: `invalid allow-terminal "maybe" in ROTARI_WEB_ALLOW_TERMINAL`,
+		},
+		{
+			name:   "a config value of shell integration that is not a boolean",
+			layers: []config.Loaded{configLayer("project", web(map[string]any{"terminal-shell-integration": "off"}))},
+			want:   `invalid terminal-shell-integration "off" in project config`,
 		},
 		{
 			name:   "a config value that is not a number",

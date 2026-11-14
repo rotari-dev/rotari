@@ -194,6 +194,7 @@ choices unset; a plain string option takes the empty string.
 | `ROTARI_WEB_TERMINAL_MAX_SHELLS_PER_PROJECT` | yes | no | no | Default for rotari web --terminal-max-shells-per-project. |
 | `ROTARI_WEB_TERMINAL_REPLAY_SIZE` | yes | no | no | Default for rotari web --terminal-replay-size. |
 | `ROTARI_WEB_TERMINAL_SHELL` | yes | no | no | Default for rotari web --terminal-shell. |
+| `ROTARI_WEB_TERMINAL_SHELL_INTEGRATION` | yes | no | no | Default for rotari web --terminal-shell-integration. |
 | `ROTARI_WEB_ALLOWED_HOST` | yes | no | no | Default for rotari web --allowed-host. |
 
 <!-- END GENERATED ENVIRONMENT REFERENCE -->

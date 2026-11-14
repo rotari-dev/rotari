@@ -2244,6 +2244,9 @@
           "value_name": "PATH"
         },
         {
+          "name": "terminal-shell-integration"
+        },
+        {
           "name": "allowed-host",
           "value_name": "NAME"
         }

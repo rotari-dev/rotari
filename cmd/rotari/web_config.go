@@ -126,6 +126,7 @@ type webConfigured struct {
 	idleLimit                time.Duration
 	shellLimit, groupLimit   int
 	replaySize, shell        string
+	integration              bool
 	// from says where each option not left at its built-in default came from.
 	from map[string]string
 	// ignored are local config values left out of webTrustedOptions.
@@ -139,7 +140,7 @@ type webConfigured struct {
 func readWebConfigured(fs *flag.FlagSet) webConfigured {
 	configured := webConfigured{
 		idleLimit: webTerminalIdleLimit, shellLimit: webTerminalShellLimit, groupLimit: webTerminalGroupLimit,
-		replaySize: webTerminalRingSize, from: map[string]string{}, ignored: map[string]configSetting{},
+		replaySize: webTerminalRingSize, integration: true, from: map[string]string{}, ignored: map[string]configSetting{},
 	}
 	read := func(name string, apply func(configuredValue) error) {
 		setting, ignored := webConfigSetting(name, isWebTrustedOption(name))
@@ -201,6 +202,10 @@ func readWebConfigured(fs *flag.FlagSet) webConfigured {
 	})
 	read("terminal-shell", func(value configuredValue) (err error) {
 		configured.shell, err = value.text("terminal-shell")
+		return err
+	})
+	read("terminal-shell-integration", func(value configuredValue) (err error) {
+		configured.integration, err = value.boolean("terminal-shell-integration")
 		return err
 	})
 	return configured

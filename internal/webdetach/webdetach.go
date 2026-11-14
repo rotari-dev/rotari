@@ -68,6 +68,9 @@ type Settings struct {
 	TerminalMaxShellsPerProject int      `json:"terminal_max_shells_per_project,omitempty"`
 	TerminalReplaySize          int      `json:"terminal_replay_size,omitempty"`
 	TerminalShell               string   `json:"terminal_shell,omitempty"`
+	// TerminalNoShellIntegration is set when shell integration, on by default, is off, so
+	// that a record without it means the default.
+	TerminalNoShellIntegration bool `json:"terminal_no_shell_integration,omitempty"`
 	// TokenSHA256 identifies the server's token without holding it.
 	TokenSHA256 string `json:"token_sha256,omitempty"`
 }
@@ -108,6 +111,7 @@ func (s Settings) Differences(want Settings, portExplicit bool) []string {
 	add(terminal && s.TerminalMaxShellsPerProject != want.TerminalMaxShellsPerProject, "terminal-max-shells-per-project")
 	add(terminal && s.TerminalReplaySize != want.TerminalReplaySize, "terminal-replay-size")
 	add(terminal && s.TerminalShell != want.TerminalShell, "terminal-shell")
+	add(terminal && s.TerminalNoShellIntegration != want.TerminalNoShellIntegration, "terminal-shell-integration")
 	add(want.TokenSHA256 != "" && s.TokenSHA256 != want.TokenSHA256, "auth-token")
 	return names
 }

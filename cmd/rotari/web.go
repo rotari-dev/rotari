@@ -147,6 +147,7 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 	terminalMaxPerProject := fs.Int("terminal-max-shells-per-project", configured.groupLimit, webFlagUsage("terminal-max-shells-per-project"))
 	terminalReplaySize := fs.String("terminal-replay-size", configured.replaySize, webFlagUsage("terminal-replay-size"))
 	terminalShell := fs.String("terminal-shell", configured.shell, webFlagUsage("terminal-shell"))
+	terminalIntegration := fs.Bool("terminal-shell-integration", configured.integration, webFlagUsage("terminal-shell-integration"))
 	allowedHosts := stringSliceFlag(configured.allowedHosts)
 	fs.Var(&allowedHosts, "allowed-host", webFlagUsage("allowed-host"))
 	if err := cliParse(fs, args); err != nil {
@@ -204,6 +205,7 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 			printError(err)
 			return webCommandFlags{}, 1
 		}
+		terminalSettings.integration = *terminalIntegration
 	}
 	if cliOptionSet(fs, "allowed-host") && !*allowExec && !*allowTerminal {
 		printError("--allowed-host only applies with --allow-exec or --allow-terminal")

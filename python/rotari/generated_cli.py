@@ -3617,6 +3617,19 @@ CLI_SCHEMA: dict[str, Any] = {
                     "value_name": "PATH",
                 },
                 {
+                    "description": "with --allow-terminal, start bash and zsh "
+                    "with rotari's own startup files, which read "
+                    "yours and mark each prompt and command so "
+                    "that the terminal panel shows commands as "
+                    "blocks with their exit codes; your files are "
+                    "not changed, and other shells start as login "
+                    "shells either way (default true; pass "
+                    "--terminal-shell-integration=false to start "
+                    "bash and zsh as plain login shells)",
+                    "environment": "ROTARI_WEB_TERMINAL_SHELL_INTEGRATION",
+                    "name": "terminal-shell-integration",
+                },
+                {
                     "description": "with --allow-exec or --allow-terminal, also "
                     "accept this Host name besides localhost, "
                     "127.0.0.1, ::1, and a specific --host (may "
@@ -4915,6 +4928,13 @@ CLI_SCHEMA: dict[str, Any] = {
             "description": "Default for rotari web --terminal-shell.",
             "job": False,
             "name": "ROTARI_WEB_TERMINAL_SHELL",
+        },
+        {
+            "array": False,
+            "cli_default": True,
+            "description": "Default for rotari web --terminal-shell-integration.",
+            "job": False,
+            "name": "ROTARI_WEB_TERMINAL_SHELL_INTEGRATION",
         },
         {
             "array": False,

@@ -126,6 +126,11 @@ func TestDifferences(t *testing.T) {
 	if names := terminal.Differences(longer, false); !reflect.DeepEqual(names, []string{"terminal-idle-timeout"}) {
 		t.Fatalf("Differences of the idle timeout = %v", names)
 	}
+	plain := terminal
+	plain.TerminalNoShellIntegration = true
+	if names := terminal.Differences(plain, false); !reflect.DeepEqual(names, []string{"terminal-shell-integration"}) {
+		t.Fatalf("Differences of shell integration = %v", names)
+	}
 	other := running
 	other.AllowTerminal = false
 	other.BaseDir = "/c"

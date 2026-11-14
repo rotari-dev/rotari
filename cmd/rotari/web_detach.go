@@ -89,6 +89,7 @@ func webDetachSettings(flags webCommandFlags, baseDir, token string, port int) (
 		settings.TerminalMaxShellsPerProject = flags.terminal.groupLimit
 		settings.TerminalReplaySize = flags.terminal.ringSize
 		settings.TerminalShell = flags.terminal.shell
+		settings.TerminalNoShellIntegration = !flags.terminal.integration
 	}
 	return settings, nil
 }

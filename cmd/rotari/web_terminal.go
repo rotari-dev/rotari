@@ -30,7 +30,7 @@ const (
 )
 
 // webTerminalOptions are the flags that say how the terminal runs.
-var webTerminalOptions = []string{"terminal-idle-timeout", "terminal-max-shells", "terminal-max-shells-per-project", "terminal-replay-size", "terminal-shell"}
+var webTerminalOptions = []string{"terminal-idle-timeout", "terminal-max-shells", "terminal-max-shells-per-project", "terminal-replay-size", "terminal-shell", "terminal-shell-integration"}
 
 // webTerminalSettings say how the Web UI's shells run.
 type webTerminalSettings struct {
@@ -39,6 +39,9 @@ type webTerminalSettings struct {
 	groupLimit int
 	ringSize   int
 	shell      string
+	// integration starts bash and zsh with rotari's startup files, which read the user's
+	// and mark prompts and commands for the panel's blocks.
+	integration bool
 }
 
 var webTerminalSize = regexp.MustCompile(`^([0-9]{1,12})(KiB|MiB)?$`)
@@ -119,5 +122,7 @@ func newWebTerminal(settings webTerminalSettings) (*terminal.Keeper, error) {
 		ShellLimit: settings.shellLimit,
 		GroupLimit: settings.groupLimit,
 		Log:        func(message string) { fmt.Fprintln(os.Stderr, message) },
+		// Shell integration is on unless turned off.
+		ShellIntegration: settings.integration,
 	})
 }

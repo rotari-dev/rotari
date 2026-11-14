@@ -477,6 +477,7 @@ var cliCommandSpecs = []cliCommandSpec{
 			cliFlagSpec{Name: "terminal-max-shells-per-project", Description: "with --allow-terminal, how many shells of one project, or of one basedir's own pages, may run at once (default 8)", ValueName: "COUNT"},
 			cliFlagSpec{Name: "terminal-replay-size", Description: "with --allow-terminal, how much of each shell's recent output to show again after switching tabs or following a link, in bytes, KiB, or MiB, from 1KiB to 64MiB (default 256KiB)", ValueName: "SIZE"},
 			cliFlagSpec{Name: "terminal-shell", Description: "with --allow-terminal, the shell to run (default: $SHELL, or /bin/sh)", ValueName: "PATH"},
+			cliFlagSpec{Name: "terminal-shell-integration", Description: "with --allow-terminal, start bash and zsh with rotari's own startup files, which read yours and mark each prompt and command so that the terminal panel shows commands as blocks with their exit codes; your files are not changed, and other shells start as login shells either way (default true; pass --terminal-shell-integration=false to start bash and zsh as plain login shells)"},
 			cliFlagSpec{Name: "allowed-host", Description: "with --allow-exec or --allow-terminal, also accept this Host name besides localhost, 127.0.0.1, ::1, and a specific --host (may be repeated); read only from the command line, the environment, the global config, or --config FILE, not from a workspace, basedir, or project config", ValueName: "NAME", Repeated: true},
 		),
 	},
