@@ -327,7 +327,8 @@ no exit code. Pointing at the dot shows the command, its exit code, and how long
 while the page was open. Failed commands are also marked in red on the scroll bar, and a thin line sets each prompt
 apart from the output before it. The **Commands** icon in the bar lists the pane's commands, newest first, with how
 each ended; type to filter them, and choose one to scroll back to it, or copy its output or command line from its
-row without scrolling. Clicking a dot offers **Copy
+row without scrolling. Point at a command's prompt or output to show **Copy output** at the right end of its prompt's
+line. Clicking a dot offers **Copy
 output**, **Copy command**, **Select output**, and **Type command again**, which types a one-line command at the
 prompt without pressing Enter, only while nothing runs in the shell, as **Recent directories** does. Blocks are kept
 only in the page, from the output it shows, so they come back after following a link for as much output as is shown

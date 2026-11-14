@@ -1504,7 +1504,9 @@ focused pane, lists that pane's blocks whose command has started, newest first, 
 and how it ended, narrowed by a filter on the command line, or says where commands come from when there are none;
 choosing one by click or by the arrow keys and Enter scrolls the pane to its prompt and lights the prompt up for 1.5
 seconds, and a row's **Copy output** and **Copy command** copy those without scrolling (output read when asked, so
-far for one running; none printed says so). The panel takes no key from the shell for blocks. Clicking a mark focuses its pane and offers **Copy output**, **Copy command**, **Select
+far for one running; none printed says so). While the pointer is over a command's prompt or output, outside the
+alternate screen, a **Copy output** button shows at the right end of its prompt's line, when that line is in view, and
+copies the same way; a press on it starts no selection. The panel takes no key from the shell for blocks. Clicking a mark focuses its pane and offers **Copy output**, **Copy command**, **Select
 output** (the terminal's selection), and **Type command again**, which types a one-line command line without Enter
 under WEB-45's rule (only after the shell's preview shows nothing running at its prompt, saying why otherwise) and is
 off for a command of more than one line. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel`

@@ -5178,6 +5178,60 @@ function shellWord(value) {
     mark.hidden = state === "prompt";
     if (state === "prompt") mark.removeAttribute("title");
     else mark.title = blockTitle(block);
+    // Copy output, at the right of the prompt's line while the pointer is over the block.
+    let copy = element.querySelector(".terminal-block-copy");
+    if (!copy) {
+      copy = document.createElement("button");
+      copy.type = "button";
+      copy.className = "terminal-block-copy";
+      copy.textContent = "Copy output";
+      copy.title = "Copy this command's output";
+      for (const type of ["mousedown", "mouseup"])
+        copy.addEventListener(type, (event) => event.stopPropagation());
+      copy.addEventListener("click", (event) => {
+        event.stopPropagation();
+        copyBlockOutput(pane, block);
+      });
+      element.append(copy);
+    }
+    copy.hidden = !block.output || pane.hovered !== block;
+  };
+  // copyBlockOutput copies a block's output, read only now, since a long one takes time to
+  // put together, or says there is none.
+  const copyBlockOutput = (pane, block) => {
+    const text = blockOutput(pane, block);
+    if (text) copyText(text, "the output");
+    else showNote("This command printed nothing.", 4000);
+  };
+  // blockAt is the block of the command whose prompt or output is on a buffer line.
+  const blockAt = (pane, line) => {
+    let found = null;
+    for (const block of pane.blocks) {
+      const at = block.prompt.marker.line;
+      if (at > line) break;
+      if (at >= 0) found = block;
+    }
+    return found?.output ? found : null;
+  };
+  // hoverBlock follows the pointer over a pane's screen, or off it with no event, to show
+  // the copy button of the block under it; none in vim or less.
+  const hoverBlock = (pane, event) => {
+    const { term } = pane;
+    const screen = term.element?.querySelector(".xterm-screen");
+    let block = null;
+    if (event && screen && term.buffer.active.type !== "alternate") {
+      const box = screen.getBoundingClientRect();
+      const row = Math.floor(
+        ((event.clientY - box.top) * term.rows) / box.height,
+      );
+      if (row >= 0 && row < term.rows)
+        block = blockAt(pane, term.buffer.active.viewportY + row);
+    }
+    if (block === pane.hovered) return;
+    const before = pane.hovered;
+    pane.hovered = block;
+    if (before) paintBlock(pane, before);
+    if (block) paintBlock(pane, block);
   };
   // decorateBlock (re)makes a block's decoration: on its prompt's line, and on the scroll
   // bar once it has failed, which xterm.js takes only when a decoration is made.
@@ -5209,6 +5263,7 @@ function shellWord(value) {
   const dropBlocks = (pane) => {
     const blocks = pane.blocks || [];
     pane.blocks = [];
+    pane.hovered = null;
     blocks.forEach(disposeBlock);
   };
   // readBlockMark adds one mark to the pane's blocks. A block's times come only from
@@ -5418,26 +5473,19 @@ function shellWord(value) {
       "span",
       "terminal-dirs-actions terminal-commands-actions",
     );
-    const copy = (label, text, said) => {
+    const copy = (label, enabled, run) => {
       const button = makeElement("button", "", label);
       button.type = "button";
-      button.disabled = !text;
+      button.disabled = !enabled;
       button.onclick = (event) => {
         event.stopPropagation();
         closeDropdown(true);
-        const copied = text();
-        if (copied) copyText(copied, said);
-        else showNote("This command printed nothing.", 4000);
+        run();
       };
       actions.append(button);
     };
-    // The output is read only when asked for, since a long one takes time to put together.
-    copy(
-      "Copy output",
-      block.output && (() => blockOutput(pane, block)),
-      "the output",
-    );
-    copy("Copy command", command && (() => command), "the command");
+    copy("Copy output", block.output, () => copyBlockOutput(pane, block));
+    copy("Copy command", command, () => copyText(command, "the command"));
     row.append(actions);
     return row;
   };
@@ -5472,6 +5520,8 @@ function shellWord(value) {
       readBlockMark(pane, data),
     );
     term.open(viewport);
+    viewport.addEventListener("mousemove", (event) => hoverBlock(pane, event));
+    viewport.addEventListener("mouseleave", () => hoverBlock(pane, null));
     fit.fit();
     term.onData((data) => {
       send(pane, new TextEncoder().encode(data));

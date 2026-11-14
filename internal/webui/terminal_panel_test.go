@@ -3818,6 +3818,41 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   bpCopied.length = 0;
   // No key is the panel's: Ctrl+Shift+ArrowUp reaches the shell.
   assert.equal(bpTerm.keyHandler, undefined, 'the panel takes keys from the shell');
+  // Copy output shows at the right of a prompt's line while the pointer is over its block:
+  // its prompt or its output, a line of 10px in a screen of 24 here.
+  const bpScreen = bp.document.createElement('div');
+  bpScreen.className = 'xterm-screen';
+  bpScreen.getBoundingClientRect = () => ({ top: 100, left: 20, width: 800, height: 240, bottom: 340, right: 820 });
+  bpTerm.element = bp.document.createElement('div');
+  bpTerm.element.append(bpScreen);
+  bpTerm.buffer.active.viewportY = 0;
+  const bpViewport = bpPane().viewport;
+  const hover = (line) => bpViewport.dispatchEvent(new bp.window.MouseEvent('mousemove', { clientX: 300, clientY: 100 + line * 10 + 5, bubbles: true }));
+  const copies = () => Array.from(bpPane().blocks, (block) => !block.decoration.render().querySelector('.terminal-block-copy').hidden);
+  assert.deepEqual(copies(), [false, false, false, false], 'Copy output shown with no pointer over a block');
+  hover(4);
+  assert.deepEqual(copies(), [false, true, false, false], 'over false\'s output');
+  hover(3);
+  assert.deepEqual(copies(), [false, true, false, false], 'over false\'s prompt');
+  hover(10);
+  assert.deepEqual(copies(), [false, false, false, true], 'over the running command');
+  // A click copies it, and starts no selection in the text under it.
+  const bpCopyButton = bpPane().blocks[3].decoration.render().querySelector('.terminal-block-copy');
+  let bpPressed = false;
+  bpCopyButton.parentElement.addEventListener('mousedown', () => (bpPressed = true));
+  bpCopyButton.dispatchEvent(new bp.window.MouseEvent('mousedown', { bubbles: true }));
+  assert.equal(bpPressed, false, 'a press on Copy output reached the terminal');
+  bpCopyButton.click();
+  await wait(20);
+  assert.deepEqual(bpCopied, ['zz']);
+  bpCopied.length = 0;
+  bpViewport.dispatchEvent(new bp.window.MouseEvent('mouseleave'));
+  assert.deepEqual(copies(), [false, false, false, false], 'Copy output stayed after the pointer left');
+  // None in vim or less.
+  bpTerm.buffer.active.type = 'alternate';
+  hover(4);
+  assert.deepEqual(copies(), [false, false, false, false], 'Copy output in the alternate screen');
+  bpTerm.buffer.active.type = 'normal';
   // menu opens the n-th block's menu from its mark, which keeps the pointer from the text.
   const menu = (n) => {
     const element = bpPane().blocks[n].decoration.render();

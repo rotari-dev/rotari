@@ -207,6 +207,20 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await page.evaluate('location.href = "/project/p1"');
   await until('the blocks replayed', markTitles + '.includes("c true\\nExit 0") && document.querySelector(".terminal-viewport-blocks") !== null');
   await until('the project\'s shell to settle after the blocks', settled);
+  // Pointing at a command's line shows Copy output at its right end, outside the text.
+  const trueRow = '[...document.querySelectorAll(".xterm-rows > div")].find((row) => row.textContent.trim() === "$ c true")';
+  const truePoint = await page.evaluate('(() => { const box = ' + trueRow + '.getBoundingClientRect(); return { x: box.left + 40, y: box.top + box.height / 2 }; })()');
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...truePoint });
+  const shownCopy = '[...document.querySelectorAll(".terminal-block-copy")].find((button) => !button.hidden && button.offsetParent !== null)';
+  await until('Copy output on the line pointed at', shownCopy + ' !== undefined');
+  const copyFacts = JSON.parse(await page.evaluate('JSON.stringify((() => { const button = ' + shownCopy + '.getBoundingClientRect(); const row = ' + trueRow + '.getBoundingClientRect(); const screen = document.querySelector(".xterm-screen").getBoundingClientRect(); return { top: button.top - row.top, right: screen.right - button.right, width: button.width, x: button.left + button.width / 2, y: button.top + button.height / 2, hit: document.elementFromPoint(button.left + button.width / 2, button.top + button.height / 2)?.className }; })())'));
+  if (Math.abs(copyFacts.top) > 2 || copyFacts.right < 0 || copyFacts.right > 20 || copyFacts.width < 20 || copyFacts.hit !== 'terminal-block-copy') throw new Error('Copy output is not at the right of the line pointed at: ' + JSON.stringify(copyFacts));
+  // A click copies, or says why it could not, which a headless browser may.
+  await page.evaluate('document.querySelector(".terminal-send-note")?.replaceChildren()');
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: copyFacts.x, y: copyFacts.y });
+  await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: copyFacts.x, y: copyFacts.y, button: 'left', clickCount: 1 });
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: copyFacts.x, y: copyFacts.y, button: 'left', clickCount: 1 });
+  await until('the copy to be said', '/^(Copied the output|Copy failed)/.test(document.querySelector(".terminal-send-note")?.textContent || "")');
   await collect();
 
   // A dialog fits above the panel, whatever its usual height.

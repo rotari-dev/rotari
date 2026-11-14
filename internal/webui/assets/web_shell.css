@@ -1683,6 +1683,26 @@ html.terminal-open .output-panel.terminal-launch {
 .terminal-commands-state[data-state="unknown"] {
   border: 1.5px solid var(--terminal-white);
 }
+/* Copy output, at the right of a prompt's line while the pointer is over its block. */
+.terminal-block-copy {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 0 6px;
+  border: 1px solid var(--terminal-bright-black);
+  border-radius: 3px;
+  background: var(--terminal-background);
+  color: var(--terminal-foreground);
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.terminal-block-copy[hidden] {
+  display: none;
+}
 /* A prompt gone to from Commands is lit up for a moment. */
 .terminal-block-flash::after {
   content: "";
