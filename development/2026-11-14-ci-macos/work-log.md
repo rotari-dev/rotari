@@ -180,3 +180,25 @@ still matches `fs.ErrExist`. Test: `TestRenameNoReplaceFallbackSaysFileExists`, 
 
 **Validation:** `go vet` of the changed packages for linux and darwin/arm64: clean. On Linux, `internal/webui`,
 `internal/terminal`, and `internal/fileops` passed (node v24).
+
+## 2026-11-14 — `a037d463`: the seventh macOS run
+
+The seventh macOS run had 13 failures: the two listener tests and the two bash integration tests already
+recorded, and `conformance/05-web`, whose terminal tests had not been seen before.
+
+**`a037d463` Web terminal conformance tests** (tests only):
+
+- `TestTerminalOptionsFromTrustedConfigs`: one case configures `host = "127.0.0.2"`, which macOS cannot bind (its
+  loopback has only 127.0.0.1). The case skips where 127.0.0.2 cannot be bound.
+- `TestTerminalExplorerListsAndOpensFiles`: a name that is not UTF-8; `support.NonUTF8NamesAllowed` decides.
+- `TestTerminalShellsFollowTheirProject`: the test set `command.Dir` after `e.Command`, so `PWD` named another
+  directory and rotari's `os.Getwd` returned `/private/var/…`. It uses `e.In(dir)`.
+- `TestTerminalShellEndsWithTheServer`: leaves the session with `setsid(1)`; skips without it.
+
+**Recorded, not fixed:** `TestTerminalPanelInBrowser` misses the long output's first line in the scrollback on
+macOS (`development/ISSUES.md`).
+
+**Validation:** `go vet` of the changed packages for linux and darwin/arm64: clean. On Linux the four tests passed.
+
+**State of the macOS leg:** what remains is the listener check and the cancel grace period (product, need a Mac),
+the bash integration tests (another thread), and the browser scrollback (unknown).
