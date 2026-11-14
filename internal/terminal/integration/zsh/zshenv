@@ -1,13 +1,26 @@
 # rotari's shell integration for zsh. rotari starts zsh with ZDOTDIR naming this directory,
 # so zsh reads these files, and each reads the user's own file of its name from where zsh
 # would have: ROTARI_USER_ZDOTDIR when rotari was started with a ZDOTDIR, else $HOME, or a
-# ZDOTDIR the user's .zshenv sets. They are read at top level, as zsh reads them. The last,
-# .zlogin, puts ZDOTDIR back; .zshrc adds the marks. The user's own files are not changed.
+# ZDOTDIR the user's .zshenv sets. They are read at top level, as zsh reads them. .zshrc adds
+# the marks and puts ZDOTDIR back, as this file does for a zsh that is not interactive and
+# reads no other. The user's own files are not changed.
 __rotari_zdotdir=$ZDOTDIR
 __rotari_had=${+ROTARI_USER_ZDOTDIR}
 __rotari_user=${ROTARI_USER_ZDOTDIR:-$HOME}
+# One that names rotari's own files would have them read themselves.
+if [[ $__rotari_user == $__rotari_zdotdir ]]; then
+	__rotari_had=0
+	__rotari_user=$HOME
+fi
 unset ROTARI_USER_ZDOTDIR
 ZDOTDIR=$__rotari_user
 [[ -r $ZDOTDIR/.zshenv ]] && source $ZDOTDIR/.zshenv
 __rotari_user=$ZDOTDIR
 ZDOTDIR=$__rotari_zdotdir
+if [[ ! -o interactive ]]; then
+	ZDOTDIR=$__rotari_user
+	if (( ! __rotari_had )) && [[ $ZDOTDIR == $HOME ]]; then
+		unset ZDOTDIR
+	fi
+	unset __rotari_zdotdir __rotari_had __rotari_user
+fi

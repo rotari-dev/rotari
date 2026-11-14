@@ -275,16 +275,17 @@ func TestZshIntegrationPutsTheCursorWhereClicked(t *testing.T) {
 // Only bash and zsh start otherwise, and only with the integration.
 func TestShellCommandWithIntegration(t *testing.T) {
 	env := []string{"HOME=/h", "ZDOTDIR=/z", "ROTARI_USER_ZDOTDIR=/forged"}
+	with := append(slices.Clone(env), "ROTARI_SHELL_INTEGRATION=/i")
 	for _, test := range []struct {
 		shell, integration string
 		args, env          []string
 	}{
-		{"/bin/sh", "/i", []string{"-l"}, env},
-		{"/usr/bin/fish", "/i", []string{"-l"}, env},
+		{"/bin/sh", "/i", []string{"-l"}, with},
+		{"/usr/bin/fish", "/i", []string{"-l"}, with},
 		{"/bin/bash", "", []string{"-l"}, env},
 		{"/bin/zsh", "", []string{"-l"}, env},
-		{"/bin/bash", "/i", []string{"--init-file", "/i/rotari.bash"}, env},
-		{"/usr/local/bin/zsh", "/i", []string{"-l"}, []string{"HOME=/h", "ZDOTDIR=/i/zsh", "ROTARI_USER_ZDOTDIR=/z"}},
+		{"/bin/bash", "/i", []string{"--init-file", "/i/rotari.bash"}, with},
+		{"/usr/local/bin/zsh", "/i", []string{"-l"}, []string{"HOME=/h", "ROTARI_SHELL_INTEGRATION=/i", "ZDOTDIR=/i/zsh", "ROTARI_USER_ZDOTDIR=/z"}},
 	} {
 		args, gotEnv := shellCommand(Options{Shell: test.shell, Integration: test.integration, Env: env})
 		if !slices.Equal(args, test.args) || !slices.Equal(gotEnv, test.env) {
@@ -292,8 +293,100 @@ func TestShellCommandWithIntegration(t *testing.T) {
 		}
 	}
 	// zsh with no ZDOTDIR is told none of its own.
-	if _, got := shellCommand(Options{Shell: "zsh", Integration: "/i", Env: []string{"HOME=/h"}}); !slices.Equal(got, []string{"HOME=/h", "ZDOTDIR=/i/zsh"}) {
+	if _, got := shellCommand(Options{Shell: "zsh", Integration: "/i", Env: []string{"HOME=/h"}}); !slices.Equal(got, []string{"HOME=/h", "ROTARI_SHELL_INTEGRATION=/i", "ZDOTDIR=/i/zsh"}) {
 		t.Errorf("zsh without ZDOTDIR: %q", got)
+	}
+	// A server started inside a panel's shell: its ZDOTDIR is that shell's rotari's, and
+	// the user's own is in ROTARI_USER_ZDOTDIR, or there is none.
+	inside := []string{"HOME=/h", "ROTARI_SHELL_INTEGRATION=/old", "ZDOTDIR=/old/zsh", "ROTARI_USER_ZDOTDIR=/z"}
+	if _, got := shellCommand(Options{Shell: "zsh", Integration: "/i", Env: inside}); !slices.Equal(got, []string{"HOME=/h", "ROTARI_SHELL_INTEGRATION=/i", "ZDOTDIR=/i/zsh", "ROTARI_USER_ZDOTDIR=/z"}) {
+		t.Errorf("zsh from inside a panel's shell: %q", got)
+	}
+	if _, got := shellCommand(Options{Shell: "zsh", Integration: "/i", Env: inside[:3]}); !slices.Equal(got, []string{"HOME=/h", "ROTARI_SHELL_INTEGRATION=/i", "ZDOTDIR=/i/zsh"}) {
+		t.Errorf("zsh from inside a panel's shell, with no ZDOTDIR of the user's: %q", got)
+	}
+}
+
+// innerMarks types a command that starts a shell inside, waits for that shell's prompt, and
+// returns the marks for false typed in it, from its prompt on.
+func innerMarks(t *testing.T, shell *startedShell, start, ready string) []string {
+	t.Helper()
+	if _, err := shell.Write([]byte(start + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(testWait); !strings.Contains(shell.text(), ready); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%q did not start; the terminal shows:\n%q", start, shell.text())
+		}
+	}
+	time.Sleep(300 * time.Millisecond)
+	shell.mu.Lock()
+	shell.output.Reset()
+	shell.mu.Unlock()
+	return marksAfter(t, shell)
+}
+
+// lines counts the lines of a file a test's startup files append to, one for each time
+// they are read.
+func lines(t *testing.T, path string) int {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	return strings.Count(string(content), "\n")
+}
+
+// A shell started by hand inside one of rotari's marks its prompts too, reading the user's
+// files once: zsh through rotari's ZDOTDIR, bash through the loader in the PROMPT_COMMAND it
+// inherits; and a zsh's own command lines still see the user's ZDOTDIR.
+func TestInnerShellsMark(t *testing.T) {
+	for _, shell := range []string{"bash", "zsh"} {
+		if _, err := exec.LookPath(shell); err != nil {
+			t.Skipf("no %s here", shell)
+		}
+	}
+	files := func(home string) map[string]string {
+		return map[string]string{
+			".bash_profile": "[ -r ~/.bashrc ] && . ~/.bashrc\n",
+			// A .bashrc that adds to PROMPT_COMMAND, as many do.
+			".bashrc":  "echo bashrc >> " + home + "/read.log\nPS1='bash$ '\nPROMPT_COMMAND=\"BASHRC_RAN=1;$PROMPT_COMMAND\"\n",
+			".zshenv":  "unsetopt GLOBAL_RCS\n",
+			".zshrc":   "echo zshrc >> " + home + "/read.log\nPS1='zsh%# '\n",
+			"read.log": "",
+		}
+	}
+	for _, test := range []struct{ outer, inner, ready, a string }{
+		{"bash", "zsh", "zsh%", "A;rotari_goto=1"},
+		{"zsh", "zsh", "zsh%", "A;rotari_goto=1"},
+		{"zsh", "bash", "bash$", "A"},
+		{"bash", "bash", "bash$", "A"},
+	} {
+		t.Run(test.inner+" inside "+test.outer, func(t *testing.T) {
+			home := t.TempDir()
+			writeFiles(t, home, files(home))
+			outer := integrated(t, test.outer, home)
+			marksAfter(t, outer)
+			before := lines(t, filepath.Join(home, "read.log"))
+			// The inner shell's prompt, once it has marked it, is where false is typed.
+			if marks := innerMarks(t, outer, test.inner, test.ready); !endsWith(marks, "D;1", test.a, "B") || !slices.ContainsFunc(marks, func(mark string) bool { return strings.HasPrefix(mark, "C") }) {
+				t.Errorf("marks in %s inside %s: %q", test.inner, test.outer, marks)
+			}
+			if read := lines(t, filepath.Join(home, "read.log")) - before; read != 1 {
+				t.Errorf("the inner %s read the user's startup file %d times", test.inner, read)
+			}
+			if test.inner == "bash" {
+				// Each prompt marks once, though .bashrc added to an inherited PROMPT_COMMAND.
+				if got := outer.run(t, `printf '%s' "$PROMPT_COMMAND" | grep -c __rotari_prompt`); got != "1" {
+					t.Errorf("the inner bash runs __rotari_prompt %s times", got)
+				}
+			}
+			if test.inner == "zsh" {
+				if got := outer.run(t, `echo "${ZDOTDIR-unset}-${ROTARI_USER_ZDOTDIR-unset}"`); got != "unset-unset" {
+					t.Errorf("the inner zsh's own ZDOTDIR: %q", got)
+				}
+			}
+		})
 	}
 }
 

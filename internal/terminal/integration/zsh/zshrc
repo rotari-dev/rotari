@@ -1,85 +1,16 @@
-# rotari's shell integration for zsh: the user's .zshrc (see .zshenv), then OSC 133 marks for
-# the Web terminal's blocks: D (the last command's end, with its exit status) and A (a
-# prompt) before each prompt, B (the command line) at the prompt's end, and C (the output)
-# before a command runs.
+# rotari's shell integration for zsh: the user's .zshrc (see .zshenv), then the marks for the
+# Web terminal's blocks (marks.zsh).
 ZDOTDIR=$__rotari_user
 [[ -r $ZDOTDIR/.zshrc ]] && source $ZDOTDIR/.zshrc
 __rotari_user=$ZDOTDIR
 ZDOTDIR=$__rotari_zdotdir
 
-__rotari_status=0
-# __rotari_keep runs first before each prompt: it keeps the command's status for the mark,
-# and gives it back to what runs after it.
-__rotari_keep() {
-	__rotari_status=$?
-	return $__rotari_status
-}
-# __rotari_prompt runs last, unless a hook is added later, as some themes add theirs at the
-# first prompt.
-__rotari_prompt() {
-	print -n "\e]133;D;${__rotari_status}\a\e]133;A${__rotari_goto_said}\a"
-	(( __rotari_line_init )) || [[ $PS1 == *'133;B'* ]] || PS1="$PS1"$'%{\e]133;B\a%}'
-	return $__rotari_status
-}
-# B is printed once the line editor has drawn the prompt, where the command line starts,
-# so that a theme that rebuilds the prompt, at any time, cannot take it away. A zsh before
-# 5.3, without add-zle-hook-widget, has B put at the end of the prompt instead.
-__rotari_line_init=0
-__rotari_b() {
-	print -n "\e]133;B\a"
-}
-# __rotari_cursor says, before each redraw of the line, where the cursor is in it, so that
-# the Web terminal finds where the line starts from the cursor even after the line editor
-# drew the prompt again elsewhere, as Ctrl+L and a list of completions do, without a B.
-__rotari_cursor() {
-	print -n "\e]133;rotari_cursor=$CURSOR\a"
-}
-# add-zle-hook-widget does nothing until the line editor is loaded, which an interactive
-# zsh does only after its startup files unless asked to.
-if zmodload zsh/zle 2>/dev/null && autoload -Uz add-zle-hook-widget 2>/dev/null &&
-	add-zle-hook-widget line-init __rotari_b 2>/dev/null; then
-	__rotari_line_init=1
-	add-zle-hook-widget line-pre-redraw __rotari_cursor 2>/dev/null
+# The marks, from marks.zsh beside this directory; then ZDOTDIR as the user had it, so that
+# a login zsh reads the user's .zlogin itself and a zsh started from this one the user's
+# files, unless the marks say otherwise for it.
+source ${ROTARI_SHELL_INTEGRATION:-${${(%):-%x}:A:h:h}}/marks.zsh
+ZDOTDIR=$__rotari_user
+if (( ! __rotari_had )) && [[ $ZDOTDIR == $HOME ]]; then
+	unset ZDOTDIR
 fi
-# __rotari_preexec says the command line too, as kitty does (C;cmdline_url= and the line
-# percent-encoded), since a prompt may redraw the line it was typed on before it runs, as
-# powerlevel10k's transient prompt does, leaving nothing between B and C on the screen.
-__rotari_preexec() {
-	emulate -L zsh
-	setopt no_multibyte
-	local text=${1:-$3} url= char hex
-	local -i i
-	for ((i = 1; i <= ${#text}; i++)); do
-		char=${text[i]}
-		if [[ $char == [A-Za-z0-9._~-] ]]; then
-			url+=$char
-		else
-			# A byte above 127 can read as negative, by the locale.
-			printf -v hex '%%%02X' $((#char & 255))
-			url+=$hex
-		fi
-	done
-	print -n "\e]133;C;cmdline_url=$url\a"
-}
-# __rotari_goto puts the cursor where the Web terminal was clicked: the panel sends a key
-# sequence no terminal does, the line's character index, and ";". CURSOR stops at the
-# buffer's end, so a suggestion shown past it, as zsh-autosuggestions shows one, is not
-# taken. The prompt's A says that it can be used.
-__rotari_goto() {
-	local key index=
-	while read -k 1 key && [[ $key == [0-9] && ${#index} -lt 10 ]]; do
-		index+=$key
-	done
-	[[ $key == ';' && -n $index ]] || return 0
-	CURSOR=$((index > ${#BUFFER} ? ${#BUFFER} : index))
-}
-__rotari_goto_said=
-if zle -N __rotari_goto 2>/dev/null; then
-	for __rotari_keymap in emacs viins vicmd; do
-		bindkey -M $__rotari_keymap '\e[9998~' __rotari_goto
-	done
-	unset __rotari_keymap
-	__rotari_goto_said=';rotari_goto=1'
-fi
-precmd_functions=(__rotari_keep $precmd_functions __rotari_prompt)
-preexec_functions+=(__rotari_preexec)
+unset __rotari_zdotdir __rotari_had __rotari_user
