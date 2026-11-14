@@ -526,7 +526,8 @@ an output, and run `rotari retry`, usually in a pile of terminal tabs, one or mo
 to a project, starts where its last run started, and has `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME`
 set, so `rotari` commands in it need no `-p`. A project's page shows its shells, and **All shells**
 lists every project's shells with what each runs and how each project's last run is doing. Run
-IDs, job IDs, and paths a shell prints are links to the run, the Explorer, or the Table viewer.
+IDs, job IDs, and paths a shell prints are links to the run, the Explorer, or the Table viewer, and
+a prompt that marks its commands shows each one's exit code beside it, as a block to copy or go back to.
 
 The shells themselves are ordinary: rotari does not run jobs through them or log what you type,
 and jobs run the same with or without them. It remembers only the directories each project's shells have been in,

@@ -320,6 +320,42 @@ instead. Click a directory to show it in the Explorer, or a file to open it in t
 from where the shell is when you point at it, with a `:12` or `:12:3` after it left out, so a relative path printed
 before a `cd` may name another file or nothing. Pointing at a link says what it opens.
 
+A shell whose prompt marks where each prompt, command line, and output start (OSC 133, which VS Code, iTerm2,
+WezTerm, and Windows Terminal also read) has its output shown as one block per command. A dot left of each prompt
+says how its command ended: green for success, red for a failure, grey while it runs, and a ring when the shell gave
+no exit code. Pointing at the dot shows the command, its exit code, and how long it took, for a command that ran
+while the page was open. Failed commands are also marked in red on the scroll bar, and a thin line sets each prompt
+apart from the output before it. **Ctrl+Shift+Up** and **Ctrl+Shift+Down** scroll to the previous or next command;
+in a shell without marks, and in `vim` or `less`, they reach the program as before. Clicking a dot offers **Copy
+output**, **Copy command**, **Select output**, and **Type command again**, which types a one-line command at the
+prompt without pressing Enter, only while nothing runs in the shell, as **Recent directories** does. Blocks are kept
+only in the page, from the output it shows, so they come back after following a link for as much output as is shown
+again. A shell that sends no marks looks as it always did.
+
+rotari does not change your shell's startup files. For bash 4.4 or later, add these lines to the end of
+`~/.bashrc` (if your `PROMPT_COMMAND` is an array, put `__rotari_mark` first in it instead):
+
+```bash
+__rotari_mark() { local status=$?; printf '\033]133;D;%s\007\033]133;A\007' "$status"; return "$status"; }
+PROMPT_COMMAND="__rotari_mark${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+PS1="$PS1"'\[\e]133;B\a\]'
+PS0='\e]133;C\a'
+```
+
+For zsh, add these to the end of `~/.zshrc`:
+
+```zsh
+__rotari_precmd() { print -n "\e]133;D;$?\a\e]133;A\a" }
+__rotari_preexec() { print -n "\e]133;C\a" }
+precmd_functions=(__rotari_precmd $precmd_functions)
+preexec_functions+=(__rotari_preexec)
+PS1="$PS1"$'%{\e]133;B\a%}'
+```
+
+fish 4 sends the marks itself, and oh-my-posh does with its shell integration option on. Put the lines after
+anything that sets the prompt, such as a prompt theme. Any program can print the marks, so a file shown with `cat`
+can draw false ones; they change only what the page shows.
+
 The **Clear** icon empties the tab's screen and scrollback, and what would be shown again after following a
 link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing
 while a full-screen program such as `vim` runs, and says so.

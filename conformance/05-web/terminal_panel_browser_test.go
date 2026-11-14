@@ -151,6 +151,71 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the project\'s shell to settle again', settled);
   await collect();
 
+  // Blocks: a prompt that marks its commands (OSC 133 A, B, and D with the exit code; sh has
+  // no hook before a command, so c prints C) gets a mark per command in the gutter, red for a
+  // failure, green for success, and failures on the scroll bar.
+  const markPrompt = "ESC=$(printf '\\033'); BEL=$(printf '\\007'); PS1=\"${ESC}]133;D;\\$?${BEL}${ESC}]133;A${BEL}\\$ ${ESC}]133;B${BEL}\"; " +
+    "c() { printf '\\033]133;C\\007'; \"$@\"; }; long() { i=0; while [ $i -lt 60 ]; do i=$((i+1)); echo \"row-$i\"; done; }; echo \"marked-$((6+6))\"";
+  await typeLine(markPrompt);
+  await until('the marking prompt', screenHas('marked-12'));
+  await sleep(300);
+  const markTitles = '[...document.querySelectorAll(".terminal-block-mark")].map((mark) => mark.title)';
+  const markTitled = (start) => markTitles + '.some((title) => title.startsWith(' + JSON.stringify(start) + '))';
+  // One command at a time, so that none is echoed before its prompt.
+  await typeLine('c false');
+  await until('a mark for false', markTitled('c false\nExit 1 after'));
+  await typeLine('c long');
+  await until('a mark for the long output', markTitled('c long\nExit 0 after'));
+  await typeLine('c true');
+  await until('a mark for true', markTitled('c true\nExit 0 after'));
+  const markFacts = JSON.parse(await page.evaluate('JSON.stringify([...document.querySelectorAll(".terminal-block-mark")].filter((mark) => !mark.hidden).map((mark) => {' +
+    'const box = mark.getBoundingClientRect();' +
+    'const screen = mark.closest(".xterm-screen").getBoundingClientRect();' +
+    'return { title: mark.title, state: mark.dataset.state, colour: getComputedStyle(mark).backgroundColor, shown: mark.offsetParent !== null,' +
+    ' outside: box.right <= screen.left, hit: document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === mark };' +
+    '}))'));
+  const factOf = (start) => markFacts.find((fact) => fact.title.startsWith(start));
+  const failedMark = factOf('c false\n');
+  const okMark = factOf('c true\n');
+  if (failedMark?.state !== 'failed' || okMark?.state !== 'ok' || failedMark.colour === okMark.colour || [failedMark.colour, okMark.colour].includes('rgba(0, 0, 0, 0)')) throw new Error('the marks are not red and green: ' + JSON.stringify(markFacts));
+  // The mark is in the gutter, left of the text, and takes the pointer there.
+  if (!okMark.shown || !okMark.outside || !okMark.hit) throw new Error('the mark for true is not in the gutter, or not under the pointer: ' + JSON.stringify(markFacts));
+  if (!(await page.evaluate('document.querySelector(".terminal-viewport-blocks .xterm-decoration-overview-ruler") !== null'))) throw new Error('no scroll bar marks for the failure');
+  // Ctrl+Shift+ArrowUp and ArrowDown scroll from prompt to prompt.
+  const blockKey = async (key) => {
+    await page.evaluate('document.querySelectorAll(".xterm-helper-textarea")[0].focus()');
+    const code = { key, code: key, windowsVirtualKeyCode: key === 'ArrowUp' ? 38 : 40, nativeVirtualKeyCode: key === 'ArrowUp' ? 38 : 40, modifiers: 10 };
+    await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...code });
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...code });
+  };
+  const topRow = 'document.querySelector(".xterm-rows > div")?.textContent.trim()';
+  const topRowSays = async (what, text) => until(what, topRow + ' === ' + JSON.stringify(text)).catch(async (error) => {
+    throw new Error(error.message + '; the top row is ' + JSON.stringify(await page.evaluate(topRow)));
+  });
+  await blockKey('ArrowUp');
+  await topRowSays('the long command at the top', '$ c long');
+  await blockKey('ArrowUp');
+  await topRowSays('false at the top', '$ c false');
+  await blockKey('ArrowDown');
+  await topRowSays('the long command at the top again', '$ c long');
+  await page.evaluate('document.querySelector(".xterm-viewport").scrollTop = 1e9');
+  // A mark's menu types its command again, without Enter.
+  const okPoint = await page.evaluate('(() => { const mark = [...document.querySelectorAll(".terminal-block-mark")].find((item) => item.title.startsWith("c true\\n")); const box = mark.getBoundingClientRect(); return { x: box.left + box.width / 2, y: box.top + box.height / 2 }; })()');
+  await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...okPoint, button: 'left', clickCount: 1 });
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...okPoint, button: 'left', clickCount: 1 });
+  const menuLabels = '[...document.querySelectorAll(".terminal-tab-menu button")].map((item) => item.textContent).join()';
+  await until('the mark\'s menu', menuLabels + ' === "Copy output,Copy command,Select output,Type command again"');
+  // A note left from another send would say the same.
+  await page.evaluate('document.querySelector(".terminal-send-note")?.replaceChildren(); [...document.querySelectorAll(".terminal-tab-menu button")].find((item) => item.textContent === "Type command again").click()');
+  await until('the command typed again', 'document.querySelector(".terminal-send-note")?.textContent === "Sent. Nothing runs until you press Enter in the terminal."');
+  await typeLine(' && echo "again-$((5+5))"');
+  await until('the command typed again to run', screenHas('again-10'));
+  // The replay brings the blocks back, without times.
+  await page.evaluate('location.href = "/project/p1"');
+  await until('the blocks replayed', markTitles + '.includes("c true\\nExit 0") && document.querySelector(".terminal-viewport-blocks") !== null');
+  await until('the project\'s shell to settle after the blocks', settled);
+  await collect();
+
   // A dialog fits above the panel, whatever its usual height.
   const fits = await page.evaluate('(() => {' +
     'window.showPath("/p");' +
@@ -455,10 +520,10 @@ process.exit(0);
 
 // TestTerminalPanelInBrowser uses the real xterm.js in Chrome, signed in as a browser
 // is: opening the panel, typing, following a link with the shell still there, a run ID
-// it prints followed to its run page, a second
-// tab, and up to four panes.
+// it prints followed to its run page, blocks from a prompt that marks its commands, a
+// second tab, and up to four panes.
 func TestTerminalPanelInBrowser(t *testing.T) {
-	covers(t, "WEB-33")
+	covers(t, "WEB-33", "WEB-48")
 	chrome := browserForTests(t)
 	node, err := exec.LookPath("node")
 	if err != nil || exec.Command(node, "-e", `if (typeof WebSocket !== "function") process.exit(1)`).Run() != nil {

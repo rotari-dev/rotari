@@ -1464,6 +1464,28 @@ limit is checked at the package level by `TestIdleLimitAppliesToTheShellsTogethe
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-48** With `rotari web --allow-terminal`, the panel reads the OSC 133 marks a shell or its prompt prints:
+`A` (a prompt starts), `B` (its command line starts), `C` (the command's output starts), and `D` with an optional
+exit code (the command ended). Each `A` starts a block; its command line is the screen's text from `B` to `C`, wrapped
+lines joined, and its output the text from `C` to `D`, or to the next prompt, or to the cursor while it runs. A
+prompt before `D` ends the last block without an exit code, as does `D` with none or with one that is not an
+integer. Marks while the alternate screen is shown, and marks with no block to belong to, are ignored. A block is
+dropped with its prompt's line, when it leaves the scrollback or **Clear** empties it, and every block when the pane
+shows its shell again. Only the page keeps blocks: the server parses nothing, and the replay (WEB-33), keeping the raw
+bytes, brings back the blocks in it, which have no times. A shell that has printed any `A` gets a gutter left of the
+text, kept across its own replay and removed after a replay with none; there, each prompt whose command has started
+(`C`) has a mark: green for exit 0, red for any other code, grey while it runs, and a ring without a code. Pointing at
+a mark shows the command line, `Running`, `Exit N`, or why there is no code, and for a command whose `C` and `D` came
+after the replay, how long it took. A separator is drawn above a prompt that follows a command's output, and a failed
+command is marked on the scroll bar in the theme's red. With focus in a pane that has a block with a command, outside
+the alternate screen, Ctrl+Shift+ArrowUp and Ctrl+Shift+ArrowDown scroll to the prompt of the command before or after
+the top line shown, past the last to the bottom, and do not reach the shell; otherwise these keys reach it as before,
+and no other key is taken. Clicking a mark focuses its pane and offers **Copy output**, **Copy command**, **Select
+output** (the terminal's selection), and **Type command again**, which types a one-line command line without Enter
+under WEB-45's rule (only after the shell's preview shows nothing running at its prompt, saying why otherwise) and is
+off for a command of more than one line. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel`
+and a step of [`TestTerminalPanelInBrowser`](../conformance/05-web/terminal_panel_browser_test.go).
+
 **WEB-47** `rotari web` run at a terminal, or with `--disconnect-action detach`, starts its server as `--detach`
 does (WEB-40), in a session of its own, and stays attached as its client: it shows the server's output, including
 `rotari web listening at URL`, and then says on stderr `Press Ctrl-D to detach and keep the server running; Ctrl-C to

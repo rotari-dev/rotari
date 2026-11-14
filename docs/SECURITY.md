@@ -223,6 +223,12 @@ Links in a shell's output (`POST /_terminal/shells/ID/links`) are found the same
 screen, at most 64 at once, behind the same checks and with a JSON body, and the server answers which name a run, a
 job, or a path that exists. That tells nothing a shell on the server could not.
 
+Blocks are read in the page alone, from the OSC 133 marks in the output it already shows; the server parses and
+keeps nothing for them, so it still records nothing that is typed. Any program can print the marks, and a file
+shown with `cat` can draw false ones. They change only the page's display: **Copy output** and **Copy command**
+write to the clipboard only when chosen, and **Type command again** types the text shown, never with Enter and only
+while the shell is at its prompt, so a false mark can at worst put text in front of you.
+
 Shells outlive their connections, like a launched VS Code server, so ones left open stay reachable
 to anyone with your session for as long as the server runs, or, with `--terminal-idle-timeout`, until that
 long after the last page closes, and recent
