@@ -121,3 +121,23 @@
   with bash 5.1 and zsh here; three runs in a row. Taking `return` out of `__rotari_keep`, or the line that puts `B`
   back, fails the bash test. `go test ./internal/terminal` passed; `go build ./...` and `go vet` clean.
 - **Remaining:** phases 6 (the option) and 7 (contract and docs).
+
+## 2026-11-14 19:20 +09:00 — The option
+
+- **Change:** `rotari web --terminal-shell-integration` (a boolean, default true), `terminal-shell-integration` under
+  `[web]` in any config, and `ROTARI_WEB_TERMINAL_SHELL_INTEGRATION`, read as the other terminal options are
+  (`readWebConfigured`; a value that is not a boolean is an error naming its source). It is one of
+  `webTerminalOptions`, so it applies only with `--allow-terminal` and is refused with `--static-dir`.
+  `webTerminalSettings.integration` reaches `KeeperOptions.ShellIntegration`. A detached server's record keeps
+  `terminal_no_shell_integration` when it is off, so a record written before this means the default, and a second
+  `--detach` that asks otherwise reports `terminal-shell-integration` as a difference. The CLI schema, the Python
+  client's `generated_cli.py` (formatted with the pre-commit pin, ruff 0.17.1), docs/CLI_REFERENCE.md,
+  docs/ENVIRONMENT_VARIABLES.md, and the golden schema were regenerated.
+- **Reason:** plan phase 6.
+- **Plan impact:** none.
+- **Validation:** new cases in `TestWebTrustedOptionsComeOnlyFromTrustedConfigs` (on by default; off from a project
+  config, from the environment over a config, and from the command line), `TestWebConfiguredBadValuesAreErrors`,
+  `TestDifferences`, and the static-pair tests (`--terminal-shell-integration=false` refused with `--static-dir`).
+  `generate_cli_reference.py --check` passed, and so did `go test ./cmd/rotari ./internal/webdetach
+  ./internal/terminal ./conformance ./conformance/03-interfaces/pairweb ./conformance/05-web`.
+- **Remaining:** phase 7 (contract, conformance through the binary, docs).

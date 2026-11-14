@@ -2,7 +2,7 @@
 
 Created: 2026-11-14
 Status: Phases 1–4 implemented on 2026-11-14 as first accepted. The same day the user asked for the marks without
-editing startup files, as an option on by default: decision 1 is revised and phases 5–7 added; phase 5 is done and phase 6 (the option) is next. See
+editing startup files, as an option on by default: decision 1 is revised and phases 5–7 added; phases 5 and 6 are done and phase 7 (contract and docs) is next. See
 [work-log.md](work-log.md). See [work-log.md](work-log.md).
 
 ## Goal
