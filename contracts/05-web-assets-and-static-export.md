@@ -1473,8 +1473,9 @@ naming rotari's script, which reads `/etc/profile` and the first readable of `~/
 the `ZDOTDIR` the shell was to have, else `$HOME`, or a `ZDOTDIR` the user's `.zshenv` sets; afterwards `ZDOTDIR` is
 as it was (unset if it was and nothing set it). Then each marks its prompts and commands with OSC 133 for the panel's
 blocks (WEB-48): before every prompt, `D;STATUS` with the last command's exit status and `A`, after the user's own
-prompt hooks, which see the command's status unchanged; `B` at the prompt's end, put back when a hook rebuilt the
-prompt without it; and `C` before the first command run from a prompt (bash 4.4 or later by `PS0`, earlier bash by a
+prompt hooks, which see the command's status unchanged; `B` where the command line starts: in bash at the prompt's
+end, put back when a hook rebuilt the prompt without it, and in zsh when the line editor starts (its `line-init`
+hook), so that a theme rebuilding the prompt at any time keeps it, or at the prompt's end in a zsh before 5.3; and `C` before the first command run from a prompt (bash 4.4 or later by `PS0`, earlier bash by a
 `DEBUG` trap unless the user's files set one, when there is no `C`; zsh by `preexec`). Any other shell,
 and every shell with `--terminal-shell-integration=false` (or `terminal-shell-integration = false` in a config, or
 `ROTARI_WEB_TERMINAL_SHELL_INTEGRATION=false`, as WEB-36 reads them), starts as `-l` with nothing added. The option

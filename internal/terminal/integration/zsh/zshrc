@@ -14,12 +14,26 @@ __rotari_keep() {
 	__rotari_status=$?
 	return $__rotari_status
 }
-# __rotari_prompt runs last. A prompt a theme rebuilt has lost B, which is put back.
+# __rotari_prompt runs last, unless a hook is added later, as some themes add theirs at the
+# first prompt.
 __rotari_prompt() {
 	print -n "\e]133;D;${__rotari_status}\a\e]133;A\a"
-	[[ $PS1 == *'133;B'* ]] || PS1="$PS1"$'%{\e]133;B\a%}'
+	(( __rotari_line_init )) || [[ $PS1 == *'133;B'* ]] || PS1="$PS1"$'%{\e]133;B\a%}'
 	return $__rotari_status
 }
+# B is printed once the line editor has drawn the prompt, where the command line starts,
+# so that a theme that rebuilds the prompt, at any time, cannot take it away. A zsh before
+# 5.3, without add-zle-hook-widget, has B put at the end of the prompt instead.
+__rotari_line_init=0
+__rotari_b() {
+	print -n "\e]133;B\a"
+}
+# add-zle-hook-widget does nothing until the line editor is loaded, which an interactive
+# zsh does only after its startup files unless asked to.
+if zmodload zsh/zle 2>/dev/null && autoload -Uz add-zle-hook-widget 2>/dev/null &&
+	add-zle-hook-widget line-init __rotari_b 2>/dev/null; then
+	__rotari_line_init=1
+fi
 __rotari_preexec() {
 	print -n "\e]133;C\a"
 }

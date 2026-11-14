@@ -182,6 +182,23 @@ func TestZshIntegrationReadsTheUsersFilesAndMarks(t *testing.T) {
 	}
 }
 
+// A zsh theme that adds its precmd hook only at the first prompt, after rotari's, and rebuilds
+// the prompt in it, as powerlevel10k does, still has its command lines marked.
+func TestZshIntegrationMarksAThemeThatComesLater(t *testing.T) {
+	home := t.TempDir()
+	writeFiles(t, home, map[string]string{
+		".zshenv": "unsetopt GLOBAL_RCS\n",
+		".zshrc":  "__later() { precmd_functions=(${precmd_functions:#__later} __theme) }\n__theme() { PS1='theme> ' }\nprecmd_functions+=(__later)\n",
+	})
+	shell := integrated(t, "zsh", home)
+	if marks := marksAfter(t, shell); !endsWith(marks, "B", "C", "D;1", "A", "B") {
+		t.Errorf("marks around false: %q", marks)
+	}
+	if got := shell.run(t, `print -l $precmd_functions | tail -1`); got != "__theme" {
+		t.Errorf("the last precmd hook is %q; the test's theme does not come after rotari's", got)
+	}
+}
+
 // Only bash and zsh start otherwise, and only with the integration.
 func TestShellCommandWithIntegration(t *testing.T) {
 	env := []string{"HOME=/h", "ZDOTDIR=/z", "ROTARI_USER_ZDOTDIR=/forged"}
