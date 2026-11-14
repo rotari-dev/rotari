@@ -88,7 +88,8 @@ type KeeperOptions struct {
 	// Log, if set, is told when a shell starts and ends, and never what it shows.
 	Log func(message string)
 	// ShellIntegration starts bash and zsh so that they mark their prompts and commands
-	// (see WriteIntegration), from files the Keeper writes now and removes on Close.
+	// (see WriteIntegration), from files the Keeper writes now: in the user's cache, kept,
+	// or else in a temporary directory, removed on Close.
 	ShellIntegration bool
 }
 
@@ -153,6 +154,9 @@ type DirEntry struct {
 // them all.
 type Keeper struct {
 	options KeeperOptions
+	// temporaryIntegration is the shell integration's directory when it is a temporary
+	// one, which Close removes.
+	temporaryIntegration string
 
 	mu     sync.Mutex
 	closed bool
@@ -200,14 +204,21 @@ func NewKeeper(options KeeperOptions) (*Keeper, error) {
 	if options.GroupLimit <= 0 {
 		return nil, errors.New("terminal group limit must be above zero")
 	}
+	temporary := ""
 	if options.ShellIntegration {
-		dir, err := WriteIntegration()
+		dir, lasting, note, err := WriteIntegration()
 		if err != nil {
 			return nil, err
 		}
+		if !lasting {
+			temporary = dir
+			if options.Log != nil {
+				options.Log("terminal: the shell integration's files are in a temporary directory, which shells started inside the panel's shells lose when the server stops: " + note)
+			}
+		}
 		options.Shell.Integration = dir
 	}
-	return &Keeper{options: options}, nil
+	return &Keeper{options: options, temporaryIntegration: temporary}, nil
 }
 
 // Start starts a shell at the given size. A shell nobody attaches to falls under the
@@ -771,8 +782,9 @@ func (keeper *Keeper) Close() {
 	keeper.stopIdleTimer()
 	keeper.mu.Unlock()
 	keeper.EndAll()
-	// Every shell has read its files by now, and no other will start.
-	if dir := keeper.options.Shell.Integration; dir != "" {
+	// Every shell has read its files by now, and no other will start. Files in the user's
+	// cache are kept, for whatever outlives the server.
+	if dir := keeper.temporaryIntegration; dir != "" {
 		if err := os.RemoveAll(dir); err != nil {
 			keeper.log("cannot remove the shell integration's files: " + err.Error())
 		}

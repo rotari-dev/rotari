@@ -19,11 +19,10 @@ func integrated(t *testing.T, shell, home string, env ...string) *startedShell {
 	if err != nil {
 		t.Skipf("no %s here", shell)
 	}
-	dir, err := WriteIntegration()
+	dir, err := writeLastingIntegration(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
 	return startShellWith(t, Options{Shell: path, Dir: home, Integration: dir, Rows: 24, Cols: 80,
 		Env: append([]string{"HOME=" + home, "PATH=" + os.Getenv("PATH")}, env...)})
 }
@@ -299,23 +298,54 @@ func TestShellCommandWithIntegration(t *testing.T) {
 }
 
 // The Keeper writes the files when it is made with the integration and removes them on Close.
-func TestKeeperWritesAndRemovesTheIntegration(t *testing.T) {
+// useCache makes the user's cache directory a new one for the test, as os.UserCacheDir
+// finds it on Linux and macOS.
+func useCache(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+	t.Setenv("HOME", home)
+	base, err := os.UserCacheDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return base
+}
+
+// The Keeper writes the files under the user's cache and keeps them after Close, for what
+// outlives the server; a cache it cannot trust makes it use a temporary directory, which it
+// removes, and says why.
+func TestKeeperKeepsTheIntegrationInTheCache(t *testing.T) {
+	base := useCache(t)
 	keeper, err := NewKeeper(KeeperOptions{Shell: Options{Shell: "/bin/sh", Dir: t.TempDir()}, RingSize: 1024, ShellLimit: 1, GroupLimit: 1, ShellIntegration: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	dir := keeper.options.Shell.Integration
-	for _, name := range []string{"rotari.bash", "zsh/.zshenv", "zsh/.zprofile", "zsh/.zshrc", "zsh/.zlogin"} {
-		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
-			t.Error(err)
-		}
-	}
-	if info, err := os.Stat(dir); err != nil || info.Mode().Perm() != 0o700 {
-		t.Errorf("directory %s: %v, %v", dir, info, err)
+	if filepath.Dir(dir) != filepath.Join(base, "rotari", "shell-integration") {
+		t.Errorf("the files are in %s, not under the cache %s", dir, base)
 	}
 	keeper.Close()
-	if _, err := os.Stat(dir); !os.IsNotExist(err) {
-		t.Errorf("after Close, %s: %v", dir, err)
+	if _, err := os.Stat(filepath.Join(dir, "rotari.bash")); err != nil {
+		t.Errorf("after Close, the files in the cache: %v", err)
+	}
+	// Others can write the cache's rotari directory: a temporary directory instead.
+	if err := os.Chmod(filepath.Join(base, "rotari"), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	var logged []string
+	fallback, err := NewKeeper(KeeperOptions{Shell: Options{Shell: "/bin/sh", Dir: t.TempDir()}, RingSize: 1024, ShellLimit: 1, GroupLimit: 1, ShellIntegration: true,
+		Log: func(message string) { logged = append(logged, message) }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	temporary := fallback.options.Shell.Integration
+	if strings.HasPrefix(temporary, base) || len(logged) != 1 || !strings.Contains(logged[0], "can be written by others") {
+		t.Errorf("with a cache others can write: files in %s, logged %q", temporary, logged)
+	}
+	fallback.Close()
+	if _, err := os.Stat(temporary); !os.IsNotExist(err) {
+		t.Errorf("after Close, the temporary %s: %v", temporary, err)
 	}
 	plain, err := NewKeeper(KeeperOptions{Shell: Options{Shell: "/bin/sh"}, RingSize: 1024, ShellLimit: 1, GroupLimit: 1})
 	if err != nil {
@@ -323,5 +353,67 @@ func TestKeeperWritesAndRemovesTheIntegration(t *testing.T) {
 	}
 	if plain.options.Shell.Integration != "" {
 		t.Error("a Keeper without the integration wrote it")
+	}
+}
+
+// The files in the cache are named by their content, written once and reused, put back
+// when changed, and refused where they could have been put by someone else.
+func TestLastingIntegration(t *testing.T) {
+	base := t.TempDir()
+	dir, err := writeLastingIntegration(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash, _ := integrationHash()
+	if dir != filepath.Join(base, "rotari", "shell-integration", hash) {
+		t.Errorf("dir %s", dir)
+	}
+	for _, file := range integrationLayout {
+		info, err := os.Stat(filepath.Join(dir, file[1]))
+		if err != nil || info.Mode().Perm() != 0o600 {
+			t.Errorf("%s: %v, %v", file[1], info, err)
+		}
+	}
+	if info, err := os.Stat(dir); err != nil || info.Mode().Perm() != 0o700 {
+		t.Errorf("directory %s: %v, %v", dir, info, err)
+	}
+	// Changed, it is put back; the second write gives the same directory.
+	zshrc := filepath.Join(dir, "zsh", ".zshrc")
+	if err := os.WriteFile(zshrc, []byte("echo changed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if again, err := writeLastingIntegration(base); err != nil || again != dir {
+		t.Fatalf("again: %s, %v", again, err)
+	}
+	want, _ := integrationFiles.ReadFile("integration/zsh/zshrc")
+	if got, _ := os.ReadFile(zshrc); string(got) != string(want) {
+		t.Error("a changed file was not put back")
+	}
+	// A file others can write is replaced by one they cannot.
+	if err := os.Chmod(zshrc, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeLastingIntegration(base); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := os.Stat(zshrc); info.Mode().Perm() != 0o600 {
+		t.Errorf("a file others could write kept %v", info.Mode())
+	}
+	// A directory that is a link, or that others can write, is refused.
+	if err := os.Chmod(dir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeLastingIntegration(base); err == nil || !strings.Contains(err.Error(), "can be written by others") {
+		t.Errorf("a directory others can write: %v", err)
+	}
+	linked := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(linked, "rotari"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), filepath.Join(linked, "rotari", "shell-integration")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeLastingIntegration(linked); err == nil || !strings.Contains(err.Error(), "is not a directory") {
+		t.Errorf("a linked directory: %v", err)
 	}
 }
