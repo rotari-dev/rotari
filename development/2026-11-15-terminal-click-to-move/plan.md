@@ -1,7 +1,8 @@
 # Plan: Click to move the cursor in the Web terminal's command line
 
 Created: 2026-11-15
-Status: Proposed; waiting for the user's decision on the open questions.
+Status: Accepted by the user on 2026-11-15, with the open questions answered as proposed; phase 1 is done and phase 2 (zsh exactly) is next.
+See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -81,7 +82,10 @@ line) is the second and gets a plan of its own.
   same keystrokes without reading the terminal behind readline's back; arrows are exact enough there, as bash has no
   autosuggestions of its own.
 
-## Open questions
+## Settled questions
+
+All three were accepted as proposed on 2026-11-15.
+
 
 1. **zsh's exact way.** Proposed: the widget (decision 2), so that a click never accepts an autosuggestion and wide
    characters are exact. The alternative is arrows everywhere, which is simpler and leaves the autosuggestion problem
