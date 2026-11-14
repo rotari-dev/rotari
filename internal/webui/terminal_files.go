@@ -121,14 +121,14 @@ func checkTerminalDir(path string) error {
 
 // listTerminalDir lists dir's immediate entries.
 func listTerminalDir(dir string) (terminalFilesResponse, error) {
-	info, err := os.Stat(dir)
+	info, err := os.Stat(dir) // NOSONAR: any path is allowed by design; only someone who passes the terminal's checks gets here, and they already have a shell.
 	if err != nil {
 		return terminalFilesResponse{}, err
 	}
 	if !info.IsDir() {
 		return terminalFilesResponse{}, fmt.Errorf("%s is not a directory", dir)
 	}
-	listed, err := os.ReadDir(dir)
+	listed, err := os.ReadDir(dir) // NOSONAR: any path is allowed by design; only someone who passes the terminal's checks gets here, and they already have a shell.
 	if err != nil {
 		return terminalFilesResponse{}, err
 	}
@@ -165,12 +165,12 @@ func terminalFileOf(dir string, item fs.DirEntry) terminalFileEntry {
 		return entry
 	}
 	path := filepath.Join(dir, name)
-	if target, err := os.Readlink(path); err == nil {
+	if target, err := os.Readlink(path); err == nil { // NOSONAR: any path is allowed by design; only someone who passes the terminal's checks gets here, and they already have a shell.
 		entry.Target = strings.ToValidUTF8(target, "�")
 		entry.TargetNotUTF8 = !utf8.ValidString(target)
 	}
 	entry.TargetKind = terminalFileMissing
-	if info, err := os.Stat(path); err == nil {
+	if info, err := os.Stat(path); err == nil { // NOSONAR: any path is allowed by design; only someone who passes the terminal's checks gets here, and they already have a shell.
 		entry.TargetKind = terminalFileKind(info.Mode().Type())
 	}
 	return entry
@@ -287,7 +287,7 @@ func serveTerminalDownload(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	path = filepath.Clean(path)
-	info, err := os.Stat(path)
+	info, err := os.Stat(path) // NOSONAR: any path is allowed by design; only someone who passes the terminal's checks gets here, and they already have a shell.
 	if err != nil {
 		http.Error(writer, err.Error(), http.StatusUnprocessableEntity)
 		return
@@ -306,7 +306,7 @@ func serveTerminalDownload(writer http.ResponseWriter, request *http.Request) {
 			panic(http.ErrAbortHandler)
 		}
 	case info.Mode().IsRegular():
-		file, err := os.Open(path)
+		file, err := os.Open(path) // NOSONAR: any path is allowed by design; only someone who passes the terminal's checks gets here, and they already have a shell.
 		if err != nil {
 			http.Error(writer, err.Error(), http.StatusUnprocessableEntity)
 			return

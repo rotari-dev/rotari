@@ -233,7 +233,7 @@ func terminalStartDir(query url.Values) (string, error) {
 		return "", err
 	}
 	dir = filepath.Clean(dir)
-	info, err := os.Stat(dir)
+	info, err := os.Stat(dir) // NOSONAR: any path is allowed by design; only someone who passes the terminal's checks gets here, and they already have a shell.
 	if err != nil {
 		return "", err
 	}
