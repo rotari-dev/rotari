@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -277,6 +278,10 @@ func TestCloseLeavesProcessesThatIgnoreTheHangup(t *testing.T) {
 // What leaves the shell's session keeps running, so a run started in a terminal
 // outlives it.
 func TestCloseLeavesDetachedProcessesRunning(t *testing.T) {
+	// setsid(1) is how a user leaves the session here; macOS has none.
+	if _, err := exec.LookPath("setsid"); err != nil {
+		t.Skipf("setsid(1) is unavailable: %v", err)
+	}
 	shell := startShell(t)
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	shell.run(t, `setsid sh -c 'echo $$ > `+pidFile+`; exec sleep 300' >/dev/null 2>&1 < /dev/null & echo started`)

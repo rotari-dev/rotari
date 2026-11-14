@@ -105,10 +105,17 @@ func TestTerminalDirsOfAShellsGroup(t *testing.T) {
 	// directory marked, unreadable runs with the reason, and dirC, the sixth, left out.
 	project := start("&project=p")
 	client := dialTerminalShell(t, server, project.ID)
-	client.typeLine(`cd '` + dirB + `' && d=$(printf 'x\377y') && mkdir "$d" && cd "$d" && echo "odd-$((1+1))"`)
+	// printf makes the byte, so the typed line stays UTF-8. Where the file
+	// system refuses such a name (macOS), an ordinary one stands in.
+	odd, oddShown := `$(printf 'x\377y')`, "x�y"
+	rawNames := nonUTF8NamesAllowed(t, dirB)
+	if !rawNames {
+		odd, oddShown = "xy", "xy"
+	}
+	client.typeLine(`cd '` + dirB + `' && d=` + odd + ` && mkdir "$d" && cd "$d" && echo "odd-$((1+1))"`)
 	client.await("odd-2")
-	response := awaitHistory(project.ID, filepath.Join(dirB, "x�y"), dirA)
-	if !response.History[0].NotUTF8 || response.History[1].NotUTF8 || response.History[0].Missing || response.History[0].EnteredAt.IsZero() {
+	response := awaitHistory(project.ID, filepath.Join(dirB, oddShown), dirA)
+	if response.History[0].NotUTF8 != rawNames || response.History[1].NotUTF8 || response.History[0].Missing || response.History[0].EnteredAt.IsZero() {
 		t.Errorf("history entries = %+v", response.History)
 	}
 	var runs []string

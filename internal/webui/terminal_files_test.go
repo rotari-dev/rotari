@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,7 +13,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -38,12 +41,19 @@ func TestTerminalFilesListADirectory(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, name := range []string{"c.txt", "a\nline", "bad\xffname", "B.csv"} {
+	rawNames := nonUTF8NamesAllowed(t, dir)
+	files := []string{"c.txt", "a\nline", "B.csv"}
+	links := map[string]string{"to-dir": "beta", "to-file": "c.txt", "broken": "nowhere"}
+	if rawNames {
+		files = append(files, "bad\xffname")
+		links["odd-target"] = "x\xfey"
+	}
+	for _, name := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for name, target := range map[string]string{"to-dir": "beta", "to-file": "c.txt", "broken": "nowhere", "odd-target": "x\xfey"} {
+	for name, target := range links {
 		if err := os.Symlink(target, filepath.Join(dir, name)); err != nil {
 			t.Fatal(err)
 		}
@@ -59,6 +69,9 @@ func TestTerminalFilesListADirectory(t *testing.T) {
 		{Name: "c.txt", Kind: "file"},
 		{Name: "odd-target", Kind: "symlink", Target: "x�y", TargetNotUTF8: true, TargetKind: "missing"},
 		{Name: "to-file", Kind: "symlink", Target: "c.txt", TargetKind: "file"},
+	}
+	if !rawNames {
+		want = slices.DeleteFunc(want, func(entry terminalFileEntry) bool { return entry.NotUTF8 || entry.TargetNotUTF8 })
 	}
 	// The shell's directory and the same directory by path list the same.
 	for _, query := range []string{"shell=" + shell.ID, "path=" + url.QueryEscape(dir), "path=" + url.QueryEscape(dir+"/beta/..")} {
@@ -395,4 +408,24 @@ func TestTerminalFilesDownloadAndUpload(t *testing.T) {
 	if response, _ := terminalTransfer(t, server, http.MethodPost, terminalFilesPath+"/download?path=/", "application/json", "{}"); response.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("POST download: %d", response.StatusCode)
 	}
+}
+
+// nonUTF8NamesAllowed reports whether the file system under dir holds a name
+// that is not UTF-8. macOS (APFS) refuses one with EILSEQ; there the tests
+// check everything else and leave such names out.
+func nonUTF8NamesAllowed(t *testing.T, dir string) bool {
+	t.Helper()
+	probe := filepath.Join(dir, "probe\xff")
+	err := os.WriteFile(probe, nil, 0o600)
+	if errors.Is(err, syscall.EILSEQ) {
+		t.Logf("this file system refuses names that are not UTF-8: %v", err)
+		return false
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(probe); err != nil {
+		t.Fatal(err)
+	}
+	return true
 }

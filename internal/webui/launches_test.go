@@ -198,7 +198,7 @@ func TestLaunchAvailabilityNamesRestartedCommands(t *testing.T) {
 func TestLaunchRunsRegisteredCommandOnArtifact(t *testing.T) {
 	f := newArtifactFixture(t)
 	options := launchOptions(t, f.baseDir,
-		launchCommand("Count", `ls "$ROTARI_LAUNCHER_ARTIFACT" | wc -l; pwd -P`, launcher.TargetDirectory),
+		launchCommand("Count", `ls "$ROTARI_LAUNCHER_ARTIFACT" | wc -l | tr -d ' '; pwd -P`, launcher.TargetDirectory),
 		launchCommand("Cat", `cat "$ROTARI_LAUNCHER_ARTIFACT"`, launcher.TargetFile),
 		launchCommand("Sleep", `sleep 300`, launcher.TargetFile, launcher.TargetDirectory))
 	handler := Handler(options)
