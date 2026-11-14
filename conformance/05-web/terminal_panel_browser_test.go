@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 const [helper, input] = process.argv.slice(1);
 const { launchChrome, withPage, sleep } = await import(pathToFileURL(helper));
-const { chrome, base, token } = JSON.parse(readFileSync(input, 'utf8'));
+const { chrome, base, token, runID } = JSON.parse(readFileSync(input, 'utf8'));
 
 const prepare = ` + "`" + `
   window.__violations = [];
@@ -133,6 +133,22 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   if (await page.evaluate(screenHas('sent-2'))) throw new Error('a sent command ran without Enter');
   await typeLine('');
   await until('the sent command to run', screenHas('sent-2'));
+  await collect();
+
+  // A run ID the shell prints is a link to its run page, and the shell stays.
+  await typeLine('echo "' + runID.slice(0, 9) + '""' + runID.slice(9) + '"');
+  const runRow = '[...document.querySelectorAll(".xterm-rows > div")].find((row) => row.textContent.trim() === ' + JSON.stringify(runID) + ')';
+  await until('the printed run ID', runRow + ' !== undefined');
+  const point = await page.evaluate('(() => { const box = ' + runRow + '.getBoundingClientRect(); return { x: box.left + 20, y: box.top + box.height / 2 }; })()');
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
+  await until('the run link', 'document.querySelector(".terminal-viewport")?.title.startsWith("Open this run of p1")');
+  await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
+  await until('the run page', 'location.pathname === "/project/p1/run/' + runID + '"');
+  await until('the shell on the run page', screenHas(runID) + ' && document.querySelectorAll(".terminal-tab").length === 1');
+  await page.evaluate('location.href = "/project/p1"');
+  await until('the project page again', 'location.pathname === "/project/p1" && document.querySelectorAll(".terminal-tab").length === 1');
+  await until('the project\'s shell to settle again', settled);
   await collect();
 
   // A dialog fits above the panel, whatever its usual height.
@@ -434,7 +450,8 @@ process.exit(0);
 `
 
 // TestTerminalPanelInBrowser uses the real xterm.js in Chrome, signed in as a browser
-// is: opening the panel, typing, following a link with the shell still there, a second
+// is: opening the panel, typing, following a link with the shell still there, a run ID
+// it prints followed to its run page, a second
 // tab, and up to four panes.
 func TestTerminalPanelInBrowser(t *testing.T) {
 	covers(t, "WEB-33")
@@ -451,10 +468,10 @@ func TestTerminalPanelInBrowser(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := support.NewEnv(t)
-	base.CreateFinishedRun()
+	run := base.CreateFinishedRun()
 	e := base.WithVar("ROTARI_WEB_AUTH_TOKEN", launchToken).WithVar("SHELL", "/bin/sh").WithVar("HOME", base.Root)
 	live := e.StartWeb("--allow-terminal")
-	input, err := json.Marshal(map[string]string{"chrome": chrome, "base": live, "token": launchToken})
+	input, err := json.Marshal(map[string]string{"chrome": chrome, "base": live, "token": launchToken, "runID": run.RunID})
 	if err != nil {
 		t.Fatal(err)
 	}

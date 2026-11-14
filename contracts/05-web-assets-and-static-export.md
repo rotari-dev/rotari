@@ -1463,6 +1463,35 @@ level by `TestIdleLimitAppliesToTheShellsTogether` and
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-46** With `rotari web --allow-terminal`, words a shell prints are links when they name something that exists.
+`POST /_terminal/shells/ID/links` takes a JSON body `{"candidates": [...]}`, at most 64 candidates of at most 4096
+bytes each (400 beyond, 415 for a body that is not JSON, unknown fields 400), and answers `links`, one for each
+distinct candidate that names something, in the order asked, with its `text` and `kind`:
+- `run`: a run ID (`YYYYMMDD-HHMMSS-` and eight lowercase hex digits) of a run of the shell's project, else of another
+  project of its basedir, else, for a shell of no project, of a project of any registered basedir; the first project
+  holding it gives `project` and `link`, its run page, under `/_basedir/ID` for a basedir other than the server's own.
+- `job`: a job ID (nine lowercase hex digits, or an array task's `ID-N`) of the shell's project only, in its newest 20
+  runs, newest first, linking to that run's page with `?job_id=`, or else in its queue, linking to the project's page.
+  A shell of a basedir's own pages or of no project links no job, and a word of that form that is no such job is no
+  link.
+- `dir` or `file`: a candidate holding `/`, absolute or relative to the shell's working directory when asked, with a
+  trailing `:LINE` or `:LINE:COL` left out, that is a directory or a regular file on this host now; `path` is its
+  absolute, cleaned path.
+
+`dir_error` says why relative paths could not be resolved, and `problems` what could not be read while looking (a
+run's snapshot, the queue, a basedir's projects); neither turns the answer into an error. A shell not running is
+404, a method but POST 405, and the route is served only where the terminal is (404 without it), behind its checks.
+The panel finds candidates on the line under the pointer, its wrapped parts joined, leaving out trailing
+punctuation and words holding `://`, which stay web links; it asks once per line, keeps answers for IDs for the
+page's life and for paths a few seconds, and underlines only what is answered, a link inside a longer one giving
+way to it. Pointing at a link says what it opens. Clicking a run or job takes the page there with the panel's
+shells kept (with the panel in a window of its own, the page it belongs to); Ctrl- or Cmd-click opens it in a new
+tab. A directory shows in the Explorer with Follow off, and a file opens in the Table viewer (WEB-42). When the
+server cannot be asked, nothing is a link and a note says so once. Implemented in
+`internal/webui/terminal_links.go` and the panel in `web_shell.js`; covered by
+[`TestTerminalOutputLinks`](../conformance/05-web/terminal_links_test.go), `TestTerminalLinksAreWhatExists`,
+`TestTerminalPanel`, and a step of `TestTerminalPanelInBrowser`.
+
 **WEB-45** With `rotari web --allow-terminal`, the shells of one group (a project's, a basedir's own, or those of no
 project, as WEB-34 groups them) share a history of where they have been. The server reads a shell's own working
 directory once its output has paused at its prompt (the shell holding its terminal's foreground) after input with a

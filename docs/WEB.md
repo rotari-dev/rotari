@@ -279,6 +279,15 @@ press Enter, so `cd`, `pushd`, and tools such as `z` all count, and so does wher
 changed inside another program, such as a nested shell, `ssh`, or `tmux`, does not. It keeps the last 20
 directories of each project, in memory only, and forgets them all when every shell ends, as when you sign out.
 
+Run IDs, job IDs, and paths that a shell prints become links when you point at them, as web addresses do, but only
+when they name something: a run of any project of the state directory (of any state directory, in a shell of no
+project), a job of the tab's project in its last 20 runs or its queue, or a file or directory on the server. A nine-digit
+hex word that is no job, such as a git hash, stays text. Click a run or job to open its run page with the job chosen
+(a job only queued opens the project's page); the panel and its shells stay, and Ctrl- or Cmd-click opens a new tab
+instead. Click a directory to show it in the Explorer, or a file to open it in the Table viewer. A path is taken
+from where the shell is when you point at it, with a `:12` or `:12:3` after it left out, so a relative path printed
+before a `cd` may name another file or nothing. Pointing at a link says what it opens.
+
 The **Clear** icon empties the tab's screen and scrollback, and what would be shown again after following a
 link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing
 while a full-screen program such as `vim` runs, and says so.
