@@ -1,8 +1,8 @@
 # Plan: Blocks in the Web terminal
 
 Created: 2026-11-14
-Status: Accepted by the user on 2026-11-14, with the open questions answered as proposed. Phase 1 (parsing and the
-block model) is done; phase 2 (display) is next. See [work-log.md](work-log.md).
+Status: Accepted by the user on 2026-11-14, with the open questions answered as proposed. Phases 1 (parsing and the
+block model) and 2 (display) are done; phase 3 (moving and acting) is next. See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -48,8 +48,10 @@ Grouping blocks by directory, discussed with recent directories, would build on 
    holds; a block whose start fell out of the ring or the scrollback is gone. Marks inside the alternate screen
    (`vim`, `less`) are ignored.
 3. **What a block shows.** A mark in a narrow gutter left of the first line of each prompt: green for exit 0, red
-   for any other exit code, grey while running, and hollow when the command ended without `D` (another prompt came
-   first, as after Ctrl-C in some setups). A thin separator above each prompt but the first. Failed commands are
+   for any other exit code, grey while running, and hollow when the command ended without an exit code (`D` with
+   none, or another prompt came first, as after Ctrl-C in some setups). A prompt where no command has started (`C`)
+   has no mark. A thin separator above each prompt that follows a command's output, so empty prompts in a row get
+   none. Failed commands are
    red marks on the scroll bar, so that a failure far up is easy to find. Hovering a mark says the command line, the
    exit code, and, for a command seen running in this page, how long it took; replayed blocks have no times, since
    the ring keeps none. The replay is a connection's first message (`Keeper.Attach` puts it first in what `Next`
