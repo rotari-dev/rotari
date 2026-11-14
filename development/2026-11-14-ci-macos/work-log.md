@@ -151,3 +151,32 @@ thread added a web flag without updating the inventory fingerprint. The user lef
 
 **Validation:** `go vet` of the changed packages for linux and darwin/arm64: clean. On Linux the changed tests
 passed, and `TestCLIFlagPairCancel` passed in full.
+
+## 2026-11-14 — `f3c16eaf` and `a8970764`: the sixth macOS run
+
+The sixth macOS run carried the diagnostics of `d9312623`.
+
+**`f3c16eaf` Refuse a no-replace rename with EEXIST on macOS too** (`internal/fileops/fileops.go`): a product
+inconsistency. `renameNoReplaceFallback`, used where the system has no no-replace rename (macOS), returned
+`fs.ErrExist` (`file already exists`) where Linux's `renameat2` returns `EEXIST` (`file exists`), so the Web
+terminal's move conflict read differently (`TestTerminalFilesChange`). It now returns `syscall.EEXIST`, which
+still matches `fs.ErrExist`. Test: `TestRenameNoReplaceFallbackSaysFileExists`, on every system.
+
+**`a8970764` Web terminal tests** (tests only):
+
+- `TestTerminalFilesListADirectory` and `TestTerminalDirsOfAShellsGroup` used names that are not UTF-8, which APFS
+  refuses; `nonUTF8NamesAllowed` decides, and an ordinary name stands in where they are refused.
+- `TestLaunchRunsRegisteredCommandOnArtifact`: BSD `wc -l` pads its count with spaces; the command strips them.
+- `TestCloseLeavesDetachedProcessesRunning` leaves the session with `setsid(1)`; it skips without it.
+
+**Not fixed, recorded in `development/ISSUES.md`:**
+
+- `TestCLIFlagPairCancel`: the diagnostics show the cancel reached the wrapper (`cancelled`,
+  `status.json.stopping`) with the macOS identity recorded, and the job ended only after the 30 s grace
+  (about 32 s per subtest). A product issue on macOS whose cause is not established.
+- `TestVerifyListener*`: lsof exits 1 with no output for the launch's listener, so the macOS listener check never
+  trusts a launch's port. Not established why.
+- `TestOldBashIntegrationMarksCommandsByTheDebugTrap` belongs to another thread's Blocks work.
+
+**Validation:** `go vet` of the changed packages for linux and darwin/arm64: clean. On Linux, `internal/webui`,
+`internal/terminal`, and `internal/fileops` passed (node v24).
