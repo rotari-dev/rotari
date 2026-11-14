@@ -283,6 +283,13 @@ function shellWord(value) {
     endShell: ["M4.5 4.5l7 7", "M11.5 4.5l-7 7"],
     // A play mark: run something here.
     launch: ["M5 3.5l7.5 4.5L5 12.5z"],
+    // A prompt's chevron over lines: the commands run in a pane.
+    commands: [
+      "M2.5 3.5l2.5 2-2.5 2",
+      "M7 7.5h6.5",
+      "M2.5 10.5h11",
+      "M2.5 13.5h7.5",
+    ],
     overview: [
       { x: 1.5, y: 2.5, width: 5.5, height: 4.5, rx: 1 },
       { x: 9, y: 2.5, width: 5.5, height: 4.5, rx: 1 },
@@ -409,6 +416,7 @@ function shellWord(value) {
     add,
     launchButton,
     dirsButton,
+    commandsButton,
     splitRightButton,
     splitDownButton,
     closePaneButton,
@@ -3145,6 +3153,7 @@ function shellWord(value) {
     closePaneButton.disabled = panes.length < 2;
     launchButton.disabled = focused.shown === null;
     dirsButton.disabled = focused.shown === null;
+    commandsButton.disabled = focused.shown === null;
   };
   // applyLayout places the panes and the handles between them, by position alone: moving
   // a screen in the page, as columns of their own elements would need, would make
@@ -3548,23 +3557,109 @@ function shellWord(value) {
   // the Explorer, opens a new tab there, or copies the path. A directory that is gone, or
   // whose name is not UTF-8, is shown but cannot be chosen, and a run that could not be
   // read says why.
-  let dirsBox = null;
-  let dirsAnchor = null;
-  const closeDirs = (refocus = false) => {
-    if (!dirsBox) return;
-    dirsBox.remove();
-    dirsBox = null;
-    dirsAnchor = null;
+  //
+  // A dropdown, of directories or of commands, is a filter over a list of rows, moved
+  // through with the arrow keys and chosen with Enter or a click; one is open at a time.
+  let dropdown = null;
+  let dropdownAnchor = null;
+  const closeDropdown = (refocus = false) => {
+    if (!dropdown) return;
+    dropdown.remove();
+    dropdown = null;
+    dropdownAnchor = null;
     if (refocus) focused.term?.focus();
   };
   document.addEventListener("pointerdown", (event) => {
     if (
-      dirsBox &&
-      !dirsBox.contains(event.target) &&
-      !dirsAnchor?.contains(event.target)
+      dropdown &&
+      !dropdown.contains(event.target) &&
+      !dropdownAnchor?.contains(event.target)
     )
-      closeDirs();
+      closeDropdown();
   });
+  // openDropdown opens one under anchor, or closes the one anchor opened. load gives what
+  // it lists, or { error } to say failed and why; show draws what matches the filter's
+  // lowercased text into the list, as rows of class terminal-dirs-row; choose is given the
+  // row Enter chose.
+  const openDropdown = async (
+    anchor,
+    { label, items, className = "", load, show, choose, failed },
+  ) => {
+    if (dropdown) {
+      const again = dropdownAnchor === anchor;
+      closeDropdown(again);
+      if (again) return;
+    }
+    const box = makeElement("div", ("terminal-dirs " + className).trim());
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-label", label);
+    const filter = makeElement("input", "terminal-dirs-filter");
+    filter.type = "search";
+    filter.placeholder = "Filter";
+    filter.setAttribute("aria-label", "Filter " + items);
+    const list = makeElement("div", "terminal-dirs-list", "Loading...");
+    list.setAttribute("role", "listbox");
+    list.setAttribute("aria-label", items[0].toUpperCase() + items.slice(1));
+    box.append(filter, list);
+    dropdown = box;
+    dropdownAnchor = anchor;
+    document.body.append(box);
+    const near = anchor.getBoundingClientRect();
+    const size = box.getBoundingClientRect();
+    box.style.left =
+      Math.max(0, Math.min(near.left, innerWidth - size.width)) + "px";
+    // Above the anchor when the panel is at the bottom and there is no room below.
+    const below = near.bottom + size.height <= innerHeight;
+    box.style.top =
+      Math.max(0, below ? near.bottom : near.top - size.height) + "px";
+    // The keys work from the start, so that Escape closes it while it loads or after a
+    // refusal.
+    let active = null;
+    const rows = () => [...list.querySelectorAll(".terminal-dirs-row")];
+    const choosable = () =>
+      rows().filter((row) => row.getAttribute("aria-disabled") !== "true");
+    const activate = (row) => {
+      active = row;
+      for (const other of rows())
+        other.setAttribute("aria-selected", String(other === row));
+      row?.scrollIntoView?.({ block: "nearest" });
+    };
+    box.onkeydown = (event) => {
+      const choices = choosable();
+      const at = choices.indexOf(active);
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        if (!choices.length) return;
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        activate(choices[(at + step + choices.length) % choices.length]);
+      } else if (event.key === "Enter" && active) {
+        event.preventDefault();
+        choose(active);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeDropdown(true);
+      }
+    };
+    filter.focus();
+    const loaded = await load();
+    if (dropdown !== box) return;
+    if (loaded.error) {
+      list.textContent = failed + loaded.error;
+      return;
+    }
+    const render = () => {
+      list.replaceChildren();
+      show(list, filter.value.trim().toLowerCase(), loaded);
+      if (!list.childElementCount)
+        list.append(
+          makeElement("div", "terminal-dirs-empty", "Nothing matches."),
+        );
+      activate(choosable()[0] || null);
+    };
+    filter.oninput = render;
+    render();
+  };
   const shellURL = (id, name) =>
     shellsPath + "/" + encodeURIComponent(id) + "/" + name;
   // fetchShellJSON is a shell's dirs or preview, or the reason it could not be had.
@@ -3619,95 +3714,32 @@ function shellWord(value) {
         : entry.missing
           ? "Not on this host."
           : "";
-  const openDirs = async (anchor) => {
-    if (dirsBox) {
-      const again = dirsAnchor === anchor;
-      closeDirs(again);
-      if (again) return;
-    }
+  const openDirs = (anchor) => {
     const id = focused.shown;
-    if (id === null) return;
-    const box = makeElement("div", "terminal-dirs");
-    box.setAttribute("role", "dialog");
-    box.setAttribute("aria-label", "Recent directories");
-    const filter = makeElement("input", "terminal-dirs-filter");
-    filter.type = "search";
-    filter.placeholder = "Filter";
-    filter.setAttribute("aria-label", "Filter directories");
-    const list = makeElement("div", "terminal-dirs-list", "Loading...");
-    list.setAttribute("role", "listbox");
-    list.setAttribute("aria-label", "Directories");
-    box.append(filter, list);
-    dirsBox = box;
-    dirsAnchor = anchor;
-    document.body.append(box);
-    const near = anchor.getBoundingClientRect();
-    const size = box.getBoundingClientRect();
-    box.style.left =
-      Math.max(0, Math.min(near.left, innerWidth - size.width)) + "px";
-    // Above the anchor when the panel is at the bottom and there is no room below.
-    const below = near.bottom + size.height <= innerHeight;
-    box.style.top =
-      Math.max(0, below ? near.bottom : near.top - size.height) + "px";
-    // The keys work from the start, so that Escape closes it while it loads or after a
-    // refusal.
-    let active = null;
-    const rows = () => [...list.querySelectorAll(".terminal-dirs-row")];
-    const choosable = () =>
-      rows().filter((row) => row.getAttribute("aria-disabled") !== "true");
-    const activate = (row) => {
-      active = row;
-      for (const other of rows())
-        other.setAttribute("aria-selected", String(other === row));
-      row?.scrollIntoView?.({ block: "nearest" });
-    };
-    box.onkeydown = (event) => {
-      const choices = choosable();
-      const at = choices.indexOf(active);
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        event.preventDefault();
-        if (!choices.length) return;
-        const step = event.key === "ArrowDown" ? 1 : -1;
-        activate(choices[(at + step + choices.length) % choices.length]);
-      } else if (event.key === "Enter" && active) {
-        event.preventDefault();
-        typeCd(id, active.dirEntry.dir);
-      } else if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        closeDirs(true);
-      }
-    };
-    filter.focus();
-    const answer = await fetchShellJSON(id, "dirs");
-    if (dirsBox !== box) return;
-    if (answer.error) {
-      list.textContent = "Cannot list the directories: " + answer.error;
+    if (id === null) {
+      closeDropdown();
       return;
     }
-    const sections = dirSections(answer);
-    const render = () => {
-      const wanted = filter.value.trim().toLowerCase();
-      list.replaceChildren();
-      for (const [heading, entries, empty] of sections) {
-        const shown = entries.filter(
-          (entry) =>
-            !wanted || (entry.dir || "").toLowerCase().includes(wanted),
-        );
-        if (!shown.length && (wanted || !empty)) continue;
-        list.append(makeElement("div", "terminal-dirs-heading", heading));
-        if (!shown.length)
-          list.append(makeElement("div", "terminal-dirs-empty", empty));
-        for (const entry of shown) list.append(dirRow(entry, id));
-      }
-      if (!list.childElementCount)
-        list.append(
-          makeElement("div", "terminal-dirs-empty", "Nothing matches."),
-        );
-      activate(choosable()[0] || null);
-    };
-    filter.oninput = render;
-    render();
+    openDropdown(anchor, {
+      label: "Recent directories",
+      items: "directories",
+      load: () => fetchShellJSON(id, "dirs"),
+      failed: "Cannot list the directories: ",
+      show: (list, wanted, answer) => {
+        for (const [heading, entries, empty] of dirSections(answer)) {
+          const shown = entries.filter(
+            (entry) =>
+              !wanted || (entry.dir || "").toLowerCase().includes(wanted),
+          );
+          if (!shown.length && (wanted || !empty)) continue;
+          list.append(makeElement("div", "terminal-dirs-heading", heading));
+          if (!shown.length)
+            list.append(makeElement("div", "terminal-dirs-empty", empty));
+          for (const entry of shown) list.append(dirRow(entry, id));
+        }
+      },
+      choose: (row) => typeCd(id, row.dirEntry.dir),
+    });
   };
   const dirRow = (entry, id) => {
     const row = makeElement("div", "terminal-dirs-row");
@@ -3744,12 +3776,12 @@ function shellWord(value) {
         showDirInExplorer(entry.dir),
       );
       action("Open in a new terminal tab", icons.newTab, () => {
-        closeDirs();
+        closeDropdown();
         newShell(focused, entry.dir);
       });
     }
     action("Copy the path", icons.copy, () => {
-      closeDirs(true);
+      closeDropdown(true);
       copyText(entry.dir);
     });
     row.append(actions);
@@ -3781,11 +3813,11 @@ function shellWord(value) {
   };
   // typeCd types cd and the directory into the focused pane, at the shell's prompt.
   const typeCd = async (id, dir) => {
-    closeDirs();
+    closeDropdown();
     await typeAtPrompt(id, "cd " + shellWord(dir), "cd");
   };
   const showDirInExplorer = (dir) => {
-    closeDirs();
+    closeDropdown();
     explorer.follow = false;
     explorer.followButton?.setAttribute("aria-pressed", "false");
     moveExplorerRoot(dir);
@@ -4982,6 +5014,12 @@ function shellWord(value) {
       () => openDirs(dirsButton),
       "Recent directories: where this project's shells have been, and where its runs started, to cd to",
     );
+    commandsButton = iconButton(
+      "Commands",
+      icons.commands,
+      () => openCommands(commandsButton),
+      "Commands run in this pane, to go back to one or copy its output",
+    );
     overviewButton = iconButton(
       "All shells",
       icons.overview,
@@ -5025,6 +5063,7 @@ function shellWord(value) {
       overviewButton,
       launchButton,
       dirsButton,
+      commandsButton,
       spacer,
       fontButton("A-", "Smaller text", -1),
       fontButton("A+", "Larger text", 1),
@@ -5089,9 +5128,9 @@ function shellWord(value) {
       " min"
     );
   };
-  // blockTitle is what hovering a block's mark says: its command line, how it ended, and
-  // for a command seen running here, how long it took.
-  const blockTitle = (block) => {
+  // blockEnd says how a block's command ended, and for one seen running here, how long it
+  // took.
+  const blockEnd = (block) => {
     const state = blockState(block);
     let end;
     if (state === "running") end = "Running";
@@ -5102,8 +5141,12 @@ function shellWord(value) {
     else end = "Exit " + block.exit;
     if (state !== "running" && block.endedAt !== null)
       end += " after " + blockDuration(block.endedAt - block.startedAt);
+    return end;
+  };
+  // blockTitle is what hovering a block's mark says: its command line, and how it ended.
+  const blockTitle = (block) => {
     const command = block.command();
-    return command ? command + "\n" + end : end;
+    return command ? command + "\n" + blockEnd(block) : blockEnd(block);
   };
   // A failed command is marked on the scroll bar too, in the theme's red.
   const blockRulerWidth = 10;
@@ -5117,6 +5160,7 @@ function shellWord(value) {
     element.classList.add("terminal-block");
     element.style.width = "100%";
     element.classList.toggle("terminal-block-separated", block.separated);
+    element.classList.toggle("terminal-block-flash", Boolean(block.flash));
     let mark = element.querySelector(".terminal-block-mark");
     if (!mark) {
       mark = document.createElement("span");
@@ -5305,44 +5349,97 @@ function shellWord(value) {
       ],
     ]);
   };
-  // moveToPrompt scrolls a pane to the prompt of the command before or after the top of
-  // what it shows, and past the last one, to the bottom.
-  const moveToPrompt = (pane, step) => {
-    const { term } = pane;
-    const top = term.buffer.active.viewportY;
-    const lines = pane.blocks
-      .filter((block) => block.output)
-      .map((block) => block.prompt.marker.line)
-      .filter((line) => line >= 0);
-    if (step < 0) {
-      const above = lines.filter((line) => line < top).at(-1);
-      if (above !== undefined) term.scrollToLine(above);
-    } else {
-      const below = lines.find((line) => line > top);
-      if (below !== undefined) term.scrollToLine(below);
-      else term.scrollToBottom();
-    }
+  // goToBlock scrolls a pane to a block's prompt, and lights the prompt up for a moment.
+  const goToBlock = (pane, block) => {
+    closeDropdown();
+    const line = block.prompt.marker.line;
+    if (line < 0) return;
+    pane.term.scrollToLine(line);
+    clearTimeout(block.flashTimer);
+    block.flash = true;
+    paintBlock(pane, block);
+    block.flashTimer = setTimeout(() => {
+      block.flash = false;
+      paintBlock(pane, block);
+    }, 1500);
+    pane.term.focus();
   };
-  // Ctrl+Shift+ArrowUp and ArrowDown move between commands, and reach the shell only where
-  // there are none to move between: in a shell that sends no marks, or in vim or less.
-  const blockKeys = (pane, event) => {
-    if (
-      event.type !== "keydown" ||
-      !event.ctrlKey ||
-      !event.shiftKey ||
-      event.altKey ||
-      event.metaKey ||
-      (event.key !== "ArrowUp" && event.key !== "ArrowDown")
-    )
-      return true;
-    if (
-      pane.term.buffer.active.type === "alternate" ||
-      !pane.blocks.some((block) => block.output)
-    )
-      return true;
-    event.preventDefault();
-    moveToPrompt(pane, event.key === "ArrowUp" ? -1 : 1);
-    return false;
+  // Commands: the focused pane's commands, newest first, from its blocks. Choosing one goes
+  // to its prompt; a row copies its output or its command line.
+  const openCommands = (anchor) => {
+    const pane = focused;
+    if (pane.shown === null) {
+      closeDropdown();
+      return;
+    }
+    openDropdown(anchor, {
+      label: "Commands",
+      items: "commands",
+      className: "terminal-commands",
+      load: async () => ({
+        blocks: pane.blocks.filter((block) => block.output).reverse(),
+      }),
+      show: (list, wanted, { blocks }) => {
+        if (!blocks.length) {
+          list.append(
+            makeElement(
+              "div",
+              "terminal-dirs-empty",
+              "No commands yet. They are listed from shells that mark them, as bash and zsh do here unless --terminal-shell-integration=false.",
+            ),
+          );
+          return;
+        }
+        for (const block of blocks) {
+          const command = block.command();
+          if (!wanted || command.toLowerCase().includes(wanted))
+            list.append(commandRow(pane, block, command));
+        }
+      },
+      choose: (row) => goToBlock(pane, row.block),
+    });
+  };
+  const commandRow = (pane, block, command) => {
+    const row = makeElement("div", "terminal-dirs-row");
+    row.setAttribute("role", "option");
+    row.block = block;
+    const state = makeElement("span", "terminal-commands-state");
+    state.dataset.state = blockState(block);
+    row.append(
+      state,
+      makeElement("span", "terminal-dirs-path", command || "(no command line)"),
+      makeElement("span", "terminal-dirs-detail", blockEnd(block)),
+    );
+    row.title = blockTitle(block);
+    row.onclick = (event) => {
+      if (!event.target.closest("button")) goToBlock(pane, block);
+    };
+    const actions = makeElement(
+      "span",
+      "terminal-dirs-actions terminal-commands-actions",
+    );
+    const copy = (label, text, said) => {
+      const button = makeElement("button", "", label);
+      button.type = "button";
+      button.disabled = !text;
+      button.onclick = (event) => {
+        event.stopPropagation();
+        closeDropdown(true);
+        const copied = text();
+        if (copied) copyText(copied, said);
+        else showNote("This command printed nothing.", 4000);
+      };
+      actions.append(button);
+    };
+    // The output is read only when asked for, since a long one takes time to put together.
+    copy(
+      "Copy output",
+      block.output && (() => blockOutput(pane, block)),
+      "the output",
+    );
+    copy("Copy command", command && (() => command), "the command");
+    row.append(actions);
+    return row;
   };
   // openTerminal gives a pane its screen, inside its viewport.
   const openTerminal = (pane) => {
@@ -5374,7 +5471,6 @@ function shellWord(value) {
     term.parser.registerOscHandler(blockMark, (data) =>
       readBlockMark(pane, data),
     );
-    term.attachCustomKeyEventHandler((event) => blockKeys(pane, event));
     term.open(viewport);
     fit.fit();
     term.onData((data) => {

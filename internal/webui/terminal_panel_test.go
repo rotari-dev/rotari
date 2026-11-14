@@ -3752,9 +3752,9 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.ok(bdTerm.decorations.every((decoration) => decoration.isDisposed), 'decorations outlived the replay');
   }
 
-  // Blocks acted on: Ctrl+Shift+ArrowUp and ArrowDown move between commands, and only where
-  // there are some; a mark's menu copies a command's output or line, selects the output, or
-  // types the line again at the shell's prompt.
+  // Blocks acted on: Commands lists the pane's commands, newest first, to go to one or copy
+  // its output or line; no key is taken from the shell; a mark's menu copies a command's
+  // output or line, selects the output, or types the line again at the shell's prompt.
   {
   const bp = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
   await wait(50);
@@ -3764,36 +3764,60 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const bpPane = () => bp.document.querySelector('.terminal-pane').terminalPane;
   const bpCopied = [];
   Object.defineProperty(bp.window.navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => bpCopied.push(text) } });
-  const key = (name, extra = {}) => {
-    const event = { type: 'keydown', key: name, ctrlKey: true, shiftKey: true, altKey: false, metaKey: false, prevented: false, preventDefault() { this.prevented = true; }, ...extra };
-    return { passed: bpTerm.keyHandler(event), prevented: event.prevented };
+  const cmdButton = [...bp.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'Commands');
+  const cmdBox = () => bp.document.querySelector('.terminal-commands');
+  const cmdRows = () => [...bp.document.querySelectorAll('.terminal-commands .terminal-dirs-row')];
+  const cmdOpen = async () => { cmdButton.click(); await wait(20); };
+  const cmdKey = (key) => cmdBox().dispatchEvent(new bp.window.KeyboardEvent('keydown', { key, bubbles: true }));
+  const cmdCopy = async (n, label) => {
+    await cmdOpen();
+    [...cmdRows()[n].querySelectorAll('button')].find((item) => item.textContent === label).click();
+    await wait(20);
   };
-  // A shell that sends no marks gets the keys, as before.
+  // A shell that sends no marks lists no commands, and says where they come from.
   bpSocket.onmessage({ data: new TextEncoder().encode('plain').buffer });
-  assert.deepEqual(key('ArrowUp'), { passed: true, prevented: false }, 'keys taken from a shell without marks');
+  assert.equal(cmdButton.disabled, false);
+  await cmdOpen();
+  assert.match(cmdBox().textContent, /No commands yet\. They are listed from shells that mark them/);
+  await cmdOpen();
+  assert.equal(cmdBox(), null, 'the button left Commands open');
   bpTerm.lines = ['$ make', 'built', 'ok', '$ false', 'bad', '$ echo a', '> b', 'a', 'b', '$ sleep 9', 'zz', ''];
   bpTerm.osc(133, 'A', 0, 0); bpTerm.osc(133, 'B', 2, 0); bpTerm.osc(133, 'C', 0, 1); bpTerm.osc(133, 'D;0', 0, 3);
   bpTerm.osc(133, 'A', 0, 3); bpTerm.osc(133, 'B', 2, 3); bpTerm.osc(133, 'C', 0, 4); bpTerm.osc(133, 'D;1', 0, 5);
   bpTerm.osc(133, 'A', 0, 5); bpTerm.osc(133, 'B', 2, 5); bpTerm.osc(133, 'C', 0, 7); bpTerm.osc(133, 'D;0', 0, 9);
   bpTerm.osc(133, 'A', 0, 9); bpTerm.osc(133, 'B', 2, 9); bpTerm.osc(133, 'C', 0, 10);
   Object.assign(bpTerm.buffer.active, { cursorX: 2, cursorY: 10, viewportY: 11 });
-  // Up goes from prompt to prompt and stops at the first; down goes back, and past the last
-  // to the bottom.
-  const tops = [];
-  for (let i = 0; i < 5; i++) { assert.deepEqual(key('ArrowUp'), { passed: false, prevented: true }); tops.push(bpTerm.buffer.active.viewportY); }
-  assert.deepEqual(tops, [9, 5, 3, 0, 0]);
-  tops.length = 0;
-  for (let i = 0; i < 4; i++) { key('ArrowDown'); tops.push(bpTerm.buffer.active.viewportY); }
-  assert.deepEqual(tops, [3, 5, 9, 0]);
-  assert.equal(bpTerm.bottomed, 1, 'down past the last command did not go to the bottom');
-  // Nothing else is taken: other keys, a key let go, and keys in vim or less.
-  assert.equal(key('ArrowUp', { shiftKey: false }).passed, true, 'Ctrl+ArrowUp taken from the shell');
-  assert.equal(key('ArrowUp', { altKey: true }).passed, true);
-  assert.equal(key('ArrowLeft').passed, true);
-  assert.equal(key('ArrowUp', { type: 'keyup' }).passed, true);
-  bpTerm.buffer.active.type = 'alternate';
-  assert.equal(key('ArrowUp').passed, true, 'keys taken from vim');
-  bpTerm.buffer.active.type = 'normal';
+  // Newest first, each with its state, line, and end.
+  await cmdOpen();
+  assert.deepEqual(cmdRows().map((row) => [row.querySelector('.terminal-commands-state').dataset.state, row.querySelector('.terminal-dirs-path').textContent, row.querySelector('.terminal-dirs-detail').textContent.replace(/ after .*/, '')]), [
+    ['running', 'sleep 9', 'Running'], ['ok', 'echo a\n> b', 'Exit 0'], ['failed', 'false', 'Exit 1'], ['ok', 'make', 'Exit 0']]);
+  assert.equal(cmdRows()[0].getAttribute('aria-selected'), 'true');
+  // The arrow keys and Enter go to one: its prompt at the top, lit up for a moment.
+  cmdKey('ArrowDown');
+  cmdKey('ArrowDown');
+  cmdKey('Enter');
+  assert.equal(bpTerm.buffer.active.viewportY, 3, 'Enter did not go to false');
+  assert.equal(cmdBox(), null, 'choosing left Commands open');
+  assert.ok(bpPane().blocks[1].decoration.render().classList.contains('terminal-block-flash'), 'the prompt gone to was not lit up');
+  await wait(1600);
+  assert.ok(!bpPane().blocks[1].decoration.render().classList.contains('terminal-block-flash'), 'the prompt stayed lit up');
+  // The filter narrows them by command line, and a click goes to one.
+  await cmdOpen();
+  const cmdFilter = cmdBox().querySelector('input');
+  cmdFilter.value = 'MAK';
+  cmdFilter.dispatchEvent(new bp.window.Event('input'));
+  assert.deepEqual(cmdRows().map((row) => row.querySelector('.terminal-dirs-path').textContent), ['make']);
+  cmdRows()[0].click();
+  assert.equal(bpTerm.buffer.active.viewportY, 0, 'a click did not go to make');
+  // A row copies its output, so far for one running, or its line.
+  await cmdCopy(3, 'Copy output');
+  await cmdCopy(2, 'Copy command');
+  await cmdCopy(0, 'Copy output');
+  assert.deepEqual(bpCopied, ['built\nok', 'false', 'zz']);
+  assert.equal(bp.document.querySelector('.terminal-send-note').textContent, 'Copied the output');
+  bpCopied.length = 0;
+  // No key is the panel's: Ctrl+Shift+ArrowUp reaches the shell.
+  assert.equal(bpTerm.keyHandler, undefined, 'the panel takes keys from the shell');
   // menu opens the n-th block's menu from its mark, which keeps the pointer from the text.
   const menu = (n) => {
     const element = bpPane().blocks[n].decoration.render();

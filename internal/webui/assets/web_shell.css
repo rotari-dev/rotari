@@ -1667,17 +1667,49 @@ html.terminal-open .output-panel.terminal-launch {
 .terminal-block-mark[hidden] {
   display: none;
 }
-.terminal-block-mark[data-state="ok"] {
+.terminal-block-mark[data-state="ok"],
+.terminal-commands-state[data-state="ok"] {
   background: var(--terminal-green);
 }
-.terminal-block-mark[data-state="failed"] {
+.terminal-block-mark[data-state="failed"],
+.terminal-commands-state[data-state="failed"] {
   background: var(--terminal-red);
 }
-.terminal-block-mark[data-state="running"] {
+.terminal-block-mark[data-state="running"],
+.terminal-commands-state[data-state="running"] {
   background: var(--terminal-white);
 }
-.terminal-block-mark[data-state="unknown"] {
+.terminal-block-mark[data-state="unknown"],
+.terminal-commands-state[data-state="unknown"] {
   border: 1.5px solid var(--terminal-white);
+}
+/* A prompt gone to from Commands is lit up for a moment. */
+.terminal-block-flash::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--terminal-selection);
+  opacity: 0.6;
+}
+/* Commands, under the bar's button: each command's state, line, and end, and its copies. */
+.terminal-commands-state {
+  flex: none;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.terminal-dirs-actions.terminal-commands-actions button {
+  width: auto;
+  height: auto;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.terminal-dirs-actions.terminal-commands-actions button:disabled {
+  opacity: 0.5;
 }
 /* A project's last run, under its name in All shells: its lifecycle in the run's tone, and
    its jobs in progress, pending, and failed, a zero dimmed. */

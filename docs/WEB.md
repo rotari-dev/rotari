@@ -325,8 +325,9 @@ WezTerm, and Windows Terminal also read) has its output shown as one block per c
 says how its command ended: green for success, red for a failure, grey while it runs, and a ring when the shell gave
 no exit code. Pointing at the dot shows the command, its exit code, and how long it took, for a command that ran
 while the page was open. Failed commands are also marked in red on the scroll bar, and a thin line sets each prompt
-apart from the output before it. **Ctrl+Shift+Up** and **Ctrl+Shift+Down** scroll to the previous or next command;
-in a shell without marks, and in `vim` or `less`, they reach the program as before. Clicking a dot offers **Copy
+apart from the output before it. The **Commands** icon in the bar lists the pane's commands, newest first, with how
+each ended; type to filter them, and choose one to scroll back to it, or copy its output or command line from its
+row without scrolling. Clicking a dot offers **Copy
 output**, **Copy command**, **Select output**, and **Type command again**, which types a one-line command at the
 prompt without pressing Enter, only while nothing runs in the shell, as **Recent directories** does. Blocks are kept
 only in the page, from the output it shows, so they come back after following a link for as much output as is shown

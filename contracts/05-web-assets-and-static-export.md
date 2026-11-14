@@ -1499,10 +1499,12 @@ text, kept across its own replay and removed after a replay with none; there, ea
 (`C`) has a mark: green for exit 0, red for any other code, grey while it runs, and a ring without a code. Pointing at
 a mark shows the command line, `Running`, `Exit N`, or why there is no code, and for a command whose `C` and `D` came
 after the replay, how long it took. A separator is drawn above a prompt that follows a command's output, and a failed
-command is marked on the scroll bar in the theme's red. With focus in a pane that has a block with a command, outside
-the alternate screen, Ctrl+Shift+ArrowUp and Ctrl+Shift+ArrowDown scroll to the prompt of the command before or after
-the top line shown, past the last to the bottom, and do not reach the shell; otherwise these keys reach it as before,
-and no other key is taken. Clicking a mark focuses its pane and offers **Copy output**, **Copy command**, **Select
+command is marked on the scroll bar in the theme's red. The bar's **Commands** button, off with no shell in the
+focused pane, lists that pane's blocks whose command has started, newest first, each with its state, command line,
+and how it ended, narrowed by a filter on the command line, or says where commands come from when there are none;
+choosing one by click or by the arrow keys and Enter scrolls the pane to its prompt and lights the prompt up for 1.5
+seconds, and a row's **Copy output** and **Copy command** copy those without scrolling (output read when asked, so
+far for one running; none printed says so). The panel takes no key from the shell for blocks. Clicking a mark focuses its pane and offers **Copy output**, **Copy command**, **Select
 output** (the terminal's selection), and **Type command again**, which types a one-line command line without Enter
 under WEB-45's rule (only after the shell's preview shows nothing running at its prompt, saying why otherwise) and is
 off for a command of more than one line. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel`

@@ -48,6 +48,7 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
     await page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...enter });
     await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
   };
+  const barButton = (text) => '[...document.querySelectorAll(".terminal-bar button")].find((item) => item.textContent === ' + JSON.stringify(text) + ' || item.getAttribute("aria-label") === ' + JSON.stringify(text) + ')';
   const screenHas = (text) => 'document.querySelector(".xterm-rows")?.textContent.includes(' + JSON.stringify(text) + ')';
   // The output differs from the typed line, so the echo cannot satisfy this.
   await until('the sign-in form', 'document.querySelector("#password") !== null');
@@ -181,23 +182,15 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   // The mark is in the gutter, left of the text, and takes the pointer there.
   if (!okMark.shown || !okMark.outside || !okMark.hit) throw new Error('the mark for true is not in the gutter, or not under the pointer: ' + JSON.stringify(markFacts));
   if (!(await page.evaluate('document.querySelector(".terminal-viewport-blocks .xterm-decoration-overview-ruler") !== null'))) throw new Error('no scroll bar marks for the failure');
-  // Ctrl+Shift+ArrowUp and ArrowDown scroll from prompt to prompt.
-  const blockKey = async (key) => {
-    await page.evaluate('document.querySelectorAll(".xterm-helper-textarea")[0].focus()');
-    const code = { key, code: key, windowsVirtualKeyCode: key === 'ArrowUp' ? 38 : 40, nativeVirtualKeyCode: key === 'ArrowUp' ? 38 : 40, modifiers: 10 };
-    await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...code });
-    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...code });
-  };
+  // Commands lists them newest first; choosing one scrolls to its prompt.
+  const commandRows = '[...document.querySelectorAll(".terminal-commands .terminal-dirs-row .terminal-dirs-path")].map((item) => item.textContent)';
+  await page.evaluate(barButton('Commands') + '.click()');
+  await until('the commands listed', 'JSON.stringify(' + commandRows + '.slice(0, 3)) === ' + JSON.stringify(JSON.stringify(['c true', 'c long', 'c false'])));
+  await page.evaluate('[...document.querySelectorAll(".terminal-commands .terminal-dirs-row")].find((row) => row.querySelector(".terminal-dirs-path").textContent === "c false").click()');
   const topRow = 'document.querySelector(".xterm-rows > div")?.textContent.trim()';
-  const topRowSays = async (what, text) => until(what, topRow + ' === ' + JSON.stringify(text)).catch(async (error) => {
+  await until('false at the top', topRow + ' === "$ c false"').catch(async (error) => {
     throw new Error(error.message + '; the top row is ' + JSON.stringify(await page.evaluate(topRow)));
   });
-  await blockKey('ArrowUp');
-  await topRowSays('the long command at the top', '$ c long');
-  await blockKey('ArrowUp');
-  await topRowSays('false at the top', '$ c false');
-  await blockKey('ArrowDown');
-  await topRowSays('the long command at the top again', '$ c long');
   await page.evaluate('document.querySelector(".xterm-viewport").scrollTop = 1e9');
   // A mark's menu types its command again, without Enter.
   const okPoint = await page.evaluate('(() => { const mark = [...document.querySelectorAll(".terminal-block-mark")].find((item) => item.title.startsWith("c true\\n")); const box = mark.getBoundingClientRect(); return { x: box.left + box.width / 2, y: box.top + box.height / 2 }; })()');
@@ -265,7 +258,6 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await page.evaluate('document.getElementById("settings-button").click()');
 
   // Split shows two shells side by side, each typed into and sized on its own.
-  const barButton = (text) => '[...document.querySelectorAll(".terminal-bar button")].find((item) => item.textContent === ' + JSON.stringify(text) + ' || item.getAttribute("aria-label") === ' + JSON.stringify(text) + ')';
   const paneHas = (index, text) => 'document.querySelectorAll(".terminal-pane")[' + index + ']?.querySelector(".xterm-rows")?.textContent.includes(' + JSON.stringify(text) + ')';
   const bothSettled = '[...document.querySelectorAll(".terminal-status")].every((item) => item.hidden)';
   // The splits are pictures with no frame, in the middle of their buttons and of the bar.
