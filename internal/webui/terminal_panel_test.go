@@ -244,12 +244,37 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       window.Terminal = class {
         rows = 24; cols = 80;
         // A test sets lines, each a string or { text, wrapped }, for the link provider to read.
-        buffer = { active: { type: 'normal', getLine: (y) => {
+        buffer = { active: { type: 'normal', cursorX: 0, cursorY: 0, getLine: (y) => {
           const line = this.lines?.[y];
           if (line === undefined) return undefined;
           const text = typeof line === 'string' ? line : line.text;
-          return { isWrapped: Boolean(line.wrapped), length: this.cols, getCell: (x) => ({ getChars: () => text[x] || '', getWidth: () => 1 }) };
+          return {
+            isWrapped: Boolean(line.wrapped), length: this.cols,
+            getCell: (x) => ({ getChars: () => text[x] || '', getWidth: () => 1 }),
+            translateToString: (trim, start = 0, end = this.cols) => {
+              const part = text.padEnd(this.cols).slice(start, end);
+              return trim ? part.trimEnd() : part;
+            },
+          };
         } } };
+        // A test calls osc to parse a sequence where the cursor is, as xterm.js does.
+        oscHandlers = {};
+        markers = [];
+        parser = { registerOscHandler: (ident, handler) => { (this.oscHandlers[ident] ||= []).push(handler); return { dispose() {} }; } };
+        osc(ident, data, x = this.buffer.active.cursorX, y = this.buffer.active.cursorY) {
+          Object.assign(this.buffer.active, { cursorX: x, cursorY: y });
+          return (this.oscHandlers[ident] || []).some((handler) => handler(data));
+        }
+        registerMarker(offset = 0) {
+          const listeners = [];
+          const marker = {
+            line: this.buffer.active.cursorY + offset, isDisposed: false,
+            onDispose: (listener) => { listeners.push(listener); return { dispose() {} }; },
+            dispose: () => { if (marker.isDisposed) return; marker.isDisposed = true; marker.line = -1; listeners.forEach((listener) => listener()); },
+          };
+          this.markers.push(marker);
+          return marker;
+        }
         modes = { bracketedPasteMode: false };
         options = {};
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
@@ -263,7 +288,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           else parse();
         }
         paste(text) { pasted.push(text); (this.pastes ||= []).push(text); }
-        clear() { this.cleared = (this.cleared || 0) + 1; }
+        clear() { this.cleared = (this.cleared || 0) + 1; this.markers.forEach((marker) => marker.dispose()); }
         onData(callback) { this.data = callback; }
         onBinary() {}
         onResize(callback) { this.resize = callback; }
@@ -3546,6 +3571,86 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   lkTerm.lines = ['other 20261114-000800-bbbbbbbb'];
   assert.equal(await linksOn(1), undefined);
   assert.match(lk.document.querySelector('.terminal-send-note').textContent, /did not say which words in the terminal are links/);
+  }
+
+  // Blocks: OSC 133 marks make one block per command, with its command line and exit
+  // code; times only for what comes after the replay; nothing in the alternate screen;
+  // gone with their lines, and with the screen on a replay.
+  {
+  const bk = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const bkSocket = bk.sockets.at(-1);
+  bkSocket.onopen?.();
+  const bkTerm = bk.terminals.at(-1);
+  assert.equal(bkTerm.oscHandlers[133]?.length, 1, 'the pane reads no OSC 133');
+  const bkPane = () => bk.document.querySelector('.terminal-pane').terminalPane;
+  const blocks = () => Array.from(bkPane().blocks, (block) => ({
+    prompt: block.prompt.marker.line, command: block.command(),
+    ended: block.ended, exit: block.exit, timed: block.startedAt !== null && block.endedAt !== null,
+  }));
+  bkTerm.lines = ['$ make', 'built', '$ false', '$ sleep 9', '^C', '$ vim', '$ ', ''];
+  // The replay, its marks parsed before it is done: a block per prompt, without times.
+  bk.parser.held = true;
+  bkSocket.onmessage({ data: new TextEncoder().encode('replay').buffer });
+  assert.equal(bkTerm.osc(133, 'A', 0, 0), true);
+  bkTerm.osc(133, 'B', 2, 0);
+  bkTerm.osc(133, 'C', 0, 1);
+  bkTerm.osc(133, 'D;0', 0, 2);
+  bk.parser.release();
+  assert.deepEqual(blocks(), [{ prompt: 0, command: 'make', ended: true, exit: 0, timed: false }]);
+  bkSocket.onmessage({ data: new TextEncoder().encode('live').buffer });
+  // After the replay, a command seen running has its times; a bad or missing exit code is none.
+  bkTerm.osc(133, 'A', 0, 2);
+  bkTerm.osc(133, 'B', 2, 2);
+  bkTerm.osc(133, 'C', 0, 3);
+  bkTerm.osc(133, 'D;1', 0, 3);
+  bkTerm.osc(133, 'A', 0, 3);
+  bkTerm.osc(133, 'B', 2, 3);
+  bkTerm.osc(133, 'C', 0, 4);
+  // A prompt with no D before it ends the command without an exit code.
+  bkTerm.osc(133, 'A', 0, 5);
+  bkTerm.osc(133, 'B', 2, 5);
+  bkTerm.osc(133, 'C', 0, 6);
+  // In the alternate screen, marks are vim's or less's, not the shell's.
+  bkTerm.buffer.active.type = 'alternate';
+  bkTerm.osc(133, 'A', 0, 0);
+  bkTerm.osc(133, 'D;0', 0, 0);
+  bkTerm.buffer.active.type = 'normal';
+  assert.deepEqual(blocks(), [
+    { prompt: 0, command: 'make', ended: true, exit: 0, timed: false },
+    { prompt: 2, command: 'false', ended: true, exit: 1, timed: true },
+    { prompt: 3, command: 'sleep 9', ended: true, exit: null, timed: false },
+    { prompt: 5, command: 'vim', ended: false, exit: null, timed: false },
+  ]);
+  bkTerm.osc(133, 'D;x', 0, 6);
+  assert.equal(blocks().at(-1).exit, null, 'an exit code that is no number');
+  // A mark with no prompt before it, or after its block's end, adds nothing.
+  bkTerm.osc(133, 'C', 0, 6);
+  assert.equal(bkPane().blocks.at(-1).output.marker.line, 6);
+  // A block whose prompt scrolled away goes with it.
+  bkTerm.markers.find((marker) => marker.line === 0).dispose();
+  assert.deepEqual(blocks().map((block) => block.command), ['false', 'sleep 9', 'vim']);
+  // A command line wrapped onto the next line is one line; one with its own lines keeps them.
+  // A line wraps when it is full.
+  const bkFull = '$ echo ' + 'a'.repeat(73);
+  bkTerm.lines = [bkFull, { text: 'bbbb', wrapped: true }, '> cccc', 'out', ''];
+  bkTerm.osc(133, 'A', 0, 0);
+  bkTerm.osc(133, 'B', 2, 0);
+  bkTerm.osc(133, 'C', 0, 3);
+  assert.equal(blocks().at(-1).command, bkFull.slice(2) + 'bbbb\n> cccc');
+  // Another shell's replay starts with no blocks, and none of the old markers are left.
+  const bkMarkers = bkTerm.markers.length;
+  bk.document.querySelectorAll('.terminal-tab [role=tab]')[1].click();
+  await wait(50);
+  assert.equal(bkPane().blocks.length, 0, 'blocks outlived the replay');
+  assert.ok(bkTerm.markers.slice(0, bkMarkers).every((marker) => marker.isDisposed), 'markers outlived the replay');
+  assert.equal(bkPane().blocksLive, false, 'a new replay counted as seen live');
+  // Clear takes the blocks with the scrollback.
+  bk.sockets.at(-1).onmessage({ data: new TextEncoder().encode('x').buffer });
+  bkTerm.lines = ['$ ', ''];
+  bkTerm.osc(133, 'A', 0, 0);
+  bkTerm.clear();
+  assert.equal(bkPane().blocks.length, 0, 'blocks outlived Clear');
   }
   process.exit(0);
 })().catch((error) => { console.error(error.stack || String(error)); process.exit(1); });

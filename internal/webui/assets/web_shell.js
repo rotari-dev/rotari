@@ -2620,7 +2620,9 @@ function shellWord(value) {
   };
   const open = (pane, takeOver) => {
     const { term } = pane;
-    // Replay brings the screen back, so what is here would appear twice.
+    // Replay brings the screen back, so what is here would appear twice, and its blocks.
+    dropBlocks(pane);
+    pane.blocksLive = false;
     term.reset();
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
     const current = new WebSocket(
@@ -2647,11 +2649,15 @@ function shellWord(value) {
       // Closing leaves what was already on its way, which is another shell's output now.
       if (pane.socket !== current) return;
       showStatus(pane, "");
+      // The first message is the replay (Keeper.Attach); what follows is seen as it comes.
+      const replay = !current.replayed;
+      current.replayed = true;
       // After the replay, so that it lands at the end of what is on screen.
-      term.write(
-        new Uint8Array(event.data),
-        pane.pendingSend ? () => deliverSend(pane) : undefined,
-      );
+      const sending = Boolean(pane.pendingSend);
+      term.write(new Uint8Array(event.data), () => {
+        if (replay && pane.socket === current) pane.blocksLive = true;
+        if (sending) deliverSend(pane);
+      });
     };
     current.onclose = (event) => {
       if (pane.socket !== current) return;
@@ -4858,6 +4864,8 @@ function shellWord(value) {
     notice.append(pane.status, pane.action);
     pane.viewport = document.createElement("div");
     pane.viewport.className = "terminal-viewport";
+    // The pane's state, such as its blocks, from its element.
+    pane.element.terminalPane = pane;
     pane.element.append(notice, pane.viewport);
     panesBox.append(pane.element);
     takeExplorerDrops(pane);
@@ -5032,6 +5040,100 @@ function shellWord(value) {
       if (isStacked() !== laidStacked) applyLayout();
     }).observe(panesBox);
   };
+  // Blocks: a shell or prompt that marks its prompts and commands with OSC 133 (A, the
+  // prompt; B, the command line; C, its output; D;EXIT, its end) has its output kept as one
+  // block per command. Only the page keeps them, from the stream it is given, so the
+  // marks in the replay bring them back; a shell that sends none has none.
+  const blockMark = 133;
+  // blockPlace is where a mark was parsed: a marker on its line, and the column.
+  const blockPlace = (term) => ({
+    marker: term.registerMarker(0),
+    x: term.buffer.active.cursorX,
+  });
+  const disposeBlock = (block) => {
+    for (const place of [block.prompt, block.input, block.output, block.end])
+      place?.marker?.dispose();
+  };
+  // dropBlocks forgets a pane's blocks, as when its screen is reset for a replay.
+  const dropBlocks = (pane) => {
+    const blocks = pane.blocks || [];
+    pane.blocks = [];
+    blocks.forEach(disposeBlock);
+  };
+  // readBlockMark adds one mark to the pane's blocks. A block's times come only from
+  // output after the replay, as the replay keeps none.
+  const readBlockMark = (pane, data) => {
+    const { term } = pane;
+    // Marks in the alternate screen, under vim or less, say nothing of the shell's.
+    if (term.buffer.active.type === "alternate") return true;
+    const [kind, ...rest] = data.split(";");
+    const blocks = pane.blocks;
+    const last = blocks.at(-1);
+    const now = pane.blocksLive ? Date.now() : null;
+    if (kind === "A") {
+      // A prompt without D before it ends the last command without an exit code.
+      if (last && !last.ended) last.ended = true;
+      const block = {
+        prompt: blockPlace(term),
+        input: null,
+        output: null,
+        end: null,
+        ended: false,
+        exit: null,
+        startedAt: null,
+        endedAt: null,
+        command: () => blockCommand(pane, block),
+      };
+      const marker = block.prompt.marker;
+      if (!marker || marker.isDisposed) return true;
+      // Output scrolled out of the scrollback, or cleared, takes its blocks with it.
+      marker.onDispose(() => {
+        const at = pane.blocks.indexOf(block);
+        if (at >= 0) pane.blocks.splice(at, 1);
+        disposeBlock(block);
+      });
+      blocks.push(block);
+    } else if (!last || last.ended) {
+      // A mark of a block whose prompt is not here, or after its end, has nothing to add to.
+    } else if (kind === "B" && !last.input && !last.output) {
+      last.input = blockPlace(term);
+    } else if (kind === "C" && !last.output) {
+      last.output = blockPlace(term);
+      last.startedAt = now;
+    } else if (kind === "D") {
+      last.end = blockPlace(term);
+      last.ended = true;
+      last.endedAt = last.startedAt === null ? null : now;
+      const exit = rest[0] === undefined ? NaN : Number(rest[0]);
+      last.exit = rest[0] !== "" && Number.isInteger(exit) ? exit : null;
+    }
+    return true;
+  };
+  // blockText is the buffer's text from one place to another, wrapped lines joined and
+  // the ends of others trimmed.
+  const blockText = (term, from, to) => {
+    const buffer = term.buffer.active;
+    const first = from?.marker?.line ?? -1;
+    const last = to?.marker?.line ?? -1;
+    if (first < 0 || last < first) return "";
+    let text = "";
+    for (let y = first; y <= last; y++) {
+      const line = buffer.getLine(y);
+      if (!line) break;
+      if (y > first && !line.isWrapped) text = text.trimEnd() + "\n";
+      text += line.translateToString(
+        false,
+        y === first ? from.x : 0,
+        y === last ? to.x : line.length,
+      );
+    }
+    return text.trimEnd();
+  };
+  // blockCommand is a block's command line, as the shell shows it: from B to C.
+  const blockCommand = (pane, block) =>
+    block.input && block.output
+      ? blockText(pane.term, block.input, block.output).trim()
+      : "";
   // openTerminal gives a pane its screen, inside its viewport.
   const openTerminal = (pane) => {
     const { viewport } = pane;
@@ -5055,6 +5157,11 @@ function shellWord(value) {
       ),
     );
     term.registerLinkProvider(outputLinkProvider(pane));
+    pane.blocks = [];
+    pane.blocksLive = false;
+    term.parser.registerOscHandler(blockMark, (data) =>
+      readBlockMark(pane, data),
+    );
     term.open(viewport);
     fit.fit();
     term.onData((data) => {
