@@ -186,14 +186,25 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   const commandRows = '[...document.querySelectorAll(".terminal-commands .terminal-dirs-row .terminal-dirs-path")].map((item) => item.textContent)';
   await page.evaluate(barButton('Commands') + '.click()');
   await until('the commands listed', 'JSON.stringify(' + commandRows + '.slice(0, 3)) === ' + JSON.stringify(JSON.stringify(['c true', 'c long', 'c false'])));
-  await page.evaluate('[...document.querySelectorAll(".terminal-commands .terminal-dirs-row")].find((row) => row.querySelector(".terminal-dirs-path").textContent === "c false").click()');
+  // xterm updates the scrollbar asynchronously; wait for its scroll event before scrolling again.
+  await page.evaluate('(() => {' +
+    'const viewport = document.querySelector(".xterm-viewport");' +
+    'const before = viewport.scrollTop;' +
+    'window.__commandScrolled = false;' +
+    'const scrolled = () => { if (viewport.scrollTop < before) { window.__commandScrolled = true; viewport.removeEventListener("scroll", scrolled); } };' +
+    'viewport.addEventListener("scroll", scrolled);' +
+    '[...document.querySelectorAll(".terminal-commands .terminal-dirs-row")].find((row) => row.querySelector(".terminal-dirs-path").textContent === "c false").click();' +
+    '})()');
   const topRow = 'document.querySelector(".xterm-rows > div")?.textContent.trim()';
-  await until('false at the top', topRow + ' === "$ c false"').catch(async (error) => {
+  await until('false at the top and its scrollbar to settle', topRow + ' === "$ c false" && window.__commandScrolled === true').catch(async (error) => {
     throw new Error(error.message + '; the top row is ' + JSON.stringify(await page.evaluate(topRow)));
   });
   await page.evaluate('document.querySelector(".xterm-viewport").scrollTop = 1e9');
   // A mark's menu types its command again, without Enter.
-  const okPoint = await page.evaluate('(() => { const mark = [...document.querySelectorAll(".terminal-block-mark")].find((item) => item.title.startsWith("c true\\n")); const box = mark.getBoundingClientRect(); return { x: box.left + box.width / 2, y: box.top + box.height / 2 }; })()');
+  const trueMark = '[...document.querySelectorAll(".terminal-block-mark")].find((item) => item.title.startsWith("c true\\n"))';
+  const markUnderPointer = '(() => { const mark = ' + trueMark + '; if (!mark || mark.hidden) return false; const box = mark.getBoundingClientRect(); return box.width > 0 && box.height > 0 && document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === mark; })()';
+  await until('the mark for true to be under the pointer', markUnderPointer);
+  const okPoint = await page.evaluate('(() => { const box = ' + trueMark + '.getBoundingClientRect(); return { x: box.left + box.width / 2, y: box.top + box.height / 2 }; })()');
   await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...okPoint, button: 'left', clickCount: 1 });
   await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...okPoint, button: 'left', clickCount: 1 });
   const menuLabels = '[...document.querySelectorAll(".terminal-tab-menu button")].map((item) => item.textContent).join()';
@@ -565,7 +576,7 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   // On the Recent jobs page, whose styles are not the application page's, it is a dialog
   // over the page too, not a block under the jobs.
   await page.evaluate('location.href = "/jobs/"');
-  await until('the panel on Recent jobs', 'document.querySelector(".terminal-bar") !== null && document.querySelector(".xterm-rows") !== null');
+  await until('the panel on Recent jobs', 'location.pathname === "/jobs/" && document.querySelector(".terminal-bar") !== null && document.querySelector(".xterm-rows") !== null');
   await page.evaluate(barButton('All shells') + '.click()');
   await until('the overview on Recent jobs', 'document.querySelector(".terminal-overview-card") !== null');
   const jobsDialog = JSON.parse(await page.evaluate('JSON.stringify((() => { const dialog = document.querySelector(".terminal-overview-modal"); const box = document.querySelector(".terminal-overview").getBoundingClientRect(); return { position: getComputedStyle(dialog).position, top: box.top, bottom: box.bottom, height: innerHeight }; })())'));
