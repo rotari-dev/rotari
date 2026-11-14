@@ -2,7 +2,7 @@
 
 Created: 2026-11-14
 Status: Phases 1–4 implemented on 2026-11-14 as first accepted. The same day the user asked for the marks without
-editing startup files, as an option on by default: decision 1 is revised and phases 5–7 added; phases 5 and 6 are done and phase 7 (contract and docs) is next. See
+editing startup files, as an option on by default: decision 1 is revised and phases 5–7 added; phases 5–7 are done; the browser step runs only in CI. See
 [work-log.md](work-log.md). See [work-log.md](work-log.md).
 
 ## Goal
@@ -46,7 +46,8 @@ Grouping blocks by directory, discussed with recent directories, would build on 
    adds the marks; zsh with `ZDOTDIR` pointing at rotari's files, each reading the user's own from where zsh would
    have (following a `ZDOTDIR` the user's `.zshenv` sets) at top level, the last adding the marks and putting
    `ZDOTDIR` back. The marks come from a first prompt hook that keeps `$?` and a last one that prints `D` and `A` and
-   puts `B` back at the end of a prompt a theme rebuilt; bash 4.4's `PS0` and zsh's `preexec` print `C`. The scripts
+   puts `B` back at the end of a prompt a theme rebuilt; bash 4.4's `PS0`, a `DEBUG` trap in earlier bash (unless the
+   user has one), and zsh's `preexec` print `C`. The scripts
    are written to a private temporary directory when the server starts and removed when it stops. Any other shell,
    and every shell with `--terminal-shell-integration=false`, starts with `-l` as before; fish 4 marks by itself.
 2. **Blocks live in the page, from the stream.** A block starts at `A`; its command line is the text from `B` to
@@ -120,7 +121,7 @@ Grouping blocks by directory, discussed with recent directories, would build on 
 ## Non-goals
 
 - Changing the user's startup files. (rotari's own startup files for bash and zsh, with an option, are decision 1.)
-- Integration for shells other than bash and zsh, and a `DEBUG` trap for bash before 4.4, which has no `PS0`.
+- Integration for shells other than bash and zsh.
 - Grouping blocks by directory, folding output, sticky command lines, or re-running a block with Enter.
 - Exit codes on the server: in **All shells**, the bell, or notifications. These could use the marks later.
 - VS Code's OSC 633, iTerm2's OSC 1337 marks, and OSC 7 directories in the blocks.

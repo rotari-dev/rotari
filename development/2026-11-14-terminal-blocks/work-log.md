@@ -141,3 +141,27 @@
   `generate_cli_reference.py --check` passed, and so did `go test ./cmd/rotari ./internal/webdetach
   ./internal/terminal ./conformance ./conformance/03-interfaces/pairweb ./conformance/05-web`.
 - **Remaining:** phase 7 (contract, conformance through the binary, docs).
+
+## 2026-11-14 20:10 +09:00 — Contract and docs for shell integration
+
+- **Change:** contract **WEB-49** (note before WEB-48, and its row): what `--terminal-shell-integration` starts, which
+  files are read from where, `ZDOTDIR` afterwards, the marks and their order with the user's hooks, the directory's
+  life, and the ways to turn it off; WEB-34's "runs as `$SHELL -l`" and WEB-36's list of options read from every
+  config, and WEB-48's opening, point to it. `TestTerminalShellIntegration` covers it through the binary: bash, and
+  zsh where installed, each with the option on (`D;1`, `A`, `B` after `false`, the user's files read) and off (the
+  files read, no OSC 133 at all), the user's files unchanged after. docs/WEB.md now says bash and zsh need nothing set
+  up, what rotari does to them, and how to turn it off, in place of the lines to paste, and lists the flag in both
+  option tables; docs/FAQ.md's "ordinary shells" and docs/SECURITY.md say what the files do.
+  While writing the docs, bash before 4.4 turned out worse off than phase 5 assumed: with no `PS0` there is no `C`,
+  and a block without `C` has no mark at all, so macOS's bash 3.2 would show nothing. `rotari.bash` now, for bash
+  before 4.4 and when the user's files set no `DEBUG` trap, sets one that prints `C` before the first command after a
+  prompt (`__rotari_prompt` raises the flag; `__rotari_keep`, first after a line with no command, lowers it);
+  `ROTARI_BASH_DEBUG_TRAP`, unset by the script, lets the test take that way with bash 5.1.
+- **Reason:** plan phase 7, and the gap found in it.
+- **Plan impact:** decision 1 says how earlier bash prints `C`; the non-goal of a `DEBUG` trap is dropped.
+- **Validation:** `TestTerminalShellIntegration` (bash 5.1 and zsh, on and off) passed through the binary.
+  `TestOldBashIntegrationMarksCommandsByTheDebugTrap` gives exactly `D;0 A B` for an empty line and `C D;1 A B` for
+  `true | false`, with `$?` kept for the user's `PROMPT_COMMAND`; five runs and three more in a row passed, and
+  lowering the flag nowhere makes it fail with a `C` for the empty line. No bash 3.2 here: macOS CI's is the first.
+  `TestContractStatus` passed; see the commit for the package runs.
+- **Remaining:** nothing in this plan.
