@@ -176,3 +176,25 @@
 - **Plan impact:** none.
 - **Validation:** the failure reproduced here with the same fingerprint; `go test ./conformance/03-interfaces/...`
   then passed.
+
+## 2026-11-14 21:30 +09:00 — Commands in place of the keys
+
+- **Change:** the user found Ctrl+Shift+ArrowUp / ArrowDown little better than scrolling and accepted a dropdown and
+  copy buttons instead (plan decision 4, phases 8 and 9). The Recent directories dropdown's box, placement, filter,
+  keys, and closing moved into `openDropdown` (`dropdown` / `closeDropdown` replace `dirsBox` / `closeDirs`), which
+  `openDirs` now calls with its sections, rows, and `typeCd`. A **Commands** icon in the bar opens `openCommands`: the
+  focused pane's blocks with `C`, newest first, as rows with a state dot (`terminal-commands-state`, the marks'
+  colours), the command line, and `blockEnd` (split out of `blockTitle`), filtered by command line, or a note on
+  where commands come from. Enter or a click calls `goToBlock`: `scrollToLine` to the prompt and `block.flash`, which
+  `paintBlock` shows as `terminal-block-flash` for 1.5 s. A row's **Copy output** (read only on the click) and **Copy
+  command** go through `copyText`; empty output says so. `moveToPrompt`, `blockKeys`, and the
+  `attachCustomKeyEventHandler` call are gone. WEB-48, its row, and docs/WEB.md describe Commands; the browser step
+  opens Commands, checks `c true`, `c long`, `c false` in that order, and clicks `c false` to bring it to the top,
+  with `barButton` moved up so that the step can use it.
+- **Reason:** plan phase 8.
+- **Plan impact:** decision 4 revised; phases 8 and 9 added.
+- **Validation:** `TestTerminalPanel` (the Recent directories tests, unchanged, on the shared code; Commands empty with
+  its note, toggled by its button, rows in order with states and ends, ArrowDown twice and Enter to `false` with the
+  highlight on and gone after 1.6 s, the filter, a click, the three copies, and no key handler) passed; `tsc` clean;
+  prettier formatted. The browser script passes `node --check`; the step itself runs only in CI.
+- **Remaining:** phase 9.

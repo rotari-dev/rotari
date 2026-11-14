@@ -1,9 +1,9 @@
 # Plan: Blocks in the Web terminal
 
 Created: 2026-11-14
-Status: Phases 1–4 implemented on 2026-11-14 as first accepted. The same day the user asked for the marks without
-editing startup files, as an option on by default: decision 1 is revised and phases 5–7 added; phases 5–7 are done; the browser step runs only in CI. See
-[work-log.md](work-log.md). See [work-log.md](work-log.md).
+Status: Phases 1–7 implemented on 2026-11-14. After them the user found Ctrl+Shift+ArrowUp / ArrowDown little
+better than scrolling, and accepted a **Commands** dropdown and copy buttons in their place (phases 8 and 9); phase 8
+is done and phase 9 is next. See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -65,8 +65,10 @@ Grouping blocks by directory, discussed with recent directories, would build on 
    exit code, and, for a command seen running in this page, how long it took; replayed blocks have no times, since
    the ring keeps none. The replay is a connection's first message (`Keeper.Attach` puts it first in what `Next`
    returns, and each `Next` is one WebSocket message), so marks parsed before that message is done get no times.
-4. **Moving and acting.** Ctrl+Shift+ArrowUp / ArrowDown scroll to the previous or next prompt and are not sent to
-   the shell; nothing else is taken from the keyboard. Clicking a mark opens a small menu: **Copy output**, **Copy
+4. **Moving and acting.** *Revised 2026-11-14:* the bar's **Commands** dropdown lists the pane's commands, newest
+   first, with their state, line, and end, and a filter; choosing one scrolls to its prompt and lights it up, and each
+   row copies its output or line. A copy button shows at the right of a prompt's line under the pointer (phase 9).
+   No key is taken from the shell; Ctrl+Shift+ArrowUp / ArrowDown, first chosen, did little more than scrolling. Clicking a mark opens a small menu: **Copy output**, **Copy
    command**, **Select output** (so the browser's own copy and the existing actions work on it), and **Type command
    again**, which goes through `sendToTerminalAndSay` and so never presses Enter, and, as choosing a recent
    directory does, only once the shell's preview says nothing runs at its prompt. A command on lines of its own is
@@ -107,6 +109,12 @@ Grouping blocks by directory, discussed with recent directories, would build on 
 7. **Contracts and docs.** A contract (WEB-49) for the option and what it starts, conformance through the binary
    with bash; WEB.md (blocks with nothing to set up, the option, what it does to bash and zsh), FAQ.md ("ordinary
    shells"), SECURITY.md, and the CLI reference.
+
+8. **Commands.** The dropdown, sharing the Recent directories dropdown's code (moved into one `openDropdown`); the
+   jump and its highlight; the row's copy buttons; the keys removed; WEB-48, docs/WEB.md, and the browser step
+   changed to it.
+9. **Copy on the prompt's line.** A **Copy output** button at the right end of a prompt's line, shown while the
+   pointer is over the line; WEB-48, docs, and the browser step.
 
 ## Tests and validation
 
