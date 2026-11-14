@@ -140,6 +140,11 @@ async function stopProcessGroup(pgid) {
       return true;
     } catch (error) {
       if (error.code === "ESRCH") return false;
+      // macOS refuses to signal a group whose members have all exited but
+      // are not yet reaped, with EPERM; Linux signals them. This group is
+      // ours, started by this user, so EPERM there means only such exited
+      // members are left.
+      if (error.code === "EPERM" && process.platform === "darwin") return false;
       throw error;
     }
   };
