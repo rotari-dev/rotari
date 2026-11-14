@@ -308,8 +308,20 @@ is greyed out, as is a run whose directory cannot be read, with the reason.
 
 A shell you start by hand inside a tab, such as `zsh` typed at a bash prompt, is followed as the shell you are in: the
 Explorer follows its directory, **Recent directories** records where it goes, and typing at the prompt treats its
-prompt as the prompt. A shell inside `tmux`, `screen`, or `ssh` is not followed, and blocks need the shell itself to
-mark its commands, which one you start by hand does not unless your startup file makes it.
+prompt as the prompt. A bash or zsh you start that way marks its commands too, with nothing to set up, so blocks,
+click to move, and Cut work in it. A shell inside `tmux`, `screen`, or `ssh` is not followed and shows no marks.
+
+So that inner shells mark, rotari's bash exports `ZDOTDIR` naming rotari's zsh files for its whole session, and rotari's
+zsh does for a command line starting with `zsh`; both export `PROMPT_COMMAND` with a loader that an inner bash runs.
+A program started from a panel's bash that reads `$ZDOTDIR` therefore sees rotari's directory, and a `tmux` started in
+a panel's shell keeps its shells reading your files through rotari's. rotari keeps those files under your cache
+directory (`~/.cache/rotari/shell-integration`), so that they are there after the server stops. A `.bashrc` that
+sets `PROMPT_COMMAND` rather than adding to it leaves that bash without marks; to mark anyway, add this line to the end
+of `~/.bashrc` (for zsh, to `~/.zshrc`, with `marks.zsh`), which does nothing outside a rotari terminal:
+
+```bash
+[ -r "$ROTARI_SHELL_INTEGRATION/marks.bash" ] && . "$ROTARI_SHELL_INTEGRATION/marks.bash"
+```
 
 The list needs no setup in your shell: rotari looks at where each shell is when it is back at its prompt after you
 press Enter, so `cd`, `pushd`, and tools such as `z` all count, and so does where each shell starts. A directory

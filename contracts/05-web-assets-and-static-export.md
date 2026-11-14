@@ -1464,6 +1464,21 @@ limit is checked at the package level by `TestIdleLimitAppliesToTheShellsTogethe
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-53** With `rotari web --allow-terminal` and `--terminal-shell-integration`, a bash or zsh started inside a panel's
+shell marks its prompts and commands as WEB-49 says, with nothing in the user's files. The marks are in `marks.bash` and
+`marks.zsh` beside rotari's startup files, which source them, and each loads once per shell. rotari's bash exports
+`ZDOTDIR` as rotari's zsh directory for its whole session (the user's own, if any, in `ROTARI_USER_ZDOTDIR`), and
+rotari's zsh exports it only for a command line whose first word, after assignments, `exec`, `command`, `builtin`,
+`nocorrect`, `noglob`, or `-`, is `zsh` or ends in `/zsh`, putting the user's back before the next prompt; a zsh started
+with it reads rotari's files, the user's through them, and has `ZDOTDIR` as the user had it once started, or, not
+interactive, once `.zshenv` is read. Both export `PROMPT_COMMAND` holding a loader that keeps the last status and, in a
+bash that has not loaded `marks.bash`, loads it; loaded, it makes `PROMPT_COMMAND` again from what the user's files
+left, rotari's pieces taken out, the loader first and the marks' hooks around the user's, so that a `.bashrc` adding to
+the inherited one runs none twice; a `.bashrc` replacing it leaves that bash without marks. A shell started with
+another environment, through `ssh`, or inside `tmux` or `screen` (whose marks they keep), shows none. Implemented in
+`internal/terminal/integration/`; covered by [`TestTerminalInnerShellsMark`](../conformance/05-web/terminal_inner_marks_test.go),
+`TestInnerShellsMark`, `TestLastingIntegration`, and `TestKeeperKeepsTheIntegrationInTheCache`.
+
 **WEB-52** With `rotari web --allow-terminal`, each shell has a current shell, the one its user is in: the shell the
 server started it with, or an interactive shell started by hand inside it. It is the leader of the terminal's
 foreground process group when that is the server's shell or an interactive shell, and otherwise, while a command
@@ -1509,11 +1524,15 @@ stays xterm.js's. Implemented in the panel in `web_shell.js`; covered by `TestTe
 [`TestTerminalPanelInBrowser`](../conformance/05-web/terminal_panel_browser_test.go).
 
 **WEB-49** With `rotari web --allow-terminal` and `--terminal-shell-integration`, on by default, a shell whose program
-is named `bash` or `zsh` starts with rotari's own startup files, written when the server starts into a new directory
-only its user can read and removed when it stops; the user's files are not changed. bash runs with `--init-file`
+is named `bash` or `zsh` starts with rotari's own startup files; the user's files are not changed. The server writes
+them when it starts to `rotari/shell-integration/HASH` under the user's cache directory (`$XDG_CACHE_HOME` or
+`~/.cache`, `~/Library/Caches` on macOS), HASH from their content, each directory of it the user's, no symbolic link,
+and not writable by others, and each file put back when it differs, and keeps them when it stops, for what started in
+its shells outlives it; when that cannot be, it writes them to a new private temporary directory, removed when it
+stops, and says why in its log. Every shell has `ROTARI_SHELL_INTEGRATION` naming the directory. bash runs with `--init-file`
 naming rotari's script, which reads `/etc/profile` and the first readable of `~/.bash_profile`, `~/.bash_login`, and
 `~/.profile`, as a login shell would. zsh runs with `-l` and `ZDOTDIR` naming rotari's directory, whose `.zshenv`,
-`.zprofile`, `.zshrc`, and `.zlogin` each read the user's file of that name, at top level, from where zsh would have:
+`.zprofile`, and `.zshrc` each read the user's file of that name, at top level, from where zsh would have:
 the `ZDOTDIR` the shell was to have, else `$HOME`, or a `ZDOTDIR` the user's `.zshenv` sets; afterwards `ZDOTDIR` is
 as it was (unset if it was and nothing set it). Then each marks its prompts and commands with OSC 133 for the panel's
 blocks (WEB-48): before every prompt, `D;STATUS` with the last command's exit status and `A`, after the user's own

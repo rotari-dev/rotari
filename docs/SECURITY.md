@@ -224,7 +224,8 @@ screen, at most 64 at once, behind the same checks and with a JSON body, and the
 job, or a path that exists. That tells nothing a shell on the server could not.
 
 So that bash and zsh print those marks, rotari starts them with its own startup files (`--terminal-shell-integration`,
-on by default), written when the server starts into a directory only you can read and removed when it stops. They
+on by default), kept under your cache directory in directories that must be yours and that only you can write, so
+that shells started from them still read them after the server stops. They
 read your usual startup files and add prompt hooks that print the marks; they change none of your files, and run
 nothing a shell would not. `--terminal-shell-integration=false` starts bash and zsh as plain login shells.
 

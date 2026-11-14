@@ -532,8 +532,8 @@ a prompt that marks its commands shows each one's exit code beside it, as a bloc
 
 The shells themselves are ordinary: rotari does not run jobs through them or log what you type,
 and jobs run the same with or without them. bash and zsh start with a few lines of rotari's after your own startup
-files, which mark where each command starts and ends for its blocks and leave your files alone;
-`--terminal-shell-integration=false` starts them as plain login shells. It remembers only the directories each project's shells have been in,
+files, which mark where each command starts and ends for its blocks and leave your files alone, and pass the same
+on to a bash or zsh started inside them; `--terminal-shell-integration=false` starts them as plain login shells. It remembers only the directories each project's shells have been in,
 in memory, for **Recent directories**, and forgets them when every shell ends. The terminal is off unless you pass `--allow-terminal`,
 and it does not replace `tmux` or your terminal emulator. See [Terminal](WEB.md#terminal).
 
