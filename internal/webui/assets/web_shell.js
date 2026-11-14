@@ -5213,6 +5213,122 @@ function shellWord(value) {
     }
     return found?.output ? found : null;
   };
+  // Click to move: a plain click in the command line at a shell's prompt moves the cursor
+  // there, as the arrow keys would, counted in characters from where the line starts (B).
+  //
+  // promptBlock is a pane's block whose command line is being typed, or null.
+  const promptBlock = (pane) => {
+    const last = pane.blocks.at(-1);
+    return last && !last.ended && last.input && !last.output ? last : null;
+  };
+  // rowEnd is where a row's text ends: past its last cell that is not blank.
+  const rowEnd = (line) => {
+    for (let x = line.length - 1; x >= 0; x--) {
+      const chars = line.getCell(x)?.getChars();
+      if (chars && chars !== " ") return x + 1;
+    }
+    return 0;
+  };
+  // charsFrom counts the characters from one place in the buffer to another, later one: a
+  // wide character's second cell is none, and a row that ends without wrapping is one, the
+  // line break of a buffer of several lines.
+  const charsFrom = (buffer, from, to) => {
+    let count = 0;
+    for (let y = from.y; y <= to.y; y++) {
+      const line = buffer.getLine(y);
+      if (!line) break;
+      const start = y === from.y ? from.x : 0;
+      const end = y === to.y ? to.x : rowEnd(line);
+      for (let x = start; x < end; x++)
+        if (line.getCell(x)?.getWidth() !== 0) count++;
+      if (y < to.y && !buffer.getLine(y + 1)?.isWrapped) count++;
+    }
+    return count;
+  };
+  // clickTarget is where in a pane's command line a click at a screen cell lands, with the
+  // cursor's place, or null when it is not in the command line.
+  const clickTarget = (pane, col, row) => {
+    const { term } = pane;
+    const buffer = term.buffer.active;
+    const block = promptBlock(pane);
+    if (!block || buffer.type === "alternate") return null;
+    if (buffer.viewportY !== buffer.baseY) return null;
+    const start = { y: block.input.marker.line, x: block.input.x };
+    const cursor = { y: buffer.baseY + buffer.cursorY, x: buffer.cursorX };
+    // The line's rows: from B to the cursor's row, and the rows wrapped on from it.
+    let last = cursor.y;
+    while (buffer.getLine(last + 1)?.isWrapped) last++;
+    const y = buffer.viewportY + row;
+    if (start.y < 0 || y < start.y || y > last) return null;
+    if (y === start.y && col < start.x) return null;
+    // Past the text of its row, a click goes to the row's end, or the cursor's if further.
+    const line = buffer.getLine(y);
+    let x = Math.min(
+      col,
+      Math.max(rowEnd(line), y === cursor.y ? cursor.x : 0),
+    );
+    // The second cell of a wide character is the character's.
+    while (x > 0 && line.getCell(x)?.getWidth() === 0) x--;
+    return { start, cursor, target: { y, x } };
+  };
+  // moveByClick sends the arrow keys that take the cursor to where a click landed.
+  const moveByClick = (pane, col, row) => {
+    const place = clickTarget(pane, col, row);
+    if (!place) return false;
+    const buffer = pane.term.buffer.active;
+    const steps =
+      charsFrom(buffer, place.start, place.target) -
+      charsFrom(buffer, place.start, place.cursor);
+    if (!steps) return true;
+    const prefix = pane.term.modes.applicationCursorKeysMode
+      ? "\x1bO"
+      : "\x1b[";
+    const key = prefix + (steps > 0 ? "C" : "D");
+    send(pane, new TextEncoder().encode(key.repeat(Math.abs(steps))));
+    return true;
+  };
+  // screenCell is the screen cell under a pointer event, or null off the screen.
+  const screenCell = (pane, event) => {
+    const { term } = pane;
+    const screen = term.element?.querySelector(".xterm-screen");
+    if (!screen) return null;
+    const box = screen.getBoundingClientRect();
+    const col = Math.floor(
+      ((event.clientX - box.left) * term.cols) / box.width,
+    );
+    const row = Math.floor(
+      ((event.clientY - box.top) * term.rows) / box.height,
+    );
+    if (col < 0 || row < 0 || col >= term.cols || row >= term.rows) return null;
+    return { col, row };
+  };
+  // A press and a release in one place, with the left button and no modifier, is a click
+  // to move, unless it made a selection, was on a link, or the program takes the mouse.
+  const clickToMove = (pane) => {
+    let pressed = null;
+    pane.viewport.addEventListener("mousedown", (event) => {
+      const plain =
+        event.button === 0 &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey;
+      pressed = plain ? { x: event.clientX, y: event.clientY } : null;
+    });
+    pane.viewport.addEventListener("mouseup", (event) => {
+      const press = pressed;
+      pressed = null;
+      const { term } = pane;
+      if (!press || event.button !== 0) return;
+      if (Math.abs(event.clientX - press.x) > 2) return;
+      if (Math.abs(event.clientY - press.y) > 2) return;
+      if (term.hasSelection() || term.modes.mouseTrackingMode !== "none")
+        return;
+      if (term.element?.querySelector(".xterm-cursor-pointer")) return;
+      const cell = screenCell(pane, event);
+      if (cell) moveByClick(pane, cell.col, cell.row);
+    });
+  };
   // hoverBlock follows the pointer over a pane's screen, or off it with no event, to show
   // the copy button of the block under it; none in vim or less.
   const hoverBlock = (pane, event) => {
@@ -5537,6 +5653,7 @@ function shellWord(value) {
     term.open(viewport);
     viewport.addEventListener("mousemove", (event) => hoverBlock(pane, event));
     viewport.addEventListener("mouseleave", () => hoverBlock(pane, null));
+    clickToMove(pane);
     fit.fit();
     term.onData((data) => {
       send(pane, new TextEncoder().encode(data));

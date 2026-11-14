@@ -250,7 +250,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           const text = typeof line === 'string' ? line : line.text;
           return {
             isWrapped: Boolean(line.wrapped), length: this.cols,
-            getCell: (x) => ({ getChars: () => text[x] || '', getWidth: () => 1 }),
+            // A character past U+2E80 is wide, and a NUL is the cell after one.
+            getCell: (x) => ({ getChars: () => (text[x] === '\0' ? '' : text[x] || ''), getWidth: () => (text[x] === '\0' ? 0 : text[x] > '\u2e80' ? 2 : 1) }),
             translateToString: (trim, start = 0, end = this.cols) => {
               const part = text.padEnd(this.cols).slice(start, end);
               return trim ? part.trimEnd() : part;
@@ -295,7 +296,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
         scrollToBottom() { this.buffer.active.viewportY = this.buffer.active.baseY; this.bottomed = (this.bottomed || 0) + 1; }
         select(column, row, length) { this.selection = { column, row, length }; }
         attachCustomKeyEventHandler(handler) { this.keyHandler = handler; }
-        modes = { bracketedPasteMode: false };
+        modes = { bracketedPasteMode: false, applicationCursorKeysMode: false, mouseTrackingMode: 'none' };
+        hasSelection() { return Boolean(this.selected); }
         options = {};
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
         loadAddon(addon) { (this.addons ||= []).push(addon); } open() {}
@@ -3761,6 +3763,89 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   bd.sockets.at(-1).onmessage({ data: new TextEncoder().encode('plain').buffer });
   assert.equal(gutter(), false, 'a gutter after a replay without marks');
   assert.ok(bdTerm.decorations.every((decoration) => decoration.isDisposed), 'decorations outlived the replay');
+  }
+
+  // Click to move: a plain click in the command line at a prompt sends the arrow keys that
+  // take the cursor there, counted in characters; anything else is left as it was.
+  {
+  const cm = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const cmSocket = cm.sockets.at(-1);
+  cmSocket.onopen?.();
+  cmSocket.readyState = 1;
+  const cmTerm = cm.terminals.at(-1);
+  // A screen of 80 by 24 cells of 10px, from (20, 100).
+  const cmScreen = cm.document.createElement('div');
+  cmScreen.className = 'xterm-screen';
+  cmScreen.getBoundingClientRect = () => ({ top: 100, left: 20, width: 800, height: 240, bottom: 340, right: 820 });
+  cmTerm.element = cm.document.createElement('div');
+  cmTerm.element.append(cmScreen);
+  const cmViewport = cm.document.querySelector('.terminal-pane').terminalPane.viewport;
+  // click presses and lets go at a cell, or moves first by drag pixels, and says what was sent.
+  const click = (col, row, { drag = 0, ...keys } = {}) => {
+    const before = cmSocket.sent.length;
+    const at = { clientX: 20 + col * 10 + 5, clientY: 100 + row * 10 + 5, button: 0, bubbles: true };
+    cmViewport.dispatchEvent(new cm.window.MouseEvent('mousedown', { ...at, ...keys }));
+    cmViewport.dispatchEvent(new cm.window.MouseEvent('mouseup', { ...at, clientX: at.clientX + drag, ...keys }));
+    return cmSocket.sent.slice(before).map((data) => (typeof data === 'string' ? data : Buffer.from(data).toString())).join('');
+  };
+  const left = (n) => '\x1b[D'.repeat(n);
+  const right = (n) => '\x1b[C'.repeat(n);
+  cmSocket.onmessage({ data: new TextEncoder().encode('plain').buffer });
+  // A shell that sends no marks: a click is only a click.
+  cmTerm.lines = ['$ echo hi', ''];
+  Object.assign(cmTerm.buffer.active, { cursorX: 9, cursorY: 0 });
+  assert.equal(click(3, 0), '', 'a click moved the cursor in a shell without marks');
+  // "echo 日本x" typed after the prompt's "$ ": a wide character takes two cells.
+  cmTerm.lines = ['$ make', 'built', '$ echo \u65e5\0\u672c\0x', ''];
+  cmTerm.osc(133, 'A', 0, 0); cmTerm.osc(133, 'B', 2, 0); cmTerm.osc(133, 'C', 0, 1); cmTerm.osc(133, 'D;0', 0, 2);
+  cmTerm.osc(133, 'A', 0, 2); cmTerm.osc(133, 'B', 2, 2);
+  Object.assign(cmTerm.buffer.active, { cursorX: 12, cursorY: 2, baseY: 0, viewportY: 0 });
+  assert.equal(click(7, 2), left(3), 'to the wide character');
+  assert.equal(click(8, 2), left(3), 'to the wide character, by its second cell');
+  assert.equal(click(4, 2), left(6));
+  assert.equal(click(40, 2), '', 'past the end, to the end, where the cursor is');
+  cmTerm.buffer.active.cursorX = 7;
+  assert.equal(click(11, 2), right(2), 'right, over the wide character');
+  assert.equal(click(40, 2), right(3), 'past the end');
+  // In application cursor mode, the keys are that mode's.
+  cmTerm.modes.applicationCursorKeysMode = true;
+  assert.equal(click(2, 2), '\x1bOD'.repeat(5));
+  cmTerm.modes.applicationCursorKeysMode = false;
+  // Not in the command line: before it, on output, or on an earlier prompt.
+  assert.equal(click(0, 2), '', 'a click on the prompt moved the cursor');
+  assert.equal(click(3, 1), '', 'a click on output moved the cursor');
+  assert.equal(click(3, 0), '', 'a click on an earlier command moved the cursor');
+  // Not a plain click: a drag, a modifier, a selection, a link, a program that takes the mouse.
+  assert.equal(click(4, 2, { drag: 20 }), '', 'a drag moved the cursor');
+  assert.equal(click(4, 2, { altKey: true }), '', 'Alt+click is xterm.js\'s');
+  assert.equal(click(4, 2, { shiftKey: true }), '');
+  cmTerm.selected = true;
+  assert.equal(click(4, 2), '', 'a click that left a selection moved the cursor');
+  cmTerm.selected = false;
+  const cmLink = cm.document.createElement('div');
+  cmLink.className = 'xterm-cursor-pointer';
+  cmTerm.element.append(cmLink);
+  assert.equal(click(4, 2), '', 'a click on a link moved the cursor');
+  cmLink.remove();
+  cmTerm.modes.mouseTrackingMode = 'vt200';
+  assert.equal(click(4, 2), '', 'a click a program takes moved the cursor');
+  cmTerm.modes.mouseTrackingMode = 'none';
+  // Not in vim or less, nor scrolled back, nor while the command runs.
+  cmTerm.buffer.active.type = 'alternate';
+  assert.equal(click(4, 2), '', 'a click in the alternate screen moved the cursor');
+  cmTerm.buffer.active.type = 'normal';
+  Object.assign(cmTerm.buffer.active, { baseY: 1, viewportY: 0 });
+  assert.equal(click(4, 3), '', 'a click scrolled back moved the cursor');
+  Object.assign(cmTerm.buffer.active, { baseY: 0, viewportY: 0 });
+  // A line wrapped onto the next row is one line.
+  cmTerm.lines = ['$ make', 'built', '$ ' + 'a'.repeat(78), { text: 'bbb', wrapped: true }, ''];
+  Object.assign(cmTerm.buffer.active, { cursorX: 3, cursorY: 3 });
+  assert.equal(click(10, 2), left(73), 'to a row before the cursor\'s, of the same line');
+  Object.assign(cmTerm.buffer.active, { cursorX: 10, cursorY: 2 });
+  assert.equal(click(1, 3), right(71), 'to the row the line wraps onto');
+  cmTerm.osc(133, 'C', 0, 4);
+  assert.equal(click(4, 2), '', 'a click while the command runs moved the cursor');
   }
 
   // Blocks acted on: Commands lists the pane's commands, newest first, to go to one or copy
