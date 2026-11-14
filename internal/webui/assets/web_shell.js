@@ -5269,17 +5269,23 @@ function shellWord(value) {
     );
     // The second cell of a wide character is the character's.
     while (x > 0 && line.getCell(x)?.getWidth() === 0) x--;
-    return { start, cursor, target: { y, x } };
+    return { block, start, cursor, target: { y, x } };
   };
-  // moveByClick sends the arrow keys that take the cursor to where a click landed.
+  // moveByClick takes the cursor to where a click landed: by the line's character index for
+  // a shell that said it takes one, else by arrow keys.
   const moveByClick = (pane, col, row) => {
     const place = clickTarget(pane, col, row);
     if (!place) return false;
     const buffer = pane.term.buffer.active;
-    const steps =
-      charsFrom(buffer, place.start, place.target) -
-      charsFrom(buffer, place.start, place.cursor);
+    const index = charsFrom(buffer, place.start, place.target);
+    const steps = index - charsFrom(buffer, place.start, place.cursor);
     if (!steps) return true;
+    // A shell that said it can is told the index, and stops at its line's end; arrows past
+    // it could take a suggestion shown there.
+    if (place.block.goto) {
+      send(pane, new TextEncoder().encode("\x1b[9998~" + index + ";"));
+      return true;
+    }
     const prefix = pane.term.modes.applicationCursorKeysMode
       ? "\x1bO"
       : "\x1b[";
@@ -5412,6 +5418,8 @@ function shellWord(value) {
         // empty prompt before it.
         separated: Boolean(last?.output),
         decoration: null,
+        // rotari's zsh says on A that a click can put its cursor at a character index.
+        goto: rest.includes("rotari_goto=1"),
       };
       const marker = block.prompt.marker;
       if (!marker || marker.isDisposed) return true;

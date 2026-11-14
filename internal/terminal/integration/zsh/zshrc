@@ -17,7 +17,7 @@ __rotari_keep() {
 # __rotari_prompt runs last, unless a hook is added later, as some themes add theirs at the
 # first prompt.
 __rotari_prompt() {
-	print -n "\e]133;D;${__rotari_status}\a\e]133;A\a"
+	print -n "\e]133;D;${__rotari_status}\a\e]133;A${__rotari_goto_said}\a"
 	(( __rotari_line_init )) || [[ $PS1 == *'133;B'* ]] || PS1="$PS1"$'%{\e]133;B\a%}'
 	return $__rotari_status
 }
@@ -54,5 +54,25 @@ __rotari_preexec() {
 	done
 	print -n "\e]133;C;cmdline_url=$url\a"
 }
+# __rotari_goto puts the cursor where the Web terminal was clicked: the panel sends a key
+# sequence no terminal does, the line's character index, and ";". CURSOR stops at the
+# buffer's end, so a suggestion shown past it, as zsh-autosuggestions shows one, is not
+# taken. The prompt's A says that it can be used.
+__rotari_goto() {
+	local key index=
+	while read -k 1 key && [[ $key == [0-9] && ${#index} -lt 10 ]]; do
+		index+=$key
+	done
+	[[ $key == ';' && -n $index ]] || return 0
+	CURSOR=$((index > ${#BUFFER} ? ${#BUFFER} : index))
+}
+__rotari_goto_said=
+if zle -N __rotari_goto 2>/dev/null; then
+	for __rotari_keymap in emacs viins vicmd; do
+		bindkey -M $__rotari_keymap '\e[9998~' __rotari_goto
+	done
+	unset __rotari_keymap
+	__rotari_goto_said=';rotari_goto=1'
+fi
 precmd_functions=(__rotari_keep $precmd_functions __rotari_prompt)
 preexec_functions+=(__rotari_preexec)

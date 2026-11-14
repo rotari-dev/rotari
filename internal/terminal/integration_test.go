@@ -187,7 +187,7 @@ func TestZshIntegrationReadsTheUsersFilesAndMarks(t *testing.T) {
 				env = append(env, strings.ReplaceAll(entry, "HOME", home))
 			}
 			shell := integrated(t, "zsh", home, env...)
-			if marks := marksAfter(t, shell); !endsWith(marks, "B", "C;cmdline_url=false", "D;1", "A", "B") {
+			if marks := marksAfter(t, shell); !endsWith(marks, "B", "C;cmdline_url=false", "D;1", "A;rotari_goto=1", "B") {
 				t.Errorf("marks around false: %q", marks)
 			}
 			want := strings.ReplaceAll(test.want, "HOME", home)
@@ -207,7 +207,7 @@ func TestZshIntegrationMarksAThemeThatComesLater(t *testing.T) {
 		".zshrc":  "__later() { precmd_functions=(${precmd_functions:#__later} __theme) }\n__theme() { PS1='theme> ' }\nprecmd_functions+=(__later)\n",
 	})
 	shell := integrated(t, "zsh", home)
-	if marks := marksAfter(t, shell); !endsWith(marks, "B", "C;cmdline_url=false", "D;1", "A", "B") {
+	if marks := marksAfter(t, shell); !endsWith(marks, "B", "C;cmdline_url=false", "D;1", "A;rotari_goto=1", "B") {
 		t.Errorf("marks around false: %q", marks)
 	}
 	// zsh says the command line in C, percent-encoded byte by byte, as kitty does. (Bytes
@@ -224,6 +224,31 @@ func TestZshIntegrationMarksAThemeThatComesLater(t *testing.T) {
 	}
 	if got := shell.run(t, `print -l $precmd_functions | tail -1`); got != "__theme" {
 		t.Errorf("the last precmd hook is %q; the test's theme does not come after rotari's", got)
+	}
+}
+
+// zsh puts its cursor at a character index sent after its private key sequence, stops at
+// the buffer's end, and moves by no widget that a suggestion is taken by.
+func TestZshIntegrationPutsTheCursorWhereClicked(t *testing.T) {
+	home := t.TempDir()
+	writeFiles(t, home, map[string]string{
+		".zshenv": "unsetopt GLOBAL_RCS\n",
+		// zsh-autosuggestions takes a suggestion on forward-char, which this notes.
+		".zshrc": "__spy() { SPIED=yes; zle .forward-char }\nzle -N forward-char __spy\n",
+	})
+	shell := integrated(t, "zsh", home)
+	marksAfter(t, shell)
+	// "echo abc", then Z after "echo ", then Q past the end, which stops at the end.
+	if _, err := shell.Write([]byte("echo abc\x1b[9998~5;Z\x1b[9998~99;Q\n")); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(testWait); !strings.Contains(oscSequence.ReplaceAllString(shell.text(), ""), "\nZabcQ\r\n"); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("no ZabcQ; the terminal shows:\n%q", shell.text())
+		}
+	}
+	if got := shell.run(t, "echo ${SPIED:-no}"); got != "no" {
+		t.Errorf("forward-char ran, which takes a suggestion: %q", got)
 	}
 }
 

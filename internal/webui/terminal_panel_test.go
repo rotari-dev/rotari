@@ -3846,6 +3846,14 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(click(1, 3), right(71), 'to the row the line wraps onto');
   cmTerm.osc(133, 'C', 0, 4);
   assert.equal(click(4, 2), '', 'a click while the command runs moved the cursor');
+  // A shell that says on A it takes an index, as rotari's zsh does, is told the index.
+  cmTerm.lines = ['$ make', 'built', '$ ' + 'a'.repeat(78), { text: 'bbb', wrapped: true }, 'x', '$ echo \u65e5\0\u672c\0x', ''];
+  cmTerm.osc(133, 'D;0', 0, 5); cmTerm.osc(133, 'A;rotari_goto=1', 0, 5); cmTerm.osc(133, 'B', 2, 5);
+  Object.assign(cmTerm.buffer.active, { cursorX: 12, cursorY: 5 });
+  assert.equal(click(8, 5), '\x1b[9998~5;', 'the index of the wide character');
+  assert.equal(click(40, 5), '', 'past the end, where the cursor is');
+  cmTerm.buffer.active.cursorX = 2;
+  assert.equal(click(40, 5), '\x1b[9998~8;', 'past the end, the line\'s end');
   }
 
   // Blocks acted on: Commands lists the pane's commands, newest first, to go to one or copy
