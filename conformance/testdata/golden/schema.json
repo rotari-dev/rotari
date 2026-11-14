@@ -2183,6 +2183,14 @@
           "name": "detach"
         },
         {
+          "name": "disconnect-action",
+          "value_name": "ACTION",
+          "values": [
+            "stop",
+            "detach"
+          ]
+        },
+        {
           "name": "shutdown"
         },
         {

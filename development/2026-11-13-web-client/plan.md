@@ -1,7 +1,7 @@
 # Plan: A run-style client for rotari web
 
 Created: 2026-11-13
-Status: Proposed. Second of two plans following [`rotari web --detach`](../2026-11-13-web-detach/plan.md); the first
+Status: Implemented; see [work-log.md](work-log.md). Second of the plans following [`rotari web --detach`](../2026-11-13-web-detach/plan.md); the first
 is [stopping a background rotari web](../2026-11-13-web-shutdown/plan.md), which this plan assumes.
 
 ## Goal
@@ -36,7 +36,9 @@ ends, while `rotari web` detaches only when started with `--detach`.
 
 ## Proposals
 
-1. **`rotari web` becomes a client of its own server.** It starts the server as `--detach` does: in a new session,
+1. **`rotari web` becomes a client of its own server** (implementation: only when it could be detached, at a
+   terminal or with `--disconnect-action detach`; without a terminal and with `stop` it serves in its own process
+   as before, so scripts, services, and the test harness see no change). It starts the server as `--detach` does: in a new session,
    with a readiness pipe. It stays attached, showing the server's output and `Press Ctrl-D to detach; Ctrl-C to stop
    the server.` The server's stdout and stderr go to the client through a pipe while it is attached.
 2. **A lifeline.** The client holds the write end of a second pipe whose read end the server watches. A clean detach
@@ -80,7 +82,7 @@ ends, while `rotari web` detaches only when started with `--detach`.
 - **Docs:** WEB.md explains Ctrl-C, Ctrl-D, and `--disconnect-action`, with the default and why it differs from
   `run`. RUNNING.md or the FAQ compares the two. ARCHITECTURE.md describes the client, the server, and the lifeline.
 - **Contracts:** WEB-34 (a shell ends when the server stops; now also when the client stops it) and WEB-40 change. A
-  new WEB-42 covers the client's keys and disconnect actions.
+  new contract covers the client's keys and disconnect actions (WEB-47, as WEB-42 to WEB-46 were taken meanwhile).
 
 ## Steps
 

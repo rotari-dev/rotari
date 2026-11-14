@@ -779,6 +779,7 @@ serve the web status UI
 | `--host` | `HOST` | `ROTARI_WEB_HOST` | HTTP listen host (live server only; cannot be combined with --static-dir); with --allow-exec or --allow-terminal, not read from a workspace, basedir, or project config |
 | `--port` | `PORT` | `ROTARI_WEB_PORT` | HTTP listen port (live server only; cannot be combined with --static-dir) |
 | `--detach` | `` | `CLI only` | start the live server in the background, where it outlives the session that started it, and return once it listens, printing its URL, PID, and log; if one already runs on this host for this user, report it instead, or fail if its options differ; stop it with --shutdown; cannot be combined with --static-dir |
+| `--disconnect-action` | `ACTION` | `ROTARI_WEB_DISCONNECT_ACTION` | when the terminal of an attached rotari web closes, or its client gets SIGHUP or SIGTERM or is killed, stop the server or detach it (default stop); Ctrl-D at a terminal always detaches and Ctrl-C always stops; not with --detach (choices: stop, detach) |
 | `--shutdown` | `` | `CLI only` | stop this host's detached server (see --detach): list what runs in its shells and ask first when anything does, send it SIGTERM, and wait for it to stop; takes no other server option |
 | `--yes` | `` | `CLI only` | with --shutdown, stop the server without asking, even when its shells run something |
 | `--static-dir` | `DIR` | `ROTARI_WEB_STATIC_DIR` | generate a static web UI |

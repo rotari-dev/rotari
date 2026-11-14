@@ -59,10 +59,9 @@ func cmdWeb(args []string) int {
 		}
 		return generateStaticWeb(flags.staticDir, options)
 	}
-	if flags.detach {
-		if !takeWebDetachedChild() {
-			return startDetachedWeb(flags, baseDir)
-		}
+	mode := takeWebChildMode()
+	switch {
+	case mode == webChildDetached:
 		child, err := holdWebDetached()
 		if errors.Is(err, webdetach.ErrRunning) {
 			printErrorf("%v; run rotari web --detach again to see it", err)
@@ -74,6 +73,21 @@ func cmdWeb(args []string) int {
 		}
 		defer child.close()
 		flags.detached = child
+	case strings.HasPrefix(mode, webChildAttachedPrefix):
+		child, err := attachWebChild(strings.TrimPrefix(mode, webChildAttachedPrefix))
+		if err != nil {
+			printErrorf("cannot start rotari web: %v", err)
+			return 1
+		}
+		defer child.close()
+		flags.detached = child
+	case mode != "":
+		printErrorf("cannot start rotari web: %s=%q is not one rotari sets", webDetachedChildEnv, mode)
+		return 1
+	case flags.detach:
+		return startDetachedWeb(flags, baseDir)
+	case webRunsAsClient(flags):
+		return runWebClient(flags)
 	}
 	return serveWeb(flags, baseDir, options)
 }
@@ -99,6 +113,9 @@ type webCommandFlags struct {
 	// background process.
 	detach   bool
 	detached *webDetachedChild
+	// disconnectAction is what a closed terminal does to an attached server: stop or
+	// detach.
+	disconnectAction string
 	// shutdown stops this host's detached server instead of serving; yes does so
 	// without asking.
 	shutdown, yes bool
@@ -117,6 +134,7 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 	cliValue(fs, &artifactRoots, "artifact-root")
 	staticArtifactContents := cliBool(fs, "static-artifact-contents", false)
 	detach := cliBool(fs, "detach", false)
+	disconnectAction := fs.String("disconnect-action", webDisconnectActionDefault(fs), webFlagUsage("disconnect-action"))
 	shutdown := cliBool(fs, "shutdown", false)
 	yes := cliBool(fs, "yes", false)
 	// The terminal and launch options read the environment and config
@@ -197,7 +215,15 @@ func parseWebFlags(args []string) (webCommandFlags, int) {
 			return webCommandFlags{}, 1
 		}
 	}
-	flags := webCommandFlags{basedir: *basedir, host: *host, port: *port, staticDir: *staticDir, authToken: *authToken, allowControl: *allowControl, notifications: *notifications, staticArtifactContents: *staticArtifactContents, detach: *detach,
+	if *disconnectAction != webDisconnectStop && *disconnectAction != webDisconnectDetach {
+		printErrorf("--disconnect-action %q must be stop or detach", *disconnectAction)
+		return webCommandFlags{}, 1
+	}
+	if *detach && cliOptionSet(fs, "disconnect-action") {
+		printError("--disconnect-action only applies without --detach, which detaches at once")
+		return webCommandFlags{}, 1
+	}
+	flags := webCommandFlags{basedir: *basedir, host: *host, port: *port, staticDir: *staticDir, authToken: *authToken, allowControl: *allowControl, notifications: *notifications, staticArtifactContents: *staticArtifactContents, detach: *detach, disconnectAction: *disconnectAction,
 		allowExec: *allowExec, allowedHosts: allowedHosts, allowTerminal: *allowTerminal, terminal: terminalSettings}
 	for _, root := range artifactRoots {
 		absolute, err := filepath.Abs(root)
@@ -336,12 +362,14 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 		return 1
 	}
 	if flags.detached != nil {
-		if err := flags.detached.listening(flags, baseDir, listener.Addr()); err != nil {
+		if err := flags.detached.listening(flags, baseDir, listener.Addr(), options.Shutdown); err != nil {
 			_ = listener.Close()
 			printErrorf("web server failed: %v", err)
 			return 1
 		}
-	} else {
+	}
+	if flags.detached == nil || flags.detached.lifeline != nil {
+		// A server whose output someone sees: in the foreground, or attached to a client.
 		noteDetachedWeb()
 	}
 	server := &http.Server{Handler: handler}
@@ -381,11 +409,52 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 		_ = server.Close()
 	}()
 	fmt.Printf("rotari web listening at http://%s\n", listener.Addr())
+	if flags.detached != nil {
+		if err := flags.detached.announced(); err != nil {
+			printErrorf("web server failed: %v", err)
+			options.Shutdown()
+		}
+	}
 	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		printErrorf("web server failed: %v", err)
 		return 1
 	}
 	return 0
+}
+
+// webDisconnectActionDefault is --disconnect-action's default from disconnect-action
+// under [web] in a config, then ROTARI_WEB_DISCONNECT_ACTION. A top-level
+// disconnect-action, like ROTARI_DISCONNECT_ACTION, is a run's (detach or cancel), so
+// it does not apply here.
+func webDisconnectActionDefault(fs *flag.FlagSet) string {
+	choices := cliCommandFlag("web", "disconnect-action").Values
+	action := webDisconnectStop
+	apply := func(value configuredValue, text string) {
+		chosen, err := value.choice("disconnect-action", text, choices)
+		if err != nil {
+			addConfiguredProblem(fs, err)
+			return
+		}
+		action = chosen
+	}
+	section, _ := cliConfig["web"].(map[string]any)
+	if raw, ok := section["disconnect-action"]; ok && raw != nil {
+		from := "config"
+		// The section is looked at first, so this names where [web] set it.
+		if setting := configSettingIn(cliConfigLayers, "web", "disconnect-action"); setting.found {
+			from = setting.where()
+		}
+		value := configuredValue{raw: raw, from: from, set: true}
+		if text, err := value.scalarText("disconnect-action"); err != nil {
+			addConfiguredProblem(fs, err)
+		} else {
+			apply(value, text)
+		}
+	}
+	if value := configuredFromEnvironment(envWebDisconnectAction); value.set {
+		apply(value, value.raw.(string))
+	}
+	return action
 }
 
 // warnUnauthenticatedHost warns when a server without a token listens beyond
@@ -402,7 +471,7 @@ func warnUnauthenticatedHost(flags webCommandFlags, token string) {
 }
 
 func webStaticServerOptions(fs *flag.FlagSet) []string {
-	return staticServerOptions(fs, "web", append([]string{"allow-control", "allow-exec", "allow-terminal", "allowed-host", "artifact-root", "auth-token", "detach", "host", "port", "shutdown", "yes"}, webTerminalOptions...))
+	return staticServerOptions(fs, "web", append([]string{"allow-control", "allow-exec", "allow-terminal", "allowed-host", "artifact-root", "auth-token", "detach", "disconnect-action", "host", "port", "shutdown", "yes"}, webTerminalOptions...))
 }
 
 // staticServerOptions lists the names, options of command that only a live

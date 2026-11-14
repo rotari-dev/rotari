@@ -1463,6 +1463,27 @@ level by `TestIdleLimitAppliesToTheShellsTogether` and
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-47** `rotari web` run at a terminal, or with `--disconnect-action detach`, starts its server as `--detach`
+does (WEB-40), in a session of its own, and stays attached as its client: it shows the server's output, including
+`rotari web listening at URL`, and then says on stderr `Press Ctrl-D to detach and keep the server running; Ctrl-C to
+stop it.` (only when stdin is a terminal) and, with the terminal on, `Shells end D after the last page closes
+(--terminal-idle-timeout), and when the server stops.` with the limit in effect written without zero units (`3h`,
+`1h30m`). `rotari web --detach` prints the same idle-limit line, for a new server and for one it reports. Ctrl-C stops
+the server and the client exits with its status. Ctrl-D detaches it: the server takes the host's lease, records
+itself, and moves its output to the host's log, and the client prints `rotari web keeps running in the background at
+URL (PID N)`, the log, and `rotari web --shutdown`, and exits 0. While another server is detached on the host, Ctrl-D
+is refused, naming that server, and the client stays attached. SIGHUP or SIGTERM to the client, a terminal that went
+away, or a client gone without a word (even by SIGKILL, which the server sees as the end of a pipe) follow
+`--disconnect-action`: `stop` (the default) stops the server, and `detach` detaches it as Ctrl-D does, or, when it
+cannot, stops it and says why in the log. `--disconnect-action detach` fails at start while a server is already
+detached. The action comes from the flag, then `disconnect-action` under `[web]` in a config, then
+`ROTARI_WEB_DISCONNECT_ACTION`. A top-level `disconnect-action` and `ROTARI_DISCONNECT_ACTION`, which are a run's, do
+not apply. A bad value is an error naming its source. `--disconnect-action` with `--detach` or `--static-dir` is an
+error. Started without a terminal and with `stop`, `rotari web` serves in its own process and starts none. Implemented
+in `cmd/rotari/web_client.go` and the attached mode of `cmd/rotari/web_detach.go`; covered by the tests in
+[conformance/05-web/web_client_test.go](../conformance/05-web/web_client_test.go) and the unit tests
+`TestShortDuration` and `TestWatchWebClientInput`.
+
 **WEB-46** With `rotari web --allow-terminal`, words a shell prints are links when they name something that exists.
 `POST /_terminal/shells/ID/links` takes a JSON body `{"candidates": [...]}`, at most 64 candidates of at most 4096
 bytes each (400 beyond, 415 for a body that is not JSON, unknown fields 400), and answers `links`, one for each

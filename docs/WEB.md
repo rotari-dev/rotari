@@ -50,9 +50,41 @@ environment variables are in
 | `--terminal-idle-timeout`, `--terminal-max-shells`, `--terminal-max-shells-per-project`, `--terminal-replay-size`, `--terminal-shell` | With `--allow-terminal`, change its limits; see below. |
 | `--allowed-host NAME` | With `--allow-exec` or `--allow-terminal`, accept one more `Host` header name (repeatable). |
 | `--artifact-root DIR` | Also serve recorded artifact files under `DIR` (repeatable). |
+| `--detach`, `--disconnect-action`, `--shutdown` | Leave the server running in the background, and stop it; see [Stopping and detaching](#stopping-and-detaching). |
 | `--static-dir DIR` | Write a static export instead of serving. |
 | `--static-artifact-contents` | With `--static-dir`, copy previewable artifact files into the export. |
 | `--notifications` | Default state of the browser notification toggle. |
+
+### Stopping and detaching
+
+At a terminal, `rotari web` works like `rotari run`. Once it listens, it says how:
+
+```console
+$ rotari web --allow-terminal
+rotari web listening at http://127.0.0.1:8080
+Press Ctrl-D to detach and keep the server running; Ctrl-C to stop it.
+Shells end 3h after the last page closes (--terminal-idle-timeout), and when the server stops.
+```
+
+- **Ctrl-C** stops the server.
+- **Ctrl-D** detaches it: the prompt comes back and the server keeps running in the background, as
+  `--detach` would have started it. It prints the URL and PID, and `rotari web --shutdown` stops it.
+  There is one detached server per user and host, so Ctrl-D while another is detached says so and stays
+  attached.
+- **Closing the terminal**, or SIGHUP or SIGTERM to `rotari web`, follows `--disconnect-action`: `stop`, the
+  default, or `detach`. It can also be set as `disconnect-action` under `[web]` in a config, or in
+  `ROTARI_WEB_DISCONNECT_ACTION`. A top-level `disconnect-action` and `ROTARI_DISCONNECT_ACTION` are for
+  runs and do not apply. A `rotari web` killed outright follows it too.
+- **`--detach`** starts the server already detached, and returns once it listens.
+
+The default differs from `rotari run`'s on purpose. A run ends by itself, so leaving it running costs nothing
+later. A server runs until it is stopped, so one left behind by every closed terminal would pile up, and most
+Web tools stop when their terminal closes.
+
+At a terminal, `rotari web` therefore runs as two processes: the one you started, which shows the server's
+output, and the server, started in the background. The first goes away when you detach. Started without a
+terminal, as from a script or a service, with the default `stop`, it serves in its own process as before, and
+SIGTERM stops it.
 
 ### Setting them in a config or the environment
 
@@ -376,8 +408,10 @@ rotari web --allow-terminal
 The shells belong to the `rotari web` process, not to your browser. To have them, and what runs in them,
 outlast a closed laptop, a dropped connection, or a night away, keep that process alive and give it time:
 
-1. **Start `rotari web` with `--detach`.** It starts the server in the background, where it outlives your SSH
-   session, and returns once the server listens:
+1. **Press Ctrl-D before you go,** or start `rotari web` with `--disconnect-action detach` so a dropped
+   connection detaches it, or start it with `--detach`, which starts the server in the background, where it
+   outlives your SSH session, and returns once the server listens (see
+   [Stopping and detaching](#stopping-and-detaching)):
 
    ```console
    $ rotari web --detach --allow-terminal --terminal-idle-timeout 24h

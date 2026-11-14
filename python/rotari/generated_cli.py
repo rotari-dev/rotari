@@ -3473,6 +3473,18 @@ CLI_SCHEMA: dict[str, Any] = {
                     "name": "detach",
                 },
                 {
+                    "description": "when the terminal of an attached rotari web "
+                    "closes, or its client gets SIGHUP or SIGTERM "
+                    "or is killed, stop the server or detach it "
+                    "(default stop); Ctrl-D at a terminal always "
+                    "detaches and Ctrl-C always stops; not with "
+                    "--detach",
+                    "environment": "ROTARI_WEB_DISCONNECT_ACTION",
+                    "name": "disconnect-action",
+                    "value_name": "ACTION",
+                    "values": ["stop", "detach"],
+                },
+                {
                     "command_line_only": True,
                     "description": "stop this host's detached server (see "
                     "--detach): list what runs in its shells and "
@@ -4846,6 +4858,13 @@ CLI_SCHEMA: dict[str, Any] = {
             "description": "Default for rotari run --partial-array.",
             "job": False,
             "name": "ROTARI_RUN_PARTIAL_ARRAY",
+        },
+        {
+            "array": False,
+            "cli_default": True,
+            "description": "Default for rotari web --disconnect-action.",
+            "job": False,
+            "name": "ROTARI_WEB_DISCONNECT_ACTION",
         },
         {
             "array": False,

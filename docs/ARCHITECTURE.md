@@ -156,6 +156,12 @@ flowchart LR
    writes `<masterdir>/web/<host>.json`; [internal/webdetach](../internal/webdetach/) finds, records, and compares
    detached servers and keeps the log bounded, and [internal/lease](../internal/lease/) holds and probes the lease for it
    and for the run supervisor's `server.lock`.
+   At a terminal, or with `--disconnect-action detach`, `rotari web` is a client
+   ([cmd/rotari/web_client.go](../cmd/rotari/web_client.go)). It starts the server the same way, but with
+   pipes for its output and a lifeline whose end the server watches, and stays attached. Ctrl-C asks the server
+   to stop, and Ctrl-D asks it to detach: it takes the host's lease, records itself, and moves its output onto
+   the log with `dup3`. A disconnect, or the lifeline closing however the client went, follows the disconnect
+   action. Without a terminal, with the default action, `rotari web` serves in its own process.
    `rotari web --shutdown` ([cmd/rotari/web_shutdown.go](../cmd/rotari/web_shutdown.go)) finds that server the same
    way. It reads what its shells run from the process table (`terminal.ServerShells`), since it has no token to ask
    the server, then sends SIGTERM and waits for the lease. `POST /_server/shutdown`

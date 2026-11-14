@@ -60,6 +60,7 @@ const (
 	envWebStaticDir             = "ROTARI_WEB_STATIC_DIR"
 	envWebAllowControl          = "ROTARI_WEB_ALLOW_CONTROL"
 	envWebAuthToken             = "ROTARI_WEB_AUTH_TOKEN"
+	envWebDisconnectAction      = "ROTARI_WEB_DISCONNECT_ACTION"
 	envWebNotifications         = "ROTARI_WEB_NOTIFICATIONS"
 	envWebhookURL               = "ROTARI_WEBHOOK_URL"
 	envPrivateState             = "ROTARI_PRIVATE_STATE"

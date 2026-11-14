@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,9 +9,11 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -33,11 +36,27 @@ const (
 	webDetachFailureExcerpt = 4096
 )
 
-// webDetachedReady is what a detached server reports once it listens.
+// webDetachedReady is what a background server reports on its readiness pipe: its
+// address once it listens, and for an attached one, Event says which report this is
+// and Reason why a detach was refused.
 type webDetachedReady struct {
-	URL string `json:"url"`
-	PID int    `json:"pid"`
+	Event  string `json:"event,omitempty"`
+	URL    string `json:"url,omitempty"`
+	PID    int    `json:"pid,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
+
+// The reports of an attached server, and the client's messages on its lifeline.
+const (
+	webEventReady         = "ready"
+	webEventDetached      = "detached"
+	webEventRefused       = "refused"
+	webLifelineStop       = "stop"
+	webLifelineDetach     = "detach"
+	webLifelineDisconnect = "disconnect"
+	webDisconnectStop     = "stop"
+	webDisconnectDetach   = "detach"
+)
 
 // webDetachPaths are this host's detached-server files.
 func webDetachPaths() (webdetach.Paths, error) {
@@ -114,6 +133,9 @@ func startDetachedWeb(flags webCommandFlags, baseDir string) int {
 	}
 	fmt.Printf("rotari web listening at %s in the background (PID %d)\n", ready.URL, ready.PID)
 	printDetachedWebHelp(paths)
+	if flags.allowTerminal {
+		fmt.Fprintln(os.Stderr, webIdleTimeoutLine(flags.terminal.idleLimit))
+	}
 	return 0
 }
 
@@ -130,6 +152,11 @@ func reportDetachedWeb(running webdetach.Record, want webdetach.Settings, flags 
 		fmt.Fprintf(os.Stderr, "Sign in with user name %q and the token printed when it started; set %s to keep one token across restarts.\n", "rotari", envWebAuthToken)
 	}
 	printDetachedWebHelp(paths)
+	if running.Settings.AllowTerminal {
+		if limit, err := time.ParseDuration(running.Settings.TerminalIdleTimeout); err == nil {
+			fmt.Fprintln(os.Stderr, webIdleTimeoutLine(limit))
+		}
+	}
 	return 0
 }
 
@@ -235,28 +262,55 @@ func describeExit(err error) string {
 // lease while it runs, records itself once it listens, and keeps its log
 // bounded.
 type webDetachedChild struct {
-	paths  webdetach.Paths
-	holder *webdetach.Holder
-	ready  *os.File
+	paths webdetach.Paths
+	ready *os.File
+	// lifeline is the attached client's pipe, nil for a server started detached;
+	// action is what losing it does: stop or detach.
+	lifeline *os.File
+	action   string
+
+	mu sync.Mutex
+	// holder is set once the server holds the host's lease; record is what it
+	// publishes then, and shutdown stops the server.
+	holder   *webdetach.Holder
+	record   webdetach.Record
+	shutdown func()
+	refusal  string
 }
 
-// takeWebDetachedChild reports whether this process is a detached server, and
-// clears the mark from its environment.
-func takeWebDetachedChild() bool {
-	if os.Getenv(webDetachedChildEnv) == "" {
-		return false
-	}
+// webChildMode is what webDetachedChildEnv says this process is: a server started
+// detached, or one attached to a client, with the disconnect action after the prefix.
+const (
+	webChildDetached       = "1"
+	webChildAttachedPrefix = "attached-"
+	webAttachedLifelineFD  = 4
+)
+
+// takeWebChildMode returns webDetachedChildEnv's value, empty for a command run by
+// hand, and clears it from the environment so shells never see it.
+func takeWebChildMode() string {
+	mode := os.Getenv(webDetachedChildEnv)
 	_ = os.Unsetenv(webDetachedChildEnv)
-	return true
+	return mode
 }
 
-// holdWebDetached takes this host's lease for a detached server.
-func holdWebDetached() (*webDetachedChild, error) {
-	ready := os.NewFile(webDetachedReadyFD, "rotari-web-ready")
-	if _, err := ready.Stat(); err != nil {
-		return nil, fmt.Errorf("the readiness report of a detached rotari web is missing: %w", err)
+// inheritedFile opens a descriptor the starting command passed, closed on exec so no
+// shell inherits it.
+func inheritedFile(fd int, name string) (*os.File, error) {
+	file := os.NewFile(uintptr(fd), name)
+	if _, err := file.Stat(); err != nil {
+		return nil, fmt.Errorf("the %s of a background rotari web is missing: %w", name, err)
 	}
-	syscall.CloseOnExec(webDetachedReadyFD)
+	syscall.CloseOnExec(fd)
+	return file, nil
+}
+
+// holdWebDetached takes this host's lease for a server started detached.
+func holdWebDetached() (*webDetachedChild, error) {
+	ready, err := inheritedFile(webDetachedReadyFD, "readiness report")
+	if err != nil {
+		return nil, err
+	}
 	paths, err := webDetachPaths()
 	if err != nil {
 		_ = ready.Close()
@@ -270,10 +324,37 @@ func holdWebDetached() (*webDetachedChild, error) {
 	return &webDetachedChild{paths: paths, holder: holder, ready: ready}, nil
 }
 
-// listening records the server, reports its address to the command that
-// started it, and starts keeping the log bounded.
-func (child *webDetachedChild) listening(flags webCommandFlags, baseDir string, address net.Addr) error {
-	defer child.ready.Close()
+// attachWebChild prepares a server attached to its client, which may detach it
+// later. It holds no lease until then.
+func attachWebChild(action string) (*webDetachedChild, error) {
+	if action != webDisconnectStop && action != webDisconnectDetach {
+		return nil, fmt.Errorf("unknown disconnect action %q", action)
+	}
+	ready, err := inheritedFile(webDetachedReadyFD, "readiness report")
+	if err != nil {
+		return nil, err
+	}
+	lifeline, err := inheritedFile(webAttachedLifelineFD, "client lifeline")
+	if err != nil {
+		_ = ready.Close()
+		return nil, err
+	}
+	paths, err := webDetachPaths()
+	if err != nil {
+		_ = ready.Close()
+		_ = lifeline.Close()
+		return nil, err
+	}
+	// Its output goes to the client until it detaches; a client that is gone must not
+	// kill it on its next line.
+	signal.Ignore(syscall.SIGPIPE)
+	return &webDetachedChild{paths: paths, ready: ready, lifeline: lifeline, action: action}, nil
+}
+
+// listening runs once the server listens. A server started detached records itself,
+// reports its address, and starts keeping its log bounded. An attached one reports its
+// address and follows its client from then on; shutdown stops it.
+func (child *webDetachedChild) listening(flags webCommandFlags, baseDir string, address net.Addr, shutdown func()) error {
 	port := 0
 	if tcp, ok := address.(*net.TCPAddr); ok {
 		port = tcp.Port
@@ -284,15 +365,140 @@ func (child *webDetachedChild) listening(flags webCommandFlags, baseDir string, 
 	}
 	executable, _ := os.Executable()
 	url := "http://" + address.String()
-	record := webdetach.Record{Host: child.paths.Host, PID: os.Getpid(), URL: url, StartedAt: time.Now().UTC(), Version: versionString(), Executable: executable, Settings: settings}
-	if err := child.holder.Publish(record); err != nil {
+	child.mu.Lock()
+	child.record = webdetach.Record{Host: child.paths.Host, PID: os.Getpid(), URL: url, StartedAt: time.Now().UTC(), Version: versionString(), Executable: executable, Settings: settings}
+	child.shutdown = shutdown
+	child.mu.Unlock()
+	if child.lifeline != nil {
+		// announced reports readiness once the address line is out.
+		return nil
+	}
+	defer child.ready.Close()
+	if err := child.holder.Publish(child.record); err != nil {
 		return fmt.Errorf("failed to record the detached rotari web: %w", err)
 	}
-	if err := json.NewEncoder(child.ready).Encode(webDetachedReady{URL: url, PID: os.Getpid()}); err != nil {
+	if err := child.send(webDetachedReady{URL: url, PID: os.Getpid()}); err != nil {
 		return fmt.Errorf("failed to report readiness: %w", err)
 	}
 	go child.keepLogBounded()
 	return nil
+}
+
+// announced tells an attached server's client that it listens, after the server has
+// printed its address, so the client's hints follow that line, and starts following
+// the client.
+func (child *webDetachedChild) announced() error {
+	if child.lifeline == nil {
+		return nil
+	}
+	child.mu.Lock()
+	record := child.record
+	child.mu.Unlock()
+	if err := child.send(webDetachedReady{Event: webEventReady, URL: record.URL, PID: record.PID}); err != nil {
+		return fmt.Errorf("failed to report readiness: %w", err)
+	}
+	go child.followClient()
+	return nil
+}
+
+func (child *webDetachedChild) send(event webDetachedReady) error {
+	return json.NewEncoder(child.ready).Encode(event)
+}
+
+// followClient reads the client's lifeline: stop, detach, or disconnect, the last
+// also being what its end means, however the client went.
+func (child *webDetachedChild) followClient() {
+	lines := bufio.NewScanner(child.lifeline)
+	for lines.Scan() {
+		switch lines.Text() {
+		case webLifelineStop:
+			child.shutdown()
+			return
+		case webLifelineDetach:
+			if child.detach() {
+				return
+			}
+		case webLifelineDisconnect:
+			child.disconnected()
+			return
+		}
+	}
+	child.disconnected()
+}
+
+// disconnected follows the disconnect action: detach when asked and possible, stop
+// otherwise, saying in the log why it did not detach.
+func (child *webDetachedChild) disconnected() {
+	if child.action == webDisconnectDetach {
+		if child.detach() {
+			return
+		}
+		child.noteInLog("rotari web: stopping, since its client went and it could not detach: " + child.lastRefusal())
+	}
+	child.shutdown()
+}
+
+// detach takes the host's lease, records the server, and moves its output to the log,
+// telling the client; it refuses, telling the client why, when another server holds the
+// lease or a step fails.
+func (child *webDetachedChild) detach() bool {
+	refuse := func(reason string) bool {
+		child.mu.Lock()
+		child.refusal = reason
+		child.mu.Unlock()
+		_ = child.send(webDetachedReady{Event: webEventRefused, Reason: reason})
+		return false
+	}
+	holder, err := webdetach.Hold(child.paths, stateinternal.DirectoryMode())
+	if errors.Is(err, webdetach.ErrRunning) {
+		if running, found, findErr := webdetach.Find(child.paths); findErr == nil && found {
+			return refuse(fmt.Sprintf("a detached rotari web is already running on this host at %s (PID %d); stop it with rotari web --shutdown first", running.URL, running.PID))
+		}
+		return refuse(err.Error())
+	}
+	if err != nil {
+		return refuse(err.Error())
+	}
+	child.mu.Lock()
+	record := child.record
+	child.mu.Unlock()
+	if err := holder.Publish(record); err != nil {
+		_ = holder.Close()
+		return refuse("failed to record the detached rotari web: " + err.Error())
+	}
+	logFile, _, err := webdetach.OpenLog(child.paths, stateinternal.DirectoryMode())
+	if err == nil {
+		err = redirectOutput(logFile)
+		_ = logFile.Close()
+	}
+	if err != nil {
+		_ = holder.Close()
+		return refuse("failed to move its output to " + child.paths.Log + ": " + err.Error())
+	}
+	child.mu.Lock()
+	child.holder = holder
+	child.mu.Unlock()
+	go child.keepLogBounded()
+	_ = child.send(webDetachedReady{Event: webEventDetached, URL: record.URL, PID: record.PID})
+	_ = child.ready.Close()
+	_ = child.lifeline.Close()
+	return true
+}
+
+func (child *webDetachedChild) lastRefusal() string {
+	child.mu.Lock()
+	defer child.mu.Unlock()
+	return child.refusal
+}
+
+// noteInLog appends line to the host's log, for a server whose client is gone.
+func (child *webDetachedChild) noteInLog(line string) {
+	logFile, _, err := webdetach.OpenLog(child.paths, stateinternal.DirectoryMode())
+	if err != nil {
+		return
+	}
+	_, _ = fmt.Fprintln(logFile, time.Now().Format(time.RFC3339)+" "+line)
+	_ = logFile.Close()
 }
 
 func (child *webDetachedChild) keepLogBounded() {
@@ -309,8 +515,15 @@ func (child *webDetachedChild) keepLogBounded() {
 	}
 }
 
+// close releases the lease and removes the record of a server that holds them.
 func (child *webDetachedChild) close() {
-	if err := child.holder.Close(); err != nil {
+	child.mu.Lock()
+	holder := child.holder
+	child.mu.Unlock()
+	if holder == nil {
+		return
+	}
+	if err := holder.Close(); err != nil {
 		printWarningf("WARNING: %v", err)
 	}
 }

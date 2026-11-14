@@ -186,6 +186,7 @@ choices unset; a plain string option takes the empty string.
 | `ROTARI_RUN_STAGE` | yes | no | no | Default for rotari run --stage. |
 | `ROTARI_RUN_MATRIX` | yes | no | no | Default for rotari run --matrix. |
 | `ROTARI_RUN_PARTIAL_ARRAY` | yes | no | no | Default for rotari run --partial-array. |
+| `ROTARI_WEB_DISCONNECT_ACTION` | yes | no | no | Default for rotari web --disconnect-action. |
 | `ROTARI_WEB_ALLOW_EXEC` | yes | no | no | Default for rotari web --allow-exec. |
 | `ROTARI_WEB_ALLOW_TERMINAL` | yes | no | no | Default for rotari web --allow-terminal. |
 | `ROTARI_WEB_TERMINAL_IDLE_TIMEOUT` | yes | no | no | Default for rotari web --terminal-idle-timeout. |

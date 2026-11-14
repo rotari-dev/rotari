@@ -461,6 +461,7 @@ var cliCommandSpecs = []cliCommandSpec{
 			cliFlagSpec{Name: "host", Description: "HTTP listen host (live server only; cannot be combined with --static-dir); with --allow-exec or --allow-terminal, not read from a workspace, basedir, or project config", ValueName: "HOST"},
 			cliFlagSpec{Name: "port", Description: "HTTP listen port (live server only; cannot be combined with --static-dir)", ValueName: "PORT"},
 			cliFlagSpec{Name: "detach", Description: "start the live server in the background, where it outlives the session that started it, and return once it listens, printing its URL, PID, and log; if one already runs on this host for this user, report it instead, or fail if its options differ; stop it with --shutdown; cannot be combined with --static-dir", CommandLineOnly: true},
+			cliFlagSpec{Name: "disconnect-action", Description: "when the terminal of an attached rotari web closes, or its client gets SIGHUP or SIGTERM or is killed, stop the server or detach it (default stop); Ctrl-D at a terminal always detaches and Ctrl-C always stops; not with --detach", ValueName: "ACTION", Values: []string{"stop", "detach"}},
 			cliFlagSpec{Name: "shutdown", Description: "stop this host's detached server (see --detach): list what runs in its shells and ask first when anything does, send it SIGTERM, and wait for it to stop; takes no other server option", CommandLineOnly: true},
 			cliFlagSpec{Name: "yes", Description: "with --shutdown, stop the server without asking, even when its shells run something", CommandLineOnly: true},
 			cliFlagSpec{Name: "static-dir", Description: "generate a static web UI", ValueName: "DIR"},
@@ -1229,6 +1230,11 @@ func cliCommandEnvironmentVariable(command, name string) string {
 			command = "run" // retry parses the shared run flag set.
 		}
 		return commandQuietEnvironmentVariable(command)
+	}
+	if command == "web" && name == "disconnect-action" {
+		// Not run's ROTARI_DISCONNECT_ACTION, whose values (detach, cancel) and
+		// intent are a run's.
+		return envWebDisconnectAction
 	}
 	if environment, ok := cliEnvironmentVariables[name]; ok {
 		return environment
