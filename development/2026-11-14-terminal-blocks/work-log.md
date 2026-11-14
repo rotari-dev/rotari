@@ -204,10 +204,21 @@
 - **Change:** the `.zshenv` that `TestZshIntegrationReadsTheUsersFilesAndMarks` and `TestTerminalShellIntegration`
   write starts with `unsetopt GLOBAL_RCS`, so that the host's `/etc/zprofile`, `/etc/zshrc`, and `/etc/zlogin` are
   skipped.
-- **Reason:** on CI (macOS, by its paths), the host's zsh files ran `compinit`, which asked "Ignore insecure
+- **Reason:** on CI (Linux, since its `/etc/profile` is systemd's), the host's zsh files ran `compinit`, which asked "Ignore insecure
   directories and continue [y] or abort compinit [n]?" before the first prompt and took the `f` of the typed `false`
   as its answer, leaving `alse`. Not rotari's doing: the same question shows in any terminal on that host.
 - **Plan impact:** none.
 - **Validation:** both tests pass here. `TestOldBashIntegrationMarksCommandsByTheDebugTrap` also failed on that run,
   but the paste had no detail; building bash 3.2 here to reproduce it was refused by the permission check, so it waits
   for the full failure from CI.
+
+## 2026-11-14 22:10 +09:00 — CI: the old bash test and a host's PS0
+
+- **Change:** `TestOldBashIntegrationMarksCommandsByTheDebugTrap` checks that `PS0` holds no `C`, not that it is
+  empty, and its `.bash_profile` sets `PS0='[ps0]'` so that this runs here too.
+- **Reason:** on CI the host's `/etc/profile` (systemd's `80-systemd-osc-context.sh`) sets
+  `PS0='$(__systemd_osc_context_ps0)'`; the test had assumed no `PS0`. rotari's script was right: on the old-bash way
+  it leaves `PS0` alone.
+- **Plan impact:** none.
+- **Validation:** the earlier test, given a profile's `PS0`, fails here as on CI (`"[ps0]-gone"`); the new one passes,
+  three runs in a row with the other integration tests.
