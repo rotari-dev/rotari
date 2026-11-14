@@ -365,7 +365,7 @@ func (child *webDetachedChild) listening(flags webCommandFlags, baseDir string, 
 		return err
 	}
 	executable, _ := os.Executable()
-	url := "http://" + address.String()
+	url := "http://" + address.String() // NOSONAR: rotari web serves plain HTTP; this records the address it actually listens on.
 	child.mu.Lock()
 	child.record = webdetach.Record{Host: child.paths.Host, PID: os.Getpid(), URL: url, StartedAt: time.Now().UTC(), Version: versionString(), Executable: executable, Settings: settings, Binary: recordedBinary()}
 	child.shutdown = shutdown
