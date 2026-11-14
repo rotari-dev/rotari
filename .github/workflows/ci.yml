@@ -15,7 +15,14 @@ permissions:
 
 jobs:
   go:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    # The macOS leg is being triaged (development/2026-11-14-ci-macos/plan.md):
+    # it reports failures without failing the workflow until it passes.
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -33,7 +40,18 @@ jobs:
           cache: "npm"
 
       - name: Install shell completion and read-count test dependencies
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zsh fish strace
+
+      # zsh comes with macOS, and strace does not exist there.
+      - name: Install shell completion test dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install fish
+
+      # Chrome is installed as an app bundle, not on PATH, on macOS runners.
+      - name: Point browser tests at Chrome (macOS)
+        if: runner.os == 'macOS'
+        run: echo "ROTARI_TEST_CHROME=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" >> "$GITHUB_ENV"
 
       - name: Install JavaScript test dependencies
         run: npm ci
@@ -53,6 +71,7 @@ jobs:
         run: gotestsum --format pkgname-and-test-fails -- -timeout 15m -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./...
 
       - name: Upload coverage to Codecov
+        if: runner.os == 'Linux'
         uses: codecov/codecov-action@v5
         with:
           files: coverage.out
