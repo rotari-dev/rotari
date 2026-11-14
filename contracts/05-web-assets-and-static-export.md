@@ -1409,8 +1409,8 @@ reason (400) when it is not an existing directory or comes with `run`, never sta
 `/_terminal/shells/ID`, which ends one on `DELETE` (404 if it is not running) and names it on `PATCH` with
 `{"name": ...}`, up to 64 characters on one line, or empty for none. `GET /_terminal/shells/ID/preview`
 says where a shell is now and what it runs without connecting to it, so it takes the shell from no page and
-leaves its output unseen: `"cwd"`, the shell's own working directory, or `"cwd_error"` saying why it could not be
-found, and `"command"`, the command line of the program the shell runs in the foreground, absent while the shell
+leaves its output unseen: `"cwd"`, the working directory of its current shell (WEB-52), or `"cwd_error"` saying why it could not be
+found, and `"command"`, the command line of the program the current shell runs in the foreground, absent while it
 is at its prompt, or `"command_error"` saying why it could not be found, and `"processes"`, the processes below the shell with their
 `pid`, `ppid`, `depth` (1 for its children), and `command`, each child followed by its own, or `null` with
 `"processes_error"` saying why they could not be listed (404 if the shell is not running, 405 for other methods).
@@ -1443,9 +1443,9 @@ basedir, as many for each basedir's own, and thirty-two in all, or what
 rejected on the command line without `--allow-terminal`, and with a bad value from anywhere when the terminal is on,
 before the server starts. `--allow-terminal`, `--allowed-host`, and these options may also come from the environment or
 a config, as WEB-36 says. A shell's `unseen_output` says it has printed something since a connection last showed it, and starts false
-until one has; its `command_finished` says a command it ran in its foreground ended, back at its prompt, while no
-connection showed it, and a connection showing it clears it; its `running` says a command holds its foreground as
-the list is made; its `started_at` is when it started and its `active_at` when it last printed or was typed into,
+until one has; its `command_finished` says a command it ran in its foreground ended, back at its current shell's prompt
+(WEB-52), while no connection showed it, and a connection showing it clears it; its `running` says a command holds
+its foreground, rather than its current shell at its prompt, as the list is made; its `started_at` is when it started and its `active_at` when it last printed or was typed into,
 which the list's `now` dates by the server's clock. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
 use in its project when it started, and its `link` is the page that shows it: its project's page, its basedir's
 All projects for a basedir's own shell, and `/activity` for one of no project. A connection names its shell with
@@ -1463,6 +1463,22 @@ limit is checked at the package level by `TestIdleLimitAppliesToTheShellsTogethe
 `TestKeepAliveHoldsTheIdleLimitOff`. A process that left its session or ignores the hangup,
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
+
+**WEB-52** With `rotari web --allow-terminal`, each shell has a current shell, the one its user is in: the shell the
+server started it with, or an interactive shell started by hand inside it. It is the leader of the terminal's
+foreground process group when that is the server's shell or an interactive shell, and otherwise, while a command
+runs, the nearest interactive shell above that leader among its parent processes, or else the server's shell. A
+process is an interactive shell when its program (a leading `-` aside) is `bash`, `zsh`, `fish`, `sh`, `dash`, `ksh`,
+`mksh`, `tcsh`, or `csh` and its command line has options only, the value of an option that takes one (such as
+`--init-file`, `--rcfile`, `-o`, `-O`, `--init-command`) skipped, with no `-c` (alone or among other letters) or
+`--command` and no operand, or has `-i` or `--interactive`; so `zsh`, `-zsh`, `bash -l`, and `zsh -i` are, and
+`bash x.sh` and `sh -c 'make'` are not. The shell is at its prompt when the foreground group's leader is its current
+shell; otherwise a command runs. Where the shell is (the preview's `cwd`, the Explorer's Follow, Recent directories)
+and whether it is at its prompt (the preview's `command`, `running`, `command_finished`, typing at the prompt) are its
+current shell's. A shell inside `tmux`, `screen`, or `ssh` is on another terminal, which these do not follow.
+Implemented in `internal/terminal/shells.go` and `Session` in `internal/terminal/session.go`; covered by
+[`TestTerminalFollowsAShellStartedInside`](../conformance/05-web/terminal_nested_test.go), `TestInteractiveShell`, and
+`TestAShellStartedInsideIsTheCurrentShell`.
 
 **WEB-51** With `rotari web --allow-terminal`, a right click in a pane opens the panel's menu by the pointer and keeps
 the browser's from opening, unless Shift is held (the browser's opens) or the program asked for mouse tracking (it
@@ -1601,7 +1617,7 @@ server cannot be asked, nothing is a link and a note says so once. Implemented i
 
 **WEB-45** With `rotari web --allow-terminal`, the shells of one group (a project's, a basedir's own, or those of no
 project, as WEB-34 groups them) share a history of where they have been. The server reads a shell's own working
-directory once its output has paused at its prompt (the shell holding its terminal's foreground) after input with a
+directory, its current shell's (WEB-52), once its output has paused at that shell's prompt after input with a
 carriage return or line feed, or, when more such input comes before that, at once, before passing it on; a directory
 other than the one it last read for that shell goes to the front of the group's history; where a shell starts enters when it starts, named without symbolic links. Each directory appears
 once, newest first, at most 20. A directory changed by a program in front of the shell, such as a nested shell or
@@ -1677,7 +1693,7 @@ error (422), as is any other failure, with the reason. Implemented in `internal/
 focused pane's shell is: a column at the left of the panel's body wherever the panel is, beside the panes, which keep
 at least 200 pixels however far its edge is dragged. It is open unless closed with the first button of the bar, and
 the browser remembers that and its width.
-While **Follow** is on, its root is the shell's directory, looked up on the server and listed again with the panel's
+While **Follow** is on, its root is the directory of the shell's current shell (WEB-52), looked up on the server and listed again with the panel's
 shells, shortly after Enter is typed in that pane, when another shell is shown there, and on **Refresh**; **Up**
 shows the parent and turns Follow off, and nothing limits how far up or down it goes. `GET
 /_terminal/files?shell=ID` lists the directory a running shell is in now (404 for a shell not running), and

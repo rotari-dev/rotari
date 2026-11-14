@@ -306,6 +306,11 @@ Nothing is typed while a program such as `vim` or `ssh` runs in the shell, and a
 also show its directory in the Explorer, open a new tab there, or copy the path. A directory that is no longer there
 is greyed out, as is a run whose directory cannot be read, with the reason.
 
+A shell you start by hand inside a tab, such as `zsh` typed at a bash prompt, is followed as the shell you are in: the
+Explorer follows its directory, **Recent directories** records where it goes, and typing at the prompt treats its
+prompt as the prompt. A shell inside `tmux`, `screen`, or `ssh` is not followed, and blocks need the shell itself to
+mark its commands, which one you start by hand does not unless your startup file makes it.
+
 The list needs no setup in your shell: rotari looks at where each shell is when it is back at its prompt after you
 press Enter, so `cd`, `pushd`, and tools such as `z` all count, and so does where each shell starts. A directory
 changed inside another program, such as a nested shell, `ssh`, or `tmux`, does not. It keeps the last 20
