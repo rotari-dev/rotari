@@ -2,7 +2,7 @@
 
 Created: 2026-11-15
 Status: Rewritten on 2026-11-15 after the user asked to avoid a line in one's own startup file, and accepted with its
-side effects and the open questions answered as proposed; phase 1 is done and phase 2 (marks inside) is next. See
+side effects and the open questions answered as proposed; phases 1 and 2 are done and phase 3 (contracts and docs) is next. See
 [work-log.md](work-log.md).
 
 ## Goal
