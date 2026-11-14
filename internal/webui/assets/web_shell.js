@@ -3539,15 +3539,18 @@ function shellWord(value) {
   const sendExplorerPath = async (path) => {
     await window.sendToTerminalAndSay(pathFromShell(path), { word: true });
   };
-  // copyText copies text and says so, naming it as said, or as itself.
+  // copyText copies text and says so, naming it as said, or as itself, and says whether it
+  // could.
   const copyText = async (text, said = text) => {
     try {
       if (navigator.clipboard?.writeText)
         await navigator.clipboard.writeText(text);
       else copyJobsValueFallback(text);
       showNote("Copied " + said, 2500);
+      return true;
     } catch (error) {
       showNote("Copy failed: " + error.message, 6000);
+      return false;
     }
   };
   // Recent directories: where the shells of the focused pane's group have been, and where
@@ -5277,21 +5280,71 @@ function shellWord(value) {
     const place = clickTarget(pane, col, row);
     if (!place) return false;
     const buffer = pane.term.buffer.active;
-    const index = charsFrom(buffer, place.start, place.target);
+    moveToIndex(pane, place, charsFrom(buffer, place.start, place.target));
+    return true;
+  };
+  // moveToIndex takes the cursor to a character index of the command line that starts at
+  // place.start, with the cursor at place.cursor.
+  const moveToIndex = (pane, place, index) => {
+    const buffer = pane.term.buffer.active;
     const steps = index - charsFrom(buffer, place.start, place.cursor);
-    if (!steps) return true;
+    if (!steps) return;
     // A shell that said it can is told the index, and stops at its line's end; arrows past
     // it could take a suggestion shown there.
     if (place.block.goto) {
       send(pane, new TextEncoder().encode("\x1b[9998~" + index + ";"));
-      return true;
+      return;
     }
     const prefix = pane.term.modes.applicationCursorKeysMode
       ? "\x1bO"
       : "\x1b[";
     const key = prefix + (steps > 0 ? "C" : "D");
     send(pane, new TextEncoder().encode(key.repeat(Math.abs(steps))));
-    return true;
+  };
+  // cutPlace is where the selection lies in the command line typed at the prompt, as its
+  // first and past-last character indexes, or null when it is not wholly inside it.
+  const cutPlace = (pane) => {
+    const { term } = pane;
+    const buffer = term.buffer.active;
+    const block = promptBlock(pane);
+    const selected = term.hasSelection() && term.getSelectionPosition();
+    if (!block || !selected || buffer.type === "alternate") return null;
+    const start = { y: block.input.marker.line, x: block.input.x };
+    const cursor = { y: buffer.baseY + buffer.cursorY, x: buffer.cursorX };
+    let last = cursor.y;
+    while (buffer.getLine(last + 1)?.isWrapped) last++;
+    const lastRow = buffer.getLine(last);
+    const end = {
+      y: last,
+      x: Math.max(
+        lastRow ? rowEnd(lastRow) : 0,
+        last === cursor.y ? cursor.x : 0,
+      ),
+    };
+    const before = (a, b) => a.y < b.y || (a.y === b.y && a.x < b.x);
+    let to = selected.end;
+    if (before(selected.start, start) || before(end, selected.start))
+      return null;
+    // A selection run past the line's text, on its last row, ends with the text.
+    if (before(end, to)) to = end;
+    const from = charsFrom(buffer, start, selected.start);
+    const past = charsFrom(buffer, start, to);
+    if (to.y > last || past <= from) return null;
+    return { block, start, cursor, from, past };
+  };
+  // cutSelection copies the selection and then takes it out of the command line: the
+  // cursor to its end, and a Backspace for each of its characters. A failed copy cuts
+  // nothing, so that the text is not lost.
+  const cutSelection = async (pane, place) => {
+    const { term } = pane;
+    if (!(await copyText(term.getSelection(), "the selection"))) return;
+    moveToIndex(pane, place, place.past);
+    send(
+      pane,
+      new TextEncoder().encode("\x7f".repeat(place.past - place.from)),
+    );
+    term.clearSelection();
+    showNote("Cut the selection", 2500);
   };
   // screenCell is the screen cell under a pointer event, or null off the screen.
   const screenCell = (pane, event) => {
@@ -5342,11 +5395,31 @@ function shellWord(value) {
     if (event.shiftKey || term.modes.mouseTrackingMode !== "none") return;
     if (pane !== focused) focusPane(pane);
     const selection = term.hasSelection() ? term.getSelection() : "";
-    openPanelMenu(event, [
+    const cut = selection ? cutPlace(pane) : null;
+    const choices = [
+      ["Cut", () => cutSelection(pane, cut), Boolean(cut)],
       ["Copy", () => copyText(selection, "the selection"), Boolean(selection)],
       ["Paste", () => pasteClipboard(pane), true],
       ["Select all", () => term.selectAll(), true],
-    ]);
+    ];
+    // On a command's prompt or output, that command's copies, as its mark offers them.
+    const cell = screenCell(pane, event);
+    const block =
+      cell && term.buffer.active.type !== "alternate"
+        ? blockAt(pane, term.buffer.active.viewportY + cell.row)
+        : null;
+    if (block) {
+      const command = block.command();
+      choices.push(
+        ["Copy output", () => copyBlockOutput(pane, block), true],
+        [
+          "Copy command",
+          () => copyText(command, "the command"),
+          Boolean(command),
+        ],
+      );
+    }
+    openPanelMenu(event, choices);
   };
   // pasteClipboard pastes what the clipboard holds, as Ctrl+V would: bracketed when the
   // program asked, and with no Enter of its own. The browser may refuse to let the page

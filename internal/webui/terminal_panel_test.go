@@ -299,6 +299,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
         modes = { bracketedPasteMode: false, applicationCursorKeysMode: false, mouseTrackingMode: 'none' };
         hasSelection() { return Boolean(this.selected); }
         getSelection() { return this.selected || ''; }
+        getSelectionPosition() { return this.selected ? this.selectedRange : undefined; }
+        clearSelection() { this.selected = false; }
         selectAll() { this.allSelected = true; }
         options = {};
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
@@ -3885,10 +3887,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     await wait(20);
   };
   const rcNote = () => rc.document.querySelector('.terminal-send-note')?.textContent;
-  assert.deepEqual(rightClick(), { prevented: true, items: [['Copy', false], ['Paste', true], ['Select all', true]] });
+  assert.deepEqual(rightClick(), { prevented: true, items: [['Cut', false], ['Copy', false], ['Paste', true], ['Select all', true]] });
   // Copy copies the selection.
   rcTerm.selected = 'ls -l';
-  assert.deepEqual(rightClick().items[0], ['Copy', true]);
+  assert.deepEqual(rightClick().items.slice(0, 2), [['Cut', false], ['Copy', true]], 'Cut of output that is no command line');
   await rcChoose('Copy');
   assert.deepEqual(rcCopied, ['ls -l']);
   assert.equal(rcNote(), 'Copied the selection');
@@ -3915,6 +3917,65 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   rcTerm.modes.mouseTrackingMode = 'vt200';
   assert.deepEqual(rightClick(), { prevented: false, items: [] }, 'a program that takes the mouse got the menu');
   rcTerm.modes.mouseTrackingMode = 'none';
+  // Cut takes a selection out of the command line typed at the prompt: copied, the cursor to
+  // its end, and a Backspace per character. "echo 日本abc" is typed after "$ ".
+  rcSocket.readyState = 1;
+  const rcScreen = rc.document.createElement('div');
+  rcScreen.className = 'xterm-screen';
+  rcScreen.getBoundingClientRect = () => ({ top: 100, left: 20, width: 800, height: 240, bottom: 340, right: 820 });
+  rcTerm.element = rc.document.createElement('div');
+  rcTerm.element.append(rcScreen);
+  rcTerm.lines = ['$ make', 'built', '$ echo \u65e5\0\u672c\0abc', ''];
+  rcTerm.osc(133, 'A', 0, 0); rcTerm.osc(133, 'B', 2, 0); rcTerm.osc(133, 'C', 0, 1); rcTerm.osc(133, 'D;0', 0, 2);
+  rcTerm.osc(133, 'A', 0, 2); rcTerm.osc(133, 'B', 2, 2);
+  Object.assign(rcTerm.buffer.active, { cursorX: 14, cursorY: 2, baseY: 0, viewportY: 0 });
+  const select = (text, fromX, fromY, toX, toY) => { rcTerm.selected = text; rcTerm.selectedRange = { start: { x: fromX, y: fromY }, end: { x: toX, y: toY } }; };
+  const sentBy = async (label, at = {}) => {
+    const before = rcSocket.sent.length;
+    rightClick(at);
+    await rcChoose(label);
+    return rcSocket.sent.slice(before).map((data) => (typeof data === 'string' ? data : Buffer.from(data).toString())).join('');
+  };
+  rcCopied.length = 0;
+  select('\u672ca', 9, 2, 12, 2);
+  assert.deepEqual(rightClick().items[0], ['Cut', true]);
+  assert.equal(await sentBy('Cut'), '\x1b[D\x1b[D' + '\x7f\x7f', 'Cut of a wide character and a letter, from the line\'s end');
+  assert.deepEqual(rcCopied, ['\u672ca']);
+  assert.equal(rcNote(), 'Cut the selection');
+  assert.equal(rcTerm.selected, false, 'the selection stayed after Cut');
+  // A selection run past the text ends with it.
+  select('bc', 12, 2, 40, 2);
+  assert.equal(await sentBy('Cut'), '\x7f\x7f');
+  // Not wholly in the command line: from the prompt, or on output.
+  select('$ echo', 0, 2, 6, 2);
+  assert.deepEqual(rightClick().items[0], ['Cut', false], 'Cut of the prompt');
+  select('built', 0, 1, 5, 1);
+  assert.deepEqual(rightClick().items[0], ['Cut', false], 'Cut of output');
+  // A failed copy cuts nothing.
+  Object.defineProperty(rc.window.navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('denied'); }, readText: () => rcClipboard() } });
+  select('abc', 11, 2, 14, 2);
+  assert.equal(await sentBy('Cut'), '', 'a failed copy cut the text');
+  assert.equal(rcNote(), 'Copy failed: denied');
+  Object.defineProperty(rc.window.navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => rcCopied.push(text), readText: () => rcClipboard() } });
+  // A shell that takes an index, as rotari's zsh, is told the selection's end.
+  rcTerm.lines[3] = '$ echo abc';
+  rcTerm.lines.push('');
+  rcTerm.osc(133, 'A;rotari_goto=1', 0, 3); rcTerm.osc(133, 'B', 2, 3);
+  Object.assign(rcTerm.buffer.active, { cursorX: 10, cursorY: 3 });
+  select('ec', 2, 3, 4, 3);
+  assert.equal(await sentBy('Cut'), '\x1b[9998~2;' + '\x7f\x7f');
+  rcTerm.selected = false;
+  // On a command's output, the menu has that command's copies too; not on a prompt's line
+  // with no command yet.
+  const onRow = (row) => ({ clientX: 100, clientY: 100 + row * 10 + 5 });
+  assert.deepEqual(rightClick(onRow(1)).items.slice(4), [['Copy output', true], ['Copy command', true]]);
+  rcCopied.length = 0;
+  rightClick(onRow(1));
+  await rcChoose('Copy output');
+  rightClick(onRow(0));
+  await rcChoose('Copy command');
+  assert.deepEqual(rcCopied, ['built', 'make']);
+  assert.deepEqual(rightClick(onRow(3)).items.length, 4, 'copies of a prompt with no command yet');
   }
 
   // Blocks acted on: Commands lists the pane's commands, newest first, to go to one or copy
