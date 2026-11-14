@@ -1,8 +1,9 @@
 # Plan: Marks from shells started inside the Web terminal's shells
 
 Created: 2026-11-15
-Status: Proposed; rewritten on 2026-11-15 after the user asked to avoid a line in one's own startup file and accepted
-making it automatic with its side effects; waiting for the user's decision on the open questions.
+Status: Rewritten on 2026-11-15 after the user asked to avoid a line in one's own startup file, and accepted with its
+side effects and the open questions answered as proposed; phase 1 is done and phase 2 (marks inside) is next. See
+[work-log.md](work-log.md).
 
 ## Goal
 
@@ -89,7 +90,10 @@ them](../2026-11-15-terminal-nested-shells/plan.md), which made the Explorer and
 - Marks through `ssh`, `tmux`, or `screen`, or from a shell started with a cleaned environment (`env -i`, `sudo`).
 - Removing old directories of files; each is a few kilobytes.
 
-## Open questions
+## Settled questions
+
+Both were accepted as proposed on 2026-11-15.
+
 
 1. **zsh inside zsh.** Proposed: `ZDOTDIR` exported only for command lines starting with `zsh` (decision 3). The
    alternative exports it for every command, which also reaches a zsh started by a script or a program, at the cost of
