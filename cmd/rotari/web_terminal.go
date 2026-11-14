@@ -13,15 +13,17 @@ import (
 
 // Defaults of the Web UI's shells.
 const (
-	webTerminalIdleLimit  = 3 * time.Hour
+	// webTerminalIdleLimit of 0 lets shells run as long as the server, whether or not a
+	// page is open.
+	webTerminalIdleLimit  = time.Duration(0)
 	webTerminalRingSize   = "256KiB"
 	webTerminalShellLimit = 32
 	webTerminalGroupLimit = 8
 	// webTerminalDefaultShell runs when neither --terminal-shell nor $SHELL says.
 	webTerminalDefaultShell = "/bin/sh"
-	// webTerminalMinIdleLimit stays well above how often an open page says so, which a
-	// browser can slow to about a minute in the background. Under it, an open page's
-	// shells could end.
+	// webTerminalMinIdleLimit, for a limit other than 0, stays well above how often an
+	// open page says so, which a browser can slow to about a minute in the background.
+	// Under it, an open page's shells could end.
 	webTerminalMinIdleLimit = 2 * time.Minute
 	webTerminalMinRingSize  = 1 << 10
 	webTerminalMaxRingSize  = 64 << 20
@@ -75,8 +77,8 @@ func newWebTerminalSettings(idleLimit time.Duration, shellLimit, groupLimit int,
 		}
 		return settings, err
 	}
-	if idleLimit < webTerminalMinIdleLimit {
-		return fail("terminal-idle-timeout", fmt.Errorf("--terminal-idle-timeout %s must be at least %s", idleLimit, webTerminalMinIdleLimit))
+	if idleLimit != 0 && idleLimit < webTerminalMinIdleLimit {
+		return fail("terminal-idle-timeout", fmt.Errorf("--terminal-idle-timeout %s must be 0 (no limit) or at least %s", idleLimit, webTerminalMinIdleLimit))
 	}
 	if shellLimit < 1 {
 		return fail("terminal-max-shells", fmt.Errorf("--terminal-max-shells %d must be at least 1", shellLimit))

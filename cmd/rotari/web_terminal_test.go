@@ -36,8 +36,7 @@ func TestNewWebTerminalSettings(t *testing.T) {
 		size, shell   string
 		says          string
 	}{
-		{0, 1, 1, "1KiB", "", "--terminal-idle-timeout"},
-		{time.Minute, 1, 1, "1KiB", "", "--terminal-idle-timeout"},
+		{time.Minute, 1, 1, "1KiB", "", "must be 0 (no limit) or at least 2m0s"},
 		{-time.Hour, 1, 1, "1KiB", "", "--terminal-idle-timeout"},
 		{time.Hour, 0, 1, "1KiB", "", "--terminal-max-shells"},
 		{time.Hour, 1, 0, "1KiB", "", "--terminal-max-shells-per-project"},
@@ -47,6 +46,17 @@ func TestNewWebTerminalSettings(t *testing.T) {
 		if _, err := newWebTerminalSettings(test.idle, test.shells, test.group, test.size, test.shell, nil); err == nil || !strings.Contains(err.Error(), test.says) {
 			t.Errorf("%+v: %v", test, err)
 		}
+	}
+}
+
+// An idle limit of 0, the default, means none.
+func TestWebTerminalIdleLimitZeroIsNone(t *testing.T) {
+	settings, err := newWebTerminalSettings(0, 1, 1, "1KiB", "", nil)
+	if err != nil || settings.idleLimit != 0 {
+		t.Fatalf("an idle limit of 0: %+v, %v", settings, err)
+	}
+	if webTerminalIdleLimit != 0 {
+		t.Errorf("the default idle limit is %v, want 0 (none)", webTerminalIdleLimit)
 	}
 }
 

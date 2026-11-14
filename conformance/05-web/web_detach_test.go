@@ -85,6 +85,9 @@ func TestWebDetachRunsInTheBackground(t *testing.T) {
 	if !strings.Contains(first.Stdout, "Log: "+log) || !strings.Contains(first.Stdout, "rotari web --shutdown") {
 		t.Errorf("--detach did not name its log and how to stop it:\n%s", first.Stdout)
 	}
+	if !strings.Contains(first.Stderr, "Shells end when the server stops or you sign out.") {
+		t.Errorf("--detach did not say how long shells last:\n%s", first.Stderr)
+	}
 	if session := sessionOf(t, server.pid); session != server.pid {
 		t.Errorf("the detached server is in session %d, not one of its own", session)
 	}

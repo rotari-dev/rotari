@@ -1454,11 +1454,12 @@ connections and replays recent output to the next, except what came before a `cl
 the last with code 4001; one with `takeover=0`, which a page reconnecting by itself sends, gets 4001
 itself when another connection has that shell. Connections to different shells do not disturb each
 other. A shell ends with its own exit or `DELETE` (4002 with how it ended). All of them end on
-signing out, the server stopping (4004) or being killed, or three hours with no connection to any
-shell and no `POST` to `/_terminal/alive`, which every open page offering the terminal sends each
-minute, whatever its panel shows and whether or not it is in view (`TestTerminalPanel`).
-`--terminal-idle-timeout` changes those three hours, to no fewer than two minutes. The limit is checked at the package
-level by `TestIdleLimitAppliesToTheShellsTogether` and
+signing out and the server stopping (4004) or being killed; with no idle limit, the default, nothing else ends
+them, however long no page is open (`TestTerminalShellsHaveNoIdleLimitByDefault`, `TestNoIdleLimitKeepsTheShells`).
+`--terminal-idle-timeout` sets a limit, `0` meaning none and any other value at least two minutes: they then also end
+after that long with no connection to any shell and no `POST` to `/_terminal/alive`, which every open page offering
+the terminal sends each minute, whatever its panel shows and whether or not it is in view (`TestTerminalPanel`). The
+limit is checked at the package level by `TestIdleLimitAppliesToTheShellsTogether` and
 `TestKeepAliveHoldsTheIdleLimitOff`. A process that left its session or ignores the hangup,
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
@@ -1468,7 +1469,7 @@ does (WEB-40), in a session of its own, and stays attached as its client: it sho
 `rotari web listening at URL`, and then says on stderr `Press Ctrl-D to detach and keep the server running; Ctrl-C to
 stop it.` (only when stdin is a terminal) and, with the terminal on, `Shells end D after the last page closes
 (--terminal-idle-timeout), and when the server stops.` with the limit in effect written without zero units (`3h`,
-`1h30m`). `rotari web --detach` prints the same idle-limit line, for a new server and for one it reports. Ctrl-C stops
+`1h30m`), or, with no limit, `Shells end when the server stops or you sign out.` `rotari web --detach` prints the same idle-limit line, for a new server and for one it reports. Ctrl-C stops
 the server and the client exits with its status. Ctrl-D detaches it: the server takes the host's lease, records
 itself, and moves its output to the host's log, and the client prints `rotari web keeps running in the background at
 URL (PID N)`, the log, and `rotari web --shutdown`, and exits 0. While another server is detached on the host, Ctrl-D

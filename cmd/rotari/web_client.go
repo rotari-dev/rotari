@@ -209,9 +209,12 @@ func printWebClientHints(flags webCommandFlags) {
 	}
 }
 
-// webIdleTimeoutLine says how long shells last, with the duration written without zero
-// units.
+// webIdleTimeoutLine says how long shells last: with no limit, until the server stops
+// or the user signs out; otherwise the limit, written without zero units.
 func webIdleTimeoutLine(limit time.Duration) string {
+	if limit == 0 {
+		return "Shells end when the server stops or you sign out."
+	}
 	return fmt.Sprintf("Shells end %s after the last page closes (--terminal-idle-timeout), and when the server stops.", shortDuration(limit))
 }
 

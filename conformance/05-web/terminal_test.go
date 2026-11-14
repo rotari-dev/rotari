@@ -208,6 +208,25 @@ func awaitProcessGone(t *testing.T, pid int, what string) {
 	}
 }
 
+// TestTerminalShellsHaveNoIdleLimitByDefault checks that, with no
+// --terminal-idle-timeout, a shell nothing is attached to and no page keeps alive goes
+// on running. Its wait is short; it shows that there is no short default.
+func TestTerminalShellsHaveNoIdleLimitByDefault(t *testing.T) {
+	covers(t, "WEB-34")
+	e := terminalEnv(t)
+	base := e.StartWeb("--allow-terminal")
+	headers := http.Header{"X-Rotari-Token": {launchToken}}
+	shell := startTerminalShell(t, base, headers)
+	time.Sleep(3 * time.Second)
+	shells := listTerminalShells(t, base, headers)
+	if len(shells) != 1 || shells[0].ID != shell.ID {
+		t.Fatalf("with no idle limit, the shells are %+v, want %s", shells, shell.ID)
+	}
+	if status, _ := terminalShellsRequest(t, http.MethodPost, base+"/_terminal/shells?rows=24&cols=80", headers); status != http.StatusCreated {
+		t.Fatalf("a second shell did not start: %d", status)
+	}
+}
+
 func TestTerminalNeedsItsFlag(t *testing.T) {
 	covers(t, "WEB-34")
 	e := support.NewEnv(t)
@@ -219,8 +238,8 @@ func TestTerminalNeedsItsFlag(t *testing.T) {
 		{[]string{"--terminal-max-shells", "2"}, "--terminal-max-shells only applies with --allow-terminal"},
 		{[]string{"--terminal-idle-timeout", "1h"}, "--terminal-idle-timeout only applies with --allow-terminal"},
 		{[]string{"--terminal-shell", "/bin/sh"}, "--terminal-shell only applies with --allow-terminal"},
-		{[]string{"--allow-terminal", "--terminal-idle-timeout", "1m"}, "must be at least 2m"},
-		{[]string{"--allow-terminal", "--terminal-idle-timeout", "0"}, "must be at least 2m"},
+		{[]string{"--allow-terminal", "--terminal-idle-timeout", "1m"}, "must be 0 (no limit) or at least 2m"},
+		{[]string{"--allow-terminal", "--terminal-idle-timeout", "-1h"}, "must be 0 (no limit) or at least 2m"},
 		{[]string{"--allow-terminal", "--terminal-max-shells", "0"}, "must be at least 1"},
 		{[]string{"--allow-terminal", "--terminal-max-shells-per-project", "0"}, "must be at least 1"},
 		{[]string{"--allow-terminal", "--terminal-replay-size", "1GiB"}, "--terminal-replay-size"},

@@ -3577,8 +3577,9 @@ CLI_SCHEMA: dict[str, Any] = {
                 },
                 {
                     "description": "with --allow-terminal, end the shells this "
-                    "long after the last Web page closes (at "
-                    "least 2m; default 3h)",
+                    "long after the last Web page closes: 0, the "
+                    "default, for no limit (shells then last as "
+                    "long as the server), or at least 2m",
                     "environment": "ROTARI_WEB_TERMINAL_IDLE_TIMEOUT",
                     "name": "terminal-idle-timeout",
                     "value_name": "DURATION",

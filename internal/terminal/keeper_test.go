@@ -131,10 +131,11 @@ const (
 
 func TestNewKeeperRejectsBadOptions(t *testing.T) {
 	for name, options := range map[string]KeeperOptions{
-		"no idle limit":  {RingSize: 1, ShellLimit: 1, GroupLimit: 1},
-		"no ring":        {IdleLimit: time.Second, ShellLimit: 1, GroupLimit: 1},
-		"no shell limit": {IdleLimit: time.Second, RingSize: 1, GroupLimit: 1},
-		"no group limit": {IdleLimit: time.Second, RingSize: 1, ShellLimit: 1},
+		// An idle limit of 0 means none (TestNoIdleLimitKeepsTheShells); below 0 is wrong.
+		"negative idle limit": {IdleLimit: -time.Second, RingSize: 1, ShellLimit: 1, GroupLimit: 1},
+		"no ring":             {IdleLimit: time.Second, ShellLimit: 1, GroupLimit: 1},
+		"no shell limit":      {IdleLimit: time.Second, RingSize: 1, GroupLimit: 1},
+		"no group limit":      {IdleLimit: time.Second, RingSize: 1, ShellLimit: 1},
 	} {
 		if _, err := NewKeeper(options); err == nil {
 			t.Errorf("%s: NewKeeper succeeded", name)
@@ -780,6 +781,36 @@ func TestIdleLimitStartsWhenTheAttachedShellEnds(t *testing.T) {
 		if time.Now().After(deadline) {
 			t.Fatalf("%v outlived the idle limit", keeper.Shells())
 		}
+	}
+}
+
+// With no idle limit, shells nothing is attached to run on.
+func TestNoIdleLimitKeepsTheShells(t *testing.T) {
+	keeper := newTestKeeper(t, 0, 1<<16)
+	if _, err := keeper.Start(StartOptions{Rows: 24, Cols: 80}); err != nil {
+		t.Fatal(err)
+	}
+	attached, err := keeper.Start(StartOptions{Rows: 24, Cols: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := keeper.Attach(attached.ID, 24, 80); err != nil {
+		t.Fatal(err)
+	}
+	// Ending the attached shell leaves nothing attached, which starts a limit when
+	// there is one (TestIdleLimitStartsWhenTheAttachedShellEnds).
+	if err := keeper.End(attached.ID); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	if shells := keeper.Shells(); len(shells) != 1 {
+		t.Fatalf("with no idle limit, %d shells are left, want 1", len(shells))
+	}
+	keeper.mu.Lock()
+	timer := keeper.idleTimer
+	keeper.mu.Unlock()
+	if timer != nil {
+		t.Error("an idle timer runs with no limit")
 	}
 }
 

@@ -76,7 +76,8 @@ type KeeperOptions struct {
 	// Shell starts each shell; its Rows and Cols are ignored, since Start gives
 	// the size.
 	Shell Options
-	// IdleLimit is how long shells run with nothing attached to any of them.
+	// IdleLimit is how long shells run with nothing attached to any of them; 0 means
+	// they run until ended, however long nothing is attached.
 	IdleLimit time.Duration
 	// RingSize is how many bytes of recent output, per shell, a new Attach replays.
 	RingSize int
@@ -184,8 +185,8 @@ type keptShell struct {
 
 // NewKeeper returns a Keeper with no shells yet.
 func NewKeeper(options KeeperOptions) (*Keeper, error) {
-	if options.IdleLimit <= 0 {
-		return nil, errors.New("terminal idle limit must be above zero")
+	if options.IdleLimit < 0 {
+		return nil, errors.New("terminal idle limit must not be negative")
 	}
 	if options.RingSize <= 0 {
 		return nil, errors.New("terminal output ring size must be above zero")
@@ -583,9 +584,10 @@ func (keeper *Keeper) anyAttached() bool {
 }
 
 // armIdleTimer starts the idle limit if nothing is attached to any shell and it is not
-// running already, and stops it if no shell is left; the caller holds mu.
+// running already, and stops it if no shell is left or there is no limit; the caller
+// holds mu.
 func (keeper *Keeper) armIdleTimer() {
-	if len(keeper.shells) == 0 || keeper.closed {
+	if len(keeper.shells) == 0 || keeper.closed || keeper.options.IdleLimit == 0 {
 		keeper.stopIdleTimer()
 		return
 	}

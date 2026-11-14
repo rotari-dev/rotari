@@ -1,7 +1,7 @@
 # Plan: Shells last as long as the server by default
 
 Created: 2026-11-13
-Status: Proposed. To follow [a run-style client for rotari web](../2026-11-13-web-client/plan.md), which makes the
+Status: Implemented; see [work-log.md](work-log.md). To follow [a run-style client for rotari web](../2026-11-13-web-client/plan.md), which makes the
 server's lifetime the user's choice.
 
 ## Goal

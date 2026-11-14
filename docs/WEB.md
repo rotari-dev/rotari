@@ -63,7 +63,7 @@ At a terminal, `rotari web` works like `rotari run`. Once it listens, it says ho
 $ rotari web --allow-terminal
 rotari web listening at http://127.0.0.1:8080
 Press Ctrl-D to detach and keep the server running; Ctrl-C to stop it.
-Shells end 3h after the last page closes (--terminal-idle-timeout), and when the server stops.
+Shells end when the server stops or you sign out.
 ```
 
 - **Ctrl-C** stops the server.
@@ -383,18 +383,18 @@ rotari web --allow-terminal
   so and offers to take it back.
 - **When a shell ends:** with its tab's **×** or `exit`, which moves to a neighboring tab of the
   project.
-- **When all of them end:** when you sign out, when `rotari web` stops, or **3 hours after the
-  last `rotari web` page closes**, which also ends what is running in their foregrounds. Any open page
-  keeps them, even in the background with its panel closed. A computer that sleeps counts as closing
-  its pages, and so does a sign-in that has expired. Use `rotari run` or `tmux` for long work: a run
-  started in the terminal carries on regardless. To keep shells through a disconnect, see
-  [below](#keeping-shells-through-a-disconnect).
+- **When all of them end:** when you sign out or when `rotari web` stops, which also ends what is running in
+  their foregrounds. No page needs to stay open. With `--terminal-idle-timeout`, they also end that long after
+  the last `rotari web` page closes; any open page keeps them, even in the background with its panel closed,
+  and a computer that sleeps counts as closing its pages, as does a sign-in that has expired. Use `rotari run`
+  or `tmux` for long work: a run started in the terminal carries on regardless. To keep shells through a
+  disconnect, see [below](#keeping-shells-through-a-disconnect).
 - **Changing the limits,** on the command line, in a config, or in the environment (see
   [above](#setting-them-in-a-config-or-the-environment)):
 
   | Flag | Default | |
   | --- | --- | --- |
-  | `--terminal-idle-timeout` | `3h` | How long the shells last after the last page closes. At least `2m`. |
+  | `--terminal-idle-timeout` | `0` (none) | How long the shells last after the last page closes; `0` for as long as the server. Otherwise at least `2m`. |
   | `--terminal-max-shells` | `32` | Shells at once. |
   | `--terminal-max-shells-per-project` | `8` | Shells of one project, or of one state directory's own pages, at once. |
   | `--terminal-replay-size` | `256KiB` | Recent output kept per shell, up to `64MiB`. More uses more memory. A pane shows at most the last 10,000 lines of it. |
@@ -414,21 +414,21 @@ outlast a closed laptop, a dropped connection, or a night away, keep that proces
    [Stopping and detaching](#stopping-and-detaching)):
 
    ```console
-   $ rotari web --detach --allow-terminal --terminal-idle-timeout 24h
+   $ rotari web --detach --allow-terminal
    --allow-terminal requires authentication. Sign in with user name "rotari" and this token as the password:
      3f9c…
    Set ROTARI_WEB_AUTH_TOKEN to keep one token across restarts.
    rotari web listening at http://127.0.0.1:8080 in the background (PID 12345)
    Log: ~/.local/state/rotari/master/web/HOST.log
    Stop it with: rotari web --shutdown
+   Shells end when the server stops or you sign out.
    ```
 
    Close the SSH session; the server, and its shells, keep running. Reach it again through your usual SSH
    forward.
-2. **Make `--terminal-idle-timeout` longer than you will be away.** It counts from the last page closing,
-   so a laptop that sleeps overnight needs more than the 3-hour default. It can also go under `[web]` in a
-   config as `terminal-idle-timeout = "24h"`, or in `ROTARI_WEB_TERMINAL_IDLE_TIMEOUT` (see
-   [above](#setting-them-in-a-config-or-the-environment)).
+2. **Leave `--terminal-idle-timeout` unset,** or longer than you will be away. Unset, shells last as long as the
+   server. With a limit, it counts from the last page closing, so a laptop that sleeps overnight needs more than
+   the night.
 
 **Finding it again:** run the same command. While a detached server runs on this host, `--detach` starts no
 other: it prints that server's URL and PID (`already running since ...`), or fails naming the options that

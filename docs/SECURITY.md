@@ -224,8 +224,8 @@ screen, at most 64 at once, behind the same checks and with a JSON body, and the
 job, or a path that exists. That tells nothing a shell on the server could not.
 
 Shells outlive their connections, like a launched VS Code server, so ones left open stay reachable
-to anyone with your session while any page stays open and for up to 3 hours after, or what
-`--terminal-idle-timeout` says, and recent
+to anyone with your session for as long as the server runs, or, with `--terminal-idle-timeout`, until that
+long after the last page closes, and recent
 output is replayed to them. A page left open keeps them for as long as its sign-in lasts, up to 12
 hours. Signing out ends them all.
 
