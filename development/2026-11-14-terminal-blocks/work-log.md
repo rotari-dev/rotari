@@ -242,3 +242,20 @@
   matched earlier in the file); `TestTerminalPanel` caught it at once, though `tsc` had passed, and the file was
   restored and edited again. The browser script passes `node --check`; its step runs only in CI.
 - **Remaining:** nothing in this plan.
+
+## 2026-11-14 23:40 +09:00 — zsh: B with powerlevel10k
+
+- **Change:** rotari's `.zshrc` loads `zsh/zle` and adds `__rotari_b`, which prints `B`, as a `line-init` hook with
+  `add-zle-hook-widget`; only when that cannot be done (zsh before 5.3) does `__rotari_prompt` put `B` at the end of
+  `PS1` as before. `TestZshIntegrationMarksAThemeThatComesLater` gives zsh a theme that adds its `precmd` hook at the
+  first prompt, after rotari's, and sets `PS1` in it.
+- **Reason:** the user's Commands rows all said "(no command line)". Their zsh runs powerlevel10k, whose
+  `_p9k_precmd` came after `__rotari_prompt` in `precmd_functions` and rebuilt `PS1` without `B` (their `PS1` held no
+  `133`). Two things were learned on the way: `add-zle-hook-widget` called from a startup file does nothing, and
+  returns non-zero, until `zsh/zle` is loaded, which an interactive zsh does only after its startup files (as
+  zsh-autosuggestions works around); and its status cannot be the only check, hence `zmodload zsh/zle` first.
+- **Plan impact:** decision 1 notes zsh's `line-init`.
+- **Validation:** the new test failed before the change (no `B` after `D;1`) and passes after; the other integration
+  tests pass, twice in a row. zsh started through rotari's files with the user's own home and powerlevel10k here gave
+  `D;0 A B C D;1 A B C D;0 A B C`. Bash keeps `B` in `PS1`, which a bash theme added after rotari's hook could still
+  drop; none was reported.
