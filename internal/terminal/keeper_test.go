@@ -1123,3 +1123,19 @@ func TestHistoryKeepsTheStartOfAShellMovedAtOnce(t *testing.T) {
 	seen.run(t, `mkdir a && cd a && echo "moved-$((1+1))"`, "moved-2")
 	awaitHistory(t, keeper, "", filepath.Join(start, "a"), start)
 }
+
+// A directory a command reached counts even when the next line comes before the prompt
+// after it settles, as when lines are pasted or typed quickly.
+func TestHistoryKeepsADirectoryLeftAtOnce(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	start, err := filepath.EvalSymlinks(keeper.DefaultDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := watch(t, keeper)
+	awaitHistory(t, keeper, "", start)
+	a, b := filepath.Join(start, "a"), filepath.Join(start, "b")
+	seen.run(t, `mkdir a b && cd a && echo "in-$((1+1))"`, "in-2")
+	seen.run(t, `cd ../b && echo "in-$((2+2))"`, "in-4")
+	awaitHistory(t, keeper, "", b, a, start)
+}

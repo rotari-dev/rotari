@@ -1495,8 +1495,8 @@ server cannot be asked, nothing is a link and a note says so once. Implemented i
 **WEB-45** With `rotari web --allow-terminal`, the shells of one group (a project's, a basedir's own, or those of no
 project, as WEB-34 groups them) share a history of where they have been. The server reads a shell's own working
 directory once its output has paused at its prompt (the shell holding its terminal's foreground) after input with a
-carriage return or line feed, and a directory other than the one it last read for that shell goes to the front of the
-group's history; where a shell starts enters when it starts, named without symbolic links. Each directory appears
+carriage return or line feed, or, when more such input comes before that, at once, before passing it on; a directory
+other than the one it last read for that shell goes to the front of the group's history; where a shell starts enters when it starts, named without symbolic links. Each directory appears
 once, newest first, at most 20. A directory changed by a program in front of the shell, such as a nested shell or
 `ssh`, is not seen, nor one left before the prompt returns. The history is kept only in memory: a shell ending leaves
 it, and it is forgotten whenever every shell ends (signing out, the idle limit, the server stopping). `GET
@@ -1517,7 +1517,7 @@ directory can only be copied, and a name marked `not_utf8` or a run with an `err
 is shown in the list. Implemented in `Keeper.History` in `internal/terminal`, `internal/webui/terminal_dirs.go`, and
 the panel in `web_shell.js`; covered by [`TestTerminalRecentDirectories`](../conformance/05-web/terminal_dirs_test.go),
 `TestHistoryIsWhereAGroupsShellsHaveBeen`, `TestHistoryKeepsTwentyDirectories`,
-`TestHistoryKeepsTheStartOfAShellMovedAtOnce`, `TestTerminalDirsOfAShellsGroup`,
+`TestHistoryKeepsTheStartOfAShellMovedAtOnce`, `TestHistoryKeepsADirectoryLeftAtOnce`, `TestTerminalDirsOfAShellsGroup`,
 `TestTerminalDirsReadTheNewestTwentyRuns`, `TestTerminalPanel`, and a step of `TestTerminalPanelInBrowser`.
 
 **WEB-44** With `rotari web --allow-terminal`, the terminal's Explorer downloads and uploads. A row's menu has

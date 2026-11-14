@@ -821,10 +821,16 @@ func (attachment *Attachment) Write(input []byte) (int, error) {
 	if !attachment.current() {
 		return 0, ErrDetached
 	}
+	enter := bytes.ContainsAny(input, "\r\n")
+	if enter {
+		// A line typed before the last command's prompt settled would hide where that
+		// command left the shell, so it is read now, before the line runs.
+		attachment.keeper.readDir(attachment.shell)
+	}
 	attachment.keeper.mu.Lock()
 	attachment.shell.info.ActiveAt = time.Now()
 	// Enter may run a cd, seen at the prompt that follows.
-	if bytes.ContainsAny(input, "\r\n") {
+	if enter {
 		attachment.shell.dirPending = true
 		attachment.shell.dirSerial++
 	}
