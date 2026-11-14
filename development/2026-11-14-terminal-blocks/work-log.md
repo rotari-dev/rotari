@@ -198,3 +198,16 @@
   highlight on and gone after 1.6 s, the filter, a click, the three copies, and no key handler) passed; `tsc` clean;
   prettier formatted. The browser script passes `node --check`; the step itself runs only in CI.
 - **Remaining:** phase 9.
+
+## 2026-11-14 21:50 +09:00 — CI: zsh tests and the host's compinit
+
+- **Change:** the `.zshenv` that `TestZshIntegrationReadsTheUsersFilesAndMarks` and `TestTerminalShellIntegration`
+  write starts with `unsetopt GLOBAL_RCS`, so that the host's `/etc/zprofile`, `/etc/zshrc`, and `/etc/zlogin` are
+  skipped.
+- **Reason:** on CI (macOS, by its paths), the host's zsh files ran `compinit`, which asked "Ignore insecure
+  directories and continue [y] or abort compinit [n]?" before the first prompt and took the `f` of the typed `false`
+  as its answer, leaving `alse`. Not rotari's doing: the same question shows in any terminal on that host.
+- **Plan impact:** none.
+- **Validation:** both tests pass here. `TestOldBashIntegrationMarksCommandsByTheDebugTrap` also failed on that run,
+  but the paste had no detail; building bash 3.2 here to reproduce it was refused by the permission check, so it waits
+  for the full failure from CI.
