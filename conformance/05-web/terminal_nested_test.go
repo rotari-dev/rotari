@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/rotari-dev/rotari/internal/executor"
 )
 
 // A shell started by hand inside a panel's shell is the current shell: the preview gives its
@@ -103,4 +105,56 @@ func TestTerminalFollowsAShellStartedInside(t *testing.T) {
 		t.Fatal(err)
 	}
 	await("the session's shell after exit", home, "", false)
+}
+
+func TestTerminalFollowsShellWithSpacedOption(t *testing.T) {
+	covers(t, "WEB-52")
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("no bash here")
+	}
+	e := terminalEnv(t)
+	base := e.StartWeb("--allow-terminal")
+	page := openTerminalPage(t, base)
+	headers := http.Header{"X-Rotari-Token": {launchToken}}
+	id := listTerminalShells(t, base, headers)[0].ID
+	dir := filepath.Join(e.Root, "shell config")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	initFile := filepath.Join(dir, "init file")
+	if err := os.WriteFile(initFile, []byte("PS1='inner$ '\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page.typeLine(executor.ShellQuote(bash) + " --init-file " + executor.ShellQuote(initFile) +
+		` -i; printf '%s%s\n' 'rotari-outer-' 'ready'`)
+	t.Cleanup(func() {
+		page.typeLine("exit")
+		page.await("rotari-outer-ready")
+	})
+	page.typeLine(`echo "nested-$((1+1))"`)
+	page.await("nested-2")
+
+	home, err := filepath.EvalSymlinks(e.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(terminalWait); ; time.Sleep(50 * time.Millisecond) {
+		status, body := terminalShellsRequest(t, http.MethodGet, base+"/_terminal/shells/"+id+"/preview", headers)
+		var got struct {
+			Cwd          string `json:"cwd"`
+			Command      string `json:"command"`
+			CommandError string `json:"command_error"`
+		}
+		if err := json.Unmarshal(body, &got); status != http.StatusOK || err != nil {
+			t.Fatalf("preview: status %d, %v: %s", status, err, body)
+		}
+		got.Cwd, _ = filepath.EvalSymlinks(got.Cwd)
+		if got.Cwd == home && got.Command == "" && got.CommandError == "" {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("nested bash with a spaced option was not at its prompt: %+v", got)
+		}
+	}
 }

@@ -70,19 +70,19 @@ func (shell *startedShell) text() string {
 // the typed command's own echo does not contain as one piece.
 func (shell *startedShell) run(t *testing.T, command string) string {
 	t.Helper()
-	const left, right = "<<", ">>"
-	if _, err := fmt.Fprintf(shell, "printf '%%s%%s' '%s' \"$(%s)\"; printf '%s\\n'\n", left, command, right); err != nil {
+	const left, right = "__rotari_start__", "__rotari_end__"
+	if _, err := fmt.Fprintf(shell, "printf '%%s%%s' '__rotari_' 'start__'; ( %s ); printf '%%s%%s\\n' '__rotari_' 'end__'\n", command); err != nil {
 		t.Fatal(err)
 	}
 	var found string
 	deadline := time.Now().Add(testWait)
 	for time.Now().Before(deadline) {
-		text := shell.text()
-		for _, line := range strings.Split(text, "\n") {
-			// An OSC sequence, such as a C mark saying the command line, is not shown.
-			line = oscSequence.ReplaceAllString(strings.TrimRight(line, "\r"), "")
-			if start := strings.Index(line, left); start >= 0 && strings.HasSuffix(line, right) && !strings.Contains(line, "printf") {
-				found = line[start+len(left) : len(line)-len(right)]
+		// An OSC sequence, such as a C mark saying the command line, is not shown.
+		text := oscSequence.ReplaceAllString(shell.text(), "")
+		if start := strings.Index(text, left); start >= 0 {
+			output := text[start+len(left):]
+			if end := strings.Index(output, right); end >= 0 {
+				found = strings.TrimRight(output[:end], "\r\n")
 			}
 		}
 		if found != "" {
@@ -95,6 +95,29 @@ func (shell *startedShell) run(t *testing.T, command string) string {
 	}
 	t.Fatalf("%q printed nothing in time; the terminal shows:\n%s", command, shell.text())
 	return ""
+}
+
+func TestShellRunIgnoresWrappedEcho(t *testing.T) {
+	shell := startShell(t)
+	shell.mu.Lock()
+	shell.output.WriteString("wrapped <<wrong>>\r\n")
+	shell.mu.Unlock()
+	if got := shell.run(t, "sleep 0.2; echo actual"); got != "actual" {
+		t.Errorf("run returned %q, want the command's output", got)
+	}
+}
+
+func TestShellRunHandlesCaseCommand(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("no bash here")
+	}
+	home := t.TempDir()
+	shell := startShellWith(t, Options{Shell: bash, Dir: home, Rows: 24, Cols: 80,
+		Env: []string{"HOME=" + home, "PATH=" + os.Getenv("PATH")}})
+	if got := shell.run(t, `case x in x) printf '%s' match;; *) printf '%s' wrong;; esac`); got != "match" {
+		t.Errorf("run returned %q, want the case command's output", got)
+	}
 }
 
 func TestShellRunsWhatIsTyped(t *testing.T) {

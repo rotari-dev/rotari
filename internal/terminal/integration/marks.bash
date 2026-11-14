@@ -10,8 +10,26 @@ __rotari_marks=1
 # __rotari_loader comes first in PROMPT_COMMAND: it keeps the last command's status for the
 # mark, and in a shell that has not read this file, reads it. Shells started inside
 # inherit it, and zsh ignores it.
-__rotari_loader='__rotari_status=$?; [ -n "${__rotari_marks+x}" ] || { [ -r "$ROTARI_SHELL_INTEGRATION/marks.bash" ] && . "$ROTARI_SHELL_INTEGRATION/marks.bash"; }'
-__rotari_status=0
+__rotari_loader='__rotari_status=$?; [ -n "${__rotari_marks+x}" ] || { [ -r "$ROTARI_SHELL_INTEGRATION/marks.bash" ] && { __rotari_loading=1; . "$ROTARI_SHELL_INTEGRATION/marks.bash"; }; }'
+__rotari_first_prompt=
+# A later user hook could rebuild PS1, so only mark this prompt here when the
+# loader is the last command of the inherited prompt hook.
+if [ -n "${__rotari_loading:-}" ] && [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" != "declare -a"* ]]; then
+	__rotari_initial=${PROMPT_COMMAND:-}
+	while [[ $__rotari_initial == *[[:space:]\;] ]]; do
+		__rotari_initial=${__rotari_initial%?}
+	done
+	case $__rotari_initial in
+	*"$__rotari_loader")
+		__rotari_before=${__rotari_initial%"$__rotari_loader"}
+		case $__rotari_before in *"$__rotari_loader"*) ;; *) __rotari_first_prompt=1 ;; esac
+		;;
+	esac
+fi
+unset __rotari_before __rotari_initial
+if [ -z "${__rotari_loading:-}" ]; then
+	__rotari_status=0
+fi
 # __rotari_keep gives the kept status back to what runs after it.
 __rotari_keep() {
 	return "$__rotari_status"
@@ -20,7 +38,8 @@ __rotari_keep() {
 # runs next is typed at the prompt, which the DEBUG trap of bash before 4.4 waits for.
 __rotari_prompt() {
 	__rotari_at_prompt=1
-	__rotari_history=$(builtin fc -l -0 2>/dev/null)
+	# Unlike fc -l -0, history 1 includes the newest entry on bash 3.2.
+	__rotari_history=$(HISTTIMEFORMAT= builtin history 1 2>/dev/null)
 	printf '\033]133;D;%s\007\033]133;A\007' "$__rotari_status"
 	case $PS1 in
 	*'133;B'*) ;;
@@ -36,14 +55,14 @@ __rotari_prompt() {
 __rotari_history=
 __rotari_c() {
 	local now line url= char hex i
-	now=$(builtin fc -l -0 2>/dev/null)
+	now=$(HISTTIMEFORMAT= builtin history 1 2>/dev/null)
 	if [ -z "$now" ] || [ "$now" = "$__rotari_history" ]; then
 		printf '\033]133;C\007'
 		return
 	fi
-	line=$(builtin fc -ln -0 2>/dev/null)
-	line=${line#$'\t'}
-	line=${line# }
+	line=${now#"${now%%[![:space:]]*}"}
+	line=${line#"${line%%[!0-9]*}"}
+	line=${line:2}
 	local LC_ALL=C
 	for ((i = 0; i < ${#line}; i++)); do
 		char=${line:i:1}
@@ -66,6 +85,7 @@ __rotari_c() {
 if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
 	__rotari_commands=()
 	for __rotari_command in "${PROMPT_COMMAND[@]}"; do
+		__rotari_command=${__rotari_command//"$__rotari_loader;"/}
 		__rotari_command=${__rotari_command//"$__rotari_loader"/}
 		case $__rotari_command in
 		'' | __rotari_keep | __rotari_prompt) ;;
@@ -86,6 +106,7 @@ if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
 else
 	__rotari_commands=
 	while IFS= read -r __rotari_command; do
+		__rotari_command=${__rotari_command//"$__rotari_loader;"/}
 		__rotari_command=${__rotari_command//"$__rotari_loader"/}
 		case $__rotari_command in
 		'' | __rotari_keep | __rotari_prompt | ';') ;;
@@ -146,4 +167,10 @@ elif [ -z "$(trap -p DEBUG)" ]; then
 	}
 	trap '__rotari_debug' DEBUG
 fi
-unset __rotari_old_bash
+unset __rotari_old_bash __rotari_loading
+if [ -n "$__rotari_first_prompt" ]; then
+	unset __rotari_first_prompt
+	__rotari_prompt
+else
+	unset __rotari_first_prompt
+fi

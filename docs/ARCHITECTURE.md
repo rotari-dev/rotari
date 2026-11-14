@@ -150,7 +150,10 @@ flowchart LR
    [web_shell.js](../internal/webui/assets/web_shell.js) loads xterm.js when first opened and connects only to the
    tab shown. Its project link can be turned off per browser tab, keeping the terminal's selected group and pane
    layout across page loads and handing them to its separate window and back. A per-window identifier lets the
-   window save that state in its opening tab's session storage even while the page reloads. A shell is not a run: it takes no project lock and writes
+   window save that state in its opening tab's session storage even while the page reloads. On macOS,
+   [internal/terminal](../internal/terminal/) reads a foreground process's argument vector through `kern.procargs2`,
+   keeping argument boundaries without starting `ps` for every output chunk. A shell is not a run: it takes no
+   project lock and writes
    nothing under a basedir.
    With `--detach` ([cmd/rotari/web_detach.go](../cmd/rotari/web_detach.go)), the command checks its options,
    then starts itself again in a session of its own with its output in `<masterdir>/web/<host>.log`, and returns once

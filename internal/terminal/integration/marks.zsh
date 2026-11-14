@@ -113,7 +113,7 @@ __rotari_zdotdir_back() {
 # A bash started inside runs the PROMPT_COMMAND it inherits, which zsh ignores: the loader
 # of rotari's marks for bash.
 if [[ -r ${ROTARI_SHELL_INTEGRATION:-}/marks.bash ]]; then
-	export PROMPT_COMMAND='__rotari_status=$?; [ -n "${__rotari_marks+x}" ] || { [ -r "$ROTARI_SHELL_INTEGRATION/marks.bash" ] && . "$ROTARI_SHELL_INTEGRATION/marks.bash"; }'
+	export PROMPT_COMMAND='__rotari_status=$?; [ -n "${__rotari_marks+x}" ] || { [ -r "$ROTARI_SHELL_INTEGRATION/marks.bash" ] && { __rotari_loading=1; . "$ROTARI_SHELL_INTEGRATION/marks.bash"; }; }'
 fi
 precmd_functions=(__rotari_keep $precmd_functions __rotari_prompt)
 preexec_functions+=(__rotari_preexec __rotari_zsh_inside)

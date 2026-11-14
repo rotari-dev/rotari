@@ -90,6 +90,9 @@ func TestBashIntegrationReadsTheLoginFilesAndMarks(t *testing.T) {
 	if got := shell.run(t, `echo "$FROM_PROFILE-$LAST"`); got != "yes-1" {
 		t.Errorf("profile and status = %q, want yes-1", got)
 	}
+	if got := shell.run(t, `printf '%s' "$HISTTIMEFORMAT"`); got != "%F " {
+		t.Errorf("history time format = %q, want the user's value", got)
+	}
 	// A line history leaves out is not said, rather than said as the one before it.
 	time.Sleep(300 * time.Millisecond)
 	shell.mu.Lock()
@@ -109,6 +112,52 @@ func TestBashIntegrationReadsTheLoginFilesAndMarks(t *testing.T) {
 	}
 	if !slices.Contains(marks, "C") || slices.ContainsFunc(marks, func(mark string) bool { return strings.HasPrefix(mark, "C;") }) {
 		t.Errorf("marks for a line history left out: %q, want a C that says no line", marks)
+	}
+}
+
+func TestBashIntegrationHistorySelection(t *testing.T) {
+	home := t.TempDir()
+	writeFiles(t, home, map[string]string{
+		".bash_profile": "PS1='bash$ '\nHISTCONTROL=ignoredups\nHISTIGNORE='echo ignored'\nHISTTIMEFORMAT='%F '\n",
+	})
+	shell := integrated(t, "bash", home)
+	eventually(t, "the first marked prompt", func() (bool, string) {
+		text := shell.text()
+		return strings.Contains(text, "\x1b]133;B\a"), text
+	})
+	for _, test := range []struct {
+		line, mark string
+	}{
+		{"echo recorded", "C;cmdline_url=echo%20recorded"},
+		{"echo ignored", "C"},
+		{"set +o history", "C;cmdline_url=set%20%2Bo%20history"},
+		{"echo offline", "C"},
+		{"set -o history", "C"},
+		{"echo recorded", "C;cmdline_url=echo%20recorded"},
+		{"echo recorded", "C"},
+	} {
+		t.Run(test.line, func(t *testing.T) {
+			shell.mu.Lock()
+			shell.output.Reset()
+			shell.mu.Unlock()
+			if _, err := shell.Write([]byte(test.line + "\n")); err != nil {
+				t.Fatal(err)
+			}
+			eventually(t, "the command's next prompt", func() (bool, string) {
+				text := shell.text()
+				at := strings.Index(text, "\x1b]133;D;0\a")
+				return at >= 0 && strings.Contains(text[at:], "\x1b]133;B\a"), text
+			})
+			var commandMarks []string
+			for _, match := range oscMark.FindAllStringSubmatch(shell.text(), -1) {
+				if match[1] == "C" || strings.HasPrefix(match[1], "C;") {
+					commandMarks = append(commandMarks, match[1])
+				}
+			}
+			if !slices.Equal(commandMarks, []string{test.mark}) {
+				t.Errorf("command marks = %q, want %q", commandMarks, test.mark)
+			}
+		})
 	}
 }
 
@@ -307,19 +356,61 @@ func TestShellCommandWithIntegration(t *testing.T) {
 	}
 }
 
+func startInnerShell(t *testing.T, shell *startedShell, start string) int {
+	t.Helper()
+	const exited = "rotari-inner-exited"
+	startAt := len(shell.text())
+	if _, err := shell.Write([]byte(start + `; printf '%s%s\n' 'rotari-inner-' 'exited'` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if strings.Contains(shell.text(), exited+"\r\n") {
+			return
+		}
+		if _, err := shell.Write([]byte("exit\n")); err != nil {
+			t.Errorf("exit the inner shell: %v", err)
+			return
+		}
+		for deadline := time.Now().Add(testWait); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+			if strings.Contains(shell.text(), exited+"\r\n") {
+				return
+			}
+		}
+		t.Errorf("the inner shell did not exit; the terminal shows:\n%q", shell.text())
+	})
+	return startAt
+}
+
 // innerMarks types a command that starts a shell inside, waits for that shell's prompt, and
 // returns the marks for false typed in it, from its prompt on.
 func innerMarks(t *testing.T, shell *startedShell, start, ready string) []string {
 	t.Helper()
-	if _, err := shell.Write([]byte(start + "\n")); err != nil {
-		t.Fatal(err)
+	startAt := startInnerShell(t, shell, start)
+	firstPrompt := func() bool {
+		text := shell.text()
+		if len(text) < startAt {
+			return false
+		}
+		text = text[startAt:]
+		command := strings.Index(text, "\x1b]133;C")
+		if command < 0 {
+			return false
+		}
+		end := strings.IndexByte(text[command:], '\a')
+		if end < 0 {
+			return false
+		}
+		text = text[command+end+1:]
+		start := strings.Index(text, "\x1b]133;A")
+		prompt := strings.Index(text, ready)
+		input := strings.Index(text, "\x1b]133;B\a")
+		return start >= 0 && prompt > start && input > prompt
 	}
-	for deadline := time.Now().Add(testWait); !strings.Contains(shell.text(), ready); time.Sleep(10 * time.Millisecond) {
+	for deadline := time.Now().Add(testWait); !firstPrompt(); time.Sleep(10 * time.Millisecond) {
 		if time.Now().After(deadline) {
-			t.Fatalf("%q did not start; the terminal shows:\n%q", start, shell.text())
+			t.Fatalf("%q did not show its first marked prompt; the terminal shows:\n%q", start, shell.text())
 		}
 	}
-	time.Sleep(300 * time.Millisecond)
 	shell.mu.Lock()
 	shell.output.Reset()
 	shell.mu.Unlock()
@@ -390,7 +481,7 @@ func TestInnerShellsMark(t *testing.T) {
 			}
 			if test.inner == "bash" {
 				// Each prompt marks once, though .bashrc added to an inherited PROMPT_COMMAND.
-				if got := outer.run(t, `printf '%s' "$PROMPT_COMMAND" | grep -c __rotari_prompt`); got != "1" {
+				if got := outer.run(t, `printf '%s\n' "$PROMPT_COMMAND" | grep -c '^__rotari_prompt$'`); got != "1" {
 					t.Errorf("the inner bash runs __rotari_prompt %s times", got)
 				}
 			}
@@ -400,6 +491,92 @@ func TestInnerShellsMark(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestInnerBashKeepsAnAppendedPromptHook(t *testing.T) {
+	for _, name := range []string{"bash", "zsh"} {
+		if _, err := exec.LookPath(name); err != nil {
+			t.Skipf("no %s here", name)
+		}
+	}
+	home := t.TempDir()
+	writeFiles(t, home, map[string]string{
+		".zshenv": "unsetopt GLOBAL_RCS\n",
+		".zshrc":  "PS1='zsh%# '\n",
+		".bashrc": "PROMPT_COMMAND=\"$PROMPT_COMMAND; PS1='theme$ '\"\n",
+	})
+	outer := integrated(t, "zsh", home)
+	startAt := startInnerShell(t, outer, "bash")
+	for deadline := time.Now().Add(testWait); ; time.Sleep(10 * time.Millisecond) {
+		text := outer.text()
+		if len(text) >= startAt && strings.Contains(text[startAt:], "theme$ ") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the inner bash did not show its prompt: %q", text)
+		}
+	}
+	marksAfter(t, outer)
+	outer.mu.Lock()
+	outer.output.Reset()
+	outer.mu.Unlock()
+	marks := marksAfter(t, outer)
+	if !endsWith(marks, "C;cmdline_url=false", "D;1", "A", "B") {
+		t.Errorf("marks in the inner bash: %q", marks)
+	}
+}
+
+func TestInnerBashFirstPromptKeepsStartupStatus(t *testing.T) {
+	for _, name := range []string{"bash", "zsh"} {
+		if _, err := exec.LookPath(name); err != nil {
+			t.Skipf("no %s here", name)
+		}
+	}
+	home := t.TempDir()
+	writeFiles(t, home, map[string]string{
+		".zshenv": "unsetopt GLOBAL_RCS\n",
+		".zshrc":  "PS1='zsh%# '\n",
+		".bashrc": "PS1='bash$ '\nfalse\n",
+	})
+	outer := integrated(t, "zsh", home)
+	startAt := startInnerShell(t, outer, "bash")
+	var prompt string
+	eventually(t, "the inner bash's first marked prompt", func() (bool, string) {
+		text := outer.text()
+		if len(text) < startAt {
+			return false, text
+		}
+		text = text[startAt:]
+		if command := strings.Index(text, "\x1b]133;C"); command >= 0 {
+			if end := strings.IndexByte(text[command:], '\a'); end >= 0 {
+				prompt = text[command+end+1:]
+				return strings.Contains(prompt, "bash$ ") && strings.Contains(prompt, "\x1b]133;B\a"), prompt
+			}
+		}
+		return false, text
+	})
+	if !strings.Contains(prompt, "\x1b]133;D;1\a\x1b]133;A\a") {
+		t.Errorf("first prompt lost the startup status: %q", prompt)
+	}
+}
+
+func TestInnerBashFirstPromptWithTrailingSeparator(t *testing.T) {
+	for _, name := range []string{"bash", "zsh"} {
+		if _, err := exec.LookPath(name); err != nil {
+			t.Skipf("no %s here", name)
+		}
+	}
+	home := t.TempDir()
+	writeFiles(t, home, map[string]string{
+		".zshenv": "unsetopt GLOBAL_RCS\n",
+		".zshrc":  "PS1='zsh%# '\n",
+		".bashrc": "PS1='bash$ '\nPROMPT_COMMAND=\"$PROMPT_COMMAND;   \"\n",
+	})
+	outer := integrated(t, "zsh", home)
+	marks := innerMarks(t, outer, "bash", "bash$")
+	if !endsWith(marks, "C;cmdline_url=false", "D;1", "A", "B") {
+		t.Errorf("marks in the inner bash: %q", marks)
 	}
 }
 

@@ -319,10 +319,13 @@ is greyed out, as is a run whose directory cannot be read, with the reason.
 A shell you start by hand inside a tab, such as `zsh` typed at a bash prompt, is followed as the shell you are in: the
 Explorer follows its directory, **Recent directories** records where it goes, and typing at the prompt treats its
 prompt as the prompt. A bash or zsh you start that way marks its commands too, with nothing to set up, so blocks,
-click to move, and Cut work in it. A shell inside `tmux`, `screen`, or `ssh` is not followed and shows no marks.
+click to move, and Cut work in it. A quoted shell-option value containing spaces stays one argument when rotari
+identifies that shell. A shell inside `tmux`, `screen`, or `ssh` is not followed and shows no marks.
 
 So that inner shells mark, rotari's bash exports `ZDOTDIR` naming rotari's zsh files for its whole session, and rotari's
 zsh does for a command line starting with `zsh`; both export `PROMPT_COMMAND` with a loader that an inner bash runs.
+A `.bashrc` that appends a hook after that loader can leave the inner bash's first prompt unmarked; putting the
+loader last lets it mark that prompt too.
 A program started from a panel's bash that reads `$ZDOTDIR` therefore sees rotari's directory, and a `tmux` started in
 a panel's shell keeps its shells reading your files through rotari's. rotari keeps those files under your cache
 directory (`~/.cache/rotari/shell-integration`), so that they are there after the server stops. A `.bashrc` that

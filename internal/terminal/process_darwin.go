@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // processWait is how long lsof or ps may take to describe a process.
@@ -61,14 +63,18 @@ func processCommand(pid int) (string, error) {
 	return command, nil
 }
 
-// processArgs is the arguments of the process with the given ID, its program first, from
-// ps's command line split at spaces, which is enough to tell its options from an operand.
+// processArgs reads the argument vector directly rather than starting ps for
+// each terminal output chunk.
 func processArgs(pid int) ([]string, error) {
-	command, err := processCommand(pid)
+	data, err := unix.SysctlRaw("kern.procargs2", pid)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read process %d arguments: %w", pid, err)
 	}
-	return strings.Fields(command), nil
+	args, err := parseDarwinProcessArgs(data)
+	if err != nil {
+		return nil, fmt.Errorf("read process %d arguments: %w", pid, err)
+	}
+	return args, nil
 }
 
 // processes lists this host's processes, each with its parent, command line, and

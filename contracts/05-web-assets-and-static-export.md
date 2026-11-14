@@ -1452,7 +1452,11 @@ All projects for a basedir's own shell, and `/activity` for one of no project. A
 `shell`, and never starts one: a shell not running closes it with 4005. A shell outlives its
 connections and replays recent output to the next, except what came before a `clear` message. A new connection to it takes it over, closing
 the last with code 4001; one with `takeover=0`, which a page reconnecting by itself sends, gets 4001
-itself when another connection has that shell. Connections to different shells do not disturb each
+itself when another connection has that shell. An attached reader receives output in order without loss while it
+keeps reading; a slow reader makes the program wait, and a reader taking nothing for 30 seconds is detached.
+Without an attached reader, the program continues and only recent output is kept for replay. Covered by
+[`TestTerminalStreamsOutputBurst`](../conformance/05-web/terminal_stream_test.go), `TestSlowReaderMakesTheProgramWait`,
+and `TestProgramsDoNotStallWithNothingAttached`. Connections to different shells do not disturb each
 other. A shell ends with its own exit or `DELETE` (4002 with how it ended). All of them end on
 signing out and the server stopping (4004) or being killed; with no idle limit, the default, nothing else ends
 them, however long no page is open (`TestTerminalShellsHaveNoIdleLimitByDefault`, `TestNoIdleLimitKeepsTheShells`).
@@ -1490,7 +1494,9 @@ with it reads rotari's files, the user's through them, and has `ZDOTDIR` as the 
 interactive, once `.zshenv` is read. Both export `PROMPT_COMMAND` holding a loader that keeps the last status and, in a
 bash that has not loaded `marks.bash`, loads it; loaded, it makes `PROMPT_COMMAND` again from what the user's files
 left, rotari's pieces taken out, the loader first and the marks' hooks around the user's, so that a `.bashrc` adding to
-the inherited one runs none twice; a `.bashrc` replacing it leaves that bash without marks. A shell started with
+the inherited one runs none twice; a `.bashrc` replacing it leaves that bash without marks. When a `.bashrc` appends
+hooks after the inherited loader, the first prompt can still be unmarked; the remaining gap is recorded in
+[`development/ISSUES.md`](../development/ISSUES.md). A shell started with
 another environment, through `ssh`, or inside `tmux` or `screen` (whose marks they keep), shows none. Implemented in
 `internal/terminal/integration/`; covered by [`TestTerminalInnerShellsMark`](../conformance/05-web/terminal_inner_marks_test.go),
 `TestInnerShellsMark`, `TestLastingIntegration`, and `TestKeeperKeepsTheIntegrationInTheCache`.
@@ -1508,7 +1514,8 @@ shell; otherwise a command runs. Where the shell is (the preview's `cwd`, the Ex
 and whether it is at its prompt (the preview's `command`, `running`, `command_finished`, typing at the prompt) are its
 current shell's. A shell inside `tmux`, `screen`, or `ssh` is on another terminal, which these do not follow.
 Implemented in `internal/terminal/shells.go` and `Session` in `internal/terminal/session.go`; covered by
-[`TestTerminalFollowsAShellStartedInside`](../conformance/05-web/terminal_nested_test.go), `TestInteractiveShell`, and
+[`TestTerminalFollowsAShellStartedInside`](../conformance/05-web/terminal_nested_test.go),
+`TestTerminalFollowsShellWithSpacedOption`, `TestProcessArgsPreserveBoundaries`, `TestInteractiveShell`, and
 `TestAShellStartedInsideIsTheCurrentShell`.
 
 **WEB-51** With `rotari web --allow-terminal`, a right click in a pane opens the panel's menu by the pointer and keeps
