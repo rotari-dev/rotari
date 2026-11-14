@@ -1,7 +1,8 @@
 # Plan: Blocks in the Web terminal
 
 Created: 2026-11-14
-Status: Proposed; waiting for the user's decision on the open questions.
+Status: Accepted by the user on 2026-11-14, with the open questions answered as proposed. Phase 1 (parsing and the
+block model) is done; phase 2 (display) is next. See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -51,7 +52,8 @@ Grouping blocks by directory, discussed with recent directories, would build on 
    first, as after Ctrl-C in some setups). A thin separator above each prompt but the first. Failed commands are
    red marks on the scroll bar, so that a failure far up is easy to find. Hovering a mark says the command line, the
    exit code, and, for a command seen running in this page, how long it took; replayed blocks have no times, since
-   the ring keeps none.
+   the ring keeps none. The replay is a connection's first message (`Keeper.Attach` puts it first in what `Next`
+   returns, and each `Next` is one WebSocket message), so marks parsed before that message is done get no times.
 4. **Moving and acting.** Ctrl+Shift+ArrowUp / ArrowDown scroll to the previous or next prompt and are not sent to
    the shell; nothing else is taken from the keyboard. Clicking a mark opens a small menu: **Copy output**, **Copy
    command**, **Select output** (so the browser's own copy and the existing actions work on it), and **Type command
@@ -97,7 +99,9 @@ Grouping blocks by directory, discussed with recent directories, would build on 
 - VS Code's OSC 633, iTerm2's OSC 1337 marks, and OSC 7 directories in the blocks.
 - Keeping blocks beyond what the ring and the scrollback hold.
 
-## Open questions
+## Settled questions
+
+All three were accepted as proposed on 2026-11-14.
 
 1. **How do shells get the marks?** Proposed: docs only, with lines for bash and zsh to paste into one's own startup
    file. The other choices are a `rotari` command that prints the lines, or an opt-in flag with which rotari adds
