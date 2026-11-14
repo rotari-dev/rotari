@@ -5250,19 +5250,61 @@ function shellWord(value) {
   };
   // clickTarget is where in a pane's command line a click at a screen cell lands, with the
   // cursor's place, or null when it is not in the command line.
-  const clickTarget = (pane, col, row) => {
-    const { term } = pane;
-    const buffer = term.buffer.active;
+  // walkBack is the place count characters before from, as charsFrom counts them, or null
+  // past the buffer's start.
+  const walkBack = (buffer, from, count) => {
+    let { y, x } = from;
+    while (count > 0) {
+      if (x > 0) {
+        x--;
+        while (x > 0 && buffer.getLine(y)?.getCell(x)?.getWidth() === 0) x--;
+        count--;
+        continue;
+      }
+      const line = buffer.getLine(y);
+      const above = buffer.getLine(y - 1);
+      if (!line || !above) return null;
+      y--;
+      if (line.isWrapped) x = above.length;
+      else {
+        x = rowEnd(above);
+        count--;
+      }
+    }
+    return { y, x };
+  };
+  // commandLine is where the command line being typed at a pane's prompt lies: its start,
+  // the cursor, and its last row; or null when there is none, or it cannot be told. A shell
+  // that says where its cursor is in the line (rotari's zsh) has the start counted back from
+  // the cursor, so that a prompt drawn again elsewhere (Ctrl+L, a list of completions) does
+  // not mislead; otherwise it is B, unless the rows from B to the cursor are not one
+  // wrapped line, as after such a redraw, when it cannot be told.
+  const commandLine = (pane) => {
+    const buffer = pane.term.buffer.active;
     const block = promptBlock(pane);
     if (!block || buffer.type === "alternate") return null;
-    if (buffer.viewportY !== buffer.baseY) return null;
-    const start = { y: block.input.marker.line, x: block.input.x };
     const cursor = { y: buffer.baseY + buffer.cursorY, x: buffer.cursorX };
-    // The line's rows: from B to the cursor's row, and the rows wrapped on from it.
+    let start;
+    if (block.lineCursor !== undefined) {
+      start = walkBack(buffer, cursor, block.lineCursor);
+    } else {
+      start = { y: block.input.marker.line, x: block.input.x };
+      for (let y = start.y + 1; y <= cursor.y && start; y++)
+        if (!buffer.getLine(y)?.isWrapped) start = null;
+    }
+    if (!start || start.y < 0 || start.y > cursor.y) return null;
     let last = cursor.y;
     while (buffer.getLine(last + 1)?.isWrapped) last++;
+    return { block, start, cursor, last };
+  };
+  const clickTarget = (pane, col, row) => {
+    const buffer = pane.term.buffer.active;
+    if (buffer.viewportY !== buffer.baseY) return null;
+    const place = commandLine(pane);
+    if (!place) return null;
+    const { block, start, cursor, last } = place;
     const y = buffer.viewportY + row;
-    if (start.y < 0 || y < start.y || y > last) return null;
+    if (y < start.y || y > last) return null;
     if (y === start.y && col < start.x) return null;
     // Past the text of its row, a click goes to the row's end, or the cursor's if further.
     const line = buffer.getLine(y);
@@ -5306,13 +5348,10 @@ function shellWord(value) {
   const cutPlace = (pane) => {
     const { term } = pane;
     const buffer = term.buffer.active;
-    const block = promptBlock(pane);
     const selected = term.hasSelection() && term.getSelectionPosition();
-    if (!block || !selected || buffer.type === "alternate") return null;
-    const start = { y: block.input.marker.line, x: block.input.x };
-    const cursor = { y: buffer.baseY + buffer.cursorY, x: buffer.cursorX };
-    let last = cursor.y;
-    while (buffer.getLine(last + 1)?.isWrapped) last++;
+    const place = selected && commandLine(pane);
+    if (!place) return null;
+    const { block, start, cursor, last } = place;
     const lastRow = buffer.getLine(last);
     const end = {
       y: last,
@@ -5505,6 +5544,13 @@ function shellWord(value) {
     const [kind, ...rest] = data.split(";");
     const blocks = pane.blocks;
     const last = blocks.at(-1);
+    // rotari's zsh says where its cursor is in the line before each redraw.
+    if (kind.startsWith("rotari_cursor=")) {
+      const index = Number(kind.slice("rotari_cursor=".length));
+      if (last && !last.ended && !last.output && Number.isInteger(index))
+        last.lineCursor = index;
+      return true;
+    }
     const now = pane.blocksLive ? Date.now() : null;
     if (kind === "A") {
       // A prompt without D before it ends the last command without an exit code.

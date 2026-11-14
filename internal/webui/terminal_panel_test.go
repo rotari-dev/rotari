@@ -3858,6 +3858,19 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(click(40, 5), '', 'past the end, where the cursor is');
   cmTerm.buffer.active.cursorX = 2;
   assert.equal(click(40, 5), '\x1b[9998~8;', 'past the end, the line\'s end');
+  // A prompt drawn again elsewhere, as Ctrl+L or a list of completions draw it, leaves B on
+  // the old row. Without word from the shell of where its cursor is in the line, the start
+  // cannot be told, and a click does nothing; with it, as rotari's zsh says it before each
+  // redraw, the start is counted back from the cursor.
+  cmTerm.lines[5] = '$ echo';
+  cmTerm.lines[6] = 'alpha  beta';
+  cmTerm.lines[7] = '$ echo abcdef';
+  cmTerm.lines[8] = '';
+  Object.assign(cmTerm.buffer.active, { cursorX: 13, cursorY: 7 });
+  assert.equal(click(9, 7), '', 'a click by a B left behind');
+  cmTerm.osc(133, 'rotari_cursor=11', 13, 7);
+  assert.equal(click(9, 7), '\x1b[9998~7;', 'a click counted from the cursor');
+  assert.equal(click(1, 7), '', 'a click on the prompt drawn again');
   }
 
   // The right-click menu: the panel's in place of the browser's, with Copy, Paste, and Select

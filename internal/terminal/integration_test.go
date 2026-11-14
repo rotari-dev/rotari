@@ -43,7 +43,8 @@ func writeFiles(t *testing.T, dir string, files map[string]string) {
 
 var oscMark = regexp.MustCompile("\x1b\\]133;([^\a]*)\a")
 
-// marksAfter types false, and returns the OSC 133 marks the shell printed by the prompt after it.
+// marksAfter types false, and returns the OSC 133 marks the shell printed by the prompt after it,
+// but zsh's rotari_cursor.
 func marksAfter(t *testing.T, shell *startedShell) []string {
 	t.Helper()
 	if _, err := shell.Write([]byte("false\n")); err != nil {
@@ -54,7 +55,10 @@ func marksAfter(t *testing.T, shell *startedShell) []string {
 		if at := strings.Index(text, "\x1b]133;D;1\a"); at >= 0 && strings.Contains(text[at:], "133;B\a") {
 			var marks []string
 			for _, match := range oscMark.FindAllStringSubmatch(text, -1) {
-				marks = append(marks, match[1])
+				// zsh's word of where its cursor is, before each redraw, is checked on its own.
+				if !strings.HasPrefix(match[1], "rotari_cursor=") {
+					marks = append(marks, match[1])
+				}
 			}
 			return marks
 		}
@@ -249,6 +253,23 @@ func TestZshIntegrationPutsTheCursorWhereClicked(t *testing.T) {
 	}
 	if got := shell.run(t, "echo ${SPIED:-no}"); got != "no" {
 		t.Errorf("forward-char ran, which takes a suggestion: %q", got)
+	}
+	// Before each redraw, zsh says where its cursor is in the line, Ctrl+L's too, so that the
+	// panel finds the line's start from it when the prompt is drawn again elsewhere.
+	if _, err := shell.Write([]byte("echo ab")); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	shell.mu.Lock()
+	shell.output.Reset()
+	shell.mu.Unlock()
+	if _, err := shell.Write([]byte("\x0c")); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(testWait); !strings.Contains(shell.text(), "\x1b]133;rotari_cursor=7\a"); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("no cursor said after Ctrl+L; the terminal shows:\n%q", shell.text())
+		}
 	}
 }
 

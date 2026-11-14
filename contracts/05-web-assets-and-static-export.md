@@ -1467,7 +1467,7 @@ including a run started in a shell, goes on. Covered by the tests in
 **WEB-51** With `rotari web --allow-terminal`, a right click in a pane opens the panel's menu by the pointer and keeps
 the browser's from opening, unless Shift is held (the browser's opens) or the program asked for mouse tracking (it
 gets the click). The menu offers **Cut**, on only for a selection wholly within the command line typed at the prompt
-(from `B` to the line's end, counted as WEB-50 counts, a selection run past the text ending with it), which copies
+(from its start, found as WEB-50 finds it, to the line's end, counted as WEB-50 counts, a selection run past the text ending with it), which copies
 the selection and, only if that succeeds, moves the cursor to its end as WEB-50 does and sends one `DEL` per character,
 then clears the selection; **Copy**, of the terminal's selection, off without one; **Paste**, which reads the
 clipboard and gives it to the terminal as Ctrl+V does (bracketed when the program asked, with no Enter of its own),
@@ -1480,8 +1480,11 @@ command**. Implemented in the panel in `web_shell.js`; covered by `TestTerminalP
 cursor there. It applies to a press and release of the left button without Alt, Ctrl, Meta, or Shift, within 2 pixels
 of each other, that leave no selection, with no link under the pointer and no mouse tracking asked for by the
 program, in a pane whose last block (WEB-48) has `B` and neither `C` nor an end, outside the alternate screen, with
-the view at the bottom, on a row from `B`'s to the cursor's or one wrapped on from it, and not before `B`. Its target
-is counted in characters from `B`: the second cell of a wide character is the character's, a row ending without
+the view at the bottom, on a row from the line's start to the cursor's or one wrapped on from it, and not before the
+start. The line starts where a shell that says where its cursor is in the line (`rotari_cursor=N`, WEB-49) puts it, N
+characters back from the cursor; otherwise at `B`, unless the rows from `B` to the cursor are not one wrapped line, as
+after the line editor drew the prompt again elsewhere (Ctrl+L, a list of completions), when no click moves the cursor.
+Its target is counted in characters from the start: the second cell of a wide character is the character's, a row ending without
 wrapping is one character, and a click past a row's text goes to its end, or the cursor's place if further. The panel
 then sends, as keystrokes, the line's character index after `ESC [ 9998 ~` and before `;` to a shell whose `A` said
 `rotari_goto=1` (WEB-49), and otherwise the left or right arrow keys for the difference, as `ESC [` or, in
@@ -1507,7 +1510,8 @@ history has just taken the line (its last entry changed since the prompt), so th
 `HISTCONTROL` or `HISTIGNORE`, or with history off, gets a `C` that says none rather than the line before it. zsh also
 binds `ESC [ 9998 ~` in its `emacs`, `viins`, and `vicmd` keymaps to a widget that reads up to ten digits and, on a
 closing `;`, puts the cursor at that character index, capped at the buffer's end (so a suggestion shown past it is
-not taken), and says so on every `A` as `A;rotari_goto=1` (WEB-50). Any other shell,
+not taken), and says so on every `A` as `A;rotari_goto=1` (WEB-50); and before each redraw of the line it says where
+its cursor is in it, as `133;rotari_cursor=N`, so that the panel finds the line's start after a redraw elsewhere. Any other shell,
 and every shell with `--terminal-shell-integration=false` (or `terminal-shell-integration = false` in a config, or
 `ROTARI_WEB_TERMINAL_SHELL_INTEGRATION=false`, as WEB-36 reads them), starts as `-l` with nothing added. The option
 is refused without `--allow-terminal` and with `--static-dir`, and a detached server reports it as a difference

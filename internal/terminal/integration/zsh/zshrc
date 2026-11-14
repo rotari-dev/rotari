@@ -28,11 +28,18 @@ __rotari_line_init=0
 __rotari_b() {
 	print -n "\e]133;B\a"
 }
+# __rotari_cursor says, before each redraw of the line, where the cursor is in it, so that
+# the Web terminal finds where the line starts from the cursor even after the line editor
+# drew the prompt again elsewhere, as Ctrl+L and a list of completions do, without a B.
+__rotari_cursor() {
+	print -n "\e]133;rotari_cursor=$CURSOR\a"
+}
 # add-zle-hook-widget does nothing until the line editor is loaded, which an interactive
 # zsh does only after its startup files unless asked to.
 if zmodload zsh/zle 2>/dev/null && autoload -Uz add-zle-hook-widget 2>/dev/null &&
 	add-zle-hook-widget line-init __rotari_b 2>/dev/null; then
 	__rotari_line_init=1
+	add-zle-hook-widget line-pre-redraw __rotari_cursor 2>/dev/null
 fi
 # __rotari_preexec says the command line too, as kitty does (C;cmdline_url= and the line
 # percent-encoded), since a prompt may redraw the line it was typed on before it runs, as
