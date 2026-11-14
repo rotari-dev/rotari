@@ -368,21 +368,12 @@ func TestResolveBaseDirPriority(t *testing.T) {
 
 	_ = os.Unsetenv(envName)
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	tempDir := t.TempDir()
-	if err := os.Chdir(tempDir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(cwd)
-	})
+	// t.Chdir also sets PWD, so os.Getwd keeps tempDir's spelling on macOS.
+	t.Chdir(tempDir)
 
 	// 1. Fallback to default (home directory, etc.) if .rotari-state does not exist in current dir
-	_, _, err = state.ResolveBaseDir("")
+	_, _, err := state.ResolveBaseDir("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2729,7 +2720,9 @@ func TestControlQueueJobsSuspendsAndResumesSelectedLocalJob(t *testing.T) {
 	}
 	// SIGSTOP is asynchronous; wait until the child has stopped before sampling.
 	var status syscall.WaitStatus
-	if _, err := syscall.Wait4(child.Process.Pid, &status, syscall.WUNTRACED, nil); err != nil || !status.Stopped() {
+	// Read the stop from the raw status: on BSD and macOS, Go's
+	// WaitStatus.Stopped is false for a stop by SIGSTOP itself.
+	if _, err := syscall.Wait4(child.Process.Pid, &status, syscall.WUNTRACED, nil); err != nil || uint32(status)&0xff != 0x7f {
 		t.Fatalf("child did not stop: status=%v err=%v", status, err)
 	}
 	data, err := os.ReadFile(outputPath)

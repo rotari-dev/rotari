@@ -95,18 +95,7 @@ func TestResolveProjectNamePrecedence(t *testing.T) {
 
 func TestResolveBaseDirDefaultIgnoresEnvironmentOverride(t *testing.T) {
 	workspace := t.TempDir()
-	oldDir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chdir(workspace); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.Chdir(oldDir); err != nil {
-			t.Error(err)
-		}
-	})
+	t.Chdir(workspace)
 	stateHome := t.TempDir()
 	envBase := t.TempDir()
 	t.Setenv(xdgStateHomeEnv, stateHome)

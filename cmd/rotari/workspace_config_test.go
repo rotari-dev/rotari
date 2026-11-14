@@ -19,19 +19,10 @@ func workspaceCWD(t *testing.T) string {
 		cliFileConfig, cliLocationExplicit, cliLocationDefaults = oldFiles, oldExplicit, oldDefaults
 		cliIgnoreImplicitLocationDefaults = oldIgnored
 	})
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
 	dir := t.TempDir()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.Chdir(cwd); err != nil {
-			t.Error(err)
-		}
-	})
+	// t.Chdir also sets PWD, as a shell does, so os.Getwd keeps dir's spelling
+	// where the temporary directory is under a symbolic link (/var on macOS).
+	t.Chdir(dir)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv(envBaseDir, "")
 	t.Setenv(envProjectName, "")
@@ -170,9 +161,7 @@ func TestWorkspaceLocationAndMergedFiles(t *testing.T) {
 	if err := os.Mkdir(child, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chdir(child); err != nil {
-		t.Fatal(err)
-	}
+	t.Chdir(child)
 	t.Setenv(envProjectName, "")
 	if err := loadCLIConfig(nil); err != nil {
 		t.Fatal(err)

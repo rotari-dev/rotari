@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"testing"
+
+	"github.com/creack/pty"
 )
 
 // usePromptStdin makes confirmation prompts treat stdin as interactive and
@@ -51,12 +53,15 @@ func TestIsTerminalRejectsDevNull(t *testing.T) {
 }
 
 func TestIsTerminalAcceptsPseudoTerminal(t *testing.T) {
-	master, err := os.OpenFile("/dev/ptmx", os.O_RDWR, 0)
+	// The terminal side is what a process gets as its stdin; macOS refuses
+	// terminal attributes on a bare /dev/ptmx master.
+	master, terminal, err := pty.Open()
 	if err != nil {
 		t.Skipf("pseudo-terminal unavailable: %v", err)
 	}
 	defer master.Close()
-	if !isTerminal(master) {
+	defer terminal.Close()
+	if !isTerminal(terminal) {
 		t.Fatal("pseudo-terminal was not treated as a terminal")
 	}
 }
