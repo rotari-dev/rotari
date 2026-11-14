@@ -222,3 +222,36 @@ The same macOS behaviour means `state.ClassifyProcess`, which takes EPERM as "ex
 group as alive or unknown; recorded in `development/ISSUES.md` with a note on the cancel entry.
 
 **Validation:** `node --check scripts/web-browser.mjs`. Not run on macOS.
+
+## 2026-11-15 — `9a44df0e` Signal a launch's shell before its group, so a stop ends it on macOS
+
+The first full run on a Mac (macOS 14.2.1, arm64, at `bc5aae54`, then the failed packages again at `e1dc61a3`)
+found the cause of three `internal/launcher` failures not seen in CI before: `TestStopEndsDescendants`,
+`TestManagerStopEndsProcessGroup`, and `TestManagerCloseStopsLaunchesAndCleansUp` read `exit 0` from `Stop()`
+instead of SIGTERM or SIGKILL, in about one stop in four.
+
+**Cause:** a product bug on macOS. There, a signal to a process group does not reach every member at once. A
+stand-alone reproducer that runs `sh -c 'sleep 300 & echo $! > F; wait'` in its own group and signals the group
+right after the child starts saw the leader exit 0 in up to 30 of 40 stops, with `sh`, `bash`, `dash`, and `zsh`,
+for SIGTERM and SIGKILL alike. Adding a command after `wait` made it 0 of 120, and so did waiting 200 ms after
+the child started: the child dies, the shell's `wait` returns 0, and the shell is already exiting when the
+signal would reach it. The launch then records `exit_code: 0` instead of `signal` in `/api/launches`.
+
+**Change:** `internal/launcher/wrapper.go`: `signalGroup` signals the unreaped leader through `os.Process.Signal`
+before the group. When the command has already exited and been reaped, its PID may be reused, so only the group
+is signalled. The reproducer with this order: 0 of 240.
+
+**Test:** `TestStopSignalsAShellWaitingForItsChild` stops such a shell 20 times. Before the fix it failed in
+each of 3 runs; after it, it and the three tests above passed `-count=5`.
+
+**Validation:** on the Mac, `internal/launcher` (also `-race`, except `TestVerifyListener*`, still recorded), and the
+`Launch|Launcher|TensorBoard` tests of `cmd/rotari`, `internal/webui`, and `conformance/05-web`. `GOOS=linux go vet`
+clean; not run on Linux.
+
+**Also seen in that run, not addressed here:** the JSDOM tests need Node ≥ 22.19 (undici), so the Mac's Node 23.7
+failed them all, and Node 22.23.5 passed them. `TestBashIntegrationReadsTheLoginFilesAndMarks` fails with macOS's
+`/bin/bash` 3.2, like the recorded `TestOldBashIntegration…`. Five `internal/terminal` tests
+(`TestAttachedReaderMissesNothingInABurst`, `TestSlowReaderMakesTheProgramWait`,
+`TestStalledReaderIsDetachedAndTheProgramContinues`, `TestProgramsDoNotStallWithNothingAttached`,
+`TestAShellStartedInsideIsTheCurrentShell`) passed at `bc5aae54` and failed every run at `e1dc61a3`, after the
+inner shell commits of another thread.
