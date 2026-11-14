@@ -1,7 +1,8 @@
 # Plan: Shells started inside the Web terminal's shells
 
 Created: 2026-11-15
-Status: Proposed; waiting for the user's decision on the open questions.
+Status: Accepted by the user on 2026-11-15, with the open questions answered as proposed; phase 1 is done and
+phase 2 (contracts and docs) is next. See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -74,7 +75,10 @@ sub-shells, gets a plan of its own.
 - Following into `tmux`, `screen`, `ssh`, containers, or `sudo`/`su` shells.
 - Telling an interactive shell from a script by more than its command line.
 
-## Open questions
+## Settled questions
+
+Both were accepted as proposed on 2026-11-15.
+
 
 1. **Which programs count as shells.** Proposed: the list in decision 1. Others (`nu`, `xonsh`, `elvish`, `pwsh`) could
    be added, but their command lines follow other conventions.
