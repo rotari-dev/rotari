@@ -257,3 +257,23 @@ func currentUmask() fs.FileMode {
 	syscall.Umask(mask)
 	return fs.FileMode(mask)
 }
+
+// TestRenameNoReplaceFallbackSaysFileExists checks the check-then-rename used
+// where the system cannot refuse to replace (macOS): it refuses with the same
+// error, and so the same message, as Linux's no-replace rename.
+func TestRenameNoReplaceFallbackSaysFileExists(t *testing.T) {
+	dir := t.TempDir()
+	from, to := filepath.Join(dir, "from"), filepath.Join(dir, "to")
+	for _, path := range []string{from, to} {
+		if err := os.WriteFile(path, []byte(path), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err := renameNoReplaceFallback(from, to)
+	if !errors.Is(err, fs.ErrExist) || !errors.Is(err, syscall.EEXIST) || !strings.Contains(err.Error(), "file exists") {
+		t.Fatalf("renameNoReplaceFallback onto a file = %v, want EEXIST saying \"file exists\"", err)
+	}
+	if data, _ := os.ReadFile(to); string(data) != to {
+		t.Fatalf("the target was replaced: %q", data)
+	}
+}

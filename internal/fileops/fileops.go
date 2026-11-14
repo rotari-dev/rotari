@@ -103,7 +103,10 @@ func within(path, dir string) bool {
 // replaced; that race is the cost.
 func renameNoReplaceFallback(from, to string) error {
 	if _, err := os.Lstat(to); err == nil {
-		return &os.LinkError{Op: "rename", Old: from, New: to, Err: fs.ErrExist}
+		// EEXIST, as Linux's no-replace rename reports it, so the message
+		// ("file exists") is the same on every system; it still matches
+		// fs.ErrExist.
+		return &os.LinkError{Op: "rename", Old: from, New: to, Err: syscall.EEXIST}
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
