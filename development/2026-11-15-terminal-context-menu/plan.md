@@ -1,7 +1,8 @@
 # Plan: A right-click menu in the Web terminal
 
 Created: 2026-11-15
-Status: Proposed; waiting for the user's decision on the open questions.
+Status: Accepted by the user on 2026-11-15, with the open questions answered as proposed; phase 1 is done and phase 2 (Cut and the block items) is next.
+See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -73,7 +74,10 @@ move](../2026-11-15-terminal-click-to-move/plan.md), whose way of moving the cur
 - A menu item that runs anything, or Paste that presses Enter.
 - Changing what Ctrl+C, Ctrl+V, or the browser's keys do.
 
-## Open questions
+## Settled questions
+
+All three were accepted as proposed on 2026-11-15.
+
 
 1. **The browser's menu.** Proposed: Shift+right-click opens it. The alternative is to drop it in the terminal
    entirely.
