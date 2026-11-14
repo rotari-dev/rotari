@@ -30,3 +30,45 @@ instead of a separate macOS `race` job, as decided with the user.
 macOS. `TestRunTerminal*` passed `-count=3` on Linux.
 
 **Remaining:** The macOS test results, which the next run shows.
+
+## 2026-11-14 — `decaddda` and `f65c7601`: the first macOS test failures
+
+The second macOS run reached the tests. The user pasted the failures of `conformance/01-resolution`,
+`02-lifecycle`, `03-interfaces`, and `cmd/rotari`; other packages' results were not seen.
+
+**`decaddda` End zsh completions in the shell test with Ctrl-G** (`cmd/rotari/completion_shell_test.go`):
+`TestShellCompletionCandidates/zsh` timed out after 120 s. The driver ended each completion with Ctrl-T, which BSD
+and macOS terminals take as their status key (the log shows its `load: … cmd: zsh` line), so zsh never saw it.
+Ctrl-G has no terminal meaning on either system. A Linux assumption in a test.
+
+**`f65c7601` Read the process table and set PWD the same way on macOS** (`conformance/support`, the three
+harnesses, `05-web`, `scripts/web_browser_test.go`):
+
+- New `support.Processes` (and `MustProcesses`, `ProcessArgs`, `ProcessEnvironment`): `/proc` on Linux, `ps -ww`
+  (and `ps -E`) elsewhere, where arguments are split at spaces. About ten `/proc` readers now use it: `KillStrays`,
+  `KillSupervisors`, `JobProcesses`, the harnesses' `killStrays` (now `support.KillStrays`) and `jobProcesses`,
+  `stopDetached`, the server command-line check, `childrenOf`, and the browser-close check (`kill -0`).
+  `sessionOf` uses `unix.Getsid`. A process table that cannot be read now fails the test; `KillStrays` used to
+  return silently, which left `TestRerunOfAnInterruptedRun`'s run alive on macOS (`state running, want
+  interrupted`).
+- `support.ProcessIdentity` returns no PID namespace or start time off Linux, as rotari records none there. It
+  failed `TestInfoReportsContextAndRunLocks`, `TestUnlockExecutionEvidenceOverridesTerminalOutcome`,
+  `TestUnlockFinalizationRepair`, and `TestUnlockOwnershipAndDryRun` with `readlink /proc/…/ns/pid`.
+- `support.CommandEnv` sets `PWD` to the command's directory in all three harnesses. They passed an explicit
+  environment without it, so `os.Getwd` in rotari returned `/private/var/…` for a test directory under `/var/…`,
+  which a shell's `PWD` avoids. It failed `TestBadConfiguredValuesAreErrors` and
+  `TestRunRecordsUncommittedGitChanges`, and probably `TestWebWorkspaceSourceSelectionAndRunSnapshot`, whose
+  message was not seen.
+
+All Linux assumptions in tests, not product bugs.
+
+**Not fixed: `TestNotesAnotherRotariBinary`.** Its message was not in the paste. From the code: on macOS,
+`ProcessStart` and `PIDNamespace` are empty, so a live coordinator is never `CoordinatorLive` and `wait` prints no
+note. A product limitation, recorded in `development/ISSUES.md`; the test stays failing rather than skipped until
+it is fixed in its own plan.
+
+**Validation:** `GOOS=darwin go vet ./...` (arm64, amd64) clean. On Linux: `go test ./conformance/... ./scripts
+./cmd/rotari` passed (node v24 for JSDOM; `05-web` failed once under the system node v12 and passed with v24).
+None of it has run on macOS yet.
+
+**Remaining:** Push and read the next macOS run, including the packages not seen so far.
