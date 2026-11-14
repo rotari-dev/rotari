@@ -2,8 +2,8 @@
 
 Created: 2026-11-14
 Status: Phases 1–7 implemented on 2026-11-14. After them the user found Ctrl+Shift+ArrowUp / ArrowDown little
-better than scrolling, and accepted a **Commands** dropdown and copy buttons in their place (phases 8 and 9); phase 8
-is done and phase 9 is next. See [work-log.md](work-log.md).
+better than scrolling, and accepted a **Commands** dropdown and copy buttons in their place (phases 8 and 9); all nine phases
+are done; the browser steps run only in CI. See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -67,7 +67,8 @@ Grouping blocks by directory, discussed with recent directories, would build on 
    returns, and each `Next` is one WebSocket message), so marks parsed before that message is done get no times.
 4. **Moving and acting.** *Revised 2026-11-14:* the bar's **Commands** dropdown lists the pane's commands, newest
    first, with their state, line, and end, and a filter; choosing one scrolls to its prompt and lights it up, and each
-   row copies its output or line. A copy button shows at the right of a prompt's line under the pointer (phase 9).
+   row copies its output or line. A copy button shows at the right of a prompt's line while the pointer is over the
+   command's prompt or output (phase 9).
    No key is taken from the shell; Ctrl+Shift+ArrowUp / ArrowDown, first chosen, did little more than scrolling. Clicking a mark opens a small menu: **Copy output**, **Copy
    command**, **Select output** (so the browser's own copy and the existing actions work on it), and **Type command
    again**, which goes through `sendToTerminalAndSay` and so never presses Enter, and, as choosing a recent
@@ -114,7 +115,7 @@ Grouping blocks by directory, discussed with recent directories, would build on 
    jump and its highlight; the row's copy buttons; the keys removed; WEB-48, docs/WEB.md, and the browser step
    changed to it.
 9. **Copy on the prompt's line.** A **Copy output** button at the right end of a prompt's line, shown while the
-   pointer is over the line; WEB-48, docs, and the browser step.
+   pointer is over the command's prompt or output; WEB-48, docs, and the browser step.
 
 ## Tests and validation
 

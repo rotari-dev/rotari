@@ -222,3 +222,23 @@
 - **Plan impact:** none.
 - **Validation:** the earlier test, given a profile's `PS0`, fails here as on CI (`"[ps0]-gone"`); the new one passes,
   three runs in a row with the other integration tests.
+
+## 2026-11-14 23:00 +09:00 — Copy output on the prompt's line
+
+- **Change:** `paintBlock` gives each decoration a `.terminal-block-copy` button ("Copy output", `pointer-events: auto`,
+  absolute at the line's right end, stopping `mousedown` and `mouseup` as the mark does), shown when the block has
+  output and is `pane.hovered`. `hoverBlock`, from `mousemove` and `mouseleave` on the viewport, finds the row under
+  the pointer from `.xterm-screen`'s box and `term.rows`, and `blockAt` the command whose prompt or output is on that
+  buffer line (none in the alternate screen); only the old and new hovered blocks are repainted, and `dropBlocks`
+  clears it. `copyBlockOutput` is shared with the Commands row, whose copy helper now takes an action. WEB-48, its
+  row, and docs/WEB.md describe the button; the browser step points at `$ c true` after the reload, checks the button
+  at that line's right end inside `.xterm-screen` and under the pointer, and clicks it, accepting "Copied the output"
+  or "Copy failed", since a headless browser may refuse the clipboard.
+- **Reason:** plan phase 9.
+- **Plan impact:** the button shows over the command's output too, not only its prompt's line.
+- **Validation:** `TestTerminalPanel` (hidden with no pointer; shown over `false`'s output and prompt and over the
+  running command; a press stops at the button; a click copies `zz`; gone on `mouseleave` and in the alternate screen)
+  passed; prettier unchanged. A first try of the edit cut a stretch of `web_shell.js` (a slice whose end marker also
+  matched earlier in the file); `TestTerminalPanel` caught it at once, though `tsc` had passed, and the file was
+  restored and edited again. The browser script passes `node --check`; its step runs only in CI.
+- **Remaining:** nothing in this plan.
