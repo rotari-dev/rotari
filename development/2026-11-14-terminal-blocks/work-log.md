@@ -278,3 +278,22 @@
   `C;cmdline_url=false`, and with `LANG=C.UTF-8` `é` as `%C3%A9`. With no locale, zsh's line editor itself turns such
   bytes into `?` before the command runs, so the test uses ASCII. `TestTerminalPanel` has the decoded line winning
   over a blank screen and an undecodable one falling back; see the commit for the runs.
+
+## 2026-11-15 00:50 +09:00 — bash says the command line in C too
+
+- **Change:** `rotari.bash` has `__rotari_c`, which prints `C;cmdline_url=` and the line (from `fc -ln -0`, the
+  leading tab and space taken off, percent-encoded byte by byte under `LC_ALL=C`, the last two hex digits of each
+  byte kept, since one above 127 can read as negative) when `fc -l -0` differs from what `__rotari_prompt` recorded at
+  the prompt, and a bare `C` otherwise. bash 4.4 and later run it from `PS0` as `$(__rotari_c)` (a bare `C` when
+  `promptvars` is off, since `PS0` would then print the text), and earlier bash from the `DEBUG` trap.
+- **Reason:** the user asked for bash to say the command line as zsh does now, for transient prompts. Bash gives a
+  hook no command line, but adds a line to history before it runs. A line history leaves out (`ignorespace`,
+  `ignoredups`, `HISTIGNORE`) would make `fc` give the line before it, hence the comparison with the prompt's entry.
+- **Plan impact:** decision 1 notes it.
+- **Validation:** with a pty here, both ways (bash 5.1, and the `DEBUG` trap way forced) gave
+  `C;cmdline_url=echo%20one`, bare `C` for the same line again and for ` echo hidden` under `ignoreboth`, and
+  `echo%20%22%C3%A9%20a%3Bb%22%20%7C%20cat` with `HISTTIMEFORMAT` set. `TestBashIntegrationReadsTheLoginFilesAndMarks`
+  now expects `C;cmdline_url=false` and a bare `C` for ` true` under `ignorespace`; without the comparison it fails,
+  saying the run helper's line instead. `TestOldBashIntegrationMarksCommandsByTheDebugTrap` expects
+  `C;cmdline_url=true%20%7C%20false`. The old version check in the bash test, which expected no `C` before 4.4, is
+  gone, since the `DEBUG` trap gives one.
