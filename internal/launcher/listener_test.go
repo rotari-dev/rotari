@@ -3,9 +3,12 @@ package launcher
 import (
 	"errors"
 	"net"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -51,8 +54,28 @@ func TestVerifyListenerAcceptsLaunchListener(t *testing.T) {
 	t.Parallel()
 	process, port := startListener(t, LoopbackHost)
 	if err := VerifyListener(port, process.PGID()); err != nil {
+		logListenerFacts(t, port, process.PGID())
 		t.Fatal(err)
 	}
+}
+
+// logListenerFacts records what the listener check saw, for a failure on a
+// platform whose check cannot be run here: lsof's own output and each
+// process's group on macOS, and the listeners as rotari read them.
+func logListenerFacts(t *testing.T, port, launchGroup int) {
+	t.Helper()
+	if runtime.GOOS == "darwin" {
+		output, err := exec.Command("/usr/sbin/lsof", "-nP", "-a", "-iTCP:"+strconv.Itoa(port), "-sTCP:LISTEN", "-Fpn").CombinedOutput()
+		t.Logf("lsof for port %d (error %v):\n%s", port, err, output)
+		for _, line := range strings.Split(string(output), "\n") {
+			if pid, err := strconv.Atoi(strings.TrimPrefix(line, "p")); strings.HasPrefix(line, "p") && err == nil {
+				group, groupErr := syscall.Getpgid(pid)
+				t.Logf("process %d: group %d (error %v)", pid, group, groupErr)
+			}
+		}
+	}
+	listeners, err := portListeners(port)
+	t.Logf("listeners on port %d as read: %+v (error %v); the launch's group is %d", port, listeners, err, launchGroup)
 }
 
 // Feasibility gate: a process outside the launch that bound the allocated
@@ -71,6 +94,7 @@ func TestVerifyListenerRejectsForeignListener(t *testing.T) {
 	waitAccepting(t, port)
 	err = VerifyListener(port, process.PGID())
 	if err == nil || !strings.Contains(err.Error(), "another process listens on") {
+		logListenerFacts(t, port, process.PGID())
 		t.Fatalf("VerifyListener() = %v, want a foreign listener error", err)
 	}
 	select {
@@ -85,6 +109,7 @@ func TestVerifyListenerRejectsNonLoopbackBind(t *testing.T) {
 	process, port := startListener(t, "0.0.0.0")
 	err := VerifyListener(port, process.PGID())
 	if err == nil || !strings.Contains(err.Error(), "bind it to 127.0.0.1") {
+		logListenerFacts(t, port, process.PGID())
 		t.Fatalf("VerifyListener() = %v, want a bind address error", err)
 	}
 }

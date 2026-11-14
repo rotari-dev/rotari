@@ -198,6 +198,30 @@ func (r controlRun) keysWhere(match func(dir string) bool) []string {
 type controlOutcome struct {
 	result   support.Result
 	affected []string
+	// unfinished describes, when a job that should have finished did not,
+	// what its attempt recorded, so a failure says why.
+	unfinished string
+}
+
+// describeAttempts lists each key's attempt files and the status and process
+// identity it recorded.
+func (r controlRun) describeAttempts(keys []string) string {
+	var text strings.Builder
+	for _, key := range keys {
+		dir := r.attempts[key]
+		entries, _ := os.ReadDir(dir)
+		var names []string
+		for _, entry := range entries {
+			names = append(names, entry.Name())
+		}
+		fmt.Fprintf(&text, "\n  %s: files %v", key, names)
+		for _, name := range []string{"status.json", "job.json"} {
+			if data, err := os.ReadFile(filepath.Join(dir, name)); err == nil {
+				fmt.Fprintf(&text, "\n    %s: %s", name, strings.TrimSpace(string(data)))
+			}
+		}
+	}
+	return r.symbolic(text.String())
 }
 
 func (r controlRun) symbolic(text string) string {
@@ -222,7 +246,7 @@ func assertControlOutcome(t *testing.T, command string, flags []pairFlag, outcom
 		return
 	}
 	if r.Code != 0 || r.Stderr != "" || !slices.Equal(outcome.affected, want) {
-		t.Fatalf("acted on %v, want %v (an option was ignored or misapplied): %s", outcome.affected, want, r)
+		t.Fatalf("acted on %v, want %v (an option was ignored or misapplied): %s%s", outcome.affected, want, r, outcome.unfinished)
 	}
 }
 
@@ -303,7 +327,17 @@ func (r controlRun) cancelOutcome(t *testing.T, flags []pairFlag, want []string)
 		affected = r.keysWhere(finished)
 	}
 	result.Stdout, result.Stderr = r.symbolic(result.Stdout), r.symbolic(result.Stderr)
-	return controlOutcome{result: result, affected: affected}
+	outcome := controlOutcome{result: result, affected: affected}
+	var missing []string
+	for _, key := range want {
+		if !slices.Contains(affected, key) {
+			missing = append(missing, key)
+		}
+	}
+	if len(missing) > 0 {
+		outcome.unfinished = "\nunfinished after 10s:" + r.describeAttempts(missing)
+	}
+	return outcome
 }
 
 func TestCLIFlagPairCancel(t *testing.T) {
