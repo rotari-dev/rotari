@@ -18,6 +18,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/rotari-dev/rotari/internal/state"
 )
 
 var binary string
@@ -40,9 +42,10 @@ func ProcessIdentity(t *testing.T, pid int) CoordinatorProcess {
 		t.Fatal(err)
 	}
 	if runtime.GOOS != "linux" {
-		// rotari records neither elsewhere (state.PIDNamespace and
-		// state.ProcessStart are empty), so neither do the tests.
-		return CoordinatorProcess{Host: host, PID: pid}
+		// Off Linux there is no /proc to read independently, so take rotari's
+		// own platform facts: NoPIDNamespaces on macOS, where every process
+		// shares one PID space, and the start time from sysctl.
+		return CoordinatorProcess{Host: host, PID: pid, PIDNamespace: state.PIDNamespace(), ProcessStart: state.ProcessStart(pid)}
 	}
 	namespace, err := os.Readlink(fmt.Sprintf("/proc/%d/ns/pid", pid))
 	if err != nil {

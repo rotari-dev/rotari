@@ -190,7 +190,15 @@ Design and implementation notes:
   be observed from here is decided once, by `state.ObserveProcess` and
   `state.ObserveProcessGroup`
   ([process_identity.go](../internal/state/process_identity.go)): same, gone,
-  reused, another host, another namespace, or unverifiable. Local `cancel`,
+  reused, another host, another namespace, or unverifiable. The PID namespace
+  and start time come from `state.PIDNamespace` and `state.ProcessStart`
+  ([process_platform.go](../internal/state/process_platform.go)): on Linux,
+  the `/proc` namespace link and field 22 of `/proc/PID/stat`; on macOS,
+  `none`, which means a platform without PID namespaces where every process on
+  the host shares one PID space, and `p_starttime` from `sysctl kern.proc.pid`.
+  The BSDs record `none` and no start time; other platforms record neither.
+  A record whose namespace is empty, such as one an earlier rotari wrote on
+  macOS, stays unverified. Local `cancel`,
   `suspend`, `resume`, and process-group liveness, client attachments, launch
   origins, the run lock, the coordinator check, and the execution probe all
   use it. `executor.LocalElsewhere` refuses a job that the run's `context.json`

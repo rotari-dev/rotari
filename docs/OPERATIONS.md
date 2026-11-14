@@ -17,7 +17,10 @@ recorded process group exists; other executors and remote hosts are
 unverified. This does not prove process identity. The run lock separately
 reports coordinator liveness on this host.
 For new runs, the run context also retains the coordinator's host, PID,
-PID namespace, and process start time independently of that lock. Each active
+PID namespace, and process start time independently of that lock. On macOS,
+which has no PID namespaces, the namespace is recorded as `none`, and the start
+time comes from the kernel's process table; runs recorded there by a rotari
+before this have neither and stay unknown. Each active
 or interrupted run reports a separate `coordinator` assessment in `info --json`
 (`state`, `reason`, `observed_at`, and the recorded `identity`), or a
 `coordinator=live|stopped|unknown` line in text output. A matching local
