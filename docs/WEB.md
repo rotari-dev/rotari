@@ -328,7 +328,10 @@ while the page was open. Failed commands are also marked in red on the scroll ba
 apart from the output before it. The **Commands** icon in the bar lists the pane's commands, newest first, with how
 each ended; type to filter them, and choose one to scroll back to it, or copy its output or command line from its
 row without scrolling. Point at a command's prompt or output to show **Copy output** at the right end of its prompt's
-line. Clicking a dot offers **Copy
+line. Click in the command line you are typing to move the cursor there, as in an editor; zsh started by rotari
+puts it at the exact character, and other shells get the arrow keys, so in a zsh not started that way a click past the
+typed text may take a zsh-autosuggestions suggestion, as the right arrow would. Alt+click keeps xterm.js's own
+cursor move. Clicking a dot offers **Copy
 output**, **Copy command**, **Select output**, and **Type command again**, which types a one-line command at the
 prompt without pressing Enter, only while nothing runs in the shell, as **Recent directories** does. Blocks are kept
 only in the page, from the output it shows, so they come back after following a link for as much output as is shown

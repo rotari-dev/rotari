@@ -221,6 +221,32 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: copyFacts.x, y: copyFacts.y, button: 'left', clickCount: 1 });
   await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: copyFacts.x, y: copyFacts.y, button: 'left', clickCount: 1 });
   await until('the copy to be said', '/^(Copied the output|Copy failed)/.test(document.querySelector(".terminal-send-note")?.textContent || "")');
+
+  // Click to move: in bash, whose line editor sh lacks, with a prompt marking where the line
+  // starts, a click in the typed line puts the cursor there.
+  await typeLine("bash --norc --noprofile -i");
+  await sleep(500);
+  await typeLine("PS1=$(printf '\\[\\033]133;A\\007\\]>> \\[\\033]133;B\\007\\]'); echo \"bash-$((3+4))\"");
+  await until('bash with a marking prompt', screenHas('bash-7'));
+  await sleep(300);
+  await page.evaluate('document.querySelectorAll(".xterm-helper-textarea")[0].focus()');
+  await page.send('Input.insertText', { text: 'echo $((40+2))x' });
+  const typedRow = '[...document.querySelectorAll(".xterm-rows > div")].find((row) => row.textContent.trim() === ">> echo $((40+2))x")';
+  await until('the typed line', typedRow + ' !== undefined');
+  // The cell of "$", after ">> echo ": the eighth.
+  const linePoint = await page.evaluate('(() => { const row = ' + typedRow + '.getBoundingClientRect(); const screen = document.querySelector(".xterm-screen").getBoundingClientRect(); const cols = document.querySelector(".terminal-pane").terminalPane.term.cols; const cell = screen.width / cols; return { x: screen.left + cell * 8.5, y: row.top + row.height / 2 }; })()');
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...linePoint });
+  await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...linePoint, button: 'left', clickCount: 1 });
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...linePoint, button: 'left', clickCount: 1 });
+  await sleep(300);
+  await page.evaluate('document.querySelectorAll(".xterm-helper-textarea")[0].focus()');
+  await typeLine('X');
+  await until('X typed where the line was clicked', screenHas('X42x')).catch(async (error) => {
+    throw new Error(error.message + '; the rows end ' + JSON.stringify(await page.evaluate('[...document.querySelectorAll(".xterm-rows > div")].map((row) => row.textContent.trim()).filter(Boolean).slice(-4)')));
+  });
+  await typeLine('exit');
+  await sleep(500);
+  await collect();
   await collect();
 
   // A dialog fits above the panel, whatever its usual height.
@@ -526,10 +552,10 @@ process.exit(0);
 
 // TestTerminalPanelInBrowser uses the real xterm.js in Chrome, signed in as a browser
 // is: opening the panel, typing, following a link with the shell still there, a run ID
-// it prints followed to its run page, blocks from a prompt that marks its commands, a
-// second tab, and up to four panes.
+// it prints followed to its run page, blocks from a prompt that marks its commands, a click
+// moving the cursor in a typed line, a second tab, and up to four panes.
 func TestTerminalPanelInBrowser(t *testing.T) {
-	covers(t, "WEB-33", "WEB-48")
+	covers(t, "WEB-33", "WEB-48", "WEB-50")
 	chrome := browserForTests(t)
 	node, err := exec.LookPath("node")
 	if err != nil || exec.Command(node, "-e", `if (typeof WebSocket !== "function") process.exit(1)`).Run() != nil {

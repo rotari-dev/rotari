@@ -1464,6 +1464,19 @@ limit is checked at the package level by `TestIdleLimitAppliesToTheShellsTogethe
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-50** With `rotari web --allow-terminal`, a click in the command line being typed at a shell's prompt moves the
+cursor there. It applies to a press and release of the left button without Alt, Ctrl, Meta, or Shift, within 2 pixels
+of each other, that leave no selection, with no link under the pointer and no mouse tracking asked for by the
+program, in a pane whose last block (WEB-48) has `B` and neither `C` nor an end, outside the alternate screen, with
+the view at the bottom, on a row from `B`'s to the cursor's or one wrapped on from it, and not before `B`. Its target
+is counted in characters from `B`: the second cell of a wide character is the character's, a row ending without
+wrapping is one character, and a click past a row's text goes to its end, or the cursor's place if further. The panel
+then sends, as keystrokes, the line's character index after `ESC [ 9998 ~` and before `;` to a shell whose `A` said
+`rotari_goto=1` (WEB-49), and otherwise the left or right arrow keys for the difference, as `ESC [` or, in
+application cursor mode, `ESC O`; nothing when the cursor is already there, and nothing else in any case. Alt+click
+stays xterm.js's. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
+[`TestTerminalPanelInBrowser`](../conformance/05-web/terminal_panel_browser_test.go).
+
 **WEB-49** With `rotari web --allow-terminal` and `--terminal-shell-integration`, on by default, a shell whose program
 is named `bash` or `zsh` starts with rotari's own startup files, written when the server starts into a new directory
 only its user can read and removed when it stops; the user's files are not changed. bash runs with `--init-file`
@@ -1479,7 +1492,10 @@ hook), so that a theme rebuilding the prompt at any time keeps it, or at the pro
 `DEBUG` trap unless the user's files set one, when there is no `C`; zsh by `preexec`). `C` says the command line as
 kitty sends it, `C;cmdline_url=` and the line percent-encoded byte by byte: always in zsh, and in bash only when
 history has just taken the line (its last entry changed since the prompt), so that a line history leaves out by
-`HISTCONTROL` or `HISTIGNORE`, or with history off, gets a `C` that says none rather than the line before it. Any other shell,
+`HISTCONTROL` or `HISTIGNORE`, or with history off, gets a `C` that says none rather than the line before it. zsh also
+binds `ESC [ 9998 ~` in its `emacs`, `viins`, and `vicmd` keymaps to a widget that reads up to ten digits and, on a
+closing `;`, puts the cursor at that character index, capped at the buffer's end (so a suggestion shown past it is
+not taken), and says so on every `A` as `A;rotari_goto=1` (WEB-50). Any other shell,
 and every shell with `--terminal-shell-integration=false` (or `terminal-shell-integration = false` in a config, or
 `ROTARI_WEB_TERMINAL_SHELL_INTEGRATION=false`, as WEB-36 reads them), starts as `-l` with nothing added. The option
 is refused without `--allow-terminal` and with `--static-dir`, and a detached server reports it as a difference

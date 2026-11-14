@@ -9,7 +9,7 @@ import (
 )
 
 // With the terminal on, bash and zsh start with rotari's own startup files, which read
-// the user's and mark prompts and commands with OSC 133; with
+// the user's and mark prompts and commands with OSC 133, zsh also taking a clicked index; with
 // --terminal-shell-integration=false they start as plain login shells, which read the
 // user's files and mark nothing. The user's files are left as they were.
 func TestTerminalShellIntegration(t *testing.T) {
@@ -50,12 +50,22 @@ func TestTerminalShellIntegration(t *testing.T) {
 				page.await(test.want)
 				shown := page.shown.String()
 				if integrated {
-					// The prompt after false says how it ended, starts a prompt, and marks the
-					// command line's start.
-					for _, mark := range []string{"\x1b]133;D;1\a", "\x1b]133;A\a", "\x1b]133;B\a"} {
+					// The prompt after false says how it ended, starts a prompt (zsh's saying it
+					// takes a clicked index), and marks the command line's start.
+					a := "\x1b]133;A\a"
+					if test.shell == "zsh" {
+						a = "\x1b]133;A;rotari_goto=1\a"
+					}
+					for _, mark := range []string{"\x1b]133;D;1\a", a, "\x1b]133;B\a"} {
 						if !strings.Contains(shown, mark) {
 							t.Errorf("no %q in what %s showed:\n%q", mark, test.shell, shown)
 						}
+					}
+					if test.shell == "zsh" {
+						// The index after zsh's key sequence puts the cursor there: Z after
+						// "echo ", and Q past the end, which stops at the end.
+						page.typeLine("echo abc\x1b[9998~5;Z\x1b[9998~99;Q")
+						page.await("ZabcQ")
 					}
 				} else if strings.Contains(shown, "\x1b]133;") {
 					t.Errorf("%s marked its prompts with the integration off:\n%q", test.shell, shown)
