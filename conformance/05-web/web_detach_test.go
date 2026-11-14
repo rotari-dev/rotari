@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rotari-dev/rotari/conformance/support"
+	"golang.org/x/sys/unix"
 )
 
 var detachedPattern = regexp.MustCompile(`rotari web listening at (http://\S+) in the background \(PID (\d+)`)
@@ -42,8 +44,8 @@ func startDetached(t *testing.T, e *support.Env, args ...string) (detachedWeb, s
 // directory, so a PID reused by another process is never hit.
 func stopDetached(t *testing.T, e *support.Env, pid int, signal syscall.Signal) {
 	t.Helper()
-	environment, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "environ"))
-	if err != nil || !bytes.Contains(environment, []byte("\x00ROTARI_MASTERDIR="+e.Master+"\x00")) && !bytes.HasPrefix(environment, []byte("ROTARI_MASTERDIR="+e.Master+"\x00")) {
+	environment, err := support.ProcessEnvironment(pid)
+	if err != nil || !slices.Contains(environment, "ROTARI_MASTERDIR="+e.Master) {
 		return
 	}
 	_ = syscall.Kill(pid, signal)
@@ -58,17 +60,12 @@ func detachedFiles(t *testing.T, e *support.Env) (record, log string) {
 	return filepath.Join(e.Master, "web", host+".json"), filepath.Join(e.Master, "web", host+".log")
 }
 
-// sessionOf is the session ID of pid, from /proc.
+// sessionOf is the session ID of pid.
 func sessionOf(t *testing.T, pid int) int {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+	session, err := unix.Getsid(pid)
 	if err != nil {
-		t.Skipf("no /proc: %v", err)
-	}
-	fields := strings.Fields(string(data[bytes.LastIndexByte(data, ')')+1:]))
-	session, err := strconv.Atoi(fields[3])
-	if err != nil {
-		t.Fatalf("stat of %d: %q", pid, data)
+		t.Fatalf("session of %d: %v", pid, err)
 	}
 	return session
 }
@@ -145,11 +142,11 @@ func TestWebDetachGeneratesATokenOutsideItsArguments(t *testing.T) {
 	if token == nil {
 		t.Fatalf("no generated token printed:\n%s", result)
 	}
-	commandLine, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(server.pid), "cmdline"))
-	if err != nil {
-		t.Skipf("no /proc: %v", err)
+	args, running, err := support.ProcessArgs(server.pid)
+	if err != nil || !running {
+		t.Fatalf("cannot read the server's command line: running %v, %v", running, err)
 	}
-	if strings.Contains(string(commandLine), token[1]) {
+	if commandLine := strings.Join(args, " "); strings.Contains(commandLine, token[1]) {
 		t.Errorf("the token is in the server's command line: %q", commandLine)
 	}
 	record, log := detachedFiles(t, e)

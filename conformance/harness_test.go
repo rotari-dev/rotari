@@ -11,9 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -101,29 +99,9 @@ func newEnv(t *testing.T) *env {
 
 // killStrays kills the process group of every process whose command line
 // names a path under root, such as a job wrapper that a failed cancel left
-// running, so a test leaks no processes. It needs /proc and does nothing
-// without it.
+// running, so a test leaks no processes.
 func killStrays(t *testing.T, root string) {
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
-		return
-	}
-	for _, entry := range entries {
-		pid, err := strconv.Atoi(entry.Name())
-		if err != nil {
-			continue
-		}
-		cmdline, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
-		if err != nil || !bytes.Contains(cmdline, []byte(root+string(filepath.Separator))) {
-			continue
-		}
-		pgid, err := syscall.Getpgid(pid)
-		if err != nil || pgid == syscall.Getpgrp() {
-			continue
-		}
-		t.Logf("killing leftover process group %d: %s", pgid, bytes.ReplaceAll(cmdline, []byte{0}, []byte{' '}))
-		_ = syscall.Kill(-pgid, syscall.SIGKILL)
-	}
+	support.KillStrays(t, root)
 }
 
 // in returns e reporting to t, for use inside a subtest.
@@ -166,8 +144,8 @@ func (r result) String() string {
 func (e *env) command(args ...string) *exec.Cmd {
 	support.TrackBuildInputs(e.t)
 	cmd := exec.Command(rotariBin, args...)
-	cmd.Env = e.vars
 	cmd.Dir = e.root
+	cmd.Env = support.CommandEnv(e.vars, cmd.Dir)
 	e.transcript.Started(cmd.Dir, args)
 	return cmd
 }
@@ -446,17 +424,13 @@ func jobAttempts(t *testing.T, e *env, run activeRun, job string) int {
 
 func jobProcesses(t *testing.T, root, job string) int {
 	t.Helper()
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
-		t.Skipf("cannot list processes: %v", err)
-	}
 	count := 0
-	for _, entry := range entries {
-		cmdline, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
-		if err != nil || !bytes.Contains(cmdline, []byte(root+string(filepath.Separator))) || !bytes.Contains(cmdline, []byte("local-wrapper.sh")) {
+	for _, process := range support.MustProcesses(t) {
+		line := process.CommandLine()
+		if !strings.Contains(line, root+string(filepath.Separator)) || !strings.Contains(line, "local-wrapper.sh") {
 			continue
 		}
-		if job == "" || bytes.Contains(cmdline, []byte(string(filepath.Separator)+job+string(filepath.Separator))) {
+		if job == "" || strings.Contains(line, string(filepath.Separator)+job+string(filepath.Separator)) {
 			count++
 		}
 	}

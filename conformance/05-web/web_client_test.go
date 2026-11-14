@@ -292,26 +292,13 @@ func TestWebWithoutATerminalServesInItsOwnProcess(t *testing.T) {
 	awaitServing(t, match[1], false, "after killing it")
 }
 
-// childrenOf lists the PIDs whose parent is pid, from /proc.
+// childrenOf lists the PIDs whose parent is pid.
 func childrenOf(t *testing.T, pid int) []int {
 	t.Helper()
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
-		t.Skipf("no /proc: %v", err)
-	}
 	var children []int
-	for _, entry := range entries {
-		child, err := strconv.Atoi(entry.Name())
-		if err != nil {
-			continue
-		}
-		stat, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "stat"))
-		if err != nil {
-			continue
-		}
-		fields := strings.Fields(string(stat[bytes.LastIndexByte(stat, ')')+1:]))
-		if len(fields) > 1 && fields[1] == strconv.Itoa(pid) {
-			children = append(children, child)
+	for _, process := range support.MustProcesses(t) {
+		if process.PPID == pid {
+			children = append(children, process.PID)
 		}
 	}
 	return children

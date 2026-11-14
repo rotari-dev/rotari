@@ -1,10 +1,13 @@
 package scripts_test
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -125,7 +128,9 @@ func TestCloseWaitsForTheBrowserToExit(t *testing.T) {
 		t.Fatalf("record = %q", data)
 	}
 	profile, pid := fields[0], fields[1]
-	if _, err := os.Stat(filepath.Join("/proc", pid)); err == nil {
+	if number, err := strconv.Atoi(pid); err != nil {
+		t.Fatalf("record PID %q: %v", pid, err)
+	} else if err := syscall.Kill(number, 0); err == nil || errors.Is(err, syscall.EPERM) {
 		t.Errorf("close returned while the browser (PID %s) still ran", pid)
 	}
 	if _, err := os.Stat(profile); !os.IsNotExist(err) {

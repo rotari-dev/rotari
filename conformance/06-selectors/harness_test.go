@@ -11,9 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -79,8 +77,8 @@ func newEnv(t *testing.T) *env {
 func (e *env) command(a ...string) *exec.Cmd {
 	support.TrackBuildInputs(e.t)
 	c := exec.Command(rotariBin, a...)
-	c.Env = e.vars
 	c.Dir = e.root
+	c.Env = support.CommandEnv(e.vars, c.Dir)
 	e.transcript.Started(c.Dir, a)
 	return c
 }
@@ -258,21 +256,7 @@ func (e *env) createFinishedRun() finishedRun {
 }
 
 func killStrays(t *testing.T, root string) {
-	entries, _ := os.ReadDir("/proc")
-	for _, x := range entries {
-		pid, err := strconv.Atoi(x.Name())
-		if err != nil {
-			continue
-		}
-		cmd, err := os.ReadFile(filepath.Join("/proc", x.Name(), "cmdline"))
-		if err != nil || !bytes.Contains(cmd, []byte(root+string(filepath.Separator))) {
-			continue
-		}
-		pgid, err := syscall.Getpgid(pid)
-		if err == nil && pgid != syscall.Getpgrp() {
-			_ = syscall.Kill(-pgid, syscall.SIGKILL)
-		}
-	}
+	support.KillStrays(t, root)
 }
 func waitUntil(t *testing.T, d time.Duration, done func() (bool, string)) {
 	deadline := time.Now().Add(d)

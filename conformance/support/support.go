@@ -11,7 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
+	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -38,6 +39,11 @@ func ProcessIdentity(t *testing.T, pid int) CoordinatorProcess {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if runtime.GOOS != "linux" {
+		// rotari records neither elsewhere (state.PIDNamespace and
+		// state.ProcessStart are empty), so neither do the tests.
+		return CoordinatorProcess{Host: host, PID: pid}
+	}
 	namespace, err := os.Readlink(fmt.Sprintf("/proc/%d/ns/pid", pid))
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +63,7 @@ const (
 	flagJSON      = "--json"
 	flagJobName   = "--job-name"
 	flagQuiet     = "--quiet"
-	supervisorArg = "__server\x00"
+	supervisorArg = "__server"
 )
 
 var addedJobPattern = regexp.MustCompile(`job_id=(\S+)`)
@@ -231,14 +237,24 @@ func (e *Env) Setenv(name, value string) {
 	e.vars = append(e.vars, prefix+value)
 }
 
+// CommandEnv is vars with PWD set to dir, as a shell sets it to the directory
+// as the user named it. Without it, os.Getwd returns the resolved path, which
+// differs where the temporary directory is under a symbolic link, as /var is on
+// macOS.
+func CommandEnv(vars []string, dir string) []string {
+	return append(slices.DeleteFunc(slices.Clone(vars), func(entry string) bool {
+		return strings.HasPrefix(entry, "PWD=")
+	}), "PWD="+dir)
+}
+
 func (e *Env) command(args ...string) *exec.Cmd {
 	TrackBuildInputs(e.T)
 	cmd := exec.Command(binary, args...)
-	cmd.Env = e.vars
 	cmd.Dir = e.Root
 	if e.dir != "" {
 		cmd.Dir = e.dir
 	}
+	cmd.Env = CommandEnv(e.vars, cmd.Dir)
 	e.transcript.Started(cmd.Dir, args)
 	return cmd
 }
@@ -627,64 +643,53 @@ func (e *Env) JobExitStatus(project, jobID string) string {
 // results.
 func KillSupervisors(t *testing.T, root string) {
 	t.Helper()
-	if _, err := os.ReadDir("/proc"); err != nil {
-		t.Skipf("cannot list processes: %v", err)
-	}
-	for _, pid := range supervisors(root) {
+	for _, pid := range supervisors(t, root) {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 	}
 	WaitUntil(t, 10*time.Second, func() (bool, string) {
-		left := supervisors(root)
+		left := supervisors(t, root)
 		return len(left) == 0, fmt.Sprintf("killed supervisors still running: %v", left)
 	})
 }
 
+// underRoot reports whether process runs from root, as rotari's processes and
+// their jobs do.
+func underRoot(process Process, root string) bool {
+	return strings.Contains(process.CommandLine(), root+string(filepath.Separator))
+}
+
 // supervisors lists the supervisor processes of runs under root. A killed
-// process that is not yet reaped has an empty command line, so it is not
-// listed.
-func supervisors(root string) []int {
-	entries, _ := os.ReadDir("/proc")
+// process that is not yet reaped has no arguments, so it is not listed.
+func supervisors(t *testing.T, root string) []int {
+	t.Helper()
 	var pids []int
-	for _, entry := range entries {
-		pid, err := strconv.Atoi(entry.Name())
-		if err != nil {
-			continue
+	for _, process := range MustProcesses(t) {
+		if underRoot(process, root) && process.HasArg(supervisorArg) {
+			pids = append(pids, process.PID)
 		}
-		cmdline, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
-		if err != nil || !bytes.Contains(cmdline, []byte(root+string(filepath.Separator))) || !bytes.Contains(cmdline, []byte(supervisorArg)) {
-			continue
-		}
-		pids = append(pids, pid)
 	}
 	return pids
 }
 
 func KillStrays(t *testing.T, root string) {
 	t.Helper()
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
-		return
-	}
 	var processes []strayProcess
-	for _, entry := range entries {
-		pid, err := strconv.Atoi(entry.Name())
-		if err != nil {
+	for _, process := range MustProcesses(t) {
+		if !underRoot(process, root) {
 			continue
 		}
-		cmdline, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
-		if err != nil || !bytes.Contains(cmdline, []byte(root+string(filepath.Separator))) {
-			continue
-		}
-		pgid, err := syscall.Getpgid(pid)
-		if err == nil && pgid != syscall.Getpgrp() {
-			processes = append(processes, strayProcess{pid, pgid, bytes.Contains(cmdline, []byte(supervisorArg))})
+		if process.PGID != syscall.Getpgrp() {
+			processes = append(processes, strayProcess{process.PID, process.PGID, process.HasArg(supervisorArg)})
 		}
 	}
 	killStrayGroups(processes, func(pid int) {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 		WaitUntil(t, 15*time.Second, func() (bool, string) {
-			cmdline, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
-			return os.IsNotExist(err) || (err == nil && !bytes.Contains(cmdline, []byte(supervisorArg))), fmt.Sprintf("supervisor %d did not stop", pid)
+			args, running, err := ProcessArgs(pid)
+			if err != nil {
+				t.Fatalf("cannot list processes: %v", err)
+			}
+			return !running || !slices.Contains(args, supervisorArg), fmt.Sprintf("supervisor %d did not stop", pid)
 		})
 	}, func(pgid int) {
 		_ = syscall.Kill(-pgid, syscall.SIGKILL)
@@ -720,20 +725,16 @@ func WaitForInterrupted(t *testing.T, e *Env, project string) {
 
 func JobProcesses(t *testing.T, root, job string) int {
 	t.Helper()
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
-		t.Skipf("cannot list processes: %v", err)
-	}
 	count := 0
-	for _, entry := range entries {
-		cmdline, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
-		if err != nil || !bytes.Contains(cmdline, []byte(root+string(filepath.Separator))) {
+	for _, process := range MustProcesses(t) {
+		if !underRoot(process, root) {
 			continue
 		}
-		if job == "" && !bytes.Contains(cmdline, []byte("local-wrapper.sh")) {
+		line := process.CommandLine()
+		if job == "" && !strings.Contains(line, "local-wrapper.sh") {
 			continue
 		}
-		if job == "" || bytes.Contains(cmdline, []byte(string(filepath.Separator)+job+string(filepath.Separator))) {
+		if job == "" || strings.Contains(line, string(filepath.Separator)+job+string(filepath.Separator)) {
 			count++
 		}
 	}
