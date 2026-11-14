@@ -160,27 +160,68 @@ func (session *Session) Resize(rows, cols uint16) error {
 	return resizeErr
 }
 
-// Dir is the shell's working directory now, which programs it runs do not change.
+// The current shell is the one the user is in: the shell the session started, or an
+// interactive shell started in it by hand (zsh typed at a bash prompt), which leads the
+// terminal's foreground process group while it waits at its prompt, as a shell with job
+// control does. Where the shell is, and whether it is at its prompt, are the current
+// shell's.
+
+// Dir is the current shell's working directory now, which programs it runs do not change:
+// the foreground group's leader if that is an interactive shell, else the nearest one
+// above it, or else the session's shell.
 func (session *Session) Dir() (string, error) {
 	select {
 	case <-session.done:
 		return "", errors.New("the shell has exited")
 	default:
 	}
-	return processDir(session.command.Process.Pid)
+	top := session.command.Process.Pid
+	group, err := session.foregroundGroup()
+	if err != nil || group == top {
+		return processDir(top)
+	}
+	if args, err := processArgs(group); err == nil && interactiveShell(args) {
+		return processDir(group)
+	}
+	// A command runs: the shell it runs in is the nearest interactive one above it.
+	all, err := processes()
+	if err != nil {
+		return processDir(top)
+	}
+	parents := make(map[int]int, len(all))
+	for _, process := range all {
+		parents[process.PID] = process.PPID
+	}
+	for pid := parents[group]; pid > 1 && pid != top; pid = parents[pid] {
+		if args, err := processArgs(pid); err == nil && interactiveShell(args) {
+			return processDir(pid)
+		}
+	}
+	return processDir(top)
 }
 
-// Foreground is the command line of the program the shell runs in the foreground, or
-// "" while the shell itself is, at its prompt. A pipeline gives its first program.
+// Foreground is the command line of the program the current shell runs in the foreground,
+// or "" while it is at its prompt. A pipeline gives its first program.
 func (session *Session) Foreground() (string, error) {
-	group, err := session.foregroundGroup()
-	if err != nil {
+	group, prompt, err := session.atPrompt()
+	if err != nil || prompt {
 		return "", err
 	}
-	if group == session.command.Process.Pid {
-		return "", nil
-	}
 	return processCommand(group)
+}
+
+// atPrompt says whether the current shell is at its prompt: the terminal's foreground
+// group is the session's shell, or is led by an interactive shell. It gives the group too.
+func (session *Session) atPrompt() (int, bool, error) {
+	group, err := session.foregroundGroup()
+	if err != nil {
+		return 0, false, err
+	}
+	if group == session.command.Process.Pid {
+		return group, true, nil
+	}
+	args, err := processArgs(group)
+	return group, err == nil && interactiveShell(args), nil
 }
 
 // Process is a process a shell started, directly or through others.
@@ -211,11 +252,11 @@ func (session *Session) Descendants() ([]Process, error) {
 	return descendantsOf(all, session.command.Process.Pid), nil
 }
 
-// busy says something other than the shell holds the terminal's foreground: a command
-// it runs, as opposed to its prompt.
+// busy says a command holds the terminal's foreground, as opposed to the current shell
+// at its prompt.
 func (session *Session) busy() (bool, error) {
-	group, err := session.foregroundGroup()
-	return err == nil && group != session.command.Process.Pid, err
+	_, prompt, err := session.atPrompt()
+	return err == nil && !prompt, err
 }
 
 // foregroundGroup is the terminal's foreground process group.

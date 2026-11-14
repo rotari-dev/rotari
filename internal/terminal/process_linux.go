@@ -27,6 +27,15 @@ func processCommand(pid int) (string, error) {
 	return command, nil
 }
 
+// processArgs is the arguments of the process with the given ID, its program first.
+func processArgs(pid int) ([]string, error) {
+	line, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/cmdline")
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(strings.TrimRight(string(line), "\x00"), "\x00"), nil
+}
+
 // processes lists this host's processes, each with its parent, command line, and
 // terminal facts, from /proc. A process that ends while it is read is left out.
 func processes() ([]Process, error) {

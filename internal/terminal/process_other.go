@@ -19,6 +19,11 @@ func processCommand(int) (string, error) {
 	return "", errProcessesUnknown
 }
 
+// processArgs is not known on this system.
+func processArgs(int) ([]string, error) {
+	return nil, errProcessesUnknown
+}
+
 // processes are not known on this system.
 func processes() ([]Process, error) {
 	return nil, errProcessesUnknown

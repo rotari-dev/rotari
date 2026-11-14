@@ -61,6 +61,16 @@ func processCommand(pid int) (string, error) {
 	return command, nil
 }
 
+// processArgs is the arguments of the process with the given ID, its program first, from
+// ps's command line split at spaces, which is enough to tell its options from an operand.
+func processArgs(pid int) ([]string, error) {
+	command, err := processCommand(pid)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Fields(command), nil
+}
+
 // processes lists this host's processes, each with its parent, command line, and
 // terminal facts, as ps reports them.
 func processes() ([]Process, error) {
