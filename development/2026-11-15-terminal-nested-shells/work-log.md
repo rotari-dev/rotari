@@ -20,3 +20,17 @@
   a row; with the old check put back it fails as the user saw it ("busy yes, command sh -i" at the inner prompt).
   `go test ./internal/terminal` passed; `go vet` for Linux and macOS and a FreeBSD build are clean.
 - **Remaining:** phase 2 (contracts, conformance, docs).
+
+## 2026-11-15 07:10 +09:00 — Contracts and docs
+
+- **Change:** contract **WEB-52** (the current shell, how an interactive shell is told, and what follows it) and its
+  row; WEB-34's preview `cwd` and `command`, `command_finished`, and `running`, WEB-42's Follow, and WEB-45's reading
+  of a directory now say the current shell's. `TestTerminalFollowsAShellStartedInside` covers it through the binary:
+  in a `/bin/sh` shell, `PS1='inner$ ' sh -i`, then `cd` to a new directory there; the preview gives that directory
+  and no command and the list no `running`; `sleep 30` in it is named and `running`; Ctrl-C brings its prompt back;
+  Recent directories has the directory; and after `exit` the session's shell, in the home directory, is current again.
+  docs/WEB.md says inner shells are followed, and what is not.
+- **Reason:** plan phase 2.
+- **Plan impact:** none.
+- **Validation:** the new test passed twice in a row; `TestContractStatus` passed; see the commit for the runs.
+- **Remaining:** nothing in this plan. Marks from inner shells (a line for one's own startup file) are the second plan.

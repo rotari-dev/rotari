@@ -1,8 +1,7 @@
 # Plan: Shells started inside the Web terminal's shells
 
 Created: 2026-11-15
-Status: Accepted by the user on 2026-11-15, with the open questions answered as proposed; phase 1 is done and
-phase 2 (contracts and docs) is next. See [work-log.md](work-log.md).
+Status: Accepted by the user on 2026-11-15, with the open questions answered as proposed; both phases are done. See [work-log.md](work-log.md).
 
 ## Goal
 
