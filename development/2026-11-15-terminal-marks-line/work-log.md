@@ -49,3 +49,20 @@
   commit for the package runs. Not tried with the user's own setup, which would write rotari's files to their cache
   and the tests' lines to their history.
 - **Remaining:** phase 3 (contracts and docs).
+
+## 2026-11-15 09:40 +09:00 — Contracts and docs
+
+- **Change:** contract **WEB-53** (inner shells marking: the marks files, `ZDOTDIR` exported by rotari's bash and, for
+  command lines starting with `zsh`, by rotari's zsh, the `PROMPT_COMMAND` loader and its rebuilding, and where it does
+  not reach) and its row; WEB-49 now says where the files are kept, the fallback, `ROTARI_SHELL_INTEGRATION`, and that
+  rotari's zsh files are `.zshenv`, `.zprofile`, and `.zshrc`. `TestTerminalInnerShellsMark` covers WEB-53 through the
+  binary: in a bash panel shell, `zsh` (and in another, `bash`) with only a `PS1` in the user's files, then `false`,
+  shows the inner shell's `D;1`, its own `A`, `B`, and `C`; and the files are in the test's cache directory.
+  docs/WEB.md says inner shells mark, the side effects (`ZDOTDIR` seen by programs started from a panel's bash, tmux
+  reading through rotari's files, the files kept in the cache), the case a `.bashrc` that sets `PROMPT_COMMAND` leaves
+  unmarked, and the line for it; docs/FAQ.md and docs/SECURITY.md follow.
+- **Reason:** plan phase 3.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalInnerShellsMark` passed for zsh and bash; `TestContractStatus` passed; see the commit
+  for the package runs.
+- **Remaining:** nothing in this plan.
