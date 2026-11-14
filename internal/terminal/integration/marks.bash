@@ -61,7 +61,8 @@ __rotari_c() {
 
 # PROMPT_COMMAND is made again from what the user's files left, rotari's pieces taken out
 # wherever they are (an inherited copy, a .bashrc that added to it), the loader first,
-# __rotari_keep next, and __rotari_prompt last, so that none runs twice.
+# __rotari_keep next, and __rotari_prompt last, so that none runs twice; and exported, for a
+# bash started inside to run the loader.
 if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
 	__rotari_commands=()
 	for __rotari_command in "${PROMPT_COMMAND[@]}"; do
@@ -71,8 +72,17 @@ if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
 		*) __rotari_commands+=("$__rotari_command") ;;
 		esac
 	done
-	PROMPT_COMMAND=("$__rotari_loader" __rotari_keep "${__rotari_commands[@]}" __rotari_prompt)
-	unset __rotari_commands __rotari_command
+	# An array cannot be exported, as systemd's /etc/profile.d makes PROMPT_COMMAND one, so
+	# it becomes the same commands on lines of a string, which bash runs alike and a later
+	# PROMPT_COMMAND+=(...) adds to as before.
+	__rotari_joined=$__rotari_loader$'\n__rotari_keep'
+	for __rotari_command in "${__rotari_commands[@]}"; do
+		__rotari_joined+=$'\n'$__rotari_command
+	done
+	unset PROMPT_COMMAND
+	PROMPT_COMMAND=$__rotari_joined$'\n__rotari_prompt'
+	export PROMPT_COMMAND
+	unset __rotari_commands __rotari_command __rotari_joined
 else
 	__rotari_commands=
 	while IFS= read -r __rotari_command; do

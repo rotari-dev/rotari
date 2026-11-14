@@ -346,9 +346,14 @@ func TestInnerShellsMark(t *testing.T) {
 			t.Skipf("no %s here", shell)
 		}
 	}
-	files := func(home string) map[string]string {
+	files := func(home string, array bool) map[string]string {
+		profile := "[ -r ~/.bashrc ] && . ~/.bashrc\n"
+		if array {
+			// As systemd's /etc/profile.d/80-systemd-osc-context.sh makes it, an array.
+			profile += "PROMPT_COMMAND+=(PROFILE_RAN=1)\n"
+		}
 		return map[string]string{
-			".bash_profile": "[ -r ~/.bashrc ] && . ~/.bashrc\n",
+			".bash_profile": profile,
 			// A .bashrc that adds to PROMPT_COMMAND, as many do.
 			".bashrc":  "echo bashrc >> " + home + "/read.log\nPS1='bash$ '\nPROMPT_COMMAND=\"BASHRC_RAN=1;$PROMPT_COMMAND\"\n",
 			".zshenv":  "unsetopt GLOBAL_RCS\n",
@@ -356,15 +361,23 @@ func TestInnerShellsMark(t *testing.T) {
 			"read.log": "",
 		}
 	}
-	for _, test := range []struct{ outer, inner, ready, a string }{
-		{"bash", "zsh", "zsh%", "A;rotari_goto=1"},
-		{"zsh", "zsh", "zsh%", "A;rotari_goto=1"},
-		{"zsh", "bash", "bash$", "A"},
-		{"bash", "bash", "bash$", "A"},
+	for _, test := range []struct {
+		outer, inner, ready, a string
+		array                  bool
+	}{
+		{"bash", "zsh", "zsh%", "A;rotari_goto=1", false},
+		{"zsh", "zsh", "zsh%", "A;rotari_goto=1", false},
+		{"zsh", "bash", "bash$", "A", false},
+		{"bash", "bash", "bash$", "A", false},
+		{"bash", "bash", "bash$", "A", true},
 	} {
-		t.Run(test.inner+" inside "+test.outer, func(t *testing.T) {
+		name := test.inner + " inside " + test.outer
+		if test.array {
+			name += " whose PROMPT_COMMAND is an array"
+		}
+		t.Run(name, func(t *testing.T) {
 			home := t.TempDir()
-			writeFiles(t, home, files(home))
+			writeFiles(t, home, files(home, test.array))
 			outer := integrated(t, test.outer, home)
 			marksAfter(t, outer)
 			before := lines(t, filepath.Join(home, "read.log"))
