@@ -1,7 +1,7 @@
 # Plan: Verify recorded processes on macOS
 
 Created: 2026-11-14
-Status: Proposed. Found by [the macOS CI leg](../2026-11-14-ci-macos/plan.md); see the `development/ISSUES.md` entry
+Status: Implemented; see [work-log.md](work-log.md). Not yet confirmed on macOS. Found by [the macOS CI leg](../2026-11-14-ci-macos/plan.md); see the `development/ISSUES.md` entry
 "On macOS, rotari cannot verify where or whether a recorded process runs".
 
 ## Goal
