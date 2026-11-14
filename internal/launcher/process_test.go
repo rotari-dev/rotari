@@ -258,6 +258,29 @@ func TestStopEndsDescendants(t *testing.T) {
 	}
 }
 
+// A shell waiting for its last command is ended by the stop signal, not left
+// to exit 0 when that command dies first. On macOS a signal to the group can
+// end the child and let the shell finish its `wait` and exit before the
+// signal reaches the shell; that happened in about one stop in four right
+// after the child started. Repeating the stop makes a miss show reliably.
+func TestStopSignalsAShellWaitingForItsChild(t *testing.T) {
+	t.Parallel()
+	lifetime := newTestLifetime(t)
+	dir := t.TempDir()
+	for attempt := range 20 {
+		pidFile := filepath.Join(dir, fmt.Sprintf("pid-%d", attempt))
+		spec := testSpec(`sleep 300 & echo $! > "$PID_FILE"; wait`, outputFile(t))
+		spec.Env = append(spec.Env, "PID_FILE="+pidFile)
+		process := startTest(t, lifetime, spec)
+		child := readNumberFile(t, pidFile)
+		result, err := process.Stop()
+		if err != nil || result.Signal != syscall.SIGTERM {
+			t.Fatalf("attempt %d: Stop() = %+v, %v; want signal %v", attempt, result, err, syscall.SIGTERM)
+		}
+		waitProcessGone(t, child, "after Stop")
+	}
+}
+
 // A command that exits and leaves members in its group does not leak them.
 func TestCommandExitEndsLeftoverGroupMembers(t *testing.T) {
 	t.Parallel()

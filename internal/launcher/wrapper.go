@@ -93,12 +93,13 @@ func RunWrapper(args []string) int {
 	var waitErr error
 	select {
 	case waitErr = <-exited:
-		stopGroup(pgid, *grace)
+		// The leader is reaped, so its PID may name another process now.
+		stopGroup(nil, pgid, *grace)
 	case <-signals:
-		stopGroup(pgid, *grace)
+		stopGroup(child.Process, pgid, *grace)
 		waitErr = <-exited
 	case <-ownerGone:
-		stopGroup(pgid, *grace)
+		stopGroup(child.Process, pgid, *grace)
 		waitErr = <-exited
 	}
 	fmt.Fprintln(status, resultLine(waitErr))
@@ -120,28 +121,45 @@ func resultLine(waitErr error) string {
 }
 
 // stopGroup sends SIGTERM to the process group, waits up to grace for it to
-// disappear, and then sends SIGKILL.
-func stopGroup(pgid int, grace time.Duration) {
-	if !signalGroup(pgid, syscall.SIGTERM) {
+// disappear, and then sends SIGKILL. leader is the group's unreaped leader,
+// or nil once it has been reaped.
+func stopGroup(leader *os.Process, pgid int, grace time.Duration) {
+	if !signalGroup(leader, pgid, syscall.SIGTERM) {
 		return
 	}
 	if waitGroupGone(pgid, grace) {
 		return
 	}
-	if signalGroup(pgid, syscall.SIGKILL) {
+	if signalGroup(leader, pgid, syscall.SIGKILL) {
 		waitGroupGone(pgid, groupKillWait)
 	}
 }
 
-// signalGroup reports whether the group still existed.
-func signalGroup(pgid int, sig syscall.Signal) bool {
+// signalGroup sends sig to the leader, if given, and then to the group, and
+// reports whether the group still existed.
+//
+// The leader comes first because macOS does not signal a group's members at
+// once: the signal can end a child the leader waits for, and the leader can
+// then finish and start exiting before the signal reaches it, so that a shell
+// running `cmd & wait` exits 0 rather than by the signal. Linux signals the
+// group at once.
+func signalGroup(leader *os.Process, pgid int, sig syscall.Signal) bool {
+	if leader != nil {
+		// os.ErrProcessDone once reaped; the group signal covers the rest.
+		_ = leader.Signal(sig)
+	}
 	return !errors.Is(syscall.Kill(-pgid, sig), syscall.ESRCH)
+}
+
+// groupExists reports whether any process is still in the group.
+func groupExists(pgid int) bool {
+	return !errors.Is(syscall.Kill(-pgid, 0), syscall.ESRCH)
 }
 
 func waitGroupGone(pgid int, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for {
-		if !signalGroup(pgid, 0) {
+		if !groupExists(pgid) {
 			return true
 		}
 		if !time.Now().Before(deadline) {
