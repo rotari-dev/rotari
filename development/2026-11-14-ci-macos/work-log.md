@@ -72,3 +72,24 @@ it is fixed in its own plan.
 None of it has run on macOS yet.
 
 **Remaining:** Push and read the next macOS run, including the packages not seen so far.
+
+## 2026-11-14 — `bc442ca7` Make the chdir, SIGSTOP, and pty unit tests hold on macOS
+
+The third macOS run (Go CI run 43575930113) no longer showed the failures fixed above, apart from those the
+product causes. Its `cmd/rotari` unit tests showed three more Linux assumptions:
+
+- `TestResolveBaseDirPriority`, `TestWorkspaceLocationAndMergedFiles`, and
+  `TestWorkspacePositionalProjectLoadsSelectedLayer` changed directory with `os.Chdir`, which leaves `PWD`, so
+  `os.Getwd` returned `/private/var/…`. They, and `internal/state`'s
+  `TestResolveBaseDirDefaultIgnoresEnvironmentOverride`, now use `t.Chdir`, which also sets `PWD`.
+- `TestControlQueueJobsSuspendsAndResumesSelectedLocalJob`: on BSD and macOS, Go's `WaitStatus.Stopped` is false
+  for a stop by SIGSTOP itself (`syscall_bsd.go`). The test reads the stop from the raw status.
+- `TestIsTerminalAcceptsPseudoTerminal` asked about a bare `/dev/ptmx` master, which macOS refuses. It opens a
+  pair with creack/pty and asks about the terminal side, which is what a process gets as stdin.
+
+The run's other failures are the product's: `unlock` refuses with `coordinator_unknown` and local executions read
+`unknown`, because macOS has no PID namespace or process start time for rotari to verify. The ISSUES entry now
+lists them; they need their own plan.
+
+**Validation:** `go test ./cmd/rotari ./internal/state` passed on Linux (node v24); `GOOS=darwin go vet` of both
+clean.
