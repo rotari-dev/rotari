@@ -21,7 +21,9 @@ func TestTerminalShellIntegration(t *testing.T) {
 		check, want string
 	}{
 		{"bash", map[string]string{".bash_profile": "export FROM_FILES=profile\n"}, `echo "files-$FROM_FILES"`, "files-profile"},
-		{"zsh", map[string]string{".zshenv": "export FROM_FILES=env\n", ".zshrc": "FROM_FILES=$FROM_FILES-rc\n"}, `echo "files-$FROM_FILES-${ZDOTDIR-unset}"`, "files-env-rc-unset"},
+		// unsetopt GLOBAL_RCS skips the host's /etc/zshrc, which may run compinit and ask
+		// about insecure directories, taking what the test types as the answer.
+		{"zsh", map[string]string{".zshenv": "unsetopt GLOBAL_RCS\nexport FROM_FILES=env\n", ".zshrc": "FROM_FILES=$FROM_FILES-rc\n"}, `echo "files-$FROM_FILES-${ZDOTDIR-unset}"`, "files-env-rc-unset"},
 	} {
 		path, err := exec.LookPath(test.shell)
 		if err != nil {

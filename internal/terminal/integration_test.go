@@ -142,17 +142,20 @@ func TestOldBashIntegrationMarksCommandsByTheDebugTrap(t *testing.T) {
 // one the user's .zshenv sets; it leaves ZDOTDIR as it was, and marks as bash does.
 func TestZshIntegrationReadsTheUsersFilesAndMarks(t *testing.T) {
 	theme := "precmd_functions+=(__user_precmd)\n__user_precmd() { LAST=$?; PS1='theme> ' }\n"
+	// The host's own /etc/zshrc may run compinit, which asks about insecure directories and
+	// takes what the test types as the answer; a user's .zshenv can skip the host's files.
+	const noHost = "unsetopt GLOBAL_RCS\n"
 	for _, test := range []struct {
 		name  string
 		files map[string]string
 		env   []string
 		want  string
 	}{
-		{"home", map[string]string{".zshenv": "export FROM=env\n", ".zprofile": "FROM=$FROM-profile\n", ".zshrc": "FROM=$FROM-rc\n" + theme, ".zlogin": "FROM=$FROM-login\n"},
+		{"home", map[string]string{".zshenv": noHost + "export FROM=env\n", ".zprofile": "FROM=$FROM-profile\n", ".zshrc": "FROM=$FROM-rc\n" + theme, ".zlogin": "FROM=$FROM-login\n"},
 			nil, "env-profile-rc-login-1-unset"},
-		{"given", map[string]string{"zd/.zshenv": "export FROM=env\n", "zd/.zshrc": "FROM=$FROM-rc\n" + theme, ".zshrc": "FROM=wrong\n"},
+		{"given", map[string]string{"zd/.zshenv": noHost + "export FROM=env\n", "zd/.zshrc": "FROM=$FROM-rc\n" + theme, ".zshrc": "FROM=wrong\n"},
 			[]string{"ZDOTDIR=HOME/zd"}, "env-rc-1-HOME/zd"},
-		{"set in .zshenv", map[string]string{".zshenv": "export FROM=env\nZDOTDIR=$HOME/cfg\n", "cfg/.zshrc": "FROM=$FROM-rc\n" + theme, ".zshrc": "FROM=wrong\n"},
+		{"set in .zshenv", map[string]string{".zshenv": noHost + "export FROM=env\nZDOTDIR=$HOME/cfg\n", "cfg/.zshrc": "FROM=$FROM-rc\n" + theme, ".zshrc": "FROM=wrong\n"},
 			nil, "env-rc-1-HOME/cfg"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
