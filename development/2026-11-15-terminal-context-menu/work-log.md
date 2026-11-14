@@ -15,3 +15,21 @@
   Select all; Paste pasting, refused, and empty; Shift and mouse tracking getting no menu) passed; `tsc` clean;
   prettier unchanged. Not seen in a real browser here.
 - **Remaining:** phases 2 (Cut and the block items) and 3 (contracts, docs, the browser step).
+
+## 2026-11-15 04:00 +09:00 — Cut and the block items
+
+- **Change:** the menu leads with **Cut**, on only when `cutPlace` finds the selection (`term.getSelectionPosition()`)
+  wholly in the command line typed at the prompt: from `B` (not before it) to the line's end (the last wrapped row's
+  text, or the cursor if further), a selection run past the text ending with it, as character indexes counted as WEB-50
+  counts them. `cutSelection` copies through `copyText`, which now says whether it could, and on success moves the
+  cursor to the selection's end (`moveToIndex`, split out of `moveByClick`: zsh's index when announced, else arrows),
+  sends one `DEL` per character, clears the selection, and says "Cut the selection"; a failed copy sends nothing. A
+  right click on a command's prompt or output (`blockAt` from `screenCell`) adds its **Copy output** and **Copy
+  command**. The fake terminal gains `getSelectionPosition` and `clearSelection`.
+- **Reason:** plan phase 2.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalPanel` (Cut off for output and the prompt; `本a` cut from the end of `echo 日本abc` as
+  two left arrows and two `DEL`s, copied, the selection cleared; a selection past the text; a failed copy sending
+  nothing; zsh's index; the block's copies on output and on a prompt, none on a prompt with no command yet) passed;
+  `tsc` clean; prettier formatted.
+- **Remaining:** phase 3 (contracts, docs, the browser step).
