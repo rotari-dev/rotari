@@ -244,6 +244,22 @@ does not promise to detect a lost remote client.
   [`cmd/rotari/config.go`](../cmd/rotari/config.go); the external check
   enumerates each command exposing `--config` in the CLI schema in
   [`conformance/03-interfaces/options_test.go`](../conformance/03-interfaces/options_test.go).
+- **CLI-31** A run's coordinator records the rotari binary it runs in the run's
+  `context.json` (`coordinator.binary`: `version`, `executable`, `size`, `modified`), and a detached
+  `rotari web` records the same in its record (WEB-40); both are optional, absent in records an older rotari
+  wrote, which older binaries ignore. Two binaries differ when the executable's path, size, or modification
+  time differs; the version alone does not decide. When `rotari wait` attaches to a run whose coordinator is
+  live and runs a different binary, it prints one line on stderr, also with `--json`, before following:
+  `Note: run R is managed by rotari V (PATH), not this rotari V' (PATH').`, or `a different build of rotari V
+  (PATH), not this one (PATH').` when the versions match. `rotari web --detach` reporting a running server,
+  `rotari web --shutdown`, and a foreground `rotari web` noting a detached one print
+  `Note: the detached rotari web (PID N) runs ...` the same way. The same binary, a record without one, and a
+  coordinator that is not live print nothing. When this binary cannot be looked at, the note says the
+  comparison could not be made and why. None of it changes a command's outcome. `rotari run` reporting an
+  active run says nothing. Implemented in `cmd/rotari/binary_note.go`, `model.RunBinary`, and
+  `projectrun.Runner.Binary`; covered by
+  [`TestNotesAnotherRotariBinary`](../conformance/03-interfaces/binary_note_test.go) and the unit tests
+  `TestBinaryNote` and `TestRunBinaryDiffers`.
 - **CLI-30** An option value from the environment or a config file that the
   option cannot use is an error naming the option, the value, and its
   source: the variable, or the config scope and path. Examples are a boolean

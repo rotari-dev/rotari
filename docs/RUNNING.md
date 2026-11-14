@@ -14,7 +14,9 @@ rotari wait sweep
 `run --async` starts a detached run and returns while its jobs continue.
 `wait` monitors runs, printing new progress, then the completion message and
 run exit code. If another client, a synchronous `run` or another `wait`, is
-attached to a run you name, `wait` warns and monitors it anyway. If the run
+attached to a run you name, `wait` warns and monitors it anyway. If the run is managed by another rotari binary
+than the one you are running, such as the one before an upgrade, `wait` says so in a note naming both: the run
+behaves as its own binary does. If the run
 has already finished, `wait` prints only the completion message. Runs inherit the caller's working
 directory and environment unless overridden; use `--env=NONE` to suppress
 inherited variables. Job variables and rotari metadata still apply. See

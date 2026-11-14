@@ -33,6 +33,14 @@ No. State, history, and locks are stored in the filesystem. Shared multi-host us
 
 A newer rotari reads runs and queues written by older versions. `queue.json`, a run's `commands.json`, and its `summary.json` record a `state_version`; if a file comes from a newer rotari with a format this binary does not know, commands stop with an error asking you to upgrade instead of misreading it. This matters when several hosts share a basedir with different rotari versions.
 
+### I upgraded rotari. Why does my run, or my Web server, still behave the old way?
+
+A run keeps the binary that started it until it ends, and a detached `rotari web` keeps its binary until it stops.
+`rotari wait`, `rotari web --detach`, and `rotari web --shutdown` say so when they reach one that runs another
+binary than theirs: `Note: run R is managed by rotari v0.1.15 (/opt/old/rotari), not this rotari v0.1.16 (...)`.
+Restart the Web server (`rotari web --shutdown`, then start it again) to use the new binary. A run picks it up with
+its next `rotari run` or `retry`.
+
 ### Can rotari manage jobs for multiple users like Slurm?
 
 No. Rotari has no accounts, permissions, quotas, or fair-share scheduling. Use a separate `--basedir` per user and do not share writable state or Web UI tokens between untrusted users. Slurm, PBS, LSF, or SGE remains responsible for scheduler-side identity and resource policy.

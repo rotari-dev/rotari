@@ -49,6 +49,9 @@ type Runner struct {
 
 	// Now returns the current time; nil means time.Now.
 	Now func() time.Time
+	// Binary is the rotari binary the coordinator runs, recorded in the run context so
+	// that a later command can say when it is another one. Optional.
+	Binary *model.RunBinary
 }
 
 func (runner Runner) now() time.Time {

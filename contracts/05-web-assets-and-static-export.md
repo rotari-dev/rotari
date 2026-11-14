@@ -1641,7 +1641,7 @@ once it listens, printing `rotari web listening at URL in the background (PID N)
 as the way to stop it; a server that exits or does not listen within 30 seconds makes it fail with the reason, the end of the log,
 and the log's path, and is stopped. A token it needs and was not given is generated, printed once, and reaches the
 server in its environment, never in its arguments; the server's record, `<masterdir>/web/<host>.json` (mode 0600),
-holds a digest of the token, never the token. There is at most one detached server per user and host: while one
+holds a digest of the token, never the token, and the binary the server runs (CLI-31). There is at most one detached server per user and host: while one
 holds the host's lease, `--detach` reports it (`already running since ...`, without the token) and starts none, or,
 when the options given differ from its own, fails naming them and the PID. Liveness is the server's `flock` lease, so
 a server killed without cleaning up does not count and its record is removed when found; only the current host's

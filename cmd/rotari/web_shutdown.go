@@ -64,6 +64,7 @@ func shutdownDetachedWeb(yes bool) int {
 		fmt.Println("No detached rotari web is running on this host.")
 		return 0
 	}
+	printDetachedWebBinaryNote(running)
 	if err := confirmWebShutdown(os.Stdin, os.Stderr, stdinIsTerminal(), yes, running, webShellLines(running.PID)); err != nil {
 		printError(err)
 		return 1

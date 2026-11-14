@@ -31,6 +31,7 @@ func (runner Runner) WriteContext(paths state.ProjectPaths, runID, cwd, configPa
 		Coordinator: &model.RunCoordinator{
 			Host: hostname, PID: os.Getpid(), PIDNamespace: state.PIDNamespace(),
 			ProcessStart: state.ProcessStart(os.Getpid()), RecordedAt: runner.timestampNano(),
+			Binary: runner.Binary,
 		},
 	}
 	var snapshot *model.FileConfigSnapshot

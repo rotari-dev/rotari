@@ -148,6 +148,7 @@ func reportDetachedWeb(running webdetach.Record, want webdetach.Settings, flags 
 		return 1
 	}
 	fmt.Printf("rotari web listening at %s in the background (PID %d, already running since %s)\n", running.URL, running.PID, running.StartedAt.Local().Format(time.DateTime))
+	printDetachedWebBinaryNote(running)
 	if running.Settings.TokenSHA256 != "" && flags.authToken == "" {
 		fmt.Fprintf(os.Stderr, "Sign in with user name %q and the token printed when it started; set %s to keep one token across restarts.\n", "rotari", envWebAuthToken)
 	}
@@ -366,7 +367,7 @@ func (child *webDetachedChild) listening(flags webCommandFlags, baseDir string, 
 	executable, _ := os.Executable()
 	url := "http://" + address.String()
 	child.mu.Lock()
-	child.record = webdetach.Record{Host: child.paths.Host, PID: os.Getpid(), URL: url, StartedAt: time.Now().UTC(), Version: versionString(), Executable: executable, Settings: settings}
+	child.record = webdetach.Record{Host: child.paths.Host, PID: os.Getpid(), URL: url, StartedAt: time.Now().UTC(), Version: versionString(), Executable: executable, Settings: settings, Binary: recordedBinary()}
 	child.shutdown = shutdown
 	child.mu.Unlock()
 	if child.lifeline != nil {
@@ -528,6 +529,14 @@ func (child *webDetachedChild) close() {
 	}
 }
 
+// printDetachedWebBinaryNote says, on stderr, when the detached server runs another
+// rotari binary than this command.
+func printDetachedWebBinaryNote(running webdetach.Record) {
+	if note := binaryNote(fmt.Sprintf("the detached rotari web (PID %d) runs", running.PID), running.Binary); note != "" {
+		fmt.Fprintln(os.Stderr, note)
+	}
+}
+
 // noteDetachedWeb tells a foreground rotari web about a detached one on this
 // host, whose shells it does not share.
 func noteDetachedWeb() {
@@ -538,6 +547,7 @@ func noteDetachedWeb() {
 		running, found, err = webdetach.Find(paths)
 		if found {
 			fmt.Fprintf(os.Stderr, "Note: a detached rotari web is also running on this host at %s (PID %d); its shells are there, not here.\n", running.URL, running.PID)
+			printDetachedWebBinaryNote(running)
 		}
 	}
 	if err != nil && !errors.Is(err, webdetach.ErrStarting) {

@@ -838,6 +838,7 @@ func followRunWithOutput(basedir, queueNameOption, runID string, deadline time.T
 		}
 	}
 	if clientSession != nil && !initial {
+		noteRunBinary(output, runDir, runID)
 		defer func() {
 			if err := clientSession.Close(""); err != nil {
 				output.errorf("warning: failed to release wait attachment: %v", err)

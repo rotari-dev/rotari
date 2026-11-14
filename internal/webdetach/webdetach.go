@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rotari-dev/rotari/internal/lease"
+	"github.com/rotari-dev/rotari/internal/model"
 )
 
 // MaxLogBytes is about how large the log grows before it is rotated, as the
@@ -127,6 +128,9 @@ type Record struct {
 	Version    string    `json:"version"`
 	Executable string    `json:"executable,omitempty"`
 	Settings   Settings  `json:"settings"`
+	// Binary is the rotari the server runs, to say when it is another one; nil in a
+	// record an older rotari wrote.
+	Binary *model.RunBinary `json:"binary,omitempty"`
 }
 
 // Find returns the detached server of paths when one is running. A record

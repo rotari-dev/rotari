@@ -1,7 +1,7 @@
 # Plan: Say when a running server is another rotari binary
 
 Created: 2026-11-14
-Status: Proposed. Follows [shells last as long as the server by default](../2026-11-13-terminal-idle-off/plan.md),
+Status: Implemented; see [work-log.md](work-log.md). Follows [shells last as long as the server by default](../2026-11-13-terminal-idle-off/plan.md),
 as the user ordered on 2026-11-13.
 
 ## Goal
@@ -28,23 +28,24 @@ normal and useful.
 
 ## Proposals
 
-1. **Record the binary.** `model.RunCoordinator` gains `version`, `executable`, and `executable_sha256`, all
-   optional, which the supervisor writes with the rest of its identity. `webdetach.Record` gains
-   `executable_sha256`. Old records lack the fields and are treated as "unknown", which prints nothing.
-2. **Compare.** A binary differs when the SHA-256 of both is known and they differ. Then the note names the other
-   binary's version and path, and this one's:
+1. **Record the binary.** `model.RunCoordinator` gains `binary`: the version, the executable's path, its size, and
+   its modification time, all optional, which the supervisor writes with the rest of its identity.
+   `webdetach.Record` gains the same size and time beside its version and path. Old records lack them and are
+   treated as "unknown", which prints nothing.
+2. **Compare by path, size, and modification time** (decided 2026-11-14). A binary differs when its path, size, or
+   modification time differs from this one's. This costs a `stat`, not a hash of tens of MB, and misses only a
+   binary copied over with the same size and time. Then the note names the other binary's version and path, and
+   this one's:
    `Note: run R is managed by rotari v0.1.15 (/opt/old/rotari), not this rotari v0.1.16 (/usr/local/bin/rotari).`
-   When the versions are equal (as for two `rotari dev` builds), it says `a different build of rotari v…`. The
-   current binary's hash is computed only when the record has one to compare with, so commands with nothing to
-   compare pay nothing.
+   When the versions are equal (as for two `rotari dev` builds), it says `a different build of rotari v…`.
 3. **Where it is said:**
    - `rotari wait` attaching to a run whose coordinator is still running: once, on stderr, before the progress. With
      `--json` it goes on stderr too, so the JSON stays as it is.
    - `rotari web --detach` reporting a running server, `rotari web --shutdown`, and the foreground note about a
      detached server: one line after theirs.
    - `rotari show` and the Web UI: not in this plan. They describe a run rather than attach to it.
-4. **Never an error, never silent about a failure.** When this binary's hash cannot be computed (it was replaced
-   or deleted under the process), the note says the comparison could not be made and why, and the command goes on.
+4. **Never an error, never silent about a failure.** When this binary cannot be looked at (it was replaced or
+   deleted under the process), the note says the comparison could not be made and why, and the command goes on.
    A record without the fields, written by an older rotari, says nothing: there is nothing to compare, which is
    not a failure.
 
@@ -69,15 +70,16 @@ normal and useful.
    record without the fields, expects none.
 4. Docs, contracts, work log.
 
-## Questions
+## Decided (2026-11-14)
 
-- **Hash cost:** hashing the binary (tens of MB) takes a few tens of milliseconds on each `wait` that attaches to a
-  run with a recorded hash. Is that acceptable, or should the comparison use path, size, and modification time
-  instead? That is cheaper, but it misses a binary copied over with the same size and time.
-- **`run` and `retry` reattaching:** when `rotari run` finds the project's run already active and reports it, should
-  it say this too? The proposal covers `wait` only.
-- **The Web UI:** the Settings menu already shows which rotari serves the page. Should it also say when the
-  project's running run is managed by another binary? Left out for now.
+- **Path, size, and modification time** rather than a hash; see proposal 2.
+- **`run` and `retry` reporting an active run** do not say this; only `wait` and the web commands do.
+
+## Memo: not in this plan
+
+- **The Web UI.** The Settings menu shows which rotari serves the page. It could also say when the project's running
+  run is managed by another binary, from the recorded coordinator binary. Left out for now, as the user decided on
+  2026-11-14; worth a plan of its own if the CLI note proves useful.
 
 ## Risks
 

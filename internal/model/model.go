@@ -713,6 +713,22 @@ type RunContext struct {
 
 // RunCoordinator identifies the supervisor independently of the removable run
 // lock. ManagementFinishedAt is informational, not evidence of process death.
+// RunBinary is the rotari binary a process runs: its version, and its executable's
+// path, size, and modification time. Two binaries differ when the path, size, or time
+// differs, which a stat tells without reading the file; a copy with the same size and
+// time passes for the same.
+type RunBinary struct {
+	Version    string `json:"version,omitempty"`
+	Executable string `json:"executable"`
+	Size       int64  `json:"size"`
+	Modified   string `json:"modified"`
+}
+
+// Differs says whether other is another binary than binary.
+func (binary RunBinary) Differs(other RunBinary) bool {
+	return binary.Executable != other.Executable || binary.Size != other.Size || binary.Modified != other.Modified
+}
+
 type RunCoordinator struct {
 	Host                 string `json:"host"`
 	PID                  int    `json:"pid"`
@@ -720,6 +736,9 @@ type RunCoordinator struct {
 	ProcessStart         string `json:"process_start,omitempty"`
 	RecordedAt           string `json:"recorded_at"`
 	ManagementFinishedAt string `json:"management_finished_at,omitempty"`
+	// Binary is the rotari the coordinator runs; nil in runs an older rotari started,
+	// or when it could not be looked at.
+	Binary *RunBinary `json:"binary,omitempty"`
 }
 
 type RunRecovery struct {

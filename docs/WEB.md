@@ -432,7 +432,8 @@ outlast a closed laptop, a dropped connection, or a night away, keep that proces
 
 **Finding it again:** run the same command. While a detached server runs on this host, `--detach` starts no
 other: it prints that server's URL and PID (`already running since ...`), or fails naming the options that
-differ from the running server's and its PID. A token generated at start is not shown again, so keep it, or set
+differ from the running server's and its PID. When that server runs another rotari binary, as after an upgrade,
+it says so; stop it and start it again to use the new one. A token generated at start is not shown again, so keep it, or set
 `ROTARI_WEB_AUTH_TOKEN` before starting to choose your own. There is one detached server per user and host;
 a plain `rotari web` still starts beside it, and says it is there, but its shells are its own.
 
