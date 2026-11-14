@@ -98,10 +98,15 @@ func TestBashIntegrationReadsTheLoginFilesAndMarks(t *testing.T) {
 // bash is made to take that way here, since no old one may be at hand.
 func TestOldBashIntegrationMarksCommandsByTheDebugTrap(t *testing.T) {
 	home := t.TempDir()
-	writeFiles(t, home, map[string]string{".bash_profile": "PROMPT_COMMAND='LAST=$?'\n"})
+	// A PS0 of the profile's own, as systemd's /etc/profile.d sets one.
+	writeFiles(t, home, map[string]string{".bash_profile": "PROMPT_COMMAND='LAST=$?'\nPS0='[ps0]'\n"})
 	shell := integrated(t, "bash", home, "ROTARI_BASH_DEBUG_TRAP=1")
-	if got := shell.run(t, `echo "${PS0:-none}-${ROTARI_BASH_DEBUG_TRAP:-gone}"`); got != "none-gone" {
-		t.Errorf("PS0 and the test's variable = %q, want none-gone", got)
+	// The host's /etc/profile may set a PS0 of its own, as systemd's does; C is not added to it.
+	if got := shell.run(t, `case ${PS0:-} in *'133;C'*) echo C-in-PS0;; *) echo no-C;; esac`); got != "no-C" {
+		t.Errorf("PS0 = %q, want no C in it", got)
+	}
+	if got := shell.run(t, `echo "${ROTARI_BASH_DEBUG_TRAP:-gone}"`); got != "gone" {
+		t.Errorf("the test's variable = %q, want it gone", got)
 	}
 	// An empty line, then a pipeline of two commands that fails, with what came before gone.
 	time.Sleep(300 * time.Millisecond)
