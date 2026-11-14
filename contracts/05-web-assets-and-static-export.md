@@ -1464,6 +1464,18 @@ limit is checked at the package level by `TestIdleLimitAppliesToTheShellsTogethe
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-51** With `rotari web --allow-terminal`, a right click in a pane opens the panel's menu by the pointer and keeps
+the browser's from opening, unless Shift is held (the browser's opens) or the program asked for mouse tracking (it
+gets the click). The menu offers **Cut**, on only for a selection wholly within the command line typed at the prompt
+(from `B` to the line's end, counted as WEB-50 counts, a selection run past the text ending with it), which copies
+the selection and, only if that succeeds, moves the cursor to its end as WEB-50 does and sends one `DEL` per character,
+then clears the selection; **Copy**, of the terminal's selection, off without one; **Paste**, which reads the
+clipboard and gives it to the terminal as Ctrl+V does (bracketed when the program asked, with no Enter of its own),
+or, when the browser does not let the page read it, says to use Ctrl+V (Cmd+V on a Mac), and says when it holds no
+text; **Select all**; and, on a command's prompt or output (WEB-48), that command's **Copy output** and **Copy
+command**. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
+[`TestTerminalPanelInBrowser`](../conformance/05-web/terminal_panel_browser_test.go).
+
 **WEB-50** With `rotari web --allow-terminal`, a click in the command line being typed at a shell's prompt moves the
 cursor there. It applies to a press and release of the left button without Alt, Ctrl, Meta, or Shift, within 2 pixels
 of each other, that leave no selection, with no link under the pointer and no mouse tracking asked for by the

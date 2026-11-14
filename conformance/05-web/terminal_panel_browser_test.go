@@ -244,6 +244,35 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('X typed where the line was clicked', screenHas('X42x')).catch(async (error) => {
     throw new Error(error.message + '; the rows end ' + JSON.stringify(await page.evaluate('[...document.querySelectorAll(".xterm-rows > div")].map((row) => row.textContent.trim()).filter(Boolean).slice(-4)')));
   });
+  // Cut from the right-click menu: a selected part of the typed line is copied and taken out
+  // of what runs. A copy the browser refuses cuts nothing, and the line runs whole.
+  try {
+    const { targetInfo } = await page.send('Target.getTargetInfo');
+    await cdp.send('Browser.grantPermissions', { origin: base, browserContextId: targetInfo.browserContextId, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
+  } catch {}
+  await page.evaluate('document.querySelectorAll(".xterm-helper-textarea")[0].focus()');
+  await page.send('Input.insertText', { text: 'echo A$((2*3))DROPZ' });
+  const cutRow = '[...document.querySelectorAll(".xterm-rows > div")].find((row) => row.textContent.trim() === ">> echo A$((2*3))DROPZ")';
+  await until('the line to cut from', cutRow + ' !== undefined');
+  // "DROP" is cells 17 to 20, after ">> echo A$((2*3))".
+  const selected = await page.evaluate('(() => { const term = document.querySelector(".terminal-pane").terminalPane.term; const buffer = term.buffer.active; term.select(17, buffer.baseY + buffer.cursorY, 4); return term.getSelection(); })()');
+  if (selected !== 'DROP') throw new Error('selected ' + JSON.stringify(selected) + ', not DROP');
+  const cutPoint = await page.evaluate('(() => { const box = ' + cutRow + '.getBoundingClientRect(); return { x: box.left + 20, y: box.top + box.height / 2 }; })()');
+  await page.evaluate('document.querySelector(".terminal-send-note")?.replaceChildren()');
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...cutPoint });
+  await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...cutPoint, button: 'right', clickCount: 1 });
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...cutPoint, button: 'right', clickCount: 1 });
+  const terminalMenu = '[...document.querySelectorAll(".terminal-tab-menu button")].map((item) => item.textContent + (item.disabled ? "-" : "+")).join()';
+  await until('the right-click menu with Cut', terminalMenu + '.startsWith("Cut+,Copy+,Paste+,Select all+")').catch(async (error) => {
+    throw new Error(error.message + '; the menu is ' + JSON.stringify(await page.evaluate(terminalMenu)));
+  });
+  await page.evaluate('[...document.querySelectorAll(".terminal-tab-menu button")].find((item) => item.textContent === "Cut").click()');
+  await until('the cut to be said', '/^(Cut the selection|Copy failed)/.test(document.querySelector(".terminal-send-note")?.textContent || "")');
+  const cutSaid = await page.evaluate('document.querySelector(".terminal-send-note").textContent');
+  await sleep(300);
+  await typeLine('');
+  if (cutSaid === 'Cut the selection') await until('the line run without what was cut', screenHas('A6Z'));
+  else await until('the line run whole after a refused copy', screenHas('A6DROPZ'));
   await typeLine('exit');
   await sleep(500);
   await collect();
@@ -553,9 +582,10 @@ process.exit(0);
 // TestTerminalPanelInBrowser uses the real xterm.js in Chrome, signed in as a browser
 // is: opening the panel, typing, following a link with the shell still there, a run ID
 // it prints followed to its run page, blocks from a prompt that marks its commands, a click
-// moving the cursor in a typed line, a second tab, and up to four panes.
+// moving the cursor in a typed line, Cut from the right-click menu, a second tab, and up to
+// four panes.
 func TestTerminalPanelInBrowser(t *testing.T) {
-	covers(t, "WEB-33", "WEB-48", "WEB-50")
+	covers(t, "WEB-33", "WEB-48", "WEB-50", "WEB-51")
 	chrome := browserForTests(t)
 	node, err := exec.LookPath("node")
 	if err != nil || exec.Command(node, "-e", `if (typeof WebSocket !== "function") process.exit(1)`).Run() != nil {
