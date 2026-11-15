@@ -232,10 +232,18 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the project\'s shell to settle after the blocks', settled);
   // Pointing at a command's line shows Copy output at its right end, outside the text.
   const longRow = '[...document.querySelectorAll(".xterm-rows > div")].find((row) => row.textContent.trim() === "$ c long")';
+  // Connected is not replayed: wait for the replay's last output before scrolling
+  // into it, or a scroll on a loaded host can stop at the end written so far.
+  await until('the replay written to its end', screenHas('again-10'));
   await page.evaluate(barButton('Commands') + '.click()');
   await until('the long command listed', commandRows + '.includes("c long")');
   await page.evaluate('[...document.querySelectorAll(".terminal-commands .terminal-dirs-row")].find((row) => row.querySelector(".terminal-dirs-path").textContent === "c long").click()');
-  await until('the long command at the top', topRow + ' === "$ c long"');
+  // On failure, say where the prompt is and where the view stopped, to tell a
+  // short buffer from a wrong line.
+  const scrollFacts = 'JSON.stringify((() => { const term = document.querySelector(".terminal-pane")?.terminalPane?.term; if (!term) return null; const buffer = term.buffer.active; let prompt = -1; for (let i = 0; i < buffer.length; i++) { if (buffer.getLine(i)?.translateToString(true).trim() === "$ c long") prompt = i; } return { length: buffer.length, viewportY: buffer.viewportY, baseY: buffer.baseY, rows: term.rows, prompt }; })())';
+  await until('the long command at the top', topRow + ' === "$ c long"').catch(async (error) => {
+    throw new Error(error.message + '; the view: ' + await page.evaluate(scrollFacts));
+  });
   await until('the long command on screen', longRow + ' !== undefined');
   const longPoint = await page.evaluate('(() => { const box = ' + longRow + '.getBoundingClientRect(); return { x: box.left + 40, y: box.top + box.height / 2 }; })()');
   await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...longPoint });
