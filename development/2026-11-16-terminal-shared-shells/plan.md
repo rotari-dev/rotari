@@ -1,7 +1,8 @@
 # Plan: A state directory's shells beside its projects' in the Web terminal
 
 Created: 2026-11-16
-Status: Proposed; waiting for the user's decision on the open questions.
+Status: Accepted by the user on 2026-11-16, with the open questions answered as proposed; phase 1 is done. See
+[work-log.md](work-log.md).
 
 ## Goal
 
@@ -74,7 +75,10 @@ page replaced them.
 - A shell belonging to several projects, or moving a shell between groups.
 - Changing what **All projects** or **Recent jobs** show.
 
-## Open questions
+## Settled questions
+
+All three were accepted as proposed on 2026-11-16.
+
 
 1. **Opening the panel on a project with no shells of its own.** Proposed: show the state directory's shells and start
    none, since one is there to use; the panel's **Start a shell** still makes the project's. The alternative is to

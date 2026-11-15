@@ -1069,6 +1069,19 @@ function shellWord(value) {
   const sameGroup = (shell, other) =>
     shell.basedir === other.basedir && shell.project === other.project;
   const shellsHere = () => shells.filter((shell) => sameGroup(shell, here));
+  // A project's page also shows its state directory's own shells, those started for work
+  // across its projects, after the project's.
+  const sharedGroup = () =>
+    here.project && here.basedir
+      ? { basedir: here.basedir, project: "" }
+      : null;
+  const isShared = (shell) => {
+    const shared = sharedGroup();
+    return Boolean(shared) && sameGroup(shell, shared);
+  };
+  const inView = (shell) => sameGroup(shell, here) || isShared(shell);
+  const sharedShells = () => shells.filter(isShared);
+  const shellsInView = () => [...shellsHere(), ...sharedShells()];
   // projectName names a group: its project, its basedir for a basedir's own shells, or none.
   const projectName = (group) => group.project || group.basedir || "No project";
   // inBasedir tells apart projects of the same name in different basedirs.
@@ -1221,10 +1234,10 @@ function shellWord(value) {
     }
     return confirm(question + "? " + detail);
   };
-  // arrangeShells puts this project's shells in the order given, here at once and then on
+  // arrangeShells puts one group's shells in the order given, here at once and then on
   // the server, so that later pages and other browser tabs see it.
   const arrangeShells = async (arranged) => {
-    const others = shells.filter((shell) => !sameGroup(shell, here));
+    const others = shells.filter((shell) => !sameGroup(shell, arranged[0]));
     listSerial++;
     shells = [...arranged, ...others];
     renderTabs();
@@ -1244,7 +1257,9 @@ function shellWord(value) {
     }
   };
   const moveShell = (shell, place) => {
-    const arranged = shellsHere().filter((item) => item.id !== shell.id);
+    const arranged = shells.filter(
+      (item) => sameGroup(item, shell) && item.id !== shell.id,
+    );
     arranged.splice(place, 0, shell);
     arrangeShells(arranged);
   };
@@ -1272,7 +1287,8 @@ function shellWord(value) {
       }
     };
     tab.ondragover = (event) => {
-      if (!draggingShell) return;
+      // A tab moves only among its own group's.
+      if (!draggingShell || !sameGroup(draggingShell, shell)) return;
       event.preventDefault();
       clearDropMarks();
       tab.classList.add(
@@ -1282,12 +1298,14 @@ function shellWord(value) {
     tab.ondrop = (event) => {
       event.preventDefault();
       const dragged = draggingShell;
-      if (!dragged) return;
+      if (!dragged || !sameGroup(dragged, shell)) return;
       const after = dropsAfter(event, tab);
       draggingShell = null;
       clearDropMarks();
       if (dragged.id === shell.id) return;
-      const arranged = shellsHere().filter((item) => item.id !== dragged.id);
+      const arranged = shells.filter(
+        (item) => sameGroup(item, dragged) && item.id !== dragged.id,
+      );
       arranged.splice(
         arranged.findIndex((item) => item.id === shell.id) + (after ? 1 : 0),
         0,
@@ -1374,7 +1392,7 @@ function shellWord(value) {
     panelMenu.querySelector("button:not(:disabled)").focus();
   };
   const openTabMenu = (event, shell) => {
-    const inGroup = shellsHere();
+    const inGroup = shells.filter((item) => sameGroup(item, shell));
     const place = inGroup.findIndex((item) => item.id === shell.id);
     const right = inGroup.slice(place + 1);
     openPanelMenu(event, [
@@ -1461,8 +1479,11 @@ function shellWord(value) {
     const inGroup = shellsHere();
     add.disabled = inGroup.length >= groupLimit || shells.length >= shellLimit;
     updatePaneButtons();
+    const shared = sharedShells();
+    const sharedLabel = shared.length ? sharedTabsLabel() : "";
     const drawn = JSON.stringify([
-      inGroup.map((shell) => [
+      sharedLabel,
+      [...inGroup, ...shared].map((shell) => [
         shell.id,
         shell.number,
         shell.name,
@@ -1476,83 +1497,100 @@ function shellWord(value) {
     // Drawing them again would take focus from a tab and move nothing.
     if (drawn === tabsDrawn || draggingShell) return;
     tabsDrawn = drawn;
-    tabs.replaceChildren(
-      ...inGroup.map((shell) => {
-        const tab = document.createElement("span");
-        tab.className = "terminal-tab";
-        tab.setAttribute("role", "presentation");
-        // A shown tab is connected, whatever the list said a moment ago.
-        const showing = paneShowing(shell.id);
-        const elsewhere = Boolean(showing) && showing !== focused;
-        const unseen = Boolean(shell.unseen_output) && !showing;
-        // A command that ended out of sight rings a bell, in place of the dot.
-        const finished = Boolean(shell.command_finished) && !showing;
-        // A command that ended out of sight with a failure rings a red bell.
-        const ended = finished ? lastCommand(shell) : null;
-        tab.classList.toggle("terminal-tab-unseen", unseen && !finished);
-        tab.classList.toggle("terminal-tab-finished", finished);
-        tab.classList.toggle("terminal-tab-failed", Boolean(ended?.failed));
-        tab.classList.toggle("terminal-tab-other-pane", elsewhere);
-        const label = document.createElement("button");
-        label.type = "button";
-        label.setAttribute("role", "tab");
-        label.setAttribute("aria-selected", String(shell.id === focused.shown));
-        label.setAttribute(
-          "aria-label",
-          "Shell " +
-            shell.number +
-            (shell.name ? ", " + shell.name : "") +
-            (ended?.failed
-              ? ", command failed"
-              : finished
-                ? ", command finished"
-                : unseen
-                  ? ", new output"
-                  : "") +
-            (elsewhere ? ", in another pane" : ""),
+    const drawTab = (shell) => {
+      const tab = document.createElement("span");
+      tab.className = "terminal-tab";
+      tab.setAttribute("role", "presentation");
+      // A shown tab is connected, whatever the list said a moment ago.
+      const showing = paneShowing(shell.id);
+      const elsewhere = Boolean(showing) && showing !== focused;
+      const unseen = Boolean(shell.unseen_output) && !showing;
+      // A command that ended out of sight rings a bell, in place of the dot.
+      const finished = Boolean(shell.command_finished) && !showing;
+      // A command that ended out of sight with a failure rings a red bell.
+      const ended = finished ? lastCommand(shell) : null;
+      tab.classList.toggle("terminal-tab-unseen", unseen && !finished);
+      tab.classList.toggle("terminal-tab-finished", finished);
+      tab.classList.toggle("terminal-tab-failed", Boolean(ended?.failed));
+      tab.classList.toggle("terminal-tab-other-pane", elsewhere);
+      const label = document.createElement("button");
+      label.type = "button";
+      label.setAttribute("role", "tab");
+      label.setAttribute("aria-selected", String(shell.id === focused.shown));
+      label.setAttribute(
+        "aria-label",
+        "Shell " +
+          shell.number +
+          (shell.name ? ", " + shell.name : "") +
+          (ended?.failed
+            ? ", command failed"
+            : finished
+              ? ", command finished"
+              : unseen
+                ? ", new output"
+                : "") +
+          (elsewhere ? ", in another pane" : "") +
+          (isShared(shell) ? ", of all projects" : ""),
+      );
+      // The times are worded as the pointer arrives: the list's refresh redraws no tab.
+      const titled = () => {
+        const times = shellTimes(
+          shells.find((item) => item.id === shell.id) || shell,
         );
-        // The times are worded as the pointer arrives: the list's refresh redraws no tab.
-        const titled = () => {
-          const times = shellTimes(
-            shells.find((item) => item.id === shell.id) || shell,
-          );
-          label.title =
-            (ended
-              ? ended.sentence + " "
-              : finished
-                ? "A command finished. "
-                : unseen
-                  ? "New output. "
-                  : "") +
-            (elsewhere ? "In another pane. " : "") +
-            "Started in " +
-            shell.dir +
-            (times
-              ? " at " +
-                times.startedAt +
-                ", " +
-                times.startedAgo +
-                ". " +
-                (times.idle ? "Idle " + times.idle + "." : "Active now.")
-              : "");
-        };
-        titled();
-        label.onpointerenter = titled;
-        label.textContent = shell.name || String(shell.number);
-        label.onclick = () => chooseTab(shell.id);
-        const close = document.createElement("button");
-        close.type = "button";
-        close.className = "terminal-tab-close";
-        close.setAttribute("aria-label", "End shell " + shell.number);
-        close.textContent = "\u00d7";
-        close.onclick = () => endShell(shell);
-        tab.oncontextmenu = (event) => openTabMenu(event, shell);
-        makeDraggable(tab, shell);
-        tab.append(label, close);
-        return tab;
-      }),
-    );
+        label.title =
+          (ended
+            ? ended.sentence + " "
+            : finished
+              ? "A command finished. "
+              : unseen
+                ? "New output. "
+                : "") +
+          (elsewhere ? "In another pane. " : "") +
+          "Started in " +
+          shell.dir +
+          (times
+            ? " at " +
+              times.startedAt +
+              ", " +
+              times.startedAgo +
+              ". " +
+              (times.idle ? "Idle " + times.idle + "." : "Active now.")
+            : "");
+      };
+      titled();
+      label.onpointerenter = titled;
+      label.textContent = shell.name || String(shell.number);
+      label.onclick = () => chooseTab(shell.id);
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "terminal-tab-close";
+      close.setAttribute("aria-label", "End shell " + shell.number);
+      close.textContent = "\u00d7";
+      close.onclick = () => endShell(shell);
+      tab.oncontextmenu = (event) => openTabMenu(event, shell);
+      makeDraggable(tab, shell);
+      tab.append(label, close);
+      return tab;
+    };
+    const drawnTabs = inGroup.map(drawTab);
+    if (shared.length) {
+      // The state directory's own shells, set apart and named as its All projects does.
+      const divider = document.createElement("span");
+      divider.className = "terminal-tab-divider";
+      divider.setAttribute("role", "presentation");
+      divider.textContent = sharedLabel;
+      divider.title =
+        "Shells of " + here.basedir + " for work across its projects";
+      drawnTabs.push(divider, ...shared.map(drawTab));
+    }
+    tabs.replaceChildren(...drawnTabs);
   };
+  // sharedTabsLabel names the state directory's own tabs, with the state directory when
+  // more than one is registered.
+  const sharedTabsLabel = () =>
+    document.querySelectorAll("#sidebar-basedirs .basedir-row").length > 1
+      ? "All projects \u00b7 " + here.basedir
+      : "All projects";
   // A sign-in that has gone cannot be retried away.
   const signInGone = (pane, response) => {
     if (response?.status !== 401 && response?.status !== 403) return false;
@@ -2053,7 +2091,7 @@ function shellWord(value) {
   // the project link setting.
   const chooseFromOverview = (shell) => {
     closeOverview();
-    if (sameGroup(shell, here)) {
+    if (inView(shell)) {
       chooseTab(shell.id);
       return;
     }
@@ -2336,7 +2374,7 @@ function shellWord(value) {
     card.type = "button";
     card.className = "terminal-overview-card";
     card.dataset.shell = shell.id;
-    const ours = sameGroup(shell, here);
+    const ours = inView(shell);
     const current = ours && focused.shown === shell.id;
     const elsewhere = ours && !current && Boolean(paneShowing(shell.id));
     const unseen =
@@ -3156,13 +3194,13 @@ function shellWord(value) {
       showBriefly(pane, "There is too little room to split this pane.");
       return;
     }
-    const inGroup = shellsHere();
+    const inGroup = shellsInView();
     const place = inGroup.findIndex((shell) => shell.id === pane.shown);
     const free = inGroup.filter((shell) => !paneShowing(shell.id));
     let shell =
       inGroup.slice(place + 1).find((item) => !paneShowing(item.id)) || free[0];
     if (!shell) {
-      if (inGroup.length >= groupLimit || shells.length >= shellLimit) {
+      if (shellsHere().length >= groupLimit || shells.length >= shellLimit) {
         showBriefly(
           pane,
           "No more shells can start here, so there is nothing to split with.",
@@ -3190,7 +3228,7 @@ function shellWord(value) {
   // A pane's shell has ended. The screen stays if there is nothing to show instead,
   // and a new shell is a choice: it may have been the last thing wanted.
   const shellGone = async (pane, message) => {
-    const before = shellsHere();
+    const before = shellsInView();
     const place = before.findIndex((shell) => shell.id === pane.shown);
     const gone = pane.shown;
     pane.shown = null;
@@ -3203,7 +3241,7 @@ function shellWord(value) {
       return;
     }
     if (pane.shown !== null || !panes.includes(pane)) return; // Someone chose meanwhile.
-    const left = shellsHere().filter((shell) => !paneShowing(shell.id));
+    const left = shellsInView().filter((shell) => !paneShowing(shell.id));
     const next = left[Math.min(Math.max(place, 0), left.length - 1)];
     if (next) show(pane, next.id, false);
     else closePane(pane); // The other panes have all there is. With none, this stays.
@@ -3349,7 +3387,7 @@ function shellWord(value) {
     }
     // Other panes are there only when this runs again on a panel in use.
     const others = panes.length > 1;
-    const inGroup = shellsHere().filter(
+    const inGroup = shellsInView().filter(
       (item) => item.id === pane.shown || !paneShowing(item.id),
     );
     const saved = others ? null : rememberedLayout(inGroup);
@@ -6762,7 +6800,7 @@ function shellWord(value) {
         ? "Sign in again to use the terminal."
         : "The server did not answer, so nothing was sent.";
     }
-    const inGroup = shellsHere();
+    const inGroup = shellsInView();
     if (!inGroup.length) return noShellMessage();
     const showing =
       pane.term && inGroup.some((shell) => shell.id === pane.shown);

@@ -1054,6 +1054,17 @@ html.terminal-open[data-terminal-place]:not(.terminal-maximized)
   background: var(--terminal-background);
   color: var(--text);
 }
+/* Before a state directory's own tabs on a project's page. */
+.terminal-tab-divider {
+  flex: none;
+  align-self: center;
+  margin-left: 6px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
 /* Shown too, in the pane the keys are not going to. */
 .terminal-tab-other-pane {
   border-color: var(--line);

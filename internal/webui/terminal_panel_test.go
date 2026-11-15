@@ -2635,6 +2635,76 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     assert.match(grouped.sockets[0].url, new RegExp('shell=' + shown + '&'), path + ' showed another group\'s shell');
   }
 
+  // A project's page shows its state directory's own shells after its own, behind a
+  // divider naming them, and not those of another state directory, no project, or another
+  // project. Each kind's tabs keep to themselves when arranged.
+  const tabRow = (page) => [...page.document.querySelector('.terminal-tabs').children].map((item) =>
+    item.classList.contains('terminal-tab-divider') ? '|' + item.textContent : item.querySelector('[role=tab]').textContent);
+  const sharing = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [
+    inProject('1', 1, 'p1'), ofBasedir('5', 5), inProject('2', 2, 'p1'), ofBasedir('6', 6), ofBasedir('7', 7, '/c'), plain('8', 8), inProject('9', 9, 'p2'),
+  ] });
+  await wait(50);
+  assert.deepEqual(tabRow(sharing), ['1', '2', '|All projects', '5', '6']);
+  assert.deepEqual(sp(sharing).live(), ['1'], 'the project\'s own shell was not shown first');
+  const sharedTab = [...sharing.document.querySelectorAll('.terminal-tab [role=tab]')].find((tab) => tab.textContent === '5');
+  assert.match(sharedTab.getAttribute('aria-label'), /^Shell 5, of all projects$/);
+  assert.match(sharing.document.querySelector('.terminal-tab-divider').title, /Shells of \/b for work across its projects/);
+  assert.equal(sharing.document.querySelector('.terminal-tab-divider').getAttribute('role'), 'presentation');
+  sp(sharing).tab('5');
+  await wait(30);
+  assert.deepEqual(sp(sharing).live(), ['5'], 'a shared tab did not show in the pane');
+  assert.equal(sp(sharing).selected(), '5');
+  assert.equal(sharing.window.location.pathname, '/project/p1');
+  // All shells chooses a shared shell as a tab of this page, without moving the page.
+  sp(sharing).bar('All shells').click();
+  await wait(30);
+  assert.equal(sharing.document.querySelector('.terminal-overview-card[data-shell="5"]').classList.contains('terminal-overview-current'), true);
+  sharing.document.querySelector('.terminal-overview-card[data-shell="6"]').click();
+  await wait(40);
+  assert.equal(sharing.window.location.pathname, '/project/p1');
+  assert.equal(sp(sharing).selected(), '6', 'the overview did not choose the shared shell here');
+  // A shared tab's menu moves it among the shared tabs, and a drag across the divider is refused.
+  const sharedTabEl = (name) => [...sharing.document.querySelectorAll('.terminal-tab')].find((tab) => tab.querySelector('[role=tab]').textContent === name);
+  sharedTabEl('5').dispatchEvent(new sharing.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+  const sharedMenu = Object.fromEntries([...sharing.document.querySelectorAll('.terminal-tab-menu button')].map((item) => [item.textContent, item]));
+  assert.equal(sharedMenu['Move left'].disabled, true, 'the first shared tab could move left past the divider');
+  assert.equal(sharedMenu['Move right'].disabled, false);
+  sharedMenu['Move right'].click();
+  await wait(30);
+  assert.deepEqual(tabRow(sharing), ['1', '2', '|All projects', '6', '5']);
+  assert.deepEqual(sharing.server.shells.filter((shell) => shell.basedir === '/b' && !shell.project).map((shell) => shell.id), ['6', '5'], 'the server did not hear the shared order');
+  const across = new sharing.window.Event('dragstart', { bubbles: true, cancelable: true });
+  sharedTabEl('5').dispatchEvent(across);
+  const acrossOver = new sharing.window.Event('dragover', { bubbles: true, cancelable: true });
+  sharedTabEl('1').dispatchEvent(acrossOver);
+  assert.equal(acrossOver.defaultPrevented, false, 'a project\'s tab accepted a shared tab');
+  sharedTabEl('1').dispatchEvent(new sharing.window.Event('drop', { bubbles: true, cancelable: true }));
+  sharedTabEl('5').dispatchEvent(new sharing.window.Event('dragend', { bubbles: true }));
+  assert.deepEqual(tabRow(sharing), ['1', '2', '|All projects', '6', '5']);
+  // With more than one state directory, the divider names the state directory.
+  sharing.document.getElementById('sidebar-basedirs').innerHTML =
+    '<div class="sidebar-project-row basedir-row"><a class="sidebar-project-link" href="/">b</a></div>' +
+    '<div class="sidebar-project-row basedir-row"><a class="sidebar-project-link" href="/_basedir/c/">c</a></div>';
+  sharing.polls[0]();
+  await wait(30);
+  assert.equal(sharing.document.querySelector('.terminal-tab-divider').textContent, 'All projects · /b');
+  // A project with no shells of its own shows the shared ones and starts none.
+  const borrowing = load(process.argv[1], { stored: '1', path: '/project/p3', shells: [ofBasedir('5', 5), inProject('9', 9, 'p2')] });
+  await wait(50);
+  assert.deepEqual(tabRow(borrowing), ['|All projects', '5']);
+  assert.deepEqual(sp(borrowing).live(), ['5']);
+  assert.equal(borrowing.requests.some((request) => request.startsWith('POST')), false, 'a shell was started beside a shared one');
+  borrowing.document.querySelector('.terminal-add').click();
+  await wait(30);
+  assert.match(borrowing.requests.findLast((request) => request.startsWith('POST')), /project=p3$/, '+ did not start a shell of the project');
+  // A state directory's own pages and a page of no project show their own group alone.
+  for (const [path, row] of [['/', ['5']], ['/activity', ['8']]]) {
+    const alone = load(process.argv[1], { stored: '1', path, shells: [inProject('1', 1, 'p1'), ofBasedir('5', 5), plain('8', 8)] });
+    await wait(50);
+    assert.deepEqual(tabRow(alone), row, path);
+    assert.equal(alone.document.querySelector('.terminal-tab-divider'), null, path + ' drew a divider');
+  }
+
   // Unlinking keeps the terminal's group and its split layout while the page moves,
   // and a group or overview choice moves only the terminal.
   const linkShells = [inProject('1', 1, 'p1'), inProject('2', 2, 'p1'), inProject('3', 1, 'p2'), inProject('4', 2, 'p2'), ofBasedir('5', 1, '/c'), plain('6', 1)];
