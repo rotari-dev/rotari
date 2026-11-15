@@ -255,3 +255,13 @@ failed them all, and Node 22.23.5 passed them. `TestBashIntegrationReadsTheLogin
 `TestStalledReaderIsDetachedAndTheProgramContinues`, `TestProgramsDoNotStallWithNothingAttached`,
 `TestAShellStartedInsideIsTheCurrentShell`) passed at `bc5aae54` and failed every run at `e1dc61a3`, after the
 inner shell commits of another thread.
+
+## 2026-11-15 — The cancel trace, dropped
+
+The ninth macOS run had three failures: the two listener tests and `TestTerminalPanelInBrowser` (now at the long
+command reaching the top of the screen); `TestCLIFlagPairCancel` and the bash integration tests passed. As the user
+chose, a trace of each cancel in the job wrapper (`ROTARI_DEBUG_CANCEL_TRACE`) was written and committed locally,
+but on rebasing it met another thread's `e2ee0d05` "Fix lost cancellation watchdog signals", which found the cause:
+the wrapper's USR1 to the grace timer can be lost while the timer installs its trap, so the wrapper waits the full
+30 s. That matches every macOS failure seen. The trace commits were abandoned before being pushed; the ISSUES entry
+now carries that thread's account and awaits macOS confirmation.
