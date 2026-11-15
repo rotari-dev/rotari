@@ -265,3 +265,19 @@ but on rebasing it met another thread's `e2ee0d05` "Fix lost cancellation watchd
 the wrapper's USR1 to the grace timer can be lost while the timer installs its trap, so the wrapper waits the full
 30 s. That matches every macOS failure seen. The trace commits were abandoned before being pushed; the ISSUES entry
 now carries that thread's account and awaits macOS confirmation.
+
+## 2026-11-15 — `29592b56` Keep the launcher tests' listener accepting
+
+The user reproduced the listener failures on a Mac, then ran the test binary's listener role by hand: it printed
+`fatal error: all goroutines are asleep - deadlock!` at `select {}` in `listenAndWait` and exited 2, right after
+writing its port. So lsof was right that nothing listened; `listener_darwin.go` is not at fault. Linux did not end
+the process, which is why the tests passed there.
+
+**Change:** `listenAndWait` accepts and closes connections in a loop instead of `select {}`; a goroutine waiting
+in `Accept` keeps the runtime from declaring a deadlock. `fakeWeb`'s `select {}` stays: its process has a
+goroutine waiting on the wrapper in a system call, and its tests pass on macOS.
+
+The ISSUES entry, which had concluded that macOS never trusts a launch's port, is moved to Resolved and corrected.
+
+**Validation:** On Linux, `go test ./internal/launcher -count=3` passed, and the listener role kept running for
+2 s. `GOOS=darwin go vet ./internal/launcher`: clean. Not yet run on macOS.
