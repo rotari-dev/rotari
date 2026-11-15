@@ -296,6 +296,17 @@ function shellWord(value) {
       { x: 1.5, y: 9, width: 5.5, height: 4.5, rx: 1 },
       { x: 9, y: 9, width: 5.5, height: 4.5, rx: 1 },
     ],
+    projectLink: [
+      "M6.5 9.5l3-3",
+      "M7 4.5l1.5-1.5a2.5 2.5 0 0 1 3.5 3.5L10.5 8",
+      "M9 11.5L7.5 13A2.5 2.5 0 0 1 4 9.5L5.5 8",
+    ],
+    projectUnlink: [
+      "M6.5 9.5l3-3",
+      "M7 4.5l1.5-1.5a2.5 2.5 0 0 1 3.5 3.5L10.5 8",
+      "M9 11.5L7.5 13A2.5 2.5 0 0 1 4 9.5L5.5 8",
+      "M2 2l12 12",
+    ],
   };
   // drawIcon replaces what a button shows with a picture. Its label names it for those who
   // cannot see the picture, and its title for those who point at it.
@@ -320,13 +331,18 @@ function shellWord(value) {
   };
   const shownKey = "rotari-terminal-shell";
   const layoutKey = "rotari-terminal-layout";
+  const projectLinkKey = "rotari-terminal-project-link";
+  const projectPathKey = "rotari-terminal-project-path";
   // What a browser tab's panes showed for each project, which goes to its window and back.
   const isPaneKey = (key) =>
     typeof key === "string" &&
     (key.startsWith(shownKey + ":") || key.startsWith(layoutKey + ":"));
+  const isHandoverKey = (key) =>
+    isPaneKey(key) || key === projectLinkKey || key === projectPathKey;
   // A browser tab whose panel is in a window says so here, so that following a link finds
   // the window again rather than taking its shells.
   const windowedKey = "rotari-terminal-windowed";
+  const windowTokenKey = "rotari-terminal-window-token";
   // A window says it is there this often, and a page loaded while it was waits this long
   // to hear it before putting the panel back.
   const windowBeat = 1000;
@@ -340,7 +356,7 @@ function shellWord(value) {
     try {
       const handover = JSON.parse(decodeURIComponent(location.hash.slice(1)));
       for (const [key, value] of Object.entries(handover)) {
-        if (isPaneKey(key) && typeof value === "string")
+        if (isHandoverKey(key) && typeof value === "string")
           sessionStorage.setItem(key, value);
       }
     } catch {}
@@ -421,16 +437,24 @@ function shellWord(value) {
     splitDownButton,
     closePaneButton,
     placeButton,
+    projectLinkButton,
     maximize;
   let shells = [];
   let shellLimit = 0;
   let groupLimit = 0;
-  let here = { basedir: "", project: "", dir: "" }; // The page's place.
+  let here = { basedir: "", project: "", dir: "" }; // The terminal's place.
+  let projectLinked = true;
+  let terminalPath = "";
+  let groupSerial = 0;
+  let beginSerial = 0;
+  let changingGroup = false;
+  let groupPending = false;
   let tabsDrawn = "";
   let groupsDrawn = "";
   let startAsked = false; // Someone opened the panel: start a shell if there is none.
   let newAsked = false; // Someone asked for a new shell here.
   let listSerial = 0;
+  let latestList = null;
   let endingHere = new Set(); // Shells this page asked to end, which need no telling.
   let terminalWindow = null; // The window the panel moved to, while it is open.
   let windowTimer;
@@ -782,7 +806,8 @@ function shellWord(value) {
     layoutKey + ":" + here.basedir + ":" + here.project;
   // While the panel is in a window, the window decides what the panes are.
   const rememberLayout = () => {
-    if (terminalWindow || awaitingWindow) return;
+    if (terminalWindow || awaitingWindow || changingGroup || groupPending)
+      return;
     try {
       if (panes[0].shown !== null)
         sessionStorage.setItem(shownStorageKey(), panes[0].shown);
@@ -804,13 +829,12 @@ function shellWord(value) {
         sessionStorage.removeItem(layoutStorageKey());
       }
       if (inWindow) {
-        tellOpener({
-          type: "rotari-terminal-saved",
-          entries: {
-            [shownStorageKey()]: sessionStorage.getItem(shownStorageKey()),
-            [layoutStorageKey()]: sessionStorage.getItem(layoutStorageKey()),
-          },
-        });
+        const entries = {
+          [shownStorageKey()]: sessionStorage.getItem(shownStorageKey()),
+          [layoutStorageKey()]: sessionStorage.getItem(layoutStorageKey()),
+        };
+        shareWithOpener(entries);
+        tellOpener({ type: "rotari-terminal-saved", entries });
       }
     } catch {}
   };
@@ -882,13 +906,8 @@ function shellWord(value) {
     }
     return layout.length ? { layout, focused: saved.focused } : null;
   };
-  // The page's basedir ID, project, and run, as it would ask for them in a query. The
-  // parts are still percent-encoded, so they go in as they are.
-  const pagePlace = () =>
-    placeOverride ||
-    placeOfPath(
-      inWindow ? location.pathname.slice(windowPath.length) : location.pathname,
-    );
+  const pagePath = () =>
+    inWindow ? location.pathname.slice(windowPath.length) : location.pathname;
   // pageOfPath is whose shells a page shows, as the application script routes it: a
   // project's page or a run's belongs to the project; Activity and History search, which
   // cover every basedir, to no project (global); and any other page, such as All projects
@@ -907,6 +926,55 @@ function shellWord(value) {
       return { global: parts[0] };
     return { mounted };
   };
+  // The page's path as far as whose shells it shows.
+  const projectPath = (path = pagePath()) => {
+    const page = pageOfPath(path);
+    if (page.global) return "/" + page.global;
+    const prefix = page.mounted ? "/_basedir/" + page.mounted : "";
+    return prefix + (page.project ? "/project/" + page.project : "/");
+  };
+  const pathSegment = (part) => {
+    try {
+      return encodeURIComponent(decodeURIComponent(part));
+    } catch (error) {
+      if (!(error instanceof URIError)) throw error;
+      console.warn("The terminal could not decode a path segment:", error);
+      return encodeURIComponent(part);
+    }
+  };
+  const groupPath = (path) => {
+    const page = pageOfPath(path);
+    if (page.global) return "/activity";
+    const prefix = page.mounted ? "/_basedir/" + pathSegment(page.mounted) : "";
+    return (
+      prefix + (page.project ? "/project/" + pathSegment(page.project) : "/")
+    );
+  };
+  const localPath = (path) =>
+    typeof path === "string" && path.startsWith("/") && !path.startsWith("//");
+  const shareWithOpener = (entries) => {
+    if (!inWindow) return false;
+    try {
+      if (!window.opener || window.opener.closed) return false;
+      const storage = window.opener.sessionStorage;
+      if (
+        !storage ||
+        storage.getItem(windowedKey) !== "1" ||
+        !window.name ||
+        storage.getItem(windowTokenKey) !== window.name
+      )
+        return false;
+      for (const [key, value] of Object.entries(entries)) {
+        if (!isHandoverKey(key)) continue;
+        if (typeof value === "string") storage.setItem(key, value);
+        else storage.removeItem(key);
+      }
+      return true;
+    } catch (error) {
+      console.warn("The terminal could not hand its state to its page:", error);
+      return false;
+    }
+  };
   // placeOfPath is a page path's place: a shell's link gives its group's.
   const placeOfPath = (path) => {
     const page = pageOfPath(path);
@@ -914,10 +982,87 @@ function shellWord(value) {
     // A project's page names the server's own basedir by leaving it out, and a basedir's
     // own page by an empty ID.
     const query =
-      page.mounted || !page.project ? ["basedir=" + page.mounted] : [];
-    if (page.project) query.push("project=" + page.project);
-    if (page.run) query.push("run=" + page.run);
+      page.mounted || !page.project
+        ? ["basedir=" + pathSegment(page.mounted)]
+        : [];
+    if (page.project) query.push("project=" + pathSegment(page.project));
+    if (page.run) query.push("run=" + pathSegment(page.run));
     return query.join("&");
+  };
+  // The page's place and the terminal's place differ while the link is off.
+  const pagePlace = () => placeOfPath(pagePath());
+  const terminalPlace = () =>
+    placeOverride || placeOfPath(projectLinked ? pagePath() : terminalPath);
+  try {
+    projectLinked = sessionStorage.getItem(projectLinkKey) !== "0";
+    const savedPath = sessionStorage.getItem(projectPathKey);
+    terminalPath =
+      !projectLinked && localPath(savedPath)
+        ? groupPath(savedPath)
+        : groupPath(pagePath());
+  } catch (error) {
+    console.warn(
+      "The terminal could not read its project link setting:",
+      error,
+    );
+    terminalPath = groupPath(pagePath());
+  }
+  const rememberTerminalContext = () => {
+    const entries = {
+      [projectLinkKey]: projectLinked ? "1" : "0",
+      [projectPathKey]: terminalPath,
+    };
+    try {
+      for (const [key, value] of Object.entries(entries))
+        sessionStorage.setItem(key, value);
+    } catch (error) {
+      console.error("The terminal could not remember its project link:", error);
+      showNote(
+        "The browser could not remember the terminal's project link.",
+        6000,
+      );
+    }
+    if (inWindow) {
+      const shared = shareWithOpener(entries);
+      tellOpener({
+        type: "rotari-terminal-context",
+        linked: projectLinked,
+        path: terminalPath,
+        shared,
+      });
+    }
+  };
+  const updateProjectLinkButton = () => {
+    if (!projectLinkButton) return;
+    projectLinkButton.setAttribute("aria-pressed", String(projectLinked));
+    projectLinkButton.title = projectLinked
+      ? "Terminal and project follow each other. Click to unlink them."
+      : "Terminal and project switch independently. Click to link them.";
+    drawIcon(
+      projectLinkButton,
+      projectLinked ? icons.projectLink : icons.projectUnlink,
+    );
+  };
+  const readTerminalContext = () => {
+    try {
+      const linked = sessionStorage.getItem(projectLinkKey);
+      const path = sessionStorage.getItem(projectPathKey);
+      if (linked === null && path === null) return false;
+      if ((linked !== "0" && linked !== "1") || !localPath(path)) {
+        console.warn("The terminal's saved project link is invalid.");
+        return false;
+      }
+      projectLinked = linked === "1";
+      terminalPath = groupPath(path);
+      updateProjectLinkButton();
+      return true;
+    } catch (error) {
+      console.warn(
+        "The terminal could not read its project link setting:",
+        error,
+      );
+      return false;
+    }
   };
   const sameGroup = (shell, other) =>
     shell.basedir === other.basedir && shell.project === other.project;
@@ -931,16 +1076,17 @@ function shellWord(value) {
       ? " in " + entry.basedir
       : "";
   const refreshHere = async () => {
-    const response = await serverFetch("/_terminal/here?" + pagePlace());
+    const serial = groupSerial;
+    const response = await serverFetch("/_terminal/here?" + terminalPlace());
     if (!response.ok) return response;
-    here = await response.json();
+    const next = await response.json();
+    if (serial !== groupSerial) return null;
+    here = next;
     if (add) add.title = "New shell in " + here.dir;
     if (inWindow) document.title = projectName(here) + " - Terminal - rotari";
     return null;
   };
-  // The projects with shells, this page's first. Choosing one goes to its page, so that
-  // what the panel shows always follows the page. A window goes to its own page for that
-  // project, and has the page that opened it go to that project's page.
+  // The projects with shells, the terminal's first.
   const renderGroups = () => {
     const entries = [{ ...here, link: "", count: shellsHere().length }];
     for (const shell of shells) {
@@ -1307,6 +1453,7 @@ function shellWord(value) {
         : "Terminal";
   };
   const renderTabs = () => {
+    if (groupPending) return;
     showShellCount();
     renderGroups();
     const inGroup = shellsHere();
@@ -1871,17 +2018,22 @@ function shellWord(value) {
             Array.isArray(column?.rows) ? column.rows.filter(Boolean) : [],
           )
         : [];
-      if (!rows.length) return;
-      if (!rows.some((row) => row.shell === shell.id)) {
-        (rows.find((row) => row.shell === saved.focused) || rows[0]).shell =
-          shell.id;
+      if (rows.length) {
+        if (!rows.some((row) => row.shell === shell.id)) {
+          (rows.find((row) => row.shell === saved.focused) || rows[0]).shell =
+            shell.id;
+        }
+        saved.focused = shell.id;
+        sessionStorage.setItem(layoutKey + suffix, JSON.stringify(saved));
       }
-      saved.focused = shell.id;
-      sessionStorage.setItem(layoutKey + suffix, JSON.stringify(saved));
+      shareWithOpener({
+        [shownKey + suffix]: sessionStorage.getItem(shownKey + suffix),
+        [layoutKey + suffix]: sessionStorage.getItem(layoutKey + suffix),
+      });
     } catch {}
   };
-  // A shell of this page's project is shown as choosing its tab would; another project's
-  // takes the page there, as the project list does.
+  // A shell of this group is shown as choosing its tab would; another group's follows
+  // the project link setting.
   const chooseFromOverview = (shell) => {
     closeOverview();
     if (sameGroup(shell, here)) {
@@ -1889,14 +2041,23 @@ function shellWord(value) {
       return;
     }
     preferShell(shell);
-    goToPage(shell.link);
+    if (projectLinked) goToPage(shell.link);
+    else switchGroup(shell.link);
   };
   // goToPage takes the page to a path of this server. A window of the panel's own takes
   // the page it belongs to there too, and follows it.
   const goToPage = (path) => {
     if (inWindow) {
-      tellOpener({ type: "rotari-terminal-go", path });
-      location.assign(windowPath + path);
+      if (window.opener && !window.opener.closed) {
+        tellOpener({ type: "rotari-terminal-go", path });
+        if (projectLinked) location.assign(windowPath + path);
+      } else if (projectLinked) {
+        location.assign(windowPath + path);
+      } else {
+        const opened = window.open(path, "_blank");
+        if (opened) opened.opener = null;
+        else showNote("The browser blocked opening the page.", 6000);
+      }
     } else {
       location.assign(path);
     }
@@ -2580,20 +2741,29 @@ function shellWord(value) {
       idle: idle < 60000 ? null : spanText(idle),
     };
   };
-  // refreshShells updates the tabs, and returns whether it could. A newer change here
-  // wins over an older answer, which may not have heard of it.
-  const refreshShells = async () => {
+  // An older request waits for the newer list, or for a local change already applied.
+  const refreshShells = () => {
     const serial = ++listSerial;
-    let response;
-    try {
-      response = await serverFetch(shellsPath);
-    } catch {}
-    if (!response?.ok) {
-      showShellCount(false);
-      return { response };
-    }
-    const listed = await response.json();
-    if (serial === listSerial) {
+    const request = (async () => {
+      let response;
+      try {
+        response = await serverFetch(shellsPath);
+      } catch {}
+      const newer = () => {
+        if (serial !== listSerial && latestList?.serial > serial)
+          return latestList.request;
+        return null;
+      };
+      let superseding = newer();
+      if (superseding) return superseding;
+      if (!response?.ok) {
+        showShellCount(false);
+        return { response };
+      }
+      const listed = await response.json();
+      superseding = newer();
+      if (superseding) return superseding;
+      if (serial !== listSerial) return { ok: true };
       if (panel && !terminalWindow) noteEndedShells(listed.shells);
       shells = listed.shells;
       if (Number.isFinite(Date.parse(listed.now)))
@@ -2606,8 +2776,18 @@ function shellWord(value) {
         renderTabs();
         refreshExplorer();
       }
-    }
-    return { ok: true };
+      return { ok: true };
+    })();
+    const latest = { serial, request, pending: true };
+    latestList = latest;
+    request.then(
+      () => (latest.pending = false),
+      (error) => {
+        latest.pending = false;
+        console.error("The shell list could not be read:", error);
+      },
+    );
+    return request;
   };
   // connect attaches a pane to its shell. Reconnecting by itself passes takeOver false,
   // so it cannot take the shell from a tab in use; only someone opening a page or
@@ -2716,13 +2896,14 @@ function shellWord(value) {
   };
   // startShell starts a shell at a pane's size, and returns it, or says why not there.
   // A directory given, as the Explorer gives one, is where the shell starts, still of the
-  // page's project; the server refuses one that is not a directory rather than starting
+  // terminal's project; the server refuses one that is not a directory rather than starting
   // the shell elsewhere.
   const startShell = async (pane, again, dir = "") => {
     showStatus(pane, "Starting a shell...");
+    const serial = groupSerial;
     let response;
     try {
-      const place = pagePlace();
+      const place = terminalPlace();
       placeOverride = "";
       response = await serverFetch(
         shellsPath +
@@ -2736,12 +2917,28 @@ function shellWord(value) {
       );
     } catch {}
     if (!response?.ok) {
+      if (serial !== groupSerial) {
+        const reason = response
+          ? (await response.text()).trim() || "status " + response.status
+          : "the server did not answer";
+        showNote("The shell did not start: " + reason, 6000);
+        return null;
+      }
       await refusal(pane, response, "The shell did not start", again);
       return null;
     }
     const shell = await response.json();
     listSerial++;
-    shells = [...shells, shell];
+    if (!shells.some((item) => item.id === shell.id))
+      shells = [...shells, shell];
+    if (serial !== groupSerial) {
+      renderTabs();
+      showNote(
+        shellName(shell) + " started in the previous terminal group.",
+        6000,
+      );
+      return null;
+    }
     return shell;
   };
   const newShell = async (pane, dir = "") => {
@@ -2978,6 +3175,7 @@ function shellWord(value) {
   // begin shows what this browser tab last showed for this project, in the same panes, or
   // the project's first shell. It starts one only if someone asked.
   const begin = async (takeOver = true) => {
+    const serial = ++beginSerial;
     const pane = focused;
     pane.whenVisible = null;
     showStatus(pane, "Connecting...");
@@ -2993,14 +3191,17 @@ function shellWord(value) {
     try {
       refused = await refreshHere();
     } catch {
-      await listFailed();
+      if (serial === beginSerial) await listFailed();
       return;
     }
+    if (serial !== beginSerial) return;
     if (refused) {
       await listFailed(refused);
       return;
     }
+    groupPending = false;
     const { response, ok } = await refreshShells();
+    if (serial !== beginSerial) return;
     if (!ok) {
       await listFailed(response);
       return;
@@ -3038,6 +3239,78 @@ function shellWord(value) {
         () => newShell(pane),
       );
     }
+  };
+  // Leave the old group's panes without overwriting their saved layout.
+  const resetGroupPanes = () => {
+    changingGroup = true;
+    try {
+      while (panes.length > 1) closePane(panes[panes.length - 1]);
+      const pane = focused;
+      clearTimeout(pane.retryTimer);
+      pane.whenVisible = null;
+      pane.connectSerial++;
+      pane.waitingToOpen = false;
+      const socket = pane.socket;
+      pane.socket = null;
+      socket?.close();
+      settleSend(pane, "The terminal's project changed, so nothing was sent.");
+      pane.shown = null;
+      if (pane.term) {
+        const serial = pane.connectSerial;
+        pane.term.write("", () => {
+          if (serial !== pane.connectSerial) return;
+          dropBlocks(pane);
+          pane.blocksLive = false;
+          pane.term.reset();
+          showBlockGutter(pane, false);
+        });
+      }
+    } finally {
+      changingGroup = false;
+    }
+  };
+  const switchGroup = (path, load = true) => {
+    const next = groupPath(path);
+    if (next === terminalPath) return;
+    if (panel) rememberLayout();
+    groupSerial++;
+    beginSerial++;
+    groupPending = true;
+    resetGroupPanes();
+    terminalPath = next;
+    placeOverride = "";
+    newAsked = startAsked = false;
+    if (inWindow && !projectLinked) {
+      try {
+        history.replaceState(null, "", windowPath + next);
+      } catch (error) {
+        console.error(
+          "The terminal window could not update its address:",
+          error,
+        );
+        showNote("The terminal window could not update its address.", 6000);
+      }
+    }
+    rememberTerminalContext();
+    if (panel) {
+      tabs.replaceChildren();
+      tabsDrawn = "";
+      add.disabled = true;
+      updatePaneButtons();
+      closeDropdown();
+      refreshExplorer();
+    }
+    if (load && focused.term && !panel.hidden)
+      begin().catch((error) => {
+        console.error(error);
+        showStatus(focused, "The terminal could not switch: " + error.message);
+      });
+  };
+  const toggleProjectLink = () => {
+    projectLinked = !projectLinked;
+    updateProjectLinkButton();
+    rememberTerminalContext();
+    if (projectLinked && !inWindow) switchGroup(groupPath(pagePath()));
   };
   const reconnect = (pane) => {
     if (document.hidden) {
@@ -4933,13 +5206,11 @@ function shellWord(value) {
     groups.setAttribute("aria-label", "Project of these shells");
     groups.onchange = () => {
       if (!groups.value) return;
-      // A window takes the page that opened it along, as the panel goes to the page.
-      if (inWindow)
-        tellOpener({
-          type: "rotari-terminal-go",
-          path: groups.value.slice(windowPath.length),
-        });
-      location.assign(groups.value);
+      const path = inWindow
+        ? groups.value.slice(windowPath.length)
+        : groups.value;
+      if (projectLinked) goToPage(path);
+      else switchGroup(path);
     };
     tabs = document.createElement("div");
     tabs.className = "terminal-tabs";
@@ -4989,6 +5260,14 @@ function shellWord(value) {
       drawIcon(button, shapes);
       return button;
     };
+    projectLinkButton = iconButton(
+      "Link terminal and project",
+      icons.projectLink,
+      toggleProjectLink,
+    );
+    projectLinkButton.classList.add("terminal-project-link");
+    projectLinkButton.disabled = false;
+    updateProjectLinkButton();
     // The split and place pictures are the Table viewer's panes, for the same choices.
     splitRightButton = iconButton("Split right", [paneFrame, "M8 2.5v11"], () =>
       splitPane(true),
@@ -5061,6 +5340,7 @@ function shellWord(value) {
       explorer.toggle,
       title,
       groups,
+      projectLinkButton,
       tabs,
       add,
       overviewButton,
@@ -5907,18 +6187,11 @@ function shellWord(value) {
         window.opener.postMessage(message, location.origin);
     } catch {}
   };
-  // The page's path as far as whose shells it shows, which a window opens on: a project's
-  // page, which a run's page gives, a basedir's All projects, which its other pages give,
-  // or Activity and History search, of no project.
-  const projectPath = (path = location.pathname) => {
-    const page = pageOfPath(path);
-    if (page.global) return "/" + page.global;
-    const prefix = page.mounted ? "/_basedir/" + page.mounted : "";
-    return prefix + (page.project ? "/project/" + page.project : "/");
-  };
   // letGo gives up every pane's connection, saying nothing of it, and closes the panel
   // without remembering that, for the window to take the shells.
   const letGo = () => {
+    groupSerial++;
+    beginSerial++;
     for (const pane of panes) {
       clearTimeout(pane.retryTimer);
       pane.whenVisible = null;
@@ -5947,12 +6220,16 @@ function shellWord(value) {
       else watchWindow();
     }, 500);
   };
-  const useWindow = (opened) => {
+  const useWindow = (opened, windowID = "") => {
     terminalWindow = opened;
     awaitingWindow = false;
     try {
+      if (windowID) sessionStorage.setItem(windowTokenKey, windowID);
       sessionStorage.setItem(windowedKey, "1");
-    } catch {}
+    } catch (error) {
+      console.error("The terminal could not remember its window:", error);
+      showNote("The browser could not remember the terminal's window.", 6000);
+    }
     watchWindow();
   };
   const followed = () => {
@@ -5969,9 +6246,10 @@ function shellWord(value) {
   };
   // followPage has the window show this page's project or basedir, when it is not the one
   // the window last followed. A page of no project, such as Activity, leaves it.
-  const followPage = () => {
+  const followPage = (force = false) => {
+    if (!projectLinked) return;
     const path = projectPath();
-    if (pageOfPath(path).global || path === followed()) return;
+    if (pageOfPath(path).global || (!force && path === followed())) return;
     rememberFollowed(path);
     terminalWindow.postMessage(
       { type: "rotari-terminal-follow", path },
@@ -5983,19 +6261,31 @@ function shellWord(value) {
   // straight from a click.
   const popOut = () => {
     rememberLayout();
+    let windowID;
+    try {
+      windowID =
+        "rotari-terminal-" +
+        [...window.crypto.getRandomValues(new Uint8Array(16))]
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("");
+    } catch (error) {
+      console.error("The terminal could not identify its window:", error);
+      showBriefly(focused, "The terminal could not open its own window.");
+      return;
+    }
     const handover = {};
     try {
       for (let index = 0; index < sessionStorage.length; index++) {
         const key = sessionStorage.key(index);
-        if (isPaneKey(key)) handover[key] = sessionStorage.getItem(key);
+        if (isHandoverKey(key)) handover[key] = sessionStorage.getItem(key);
       }
     } catch {}
     const address =
       windowPath +
-      projectPath() +
+      (projectLinked ? projectPath() : terminalPath) +
       "#" +
       encodeURIComponent(JSON.stringify(handover));
-    const opened = window.open(address, "", "popup,width=900,height=600");
+    const opened = window.open(address, windowID, "popup,width=900,height=600");
     if (!opened) {
       showBriefly(
         focused,
@@ -6005,7 +6295,7 @@ function shellWord(value) {
       return;
     }
     letGo();
-    useWindow(opened);
+    useWindow(opened, windowID);
     rememberFollowed(projectPath());
   };
   // windowGone puts the panel back where it was, with the panes the window last had for
@@ -6013,12 +6303,24 @@ function shellWord(value) {
   const windowGone = () => {
     if (!terminalWindow && !awaitingWindow) return;
     clearTimeout(windowTimer);
-    while (panes.length > 1) closePane(panes[panes.length - 1]);
+    readTerminalContext();
+    if (projectLinked) {
+      while (panes.length > 1) closePane(panes[panes.length - 1]);
+      terminalPath = groupPath(pagePath());
+    } else {
+      groupSerial++;
+      beginSerial++;
+      groupPending = true;
+      resetGroupPanes();
+    }
     terminalWindow = null;
     awaitingWindow = false;
     try {
       sessionStorage.removeItem(windowedKey);
-    } catch {}
+      sessionStorage.removeItem(windowTokenKey);
+    } catch (error) {
+      console.warn("The terminal could not forget its window:", error);
+    }
     if (!panel) {
       setOpen(true);
       return;
@@ -6079,8 +6381,7 @@ function shellWord(value) {
       const elsewhere =
         !problem &&
         typeof path === "string" &&
-        projectPath(path) !==
-          projectPath(location.pathname.slice(windowPath.length));
+        groupPath(path) !== terminalPath;
       tellOpener({
         type: "rotari-terminal-sent",
         id,
@@ -6089,10 +6390,7 @@ function shellWord(value) {
       });
     } else if (type === "rotari-terminal-follow" && typeof path === "string") {
       if (!path.startsWith("/") || path.startsWith("//")) return;
-      if (
-        projectPath(path) !==
-        projectPath(location.pathname.slice(windowPath.length))
-      ) {
+      if (projectLinked && groupPath(path) !== terminalPath) {
         location.assign(windowPath + projectPath(path));
       }
     } else if (
@@ -6103,10 +6401,12 @@ function shellWord(value) {
       // Only a path on this server: one starting // would be another.
       if (!path.startsWith("/") || path.startsWith("//")) return;
       window.focus();
-      if (
-        projectPath(path) ===
-        projectPath(location.pathname.slice(windowPath.length))
-      ) {
+      if (!projectLinked) {
+        switchGroup(path, false);
+        placeOverride = place;
+        newAsked = true;
+        begin();
+      } else if (groupPath(path) === terminalPath) {
         placeOverride = place;
         newAsked = true;
         begin();
@@ -6129,13 +6429,34 @@ function shellWord(value) {
     )
       return;
     const { type } = event.data;
+    const acceptContext = () => {
+      const { linked, path, shared } = event.data;
+      if (typeof linked !== "boolean" || !localPath(path)) return false;
+      const wasLinked = projectLinked;
+      if (!shared || !readTerminalContext()) {
+        projectLinked = linked;
+        terminalPath = groupPath(path);
+        rememberTerminalContext();
+        updateProjectLinkButton();
+      }
+      return !wasLinked && projectLinked;
+    };
     if (type === "rotari-terminal-window" && awaitingWindow && event.source) {
+      try {
+        const expected = sessionStorage.getItem(windowTokenKey);
+        if (expected && event.data.windowID !== expected) return;
+      } catch (error) {
+        console.warn("The terminal could not identify its window:", error);
+      }
+      const relinked = acceptContext();
       useWindow(event.source);
-      followPage();
+      followPage(relinked);
       return;
     }
     if (!terminalWindow || event.source !== terminalWindow) return;
-    if (type === "rotari-terminal-saved") {
+    if (type === "rotari-terminal-context") {
+      if (acceptContext()) followPage(true);
+    } else if (type === "rotari-terminal-saved") {
       try {
         for (const [key, value] of Object.entries(event.data.entries || {})) {
           if (!isPaneKey(key)) continue;
@@ -6193,6 +6514,10 @@ function shellWord(value) {
       return;
     }
     if (awaitingWindow) return;
+    if (!projectLinked) {
+      switchGroup(groupPath(pagePath()), false);
+      placeOverride = pagePlace();
+    }
     newAsked = true;
     setOpen(true);
   };
@@ -6231,15 +6556,23 @@ function shellWord(value) {
     if (terminalWindow) return sendToWindow(text);
     if (awaitingWindow)
       return "The terminal's window has not answered yet, so nothing was sent.";
-    return sendToPane(focused, text);
+    const problem = await sendToPane(focused, text);
+    if (!problem && !projectLinked && groupPath(pagePath()) !== terminalPath)
+      sentToProject = projectName(here);
+    return problem;
   };
   const sendToPane = async (pane, text) => {
     if (pane.pendingSend) return "The terminal is still connecting.";
+    const serial = groupSerial;
     let refused, listed;
     try {
       refused = await refreshHere();
+      if (serial !== groupSerial)
+        return "The terminal's project changed, so nothing was sent.";
       listed = refused ? null : await refreshShells();
     } catch {}
+    if (serial !== groupSerial)
+      return "The terminal's project changed, so nothing was sent.";
     if (!listed?.ok) {
       const response = refused || listed?.response;
       return response?.status === 401 || response?.status === 403
@@ -6293,7 +6626,9 @@ function shellWord(value) {
       pasted,
     });
     const sent = sentToProject
-      ? "Sent to the terminal's window, in " +
+      ? "Sent to the " +
+        (terminalWindow ? "terminal's window" : "terminal") +
+        ", in " +
         sentToProject +
         ". Nothing runs until you press Enter there."
       : "Sent. Nothing runs until you press Enter in the terminal.";
@@ -6553,7 +6888,11 @@ function shellWord(value) {
         }).observe(sidebar);
       }
       setInterval(() => {
-        if (!document.hidden && !panes.some((pane) => pane.whenVisible))
+        if (
+          !document.hidden &&
+          !panes.some((pane) => pane.whenVisible) &&
+          (!latestList?.pending || latestList.serial !== listSerial)
+        )
           refreshShells();
       }, shellsRefresh);
     }
@@ -6578,7 +6917,17 @@ function shellWord(value) {
           window.close();
           return;
         }
-        tellOpener({ type: "rotari-terminal-window" });
+        const shared = shareWithOpener({
+          [projectLinkKey]: projectLinked ? "1" : "0",
+          [projectPathKey]: terminalPath,
+        });
+        tellOpener({
+          type: "rotari-terminal-window",
+          linked: projectLinked,
+          path: terminalPath,
+          shared,
+          windowID: window.name,
+        });
         setTimeout(beat, windowBeat);
       };
       beat();

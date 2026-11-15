@@ -1851,12 +1851,14 @@ html.terminal-open .output-panel.terminal-launch {
 }
 .terminal-explorer button.terminal-icon:hover,
 .terminal-explorer button[aria-pressed="true"],
-.terminal-bar button.terminal-explorer-toggle[aria-pressed="true"] {
+.terminal-bar button.terminal-explorer-toggle[aria-pressed="true"],
+.terminal-bar button.terminal-project-link[aria-pressed="true"] {
   background: var(--surface-2);
   color: var(--text);
 }
 .terminal-explorer button[aria-pressed="true"],
-.terminal-bar button.terminal-explorer-toggle[aria-pressed="true"] {
+.terminal-bar button.terminal-explorer-toggle[aria-pressed="true"],
+.terminal-bar button.terminal-project-link[aria-pressed="true"] {
   box-shadow: inset 0 0 0 1px var(--line);
 }
 .terminal-explorer-where {

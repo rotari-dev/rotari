@@ -178,7 +178,7 @@ under 1000 pixels wide the panel stays at the bottom. Panes stack when the panel
 
 **Window** in the same menu moves the whole panel, with its tabs, panes, and project list, into a browser
 window of its own, for a second screen. The page gets all of its room back. The page and the window keep to one
-project, as with the panel: moving to another project's page switches the window, and choosing a project in the
+project by default, as with the panel: moving to another project's page switches the window, and choosing a project in the
 window takes the page there. A state directory's **All projects** and **Recent jobs** switch it to that state
 directory's own shells, and Activity and History search, of no project, leave the window as it is. While the window is open, the **Terminal** button brings it
 to the front, the send buttons type into it, and **Open a terminal here** starts the shell there. Following
@@ -193,7 +193,7 @@ in the sidebar with a shell running has a terminal icon, as does a state directo
 state directory has shells of its own; point at it to see how many.
 
 The **All shells** icon beside **+** opens a dialog over the page, as a log does, listing every running shell,
-grouped by project with the page's first. Under each project's name, a line says what its last run (the one
+grouped by project with the terminal's first. Under each project's name, a line says what its last run (the one
 `rotari show` shows) is doing, such as `Last run running, started 12m ago · 3 in progress · 5 pending · 0 failed`,
 counted as the run page's Jobs card counts them; click it to open that run. Each card shows its tab name, the directory its shell is in now, and
 the command running in it, if any, and when it started and how long it has been idle (no output and no
@@ -201,7 +201,7 @@ typing); a tab's tooltip says the same. Next to the command, the card says how m
 started, as `▶ make · 3 processes`, or `2 background processes` when nothing runs in front; click it to see each
 one's process ID and command, indented under its parent. A process that left the shell, such as one started with
 `nohup` or `setsid`, is not counted. Choose one with a click, or with the arrow keys and Enter, to close the dialog
-and show that shell in the pane with the keys; one of another project takes the page there, as the project list
+and show that shell in the pane with the keys; one of another project normally takes the page there, as the project list
 does. The pencil on a card renames its tab and the cross ends its shell, after asking; **F2** and **Delete** do
 the same for the card with the keys, and the dialog stays open for the next one. **End all** beside a project's
 name ends its shells, and **End all shells** at the top every shell, after asking. The **+** beside a project's name
@@ -214,11 +214,21 @@ server cannot find it the card says where the shell started instead. The command
 the first of a pipeline; a shell with no job control runs everything in its own process group, so its cards
 show no command.
 
-Shells belong to projects, as an editor's terminals belong to its window. A project's pages show
+Shells belong to projects, as an editor's terminals belong to its window. By default a project's pages show
 that project's tabs, and the list beside them goes to other projects that have shells. A state
 directory's **All projects** and **Recent jobs** show the shells of that state directory itself, for
 work across its projects. Activity and History search, which cover every state directory, show the
 shells of no project.
+
+The **Link terminal and project** icon beside the project list is on by default. Turn it off to keep the
+terminal's project and panes when you open another page, and to choose another project in the terminal's
+list or **All shells** without moving the page. The choice and terminal project stay with this browser tab
+through navigation and reloads, including when the panel moves into a window or back. Turn it on again to
+follow the current page; for a separate window, Activity and History search still leave the window as it
+is. With the link off, **+**, splitting, and the Explorer's **Open in a new terminal tab** start shells in
+the terminal's project, where that project's latest run started. A run's **Open a terminal here** is an
+explicit exception: it switches the terminal to the run's project and starts there. Send buttons type into
+the displayed shell and name its project when it differs from the page's, without pressing Enter.
 
 | Where you are | Where a new shell starts |
 |---|---|
@@ -268,7 +278,7 @@ tree stays where you put it while the shell moves on; the line at its foot then 
 Click a folder to open or close it, and double-click a file, or press Enter on it, to open it in the Table viewer
 in a new tab; the arrow keys move through the tree. Pointing at a row shows two buttons: send its path to the
 terminal, and open it in the Table viewer. Right-click offers those, **Open in a new terminal tab**, which starts
-a shell of the page's project in that folder (a file's own folder, for a file), **Copy the path**, and **Copy the
+a shell of the terminal's project in that folder (a file's own folder, for a file), **Copy the path**, and **Copy the
 path from here**, relative to the shell's directory. You can also drag a row onto a pane to type its path there. A path goes
 in as the send buttons above send a value: relative to the shell's directory when the file is under it, otherwise
 whole, quoted if it needs to be, and not run until you press Enter. A name with a line break or other control

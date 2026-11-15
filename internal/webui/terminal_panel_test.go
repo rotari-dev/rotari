@@ -46,11 +46,11 @@ const home = '/home/u';
 const plain = (id, number) => ({ id, number, basedir: '', project: '', dir: home, link: '/activity' });
 const ofBasedir = (id, number, basedir = '/b') => ({ id, number, basedir, project: '', dir: '/w', link: basedir === '/b' ? '/' : '/_basedir/' + basedir.slice(1) + '/' });
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
-const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/activity', maximized = false, fontSize = '', explorer = '' } = {}) => {
+const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/activity', maximized = false, fontSize = '', explorer = '', session = {}, holdHere = [], holdLists = false, windowName = '' } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
   // xterm.js parses what it is given later; a test can hold that back.
   const parser = { held: false, waiting: [], release() { this.held = false; this.waiting.splice(0).forEach((parse) => parse()); } };
-  const server = { shells: [...shells], lastID: 100, limit, startError: '', tight, observers: [] };
+  const server = { shells: [...shells], lastID: 100, limit, startError: '', tight, observers: [], holdHere, holdLists };
   const fakeShells = (url, method, body) => {
     requests.push(method + ' ' + url);
     const refused = (code, text) => Promise.resolve({ ok: false, status: code, text: async () => text });
@@ -80,7 +80,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       const below = server.processes?.[id];
       return Promise.resolve({ ok: true, status: 200, json: async () => ({ ...(cwd ? { cwd } : { cwd_error: 'no such process' }), ...(command === '?' ? { command_error: 'no such group' } : command ? { command } : {}), ...(below === '?' ? { processes: null, processes_error: 'no /proc' } : { processes: below || [] }) }) });
     }
-    if (method === 'GET') return Promise.resolve({ ok: true, status: 200, json: async () => ({ shells: [...server.shells], limit: 32, group_limit: server.limit, ...(server.now ? { now: server.now } : {}) }) });
+    if (method === 'GET') {
+      const answer = { ok: true, status: 200, json: async () => ({ shells: [...server.shells], limit: 32, group_limit: server.limit, ...(server.now ? { now: server.now } : {}) }) };
+      return server.holdLists ? new Promise((resolve) => (server.heldLists ||= []).push((response = answer) => resolve(response))) : Promise.resolve(answer);
+    }
     if (method === 'POST') {
       if (server.startError) return refused(500, server.startError);
       const project = decodeURIComponent(/project=([^&]*)/.exec(url)?.[1] || '');
@@ -92,7 +95,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       const id = String(++server.lastID);
       const shell = project ? inProject(id, number, project) : basedir ? ofBasedir(id, number) : plain(id, number);
       server.shells = [...server.shells, shell];
-      return Promise.resolve({ ok: true, status: 201, json: async () => shell });
+      const answer = { ok: true, status: 201, json: async () => shell };
+      return server.holdStarts ? new Promise((resolve) => (server.heldStarts ||= []).push(() => resolve(answer))) : Promise.resolve(answer);
     }
     if (server.refuse && (method === 'PATCH' || method === 'DELETE')) return refused(500, server.refuse);
     if (method === 'PATCH') {
@@ -113,6 +117,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       if (maximized) window.localStorage.setItem('rotari-terminal-maximized', '1');
       if (fontSize) window.localStorage.setItem('rotari-terminal-font-size', fontSize);
       if (explorer) window.localStorage.setItem('rotari-terminal-explorer', explorer);
+      for (const [key, value] of Object.entries(session)) window.sessionStorage.setItem(key, value);
+      if (windowName) window.name = windowName;
       if (remembered) window.sessionStorage.setItem(remembered[0], remembered[1]);
       if (opener) Object.defineProperty(window, 'opener', { configurable: true, value: opener });
       if (split) window.sessionStorage.setItem(split[0], split[1]);
@@ -206,7 +212,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
           const basedirID = /[?&]basedir=([^&]*)/.exec(address)?.[1];
           // A project's shells here are all of /b, as the fixtures make them.
           const basedir = project ? '/b' : basedirID ? '/' + basedirID : basedirID !== undefined ? '/b' : '';
-          return Promise.resolve({ ok: true, status: 200, json: async () => ({ basedir, project, dir: project ? '/w/' + project : basedir ? '/w' : home }) });
+          const answer = { ok: true, status: 200, json: async () => ({ basedir, project, dir: project ? '/w/' + project : basedir ? '/w' : home }) };
+          return server.holdHere?.includes(project) ? new Promise((resolve) => (server.heldHere ||= []).push(() => resolve(answer))) : Promise.resolve(answer);
         }
         return new Promise(() => {});
       };
@@ -2342,6 +2349,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(popped.length, 1);
   const [address, hash] = popped[0][0].split('#');
   assert.equal(address, '/_terminal/window/project/p1', 'the window is not on the page\'s project');
+  assert.match(popped[0][1], /^rotari-terminal-[a-f0-9]{32}$/);
+  assert.equal(popping.window.sessionStorage.getItem('rotari-terminal-window-token'), popped[0][1]);
   assert.equal(popped[0][2], 'popup,width=900,height=600');
   const handover = JSON.parse(decodeURIComponent(hash));
   assert.equal(handover['rotari-terminal-shell:/b:p1'], '1');
@@ -2404,6 +2413,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.deepEqual(sp(popping).live(), ['2']);
   assert.equal(sp(popping).panes().length, 1);
   assert.equal(popping.window.sessionStorage.getItem('rotari-terminal-windowed'), null);
+  assert.equal(popping.window.sessionStorage.getItem('rotari-terminal-window-token'), null);
   // Back to page says so first.
   poppedWindow = fakeWindow();
   chooseWindow(popping);
@@ -2467,7 +2477,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.deepEqual(sp(takes).live(), ['2']);
   assert.equal(takes.window.location.hash, '');
   assert.equal(takes.window.sessionStorage.getItem('rotari-terminal-other'), null);
-  assert.deepEqual(told[0], [{ type: 'rotari-terminal-window' }, origin]);
+  assert.deepEqual(told[0], [{ type: 'rotari-terminal-window', linked: true, path: '/project/p1', shared: false, windowID: '' }, origin]);
   sp(takes).tab('1');
   const saved = told.filter(([message]) => message.type === 'rotari-terminal-saved').at(-1);
   assert.deepEqual(saved, [{ type: 'rotari-terminal-saved', entries: { 'rotari-terminal-shell:/b:p1': '1', 'rotari-terminal-layout:/b:p1': null } }, origin]);
@@ -2532,6 +2542,277 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     assert.equal(grouped.sockets.length, 1, path + ' did not show one shell');
     assert.match(grouped.sockets[0].url, new RegExp('shell=' + shown + '&'), path + ' showed another group\'s shell');
   }
+
+  // Unlinking keeps the terminal's group and its split layout while the page moves,
+  // and a group or overview choice moves only the terminal.
+  const linkShells = [inProject('1', 1, 'p1'), inProject('2', 2, 'p1'), inProject('3', 1, 'p2'), inProject('4', 2, 'p2'), ofBasedir('5', 1, '/c'), plain('6', 1)];
+  const linkKey = 'rotari-terminal-project-link', groupKey = 'rotari-terminal-project-path';
+  const linkButton = (page) => sp(page).bar('Link terminal and project');
+  const sessionOf = (page) => Object.fromEntries(Array.from({ length: page.window.sessionStorage.length }, (_, index) => {
+    const key = page.window.sessionStorage.key(index);
+    return [key, page.window.sessionStorage.getItem(key)];
+  }));
+  const chooseGroup = (page, path) => {
+    const select = page.document.querySelector('.terminal-groups');
+    const option = [...select.options].find((item) => item.value === (page.document.documentElement.hasAttribute('data-terminal-window') ? '/_terminal/window' : '') + path);
+    assert.ok(option, 'no choice for ' + path);
+    select.value = option.value;
+    select.onchange();
+  };
+  const linked = load(process.argv[1], { stored: '1', path: '/project/p1', shells: linkShells });
+  await wait(50);
+  assert.equal(linkButton(linked).getAttribute('aria-pressed'), 'true');
+  sp(linked).split();
+  await wait(30);
+  linkButton(linked).click();
+  assert.equal(linkButton(linked).getAttribute('aria-pressed'), 'false');
+  assert.equal(linked.window.sessionStorage.getItem(linkKey), '0');
+  assert.equal(linked.window.sessionStorage.getItem(groupKey), '/project/p1');
+  assert.deepEqual(sp(linked).live(), ['1', '2'], 'unlinking disturbed the panes');
+
+  const independent = load(process.argv[1], { stored: '1', path: '/project/p3/run/r%201', shells: linkShells, session: sessionOf(linked) });
+  await wait(60);
+  assert.equal(linkButton(independent).getAttribute('aria-pressed'), 'false');
+  assert.deepEqual(sp(independent).live(), ['1', '2'], 'moving the page changed the terminal');
+  assert.equal(independent.requests.some((request) => request.startsWith('POST')), false, 'moving the page started a shell');
+  chooseGroup(independent, '/project/p2');
+  await wait(50);
+  assert.equal(independent.window.location.pathname, '/project/p3/run/r%201');
+  assert.deepEqual(sp(independent).live(), ['3']);
+  assert.equal(independent.window.sessionStorage.getItem(groupKey), '/project/p2');
+  assert.equal(JSON.parse(independent.window.sessionStorage.getItem(splitKey)).columns.length, 2, 'switching lost the previous group\'s layout');
+  independent.document.querySelector('.terminal-add').click();
+  await wait(30);
+  assert.match(independent.requests.findLast((request) => request.startsWith('POST')), /project=p2$/, '+ started a shell in the page\'s project');
+  await independent.window.sendToTerminalAndSay('echo chosen');
+  assert.match(independent.document.querySelector('.terminal-send-note').textContent, /terminal, in p2\./);
+  sp(independent).bar('All shells').click();
+  await wait(30);
+  independent.document.querySelector('.terminal-overview-card[data-shell="2"]').click();
+  await wait(50);
+  assert.equal(independent.window.location.pathname, '/project/p3/run/r%201');
+  assert.deepEqual(sp(independent).live(), ['1', '2']);
+  assert.equal(sp(independent).selected(), '2', 'the overview did not choose its shell');
+  chooseGroup(independent, '/_basedir/c/');
+  await wait(40);
+  assert.deepEqual(sp(independent).live(), ['5'], 'a basedir\'s own shells did not stay distinct');
+  chooseGroup(independent, '/activity');
+  await wait(40);
+  assert.deepEqual(sp(independent).live(), ['6'], 'the shells of no project did not stay distinct');
+  linkButton(independent).click();
+  await wait(40);
+  assert.equal(linkButton(independent).getAttribute('aria-pressed'), 'true');
+  assert.equal(independent.window.location.pathname, '/project/p3/run/r%201');
+  assert.deepEqual(sp(independent).live(), []);
+  assert.match(sp(independent).statusOf(0).textContent, /No shell for p3 yet/);
+  const linkedAgain = load(process.argv[1], { stored: '1', path: '/project/p2', shells: linkShells, session: sessionOf(independent) });
+  await wait(50);
+  assert.deepEqual(sp(linkedAgain).live(), ['3'], 'relinking did not restore following the page');
+
+  // An explicit request for a run's directory still opens a shell there, even when unlinked.
+  const hereUnlinked = load(process.argv[1], { stored: '1', path: '/project/p3/run/r%201', shells: linkShells, session: sessionOf(linked) });
+  await wait(50);
+  hereUnlinked.window.openTerminalHere();
+  await wait(50);
+  assert.equal(hereUnlinked.window.location.pathname, '/project/p3/run/r%201');
+  assert.match(hereUnlinked.requests.findLast((request) => request.startsWith('POST')), /project=p3&run=r%201$/);
+  assert.deepEqual(sp(hereUnlinked).live(), ['101']);
+  assert.equal(hereUnlinked.window.sessionStorage.getItem(groupKey), '/project/p3');
+
+  // The unlinked context moves with a popped-out panel and comes back with it.
+  const popIndependent = load(process.argv[1], { stored: '1', path: '/project/p3', shells: linkShells, session: sessionOf(linked) });
+  await wait(50);
+  const detached = fakeWindow(), detachedAddresses = [];
+  popIndependent.window.open = (...args) => { detachedAddresses.push(args[0]); return detached; };
+  chooseWindow(popIndependent);
+  const [detachedPath, detachedHash] = detachedAddresses[0].split('#');
+  assert.equal(detachedPath, '/_terminal/window/project/p1');
+  const detachedState = JSON.parse(decodeURIComponent(detachedHash));
+  assert.equal(detachedState[linkKey], '0');
+  assert.equal(detachedState[groupKey], '/project/p1');
+  const detachedMessages = [];
+  const detachedOpener = { closed: false, postMessage: (message, target) => detachedMessages.push(JSON.parse(JSON.stringify([message, target]))) };
+  const freeWindow = load(process.argv[6], { path: detachedAddresses[0], shells: linkShells, opener: detachedOpener });
+  await wait(50);
+  assert.equal(linkButton(freeWindow).getAttribute('aria-pressed'), 'false');
+  chooseGroup(freeWindow, '/project/p2');
+  await wait(50);
+  assert.deepEqual(sp(freeWindow).live(), ['3']);
+  assert.equal(detachedMessages.some(([message]) => message.type === 'rotari-terminal-go'), false, 'an unlinked window moved its page');
+  const context = detachedMessages.findLast(([message]) => message.type === 'rotari-terminal-context')[0];
+  post(popIndependent, context, detached);
+  post(popIndependent, { type: 'rotari-terminal-back' }, detached);
+  await wait(50);
+  assert.equal(popIndependent.window.location.pathname, '/project/p3');
+  assert.deepEqual(sp(popIndependent).live(), ['3'], 'the returned panel lost the window\'s group');
+
+  const waitingUnlinked = load(process.argv[1], { stored: '1', path: '/project/p3', shells: linkShells, session: { ...sessionOf(linked), 'rotari-terminal-windowed': '1', 'rotari-terminal-followed': '/project/p1' } });
+  await wait(30);
+  const foundUnlinked = fakeWindow();
+  post(waitingUnlinked, { type: 'rotari-terminal-window', linked: false, path: '/project/p1' }, foundUnlinked);
+  assert.deepEqual(foundUnlinked.messages, [], 'an unlinked page moved its window');
+  post(waitingUnlinked, { type: 'rotari-terminal-context', linked: true, path: '/project/p2' }, foundUnlinked);
+  assert.deepEqual(foundUnlinked.messages.at(-1), [{ type: 'rotari-terminal-follow', path: '/project/p3' }, origin], 'relinking did not follow the current page');
+
+  post(freeWindow, { type: 'rotari-terminal-here', path: '/project/p3', place: 'project=p3&run=r1' }, detachedOpener);
+  await wait(50);
+  assert.match(freeWindow.requests.findLast((request) => request.startsWith('POST')), /project=p3&run=r1$/);
+  assert.deepEqual(sp(freeWindow).live(), ['101']);
+
+  // The page can be reloading while the window changes group and closes, so its
+  // messages may have no listener. Its tab still gets the window's current state.
+  const reloadingPage = load(process.argv[1], { stored: '1', path: '/project/p3', shells: linkShells, session: { ...sessionOf(linked), 'rotari-terminal-windowed': '1', 'rotari-terminal-window-token': 'linked-window' } });
+  const reloadingOpener = { closed: false, sessionStorage: reloadingPage.window.sessionStorage, postMessage() {} };
+  const unreported = load(process.argv[6], { path: '/_terminal/window/project/p1', shells: linkShells, opener: reloadingOpener, session: sessionOf(linked), windowName: 'linked-window' });
+  await wait(50);
+  chooseGroup(unreported, '/project/p2');
+  await wait(40);
+  sp(unreported).split();
+  await wait(20);
+  assert.equal(reloadingPage.window.sessionStorage.getItem(linkKey), '0');
+  assert.equal(reloadingPage.window.sessionStorage.getItem(groupKey), '/project/p2', 'the reloading page lost the window\'s group');
+  assert.equal(JSON.parse(reloadingPage.window.sessionStorage.getItem('rotari-terminal-layout:/b:p2')).columns.length, 2, 'the reloading page lost the split layout');
+  await wait(3200);
+  assert.deepEqual(sp(reloadingPage).live(), ['3', '4'], 'the panel returned to the wrong panes after messages were lost');
+  assert.equal(sp(reloadingPage).selected(), '2', 'the returned split lost its focused shell');
+
+  // An old heartbeat cannot relink a window after its newer state reached the page.
+  const stalePage = load(process.argv[1], { stored: '1', path: '/project/p3', shells: linkShells, session: { 'rotari-terminal-windowed': '1', 'rotari-terminal-followed': '/project/p1', 'rotari-terminal-window-token': 'current-window' } });
+  const staleOpener = { closed: false, sessionStorage: stalePage.window.sessionStorage, postMessage() {} };
+  const currentWindow = load(process.argv[6], { path: '/_terminal/window/project/p1', shells: linkShells, opener: staleOpener, windowName: 'current-window' });
+  await wait(50);
+  linkButton(currentWindow).click();
+  chooseGroup(currentWindow, '/project/p2');
+  await wait(40);
+  const impostor = fakeWindow();
+  post(stalePage, { type: 'rotari-terminal-window', linked: true, path: '/project/p1', shared: true, windowID: 'another-window' }, impostor);
+  stalePage.document.getElementById('terminal-button').click();
+  assert.equal(impostor.focuses, 0, 'another window claimed the reloading page');
+  const staleSource = fakeWindow();
+  post(stalePage, { type: 'rotari-terminal-window', linked: true, path: '/project/p1', shared: true, windowID: 'current-window' }, staleSource);
+  assert.deepEqual(staleSource.messages, [], 'an older heartbeat relinked and moved the window');
+  post(stalePage, { type: 'rotari-terminal-back' }, staleSource);
+  await wait(40);
+  assert.equal(linkButton(stalePage).getAttribute('aria-pressed'), 'false');
+  assert.deepEqual(sp(stalePage).live(), ['3']);
+
+  // A separately opened terminal window must not change its opener's terminal state.
+  const unrelatedPage = load(process.argv[1], { stored: '1', path: '/project/p3', shells: linkShells, session: { 'rotari-terminal-windowed': '1', 'rotari-terminal-window-token': 'another-window' } });
+  const unrelatedOpener = { closed: false, sessionStorage: unrelatedPage.window.sessionStorage, postMessage() {} };
+  const separateWindow = load(process.argv[6], { path: '/_terminal/window/project/p1', shells: linkShells, opener: unrelatedOpener, windowName: 'separate-window' });
+  await wait(50);
+  linkButton(separateWindow).click();
+  chooseGroup(separateWindow, '/project/p2');
+  await wait(40);
+  assert.equal(unrelatedPage.window.sessionStorage.getItem(linkKey), null, 'an unrelated window changed the page\'s link setting');
+  assert.equal(unrelatedPage.window.sessionStorage.getItem(groupKey), null, 'an unrelated window changed the page\'s group');
+  assert.equal(unrelatedPage.window.sessionStorage.getItem('rotari-terminal-shell:/b:p2'), null, 'an unrelated window changed the page\'s panes');
+
+  // An older place lookup or shell start must not move the terminal back after a newer choice.
+  const racing = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [...linkShells, inProject('7', 1, 'p3')] });
+  await wait(50);
+  linkButton(racing).click();
+  racing.server.holdHere = ['p2'];
+  chooseGroup(racing, '/project/p2');
+  await wait(10);
+  chooseGroup(racing, '/project/p3');
+  await wait(40);
+  assert.deepEqual(sp(racing).live(), ['7']);
+  racing.server.heldHere[0]();
+  await wait(30);
+  assert.deepEqual(sp(racing).live(), ['7'], 'an older place lookup changed the chosen project');
+  assert.equal(racing.window.sessionStorage.getItem(groupKey), '/project/p3');
+  racing.server.holdHere = [];
+  racing.server.holdStarts = true;
+  racing.document.querySelector('.terminal-add').click();
+  await wait(10);
+  chooseGroup(racing, '/project/p2');
+  await wait(40);
+  racing.server.heldStarts[0]();
+  await wait(40);
+  assert.deepEqual(sp(racing).live(), ['3'], 'a shell started in the previous project took the pane');
+  assert.match(racing.document.querySelector('.terminal-send-note').textContent, /started in the previous terminal group/);
+  assert.deepEqual(options(racing).map((option) => option.textContent), ['p2 (2)', 'p1 (2)', '/c (1)', 'No project (1)', 'p3 (2)']);
+
+  // An overview opened during startup waits for a newer list rather than showing an
+  // empty view, or an old refusal, before that list has answered.
+  for (const [oldFailed, latestFailed] of [[false, false], [true, false], [false, true]]) {
+    const loading = load(process.argv[1], { stored: '1', path: '/jobs/', shells: [ofBasedir('1', 1)], holdHere: [''], holdLists: true });
+    await wait(50);
+    assert.equal(loading.server.heldHere.length, 1);
+    sp(loading).bar('All shells').click();
+    await wait(10);
+    assert.equal(loading.server.heldLists.length, 1);
+    loading.server.heldHere[0]();
+    await wait(10);
+    assert.equal(loading.server.heldLists.length, 2);
+    const oldRefusal = { ok: false, status: 500, text: async () => 'old refusal' };
+    loading.server.heldLists[0](oldFailed ? oldRefusal : undefined);
+    await wait(20);
+    assert.match(loading.document.querySelector('.terminal-overview-body').textContent, /Listing the shells/, 'an older list decided the overview');
+    loading.polls[0]();
+    await wait(10);
+    assert.equal(loading.server.heldLists.length, 2, 'a timer overtook the still-pending latest list');
+    loading.server.holdLists = false;
+    const latestRefusal = { ok: false, status: 500, text: async () => 'latest refusal' };
+    loading.server.heldLists[1](latestFailed ? latestRefusal : undefined);
+    await wait(30);
+    if (latestFailed) assert.match(loading.document.querySelector('.terminal-overview-body').textContent, /could not be listed: latest refusal/);
+    else {
+      assert.ok(loading.document.querySelector('.terminal-overview-card[data-shell="1"]'), 'the newer list did not reach the overview');
+      loading.server.shells.push(ofBasedir('2', 2));
+      loading.polls[0]();
+      await wait(20);
+      assert.equal(loading.document.querySelectorAll('.terminal-tab').length, 2, 'polling did not resume after the list answered');
+    }
+  }
+  // A local shell start supersedes old data, but cannot turn a failed list into success.
+  const starting = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')] });
+  await wait(50);
+  starting.server.holdStarts = true;
+  starting.document.querySelector('.terminal-add').click();
+  await wait(10);
+  starting.server.holdLists = true;
+  sp(starting).bar('All shells').click();
+  await wait(10);
+  starting.server.heldStarts[0]();
+  await wait(20);
+  starting.server.heldLists[0]({ ok: false, status: 500, text: async () => 'list refused' });
+  await wait(30);
+  assert.match(starting.document.querySelector('.terminal-overview-body').textContent, /could not be listed: list refused/);
+
+  // The server and page encode project names differently, but they name one group.
+  const specialShell = { ...inProject('8', 1, 'x+y'), link: '/project/x+y' };
+  const special = load(process.argv[1], { stored: '1', path: '/project/x%2By', shells: [specialShell, inProject('9', 1, 'p2')] });
+  await wait(50);
+  linkButton(special).click();
+  chooseGroup(special, '/project/p2');
+  await wait(30);
+  chooseGroup(special, '/project/x+y');
+  await wait(30);
+  await special.window.sendToTerminalAndSay('echo same');
+  assert.match(special.document.querySelector('.terminal-send-note').textContent, /^Sent\. Nothing runs/, 'equivalent paths were said to be different projects');
+  const beforeRelink = special.sockets.length;
+  linkButton(special).click();
+  await wait(30);
+  assert.equal(special.sockets.length, beforeRelink, 'relinking equivalent paths reconnected the shell');
+  for (const [name, path, query] of [['x+y', '/project/x+y', 'x%2By'], ['x&y=1', '/project/x&y=1', 'x%26y%3D1']]) {
+    const rawShell = { ...inProject('8', 1, name), link: path };
+    const rawSpecial = load(process.argv[1], { stored: '1', path, shells: [rawShell] });
+    await wait(50);
+    assert.ok(rawSpecial.requests.includes('GET /_terminal/here?project=' + query), rawSpecial.requests.join(', '));
+    assert.deepEqual(sp(rawSpecial).live(), ['8'], path + ' changed the project');
+    rawSpecial.document.querySelector('.terminal-add').click();
+    await wait(30);
+    assert.ok(rawSpecial.requests.findLast((request) => request.startsWith('POST')).endsWith('project=' + query));
+  }
+  const specialOverview = load(process.argv[1], { stored: '1', path: '/project/p2', shells: [specialShell, inProject('9', 1, 'p2')] });
+  await wait(50);
+  sp(specialOverview).bar('All shells').click();
+  await wait(30);
+  specialOverview.document.querySelector('[aria-label="New shell in x+y"]').click();
+  await wait(30);
+  assert.match(specialOverview.requests.findLast((request) => request.startsWith('POST')), /project=x%2By$/);
 
   // The sidebar marks each project with shells, with the panel closed, and again after
   // the sidebar is drawn again, and a basedir's All projects for the basedir's own shells;

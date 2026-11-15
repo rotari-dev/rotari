@@ -148,7 +148,9 @@ flowchart LR
    `/api/tableview-sources` with a path). Pages only attach to
    shells, since each link reloads the page, and the panel in
    [web_shell.js](../internal/webui/assets/web_shell.js) loads xterm.js when first opened and connects only to the
-   tab shown. A shell is not a run: it takes no project lock and writes
+   tab shown. Its project link can be turned off per browser tab, keeping the terminal's selected group and pane
+   layout across page loads and handing them to its separate window and back. A per-window identifier lets the
+   window save that state in its opening tab's session storage even while the page reloads. A shell is not a run: it takes no project lock and writes
    nothing under a basedir.
    With `--detach` ([cmd/rotari/web_detach.go](../cmd/rotari/web_detach.go)), the command checks its options,
    then starts itself again in a session of its own with its output in `<masterdir>/web/<host>.log`, and returns once

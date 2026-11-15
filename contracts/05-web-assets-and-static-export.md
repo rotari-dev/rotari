@@ -1464,6 +1464,22 @@ limit is checked at the package level by `TestIdleLimitAppliesToTheShellsTogethe
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
 
+**WEB-54** The terminal's **Link terminal and project** button is on by default. Turned off, a page moving to
+another project, basedir, or global page leaves the selected terminal group and its panes alone; choosing another
+group in its list or a shell in **All shells** switches the terminal without moving the page. The setting, selected
+group, and each group's pane layout are kept for the browser tab through page loads, and handed to its own window
+and back, even when the page is reloading and misses the window's messages. The same choice applies in that window.
+An independently opened terminal window does not change its opener's saved terminal state.
+Turning the link on has the panel follow the current page; its
+window follows the page except on Activity and History search, which leave it as WEB-33 says. When unlinked, **+**
+and splits start in the terminal's group, and the Explorer starts a shell there in the named directory; **Open a
+terminal here** explicitly switches to the page's project and starts in its run. A send button still types into
+the displayed shell without Enter, naming its project when it differs from the page's. Differently escaped paths
+to the same project name its group once, and starting a shell keeps characters such as `+` and `&` in that name.
+A later group choice wins over an earlier pending lookup or shell start. Implemented in
+[web_shell.js](../internal/webui/assets/web_shell.js); covered by `TestTerminalPanel` and
+[`TestTerminalProjectLinkInBrowser`](../conformance/05-web/terminal_project_link_browser_test.go).
+
 **WEB-53** With `rotari web --allow-terminal` and `--terminal-shell-integration`, a bash or zsh started inside a panel's
 shell marks its prompts and commands as WEB-49 says, with nothing in the user's files. The marks are in `marks.bash` and
 `marks.zsh` beside rotari's startup files, which source them, and each loads once per shell. rotari's bash exports
@@ -1850,17 +1866,17 @@ application and Recent jobs pages, which shows how many shells there are in all 
 with the panel open or not and without connecting to any, on a page in view; with no answer from the server it
 shows no number. Each project row in the sidebar whose project has shells is marked with how many, and so is a
 basedir's All projects row when the basedir has shells of its own. It opens a panel along the bottom, or down the left or right of the window as the browser
-keeps from a menu in the panel's bar, with a tab for each
+keeps from a menu in the panel's bar, by default with a tab for each
 shell of the page's project; on a basedir's other pages, such as All projects and Recent jobs, of that basedir's
 own; and on Activity and History search, of no project. A list names the projects with
-shells, and choosing one goes to its page. A tab not shown whose `command_finished` is set shows a bell in place of
+shells, and choosing one goes to its page while the link is on (WEB-54). A tab not shown whose `command_finished` is set shows a bell in place of
 its unseen-output mark, as its All shells card does. A tab's tooltip and an All shells card say when the shell
 started and how long it has been idle, by the server's clock. A card's line of what runs also says how many
 processes the shell has started, background ones when nothing runs in its foreground, and opens into their tree. Signing out from a page with the terminal first asks, naming
 each shell with a command `running` or processes below it and what runs there, since signing out ends every shell;
 a shell whose processes cannot be listed is named as such, it asks too, saying why, when the shells cannot be
 listed, and signs out at once when nothing runs. **All shells** in the bar opens a dialog over the page, as a log's is,
-with the panel's room left to it: every running shell, grouped by project with the page's first, each with its tab
+with the panel's room left to it: every running shell, grouped by project with the terminal's first, each with its tab
 name, its shell's working directory now, or where it started, said as such, when that cannot be found, and the
 command running in its foreground, if any, or that it is not known (WEB-34); it connects to none. Under each
 project's name a line says what its last run is doing (WEB-34): its lifecycle, when it ended or, while it goes on, when it started, and its
@@ -1868,7 +1884,7 @@ jobs in progress, pending, and failed, as its run page's Jobs card counts them, 
 could not be read; choosing the line closes the dialog and opens that run's page, a window taking its page along.
 The projects are read each time the dialog is drawn, not with the list of shells. Choosing one
 closes the dialog and shows the shell in the pane with the keys, as its tab would, or for another project has that
-project's page show it in the pane with the keys and goes there, as the list does, a window taking its page along.
+project's page show it in the pane with the keys and goes there while linked, as the list does, a window taking its page along.
 Each card also renames its tab and ends its shell, after asking and naming another project's shell by its project,
 as a tab's menu and close button do, and **End all** beside a project's name and **End all shells** at its top end
 that project's shells and every shell, after one question, leaving the dialog open and drawn again; a refusal is
@@ -1878,9 +1894,12 @@ basedir with no shell of its own, each of its projects with no shell, and no pro
 of the choice would start it (WEB-34), shown in no pane but as a card with the keys; a basedir whose projects cannot be
 listed is named.
 It is a view of when it opened, or of **Refresh**, and Escape, **Close**, a click beside it, or hiding the panel
-closes it. Opening the panel with no shell there starts one, **+**
-starts another, and a run page's **Open a terminal here** button starts another, each where the page
-says (WEB-34); closing a tab asks, then ends that shell. A tab's menu also closes the tabs to its right, all
+closes it. When a list request is overtaken by a newer one, it waits for the newer answer rather than treating an
+old empty list or refusal as the overview; a newer local shell change takes precedence over a stale successful
+list, but does not hide a list refusal. Periodic refresh does not overtake a still-pending current list.
+Opening the panel with no shell there starts one, **+**
+starts another, and a run page's **Open a terminal here** button starts another, where the page or unlinked terminal
+says (WEB-34 and WEB-54); closing a tab asks, then ends that shell. A tab's menu also closes the tabs to its right, all
 of the project's tabs, and every shell of every project, each after one question saying how many shells and whose.
 Every question to end shells, from a tab, its menu, or All shells, says how many processes run in them, naming up to
 three commands, or that nothing does, or why that is not known. A page loaded with the panel left open starts
@@ -1910,10 +1929,10 @@ go to the server's root on a page under a basedir's mount too.
 At a side the panel has the window's height and a width of its own, from 320 pixels up to what leaves 400 beside the sidebar, and the page, its
 top bar, which wraps rather than running under the panel, and its dialogs take the rest; under 1000 pixels wide it is at the bottom, and the choice stays for a wider window. Moving it changes no
 connection, and panes stack when the panel is under 720 pixels wide, keeping their columns for when it has room.
-**Window** in the same menu opens the panel in a browser window of its own, from the click, on the page's project
+**Window** in the same menu opens the panel in a browser window of its own, from the click, on the terminal's project
 with the panes this browser tab had for each project; the window fills itself, has no resizer, Maximize, or Hide,
-and its project list, as the panel's does, takes the page that opened it to that project's page, the window
-switching with it. When the page moves to another project's page, or to a page of another basedir's own, such as
+and its project list, as the panel's does, takes the page that opened it to that project's page while linked, the window
+switching with it. While linked, when the page moves to another project's page, or to a page of another basedir's own, such as
 its All projects or Recent jobs, the window switches to that project or basedir; a page of no project, such as
 Activity, or of the project or basedir it last followed, leaves it. The page lets go of its shells without
 saying another tab took them, gives up the panel's room, and keeps whether the panel is open for other pages.
@@ -1921,7 +1940,8 @@ While the window is open, the Terminal button brings it to the front, a send but
 with the keys and names its project when it is not the page's, and **Open a terminal here** starts the shell
 in the window, on the page's project. A link followed in that browser tab finds the window again rather than taking its
 shells, and the panel comes back if the window does not answer within three seconds. Closing the window, or its
-**Back to page**, puts the panel back where it was with the window's panes for the page's project. Closing the
+**Back to page**, puts the panel back where it was with the window's panes for the page's project while linked,
+or for the window's project when unlinked. Closing the
 browser tab that opened the window closes the window within a few seconds, leaving its shells running; following
 links and reloading in that tab keep it. A window opened by its address has no such tab, and its **Back to page**
 says it has nowhere to go. A blocked window leaves the panel where it was, saying why.

@@ -22,6 +22,18 @@ const prepare = ` + "`" + `
   document.addEventListener('securitypolicyviolation', (event) => {
     window.__violations.push(event.violatedDirective + ' ' + event.blockedURI + ' ' + event.sourceFile + ':' + event.lineNumber);
   });
+  if (location.pathname === '/jobs/' && sessionStorage.getItem('rotari-test-hold-lists') === '1') {
+    sessionStorage.removeItem('rotari-test-hold-lists');
+    const originalFetch = window.fetch;
+    const held = window.__terminalRace = { here: null, lists: [] };
+    window.fetch = (...args) => {
+      const answer = originalFetch.apply(window, args);
+      const hold = (receive) => new Promise((resolve, reject) => receive(() => answer.then(resolve, reject)));
+      if (String(args[0]).startsWith('/_terminal/here?')) return hold((release) => { held.here = release; });
+      if (args[0] === '/_terminal/shells' && (!args[1]?.method || args[1].method === 'GET')) return hold((release) => held.lists.push(release));
+      return answer;
+    };
+  }
 ` + "`" + `;
 
 const { cdp, close } = await launchChrome(chrome);
@@ -553,7 +565,8 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   if (await page.evaluate('[...document.querySelectorAll(".terminal-pane-status")].some((status) => /Another tab/.test(status.textContent))')) throw new Error('the page said another tab took its shell');
   await page.evaluate('window.__popups[0].close(); true');
   await until('the panel back in the page', 'document.documentElement.classList.contains("terminal-open") && !document.getElementById("terminal-panel").hidden');
-  await until('the same shell in the page', screenHas('popped-$((2+3))'));
+  // The pane can still be scrolled up from the command-block checks above.
+  await until('the same shell in the page', '(() => { document.querySelector(".terminal-pane")?.terminalPane?.term?.scrollToBottom(); return ' + screenHas('popped-$((2+3))') + '; })()');
   await collect();
 
   // All shells shows a card for each shell in the page's dialog, as a log is, saying where
@@ -574,10 +587,18 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the overview to close on a choice', 'document.querySelector(".terminal-overview") === null');
   await collect();
   // On the Recent jobs page, whose styles are not the application page's, it is a dialog
-  // over the page too, not a block under the jobs.
-  await page.evaluate('location.href = "/jobs/"');
-  await until('the panel on Recent jobs', 'location.pathname === "/jobs/" && document.querySelector(".terminal-bar") !== null && document.querySelector(".xterm-rows") !== null');
+  // over the page too, not a block under the jobs. Open it while the initial place is
+  // still loading, and return its list before the newer startup list.
+  await page.evaluate('sessionStorage.setItem("rotari-test-hold-lists", "1"); location.href = "/jobs/"');
+  await until('the panel on Recent jobs', 'location.pathname === "/jobs/" && document.querySelector(".terminal-bar") !== null && document.querySelector(".xterm-rows") !== null && typeof window.__terminalRace?.here === "function"');
   await page.evaluate(barButton('All shells') + '.click()');
+  await until('the overview list request', 'window.__terminalRace.lists.length === 1');
+  await page.evaluate('window.__terminalRace.here()');
+  await until('the newer startup list request', 'window.__terminalRace.lists.length === 2');
+  await page.evaluate('window.__terminalRace.lists[0]()');
+  await sleep(200);
+  if (!(await page.evaluate('document.querySelector(".terminal-overview-body")?.textContent.includes("Listing the shells")'))) throw new Error('an older list decided the overview before the startup list answered');
+  await page.evaluate('window.__terminalRace.lists[1]()');
   await until('the overview on Recent jobs', 'document.querySelector(".terminal-overview-card") !== null');
   const jobsDialog = JSON.parse(await page.evaluate('JSON.stringify((() => { const dialog = document.querySelector(".terminal-overview-modal"); const box = document.querySelector(".terminal-overview").getBoundingClientRect(); return { position: getComputedStyle(dialog).position, top: box.top, bottom: box.bottom, height: innerHeight }; })())'));
   if (jobsDialog.position !== 'fixed' || jobsDialog.top < 0 || jobsDialog.bottom > jobsDialog.height) throw new Error('the overview on Recent jobs is not a dialog in view: ' + JSON.stringify(jobsDialog));
