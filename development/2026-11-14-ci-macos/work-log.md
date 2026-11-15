@@ -351,3 +351,23 @@ and the line holding `$ c long`, which tells a short buffer from a wrong line.
 
 **Validation:** `go vet`; the added expression parses in node. The test needs Chrome, which is not here, so it was
 not run; the next macOS CI run, or the user's Mac, shows the outcome.
+
+## 2026-11-15 — `74dab5ab` Hold a chosen command's scroll against late scroll events
+
+The next macOS race run, with the diagnostics of `72bb4ebc`, still stopped at `the long command at the top`, and
+reported `{"length":74,"viewportY":42,"baseY":58,"rows":16,"prompt":9}`. The replay was written to its end and the
+prompt was on line 9, so the block's line was right and `scrollToLine(9)` was given it. The view stood at 42, which
+is `baseY - rows` for a 58-line buffer: the bottom part-way through the replay. xterm.js follows its scroll bar
+asynchronously, and a scroll event for that earlier bar position, delivered late on the loaded runner, moved the
+view back. A product fault, which only load shows.
+
+**Change:** `internal/webui/assets/web_shell.js`: `goToBlock` scrolls through `holdScroll`, which for half a
+second puts the view back on the chosen line whenever `term.onScroll` reports it elsewhere, and stops at once on
+the viewer's wheel, key, mouse, or touch in the pane.
+
+**Test:** `TestTerminalPanel` (JSDOM): after choosing a command, a late scroll event elsewhere is put back; after a
+wheel event, it is not. The fake terminal gained `onScroll`. Against the old page the test fails with
+`a late scroll event moved the view off false`.
+
+**Validation:** `node --check` and `tsc` clean; `TestTerminalPanel` passed. The browser test needs Chrome, which is
+not here; the next macOS run tells.
