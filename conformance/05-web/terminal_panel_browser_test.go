@@ -285,7 +285,9 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   // "DROP" is cells 17 to 20, after ">> echo A$((2*3))".
   const selected = await page.evaluate('(() => { const term = document.querySelector(".terminal-pane").terminalPane.term; const buffer = term.buffer.active; term.select(17, buffer.baseY + buffer.cursorY, 4); return term.getSelection(); })()');
   if (selected !== 'DROP') throw new Error('selected ' + JSON.stringify(selected) + ', not DROP');
-  const cutPoint = await page.evaluate('(() => { const box = ' + cutRow + '.getBoundingClientRect(); return { x: box.left + 20, y: box.top + box.height / 2 }; })()');
+  // On the selection itself: on macOS a right click elsewhere selects the word under it first
+  // (xterm.js's rightClickSelectsWord), as the Mac's own text does.
+  const cutPoint = await page.evaluate('(() => { const box = ' + cutRow + '.getBoundingClientRect(); const screen = document.querySelector(".xterm-screen").getBoundingClientRect(); const cell = screen.width / document.querySelector(".terminal-pane").terminalPane.term.cols; return { x: screen.left + cell * 18.5, y: box.top + box.height / 2 }; })()');
   await page.evaluate('document.querySelector(".terminal-send-note")?.replaceChildren()');
   await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...cutPoint });
   await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...cutPoint, button: 'right', clickCount: 1 });
