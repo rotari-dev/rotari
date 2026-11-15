@@ -1,8 +1,8 @@
 # Plan: Command results in the Web terminal's server
 
 Created: 2026-11-15
-Status: Proposed; revised on 2026-11-15 after the user asked for the terminal's notifications to be set in the
-notification config; waiting for the user's decision on the open questions.
+Status: Accepted by the user on 2026-11-15, after asking for the settings to be in the notification config, with the
+open questions answered as proposed; phase 1 is done and phase 2 (the panel) is next. See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -101,7 +101,10 @@ shells, the bell, or notifications"), proposed on 2026-11-15 as the next termina
 - A history of commands; only the last one is kept.
 - Reading exit codes without marks (a shell rotari does not start or integrate).
 
-## Open questions
+## Settled questions
+
+Both were accepted as proposed on 2026-11-15.
+
 
 1. **Defaults.** Proposed: both events on and 30 seconds, so that a long command's end is announced with nothing set.
    The alternative is failures only by default.
