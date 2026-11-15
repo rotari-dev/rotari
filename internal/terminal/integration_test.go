@@ -274,7 +274,11 @@ func TestIntegrationSaysTheDirectory(t *testing.T) {
 	osc7 := regexp.MustCompile("\x1b\\]7;file://([^/\a]*)(/[^\a]*)\a")
 	for _, shellName := range []string{"bash", "zsh"} {
 		t.Run(shellName, func(t *testing.T) {
-			home := t.TempDir()
+			// The shell's $PWD has no symbolic links, as macOS's /var is one to /private/var.
+			home, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
 			writeFiles(t, home, map[string]string{".zshenv": "unsetopt GLOBAL_RCS\n"})
 			moved := filepath.Join(home, "a b", "日本")
 			if err := os.MkdirAll(moved, 0o755); err != nil {
