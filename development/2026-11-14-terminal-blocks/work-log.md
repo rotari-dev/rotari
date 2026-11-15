@@ -330,3 +330,12 @@
 - **Reason:** the user asked for one order, the prompt line's, in the Commands dropdown.
 - **Plan impact:** none.
 - **Validation:** `TestTerminalPanel` checks the row's order; see the commit.
+
+## 2026-11-16 11:20 +09:00 — One order for the copies everywhere
+
+- **Change:** a mark's menu offers **Copy command**, **Copy output**, **Select output**, **Type command again**, and the
+  right-click menu's block items are **Copy command** then **Copy output**, as on the prompt's line and in Commands;
+  WEB-48, WEB-51, their rows, docs/WEB.md, `TestTerminalPanel`, and the browser step's menu check follow.
+- **Reason:** the user asked for the same order in the mark's and right-click menus.
+- **Plan impact:** none.
+- **Validation:** see the commit.
