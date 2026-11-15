@@ -296,3 +296,19 @@ The timeout is doubled because the race detector slows tests several times over.
 
 **Remaining:** Triage what `-race` finds on macOS; then step 4, making the leg required, once
 `TestTerminalPanelInBrowser` passes there.
+
+## 2026-11-15 — `03c8e415` Give each flag-pair invocation 20 seconds
+
+The first macOS race run (at `59a175f6`): the pasted failure was `TestCLIFlagPairCancel/pairs/matrix+wait`,
+`timeout: rotari ["cancel" "--wait=true" "--matrix" "grid" "--yes"]`, with no output, in a 7.69 s subtest. No
+`DATA RACE` was in the pasted part.
+
+The rotari binary under test is built without `-race` (`support.go`), so the race detector slowed only the test
+processes; with them, the three-CPU macOS runner was loaded, and `PairInvoke`'s 5-second bound on one command was
+exceeded. The subtest's 7.69 s rules out the 30-second cancel grace period. The ISSUES entry on conformance tests
+timing out under high load names this test on Linux too.
+
+**Change:** `conformance/support/pairs.go`: `PairInvoke`'s bound is 20 s, still a failure bound, and below the
+30-second grace period so a cancel that waits it out still fails.
+
+**Validation:** `go vet ./conformance/support`. The bound only lengthens how long a hung command is allowed.
