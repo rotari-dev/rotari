@@ -56,6 +56,14 @@ func TestTerminalInnerShellsMark(t *testing.T) {
 				}
 				e := terminalEnv(t)
 				e.Setenv("SHELL", outerPath)
+				cacheHome := filepath.Join(e.Root, "alternate-cache")
+				e.Setenv("XDG_CACHE_HOME", cacheHome)
+				t.Setenv("HOME", e.Root)
+				t.Setenv("XDG_CACHE_HOME", cacheHome)
+				cache, err := os.UserCacheDir()
+				if err != nil {
+					t.Fatal(err)
+				}
 				for file, content := range map[string]string{
 					".zshenv": "unsetopt GLOBAL_RCS\n",
 					".zshrc":  "PS1='inner-zsh%% '\n",
@@ -93,7 +101,10 @@ func TestTerminalInnerShellsMark(t *testing.T) {
 					}
 				}
 				// The files are in the user's cache, where they outlast the server.
-				kept, _ := filepath.Glob(filepath.Join(e.Root, "cache", "rotari", "shell-integration", "*", "marks.bash"))
+				kept, err := filepath.Glob(filepath.Join(cache, "rotari", "shell-integration", "*", "marks.bash"))
+				if err != nil {
+					t.Fatal(err)
+				}
 				if len(kept) != 1 {
 					t.Errorf("the integration's files in the cache: %q", kept)
 				}
