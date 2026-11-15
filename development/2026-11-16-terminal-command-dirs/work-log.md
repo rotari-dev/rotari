@@ -34,3 +34,22 @@
   decode asking only about the absolute path, with no `dir`; another host's block sending its host; output with no
   OSC 7 asking with no directory. `tsc` and prettier clean.
 - **Remaining:** phase 3 (contracts and docs).
+
+## 2026-11-16 02:22 +09:00 — Contracts and docs
+
+- **Change:** WEB-46 says the links request's `dir` and `host`, paths resolved in `dir`, none from another host, and
+  how the panel asks with a block's OSC 7 directory (or none), with decision 6's limit; WEB-49 that bash and zsh
+  print OSC 7 before each prompt; their status table rows too. Conformance: `TestTerminalShellIntegration` checks
+  OSC 7 naming `a b` (percent-encoded) from integrated bash and zsh and none from plain ones;
+  `TestTerminalOutputLinks` a relative path found under `dir`, another host linking only the run, and a relative
+  `dir` refused; `TestTerminalCommandDirsInBrowser` (new, its own file, as the shared shells' browser test) has bash
+  print `sub/y.txt` in one directory, `cd /`, and the printed path still link to that file. docs/WEB.md replaces
+  the caveat; docs/SECURITY.md says `dir` and that a false OSC 7 at worst links wrongly.
+- **Reason:** plan phase 3.
+- **Plan impact:** the browser step is a test of its own (`TestTerminalCommandDirsInBrowser`, bash with the
+  integration) rather than a step in `TestTerminalPanelInBrowser`, whose shell is `/bin/sh` with a hand-made prompt
+  and which another thread also changes.
+- **Validation:** `go vet ./...`; `go test ./conformance ./conformance/05-web ./internal/terminal ./internal/webui`
+  pass. The browser test skips here (no Chrome); its script passes `node --check`. `scripts/check.sh` not run (npm
+  broken here; the full and race runs are too heavy for the shared machine).
+- **Remaining:** CI's browser run.

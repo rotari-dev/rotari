@@ -1600,7 +1600,8 @@ naming rotari's script, which reads `/etc/profile` and the first readable of `~/
 `.zprofile`, and `.zshrc` each read the user's file of that name, at top level, from where zsh would have:
 the `ZDOTDIR` the shell was to have, else `$HOME`, or a `ZDOTDIR` the user's `.zshenv` sets; afterwards `ZDOTDIR` is
 as it was (unset if it was and nothing set it). Then each marks its prompts and commands with OSC 133 for the panel's
-blocks (WEB-48): before every prompt, `D;STATUS` with the last command's exit status and `A`, after the user's own
+blocks (WEB-48): before every prompt, OSC 7 with the directory, `file://` and the host (bash's `$HOSTNAME`, zsh's
+`$HOST`) then `$PWD` percent-encoded byte by byte with `/` kept, for the panel's links (WEB-46), then `D;STATUS` with the last command's exit status and `A`, after the user's own
 prompt hooks, which see the command's status unchanged; `B` where the command line starts: in bash at the prompt's
 end, put back when a hook rebuilt the prompt without it, and in zsh when the line editor starts (its `line-init`
 hook), so that a theme rebuilding the prompt at any time keeps it, or at the prompt's end in a zsh before 5.3; and `C` before the first command run from a prompt (bash 4.4 or later by `PS0`, earlier bash by a
@@ -1618,7 +1619,7 @@ is refused without `--allow-terminal` and with `--static-dir`, and a detached se
 when asked for otherwise (WEB-40). Implemented in `internal/terminal/integration.go` and the scripts beside it;
 covered by [`TestTerminalShellIntegration`](../conformance/05-web/terminal_integration_test.go) and the unit tests
 `TestBashIntegrationReadsTheLoginFilesAndMarks`, `TestOldBashIntegrationMarksCommandsByTheDebugTrap`,
-`TestZshIntegrationReadsTheUsersFilesAndMarks`,
+`TestZshIntegrationReadsTheUsersFilesAndMarks`, `TestIntegrationSaysTheDirectory`,
 `TestShellCommandWithIntegration`, and `TestKeeperWritesAndRemovesTheIntegration`.
 
 **WEB-48** With `rotari web --allow-terminal`, the panel reads the OSC 133 marks a shell or its prompt prints (bash
@@ -1673,7 +1674,9 @@ in `cmd/rotari/web_client.go` and the attached mode of `cmd/rotari/web_detach.go
 
 **WEB-46** With `rotari web --allow-terminal`, words a shell prints are links when they name something that exists.
 `POST /_terminal/shells/ID/links` takes a JSON body `{"candidates": [...]}`, at most 64 candidates of at most 4096
-bytes each (400 beyond, 415 for a body that is not JSON, unknown fields 400), and answers `links`, one for each
+bytes each (400 beyond, 415 for a body that is not JSON, unknown fields 400), with an optional `dir`, the directory
+the command that printed them ran in (absolute and at most 4096 bytes, else 400), and `host`, the host it is on (at
+most 4096 bytes), and answers `links`, one for each
 distinct candidate that names something, in the order asked, with its `text` and `kind`:
 - `run`: a run ID (`YYYYMMDD-HHMMSS-` and eight lowercase hex digits) of a run of the shell's project, else of another
   project of its basedir, else, for a shell of no project, of a project of any registered basedir; the first project
@@ -1682,23 +1685,31 @@ distinct candidate that names something, in the order asked, with its `text` and
   runs, newest first, linking to that run's page with `?job_id=`, or else in its queue, linking to the project's page.
   A shell of a basedir's own pages or of no project links no job, and a word of that form that is no such job is no
   link.
-- `dir` or `file`: a candidate holding `/`, absolute or relative to the shell's working directory when asked, with a
-  trailing `:LINE` or `:LINE:COL` left out, that is a directory or a regular file on this host now; `path` is its
-  absolute, cleaned path.
+- `dir` or `file`: a candidate holding `/`, absolute or relative to `dir` when given, else to the shell's working
+  directory when asked, with a trailing `:LINE` or `:LINE:COL` left out, that is a directory or a regular file on this
+  host now; `path` is its absolute, cleaned path. With a `host` that is not this one (this one being its name
+  ignoring case, or the same up to the first dot, empty, or `localhost`), no candidate is a path; a host name the
+  server cannot read makes every named host another's, said in `problems`.
 
 `dir_error` says why relative paths could not be resolved, and `problems` what could not be read while looking (a
 run's snapshot, the queue, a basedir's projects); neither turns the answer into an error. A shell not running is
 404, a method but POST 405, and the route is served only where the terminal is (404 without it), behind its checks.
 The panel finds candidates on the line under the pointer, its wrapped parts joined, leaving out trailing
-punctuation and words holding `://`, which stay web links; it asks once per line, keeps answers for IDs for the
+punctuation and words holding `://`, which stay web links. A line in a block (WEB-48) is asked with the directory the
+shell said by OSC 7 (`file://HOST/PATH`, the path percent-decoded as UTF-8) before that block's prompt, as `dir` and
+`host`; when what it said does not decode to an absolute path, relative paths on its lines are not asked about, and
+a line in no block, or after no OSC 7, is asked with neither. A command line that changes directory itself prints
+relative to where it went, which no mark says, and is read against its prompt's. It asks once per line and
+directory, keeps answers for IDs for the
 page's life and for paths a few seconds, and underlines only what is answered, a link inside a longer one giving
 way to it. Pointing at a link says what it opens. Clicking a run or job takes the page there with the panel's
 shells kept (with the panel in a window of its own, the page it belongs to); Ctrl- or Cmd-click opens it in a new
 tab. A directory shows in the Explorer with Follow off, and a file opens in the Table viewer (WEB-42). When the
 server cannot be asked, nothing is a link and a note says so once. Implemented in
 `internal/webui/terminal_links.go` and the panel in `web_shell.js`; covered by
-[`TestTerminalOutputLinks`](../conformance/05-web/terminal_links_test.go), `TestTerminalLinksAreWhatExists`,
-`TestTerminalPanel`, and a step of `TestTerminalPanelInBrowser`.
+[`TestTerminalOutputLinks`](../conformance/05-web/terminal_links_test.go),
+[`TestTerminalCommandDirsInBrowser`](../conformance/05-web/terminal_command_dirs_browser_test.go),
+`TestTerminalLinksAreWhatExists`, `TestTerminalPanel`, and a step of `TestTerminalPanelInBrowser`.
 
 **WEB-45** With `rotari web --allow-terminal`, the shells of one group (a project's, a basedir's own, or those of no
 project, as WEB-34 groups them) share a history of where they have been. The server reads a shell's own working

@@ -1,7 +1,7 @@
 # Plan: Relative paths in the Web terminal's output, from where each command ran
 
 Created: 2026-11-16
-Status: Accepted by the user on 2026-11-16, with the open questions answered as proposed; phases 1 and 2 are done. See
+Status: Accepted by the user on 2026-11-16, with the open questions answered as proposed; all three phases are done. See
 [work-log.md](work-log.md).
 
 ## Goal

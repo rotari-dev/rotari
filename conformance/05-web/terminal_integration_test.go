@@ -4,14 +4,19 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
 
 // With the terminal on, bash and zsh start with rotari's own startup files, which read
-// the user's and mark prompts and commands with OSC 133, zsh also taking a clicked index; with
+// the user's and mark prompts and commands with OSC 133 and say each prompt's directory with
+// OSC 7, zsh also taking a clicked index; with
 // --terminal-shell-integration=false they start as plain login shells, which read the
 // user's files and mark nothing. The user's files are left as they were.
+// osc7InDir is OSC 7 naming a directory "a b", percent-encoded.
+var osc7InDir = regexp.MustCompile("\x1b\\]7;file://[^/\a]*/[^\a]*/a%20b\a")
+
 func TestTerminalShellIntegration(t *testing.T) {
 	covers(t, "WEB-49")
 	for _, test := range []struct {
@@ -61,13 +66,21 @@ func TestTerminalShellIntegration(t *testing.T) {
 							t.Errorf("no %q in what %s showed:\n%q", mark, test.shell, shown)
 						}
 					}
+					// Each prompt says its directory (OSC 7), percent-encoded with / kept.
+					page.typeLine(`mkdir -p "$HOME/a b" && cd "$HOME/a b" && echo "moved-$((1+1))"`)
+					page.await("moved-2")
+					page.typeLine(`echo "after-$((2+2))"`)
+					page.await("after-4")
+					if !osc7InDir.MatchString(page.shown.String()) {
+						t.Errorf("no OSC 7 naming a b in what %s showed:\n%q", test.shell, page.shown.String())
+					}
 					if test.shell == "zsh" {
 						// The index after zsh's key sequence puts the cursor there: Z after
 						// "echo ", and Q past the end, which stops at the end.
 						page.typeLine("echo abc\x1b[9998~5;Z\x1b[9998~99;Q")
 						page.await("ZabcQ")
 					}
-				} else if strings.Contains(shown, "\x1b]133;") {
+				} else if strings.Contains(shown, "\x1b]133;") || strings.Contains(shown, "\x1b]7;") {
 					t.Errorf("%s marked its prompts with the integration off:\n%q", test.shell, shown)
 				}
 				for file, content := range test.files {

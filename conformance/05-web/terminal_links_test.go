@@ -21,8 +21,9 @@ type terminalLinkAnswer struct {
 }
 
 // Which words of a shell's output are links is what exists: a run, a job of the shell's
-// project in its runs or queue, or a path, absolute or where the shell is; only where the
-// terminal is served.
+// project in its runs or queue, or a path, absolute or where the shell is, or where the
+// panel says the command ran unless that is on another host; only where the terminal is
+// served.
 func TestTerminalOutputLinks(t *testing.T) {
 	covers(t, "WEB-46")
 	e := terminalEnv(t)
@@ -51,9 +52,16 @@ func TestTerminalOutputLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	links := base + "/_terminal/shells/" + shell.ID + "/links"
-	ask := func(candidates ...string) []terminalLinkAnswer {
+	askIn := func(dir, host string, candidates ...string) []terminalLinkAnswer {
 		t.Helper()
-		request, err := json.Marshal(map[string][]string{"candidates": candidates})
+		body := map[string]any{"candidates": candidates}
+		if dir != "" {
+			body["dir"] = dir
+		}
+		if host != "" {
+			body["host"] = host
+		}
+		request, err := json.Marshal(body)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,6 +79,10 @@ func TestTerminalOutputLinks(t *testing.T) {
 		}
 		return answer.Links
 	}
+	ask := func(candidates ...string) []terminalLinkAnswer {
+		t.Helper()
+		return askIn("", "", candidates...)
+	}
 
 	runPage := "/project/" + run.Project + "/run/" + run.RunID
 	got := ask(run.RunID, "20200101-000000-deadbeef", run.OKJob, queued, "012345678",
@@ -86,15 +98,40 @@ func TestTerminalOutputLinks(t *testing.T) {
 		t.Errorf("links:\n got %+v\nwant %+v", got, want)
 	}
 
+	// Relative paths are resolved in the directory the panel says a command ran in, and a
+	// directory on another host links no path, while IDs still link.
+	ran := filepath.Join(e.Root, "ran here")
+	if err := os.MkdirAll(filepath.Join(ran, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ran, "sub", "y.txt"), []byte("y\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	host, err := os.Hostname()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = askIn(ran, host, "sub/y.txt", "out dir/x.csv")
+	want = []terminalLinkAnswer{{Text: "sub/y.txt", Kind: "file", Path: filepath.Join(ran, "sub", "y.txt")}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("links in the directory a command ran in:\n got %+v\nwant %+v", got, want)
+	}
+	got = askIn(ran, "far-away-"+host, "sub/y.txt", filepath.Join(dir, "out dir"), run.RunID)
+	want = []terminalLinkAnswer{{Text: run.RunID, Kind: "run", Project: run.Project, Link: runPage}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("links from another host:\n got %+v\nwant %+v", got, want)
+	}
+
 	for name, test := range map[string]struct {
 		headers map[string]string
 		body    string
 		want    int
 	}{
-		"too many": {headers, `{"candidates":[` + strings.Repeat(`"a",`, 64) + `"a"]}`, http.StatusBadRequest},
-		"too long": {headers, `{"candidates":["` + strings.Repeat("a", 4097) + `"]}`, http.StatusBadRequest},
-		"not JSON": {map[string]string{"X-Rotari-Token": launchToken, "Content-Type": "text/plain"}, `{"candidates":[]}`, http.StatusUnsupportedMediaType},
-		"no token": {nil, `{"candidates":[]}`, http.StatusForbidden},
+		"too many":     {headers, `{"candidates":[` + strings.Repeat(`"a",`, 64) + `"a"]}`, http.StatusBadRequest},
+		"too long":     {headers, `{"candidates":["` + strings.Repeat("a", 4097) + `"]}`, http.StatusBadRequest},
+		"not JSON":     {map[string]string{"X-Rotari-Token": launchToken, "Content-Type": "text/plain"}, `{"candidates":[]}`, http.StatusUnsupportedMediaType},
+		"no token":     {nil, `{"candidates":[]}`, http.StatusForbidden},
+		"relative dir": {headers, `{"candidates":["sub"],"dir":"ran here"}`, http.StatusBadRequest},
 	} {
 		if got := e.HTTPDo(http.MethodPost, links, test.headers, test.body); got.Status != test.want {
 			t.Errorf("%s: (%d, %s), want %d", name, got.Status, got.Body, test.want)

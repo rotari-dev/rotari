@@ -355,9 +355,14 @@ when they name something: a run of any project of the state directory (of any st
 project), a job of the tab's project in its last 20 runs or its queue, or a file or directory on the server. A nine-digit
 hex word that is no job, such as a git hash, stays text. Click a run or job to open its run page with the job chosen
 (a job only queued opens the project's page); the panel and its shells stay, and Ctrl- or Cmd-click opens a new tab
-instead. Click a directory to show it in the Explorer, or a file to open it in the Table viewer. A path is taken
-from where the shell is when you point at it, with a `:12` or `:12:3` after it left out, so a relative path printed
-before a `cd` may name another file or nothing. Pointing at a link says what it opens.
+instead. Click a directory to show it in the Explorer, or a file to open it in the Table viewer. A `:12` or
+`:12:3` after a path is left out. A relative path is taken from the directory the command that printed it ran in:
+bash and zsh started by rotari say it at each prompt (OSC 7, as other terminals read it), as do fish and many prompts,
+so a path printed before a `cd` still names what it did. A command line that changes directory itself, such as
+`cd sub && ls -d */`, prints relative to where it went, which the shell does not say, so its paths are taken from
+where its prompt was. Output from a shell that says no directory is taken from where the shell is when you point at
+it, and a directory said by another host (after `ssh`) links no paths, since they are that host's. Pointing at a link
+says what it opens.
 
 A shell whose prompt marks where each prompt, command line, and output start (OSC 133, which VS Code, iTerm2,
 WezTerm, and Windows Terminal also read) has its output shown as one block per command. A dot left of each prompt

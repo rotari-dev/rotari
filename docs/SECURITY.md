@@ -220,8 +220,10 @@ project's shells have been in and where its runs started. The server keeps those
 on disk, and forgets them when every shell ends; it records nothing that is typed.
 
 Links in a shell's output (`POST /_terminal/shells/ID/links`) are found the same way: the page sends words from the
-screen, at most 64 at once, behind the same checks and with a JSON body, and the server answers which name a run, a
-job, or a path that exists. That tells nothing a shell on the server could not.
+screen, at most 64 at once, behind the same checks and with a JSON body, with the directory the shell said a command
+ran in (OSC 7), and the server answers which name a run, a job, or a path that exists, there or absolute. That tells
+nothing a shell on the server could not. The directory is only output a shell printed, so a file shown with `cat` can
+say a false one, which at worst links a path wrongly, as a false mark draws a false block.
 
 So that bash and zsh print those marks, rotari starts them with its own startup files (`--terminal-shell-integration`,
 on by default), kept under your cache directory in directories that must be yours and that only you can write, so
