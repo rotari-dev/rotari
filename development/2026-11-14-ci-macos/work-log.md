@@ -334,3 +334,20 @@ the three rows. Against the old page it fails with `the rows went while a refuse
 
 **Validation:** `node --check` and `tsc` clean; the test passed `-count=5` (JSDOM, node v24), and
 `internal/webui` passed.
+
+## 2026-11-15 — `72bb4ebc` Wait for the terminal replay before scrolling to a command
+
+The user asked to fix `TestTerminalPanelInBrowser` here, the macOS race leg's only failure, which twice stopped at
+`the long command at the top` with the view on rows 33 to 48 of `c long`'s 60 rows.
+
+After reloading, the test waited for `settled` (the connection status hidden), which says nothing about the replay
+being written to the terminal; it then chose `c long` in Commands, which calls `term.scrollToLine` on its prompt.
+A scroll while the replay is still being written can stop at the end written so far, which would show rows near
+the middle of `c long`. This is a reading of the code, not established.
+
+**Change** (test only): wait for `again-10`, the last output before the reload, on screen before opening
+Commands; and if the prompt still does not reach the top, report the buffer length, `viewportY`, `baseY`, rows,
+and the line holding `$ c long`, which tells a short buffer from a wrong line.
+
+**Validation:** `go vet`; the added expression parses in node. The test needs Chrome, which is not here, so it was
+not run; the next macOS CI run, or the user's Mac, shows the outcome.
