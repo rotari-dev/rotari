@@ -1548,8 +1548,8 @@ the selection and, only if that succeeds, moves the cursor to its end as WEB-50 
 then clears the selection; **Copy**, of the terminal's selection, off without one; **Paste**, which reads the
 clipboard and gives it to the terminal as Ctrl+V does (bracketed when the program asked, with no Enter of its own),
 or, when the browser does not let the page read it, says to use Ctrl+V (Cmd+V on a Mac), and says when it holds no
-text; **Select all**; and, on a command's prompt or output (WEB-48), that command's **Copy output** and **Copy
-command**. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
+text; **Select all**; and, on a command's prompt or output (WEB-48), that command's **Copy command** and **Copy
+output**. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
 [`TestTerminalPanelInBrowser`](../conformance/05-web/terminal_panel_browser_test.go).
 
 **WEB-50** With `rotari web --allow-terminal`, a click in the command line being typed at a shell's prompt moves the
@@ -1624,7 +1624,7 @@ seconds, and a row's **Copy command** and **Copy output**, in that order as on t
 far for one running; none printed says so). While the pointer is over a command's prompt or output, outside the
 alternate screen, **Copy command** (when the block has a command line) and **Copy output** buttons show at the right
 end of its prompt's line, Copy output last, when that line is in view, and copy the same way; a press on either starts
-no selection. The panel takes no key from the shell for blocks. Clicking a mark focuses its pane and offers **Copy output**, **Copy command**, **Select
+no selection. The panel takes no key from the shell for blocks. Clicking a mark focuses its pane and offers **Copy command**, **Copy output**, **Select
 output** (the terminal's selection), and **Type command again**, which types a one-line command line without Enter
 under WEB-45's rule (only after the shell's preview shows nothing running at its prompt, saying why otherwise) and is
 off for a command of more than one line. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel`

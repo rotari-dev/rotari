@@ -4354,7 +4354,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   // On a command's output, the menu has that command's copies too; not on a prompt's line
   // with no command yet.
   const onRow = (row) => ({ clientX: 100, clientY: 100 + row * 10 + 5 });
-  assert.deepEqual(rightClick(onRow(1)).items.slice(4), [['Copy output', true], ['Copy command', true]]);
+  assert.deepEqual(rightClick(onRow(1)).items.slice(4), [['Copy command', true], ['Copy output', true]]);
   rcCopied.length = 0;
   rightClick(onRow(1));
   await rcChoose('Copy output');
@@ -4504,7 +4504,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     await wait(20);
   };
   assert.deepEqual(menu(0).map((item) => [item.textContent, item.disabled]), [
-    ['Copy output', false], ['Copy command', false], ['Select output', false], ['Type command again', false]]);
+    ['Copy command', false], ['Copy output', false], ['Select output', false], ['Type command again', false]]);
   await choose(0, 'Copy output');
   await choose(0, 'Copy command');
   await choose(2, 'Copy output');

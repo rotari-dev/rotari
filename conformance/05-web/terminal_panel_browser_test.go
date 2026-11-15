@@ -222,7 +222,7 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...okPoint, button: 'left', clickCount: 1 });
   await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...okPoint, button: 'left', clickCount: 1 });
   const menuLabels = '[...document.querySelectorAll(".terminal-tab-menu button")].map((item) => item.textContent).join()';
-  await until('the mark\'s menu', menuLabels + ' === "Copy output,Copy command,Select output,Type command again"');
+  await until('the mark\'s menu', menuLabels + ' === "Copy command,Copy output,Select output,Type command again"');
   // A note left from another send would say the same.
   await page.evaluate('document.querySelector(".terminal-send-note")?.replaceChildren(); [...document.querySelectorAll(".terminal-tab-menu button")].find((item) => item.textContent === "Type command again").click()');
   await until('the command typed again', 'document.querySelector(".terminal-send-note")?.textContent === "Sent. Nothing runs until you press Enter in the terminal."');

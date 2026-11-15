@@ -366,10 +366,10 @@ line. Click in the command line you are typing to move the cursor there, as in a
 puts it at the exact character, and other shells get the arrow keys, so in a zsh not started that way a click past the
 typed text may take a zsh-autosuggestions suggestion, as the right arrow would. Alt+click keeps xterm.js's own
 cursor move. Right-click for **Cut**, **Copy**, **Paste**, and **Select all**, and on a command's output for its
-**Copy output** and **Copy command**; Cut works on a selection inside the command line you are typing, and removes
+**Copy command** and **Copy output**; Cut works on a selection inside the command line you are typing, and removes
 nothing if the copy fails. Paste asks the browser to read the clipboard, which it may ask you to allow; Ctrl+V (Cmd+V
 on a Mac) always works. Shift+right-click opens the browser's own menu. Clicking a dot offers **Copy
-output**, **Copy command**, **Select output**, and **Type command again**, which types a one-line command at the
+command**, **Copy output**, **Select output**, and **Type command again**, which types a one-line command at the
 prompt without pressing Enter, only while nothing runs in the shell, as **Recent directories** does. Blocks are kept
 only in the page, from the output it shows, so they come back after following a link for as much output as is shown
 again. A shell that sends no marks looks as it always did.

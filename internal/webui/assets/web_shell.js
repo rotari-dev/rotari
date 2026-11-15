@@ -5890,12 +5890,12 @@ function shellWord(value) {
     if (block) {
       const command = block.command();
       choices.push(
-        ["Copy output", () => copyBlockOutput(pane, block), true],
         [
           "Copy command",
           () => copyText(command, "the command"),
           Boolean(command),
         ],
+        ["Copy output", () => copyBlockOutput(pane, block), true],
       );
     }
     openPanelMenu(event, choices);
@@ -6121,12 +6121,12 @@ function shellWord(value) {
     const command = block.command();
     const oneLine = !command.includes("\n");
     openPanelMenu(event, [
-      ["Copy output", () => copyText(output, "the output"), Boolean(output)],
       [
         "Copy command",
         () => copyText(command, "the command"),
         Boolean(command),
       ],
+      ["Copy output", () => copyText(output, "the output"), Boolean(output)],
       ["Select output", () => selectBlockOutput(pane, block), Boolean(output)],
       [
         oneLine
