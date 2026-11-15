@@ -885,6 +885,61 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.match(endLine('4').textContent, /^last: a command \u2014 no exit code after 30 s, at /);
   assert.equal(endLine('5').classList.contains('terminal-overview-last-failed'), true, 'a failure the bell does not ring for is still red on the card');
   assert.equal(endLine('1').hidden, false);
+  // A command that ends out of sight, which its group's notification config asks to be told
+  // (notify), raises a desktop notification under the runs' toggle and permission: not for
+  // what the first list already held, not for a shown shell, not twice, and not when another
+  // page took it; a click shows the shell. A hidden page asks for the list only to notify.
+  {
+  const told = [];
+  const notifying = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1'), { ...inProject('2', 2, 'p1'), last_command: { ...lastOf('old', 1, 5), notify: true } }], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  notifying.window.Notification = class { static permission = 'granted'; constructor(title, options) { Object.assign(this, { title, options }); told.push(this); } close() { this.closed = true; } };
+  notifying.window.localStorage.setItem('rotari-notifications-enabled', 'true');
+  await wait(50);
+  const endIn = (index, command, exit, notify, minutes) => { notifying.server.shells[index] = { ...notifying.server.shells[index], last_command: { ...lastOf(command, exit, minutes), notify } }; };
+  const listAgain = async () => { notifying.polls[0](); await wait(20); };
+  await listAgain();
+  assert.equal(told.length, 0, 'a command the first list held was told');
+  endIn(1, 'make test', 2, true, 3);
+  await listAgain();
+  assert.deepEqual(told.map((item) => [item.title, item.options.body]), [['make test failed (exit 2) after 3 min 0 s.', 'Shell 2 of p1. Click to show it.']]);
+  assert.match(told[0].options.tag, /^rotari-terminal-2-/);
+  await listAgain();
+  assert.equal(told.length, 1, 'the same end was told twice');
+  // The shown shell's, one its config does not ask for, and one another page took.
+  endIn(0, 'ls', 0, true, 1);
+  await listAgain();
+  endIn(1, 'true', 0, false, 4);
+  await listAgain();
+  endIn(1, 'make', 0, true, 5);
+  notifying.window.localStorage.setItem('rotari-terminal-notified', 'rotari-terminal-2-' + notifying.server.shells[1].last_command.ended_at);
+  await listAgain();
+  assert.equal(told.length, 1, 'a shown shell, one not asked for, or one another page took was told');
+  // With the toggle off, nothing.
+  notifying.window.localStorage.setItem('rotari-notifications-enabled', 'false');
+  endIn(1, 'make again', 1, true, 6);
+  await listAgain();
+  assert.equal(told.length, 1, 'told with the toggle off');
+  notifying.window.localStorage.setItem('rotari-notifications-enabled', 'true');
+  endIn(1, 'make once more', 1, true, 7);
+  await listAgain();
+  assert.equal(told.length, 2);
+  // A click shows the shell.
+  told[1].onclick();
+  await wait(30);
+  assert.equal(told[1].closed, true);
+  assert.equal(notifying.document.querySelector('.terminal-tab [aria-selected="true"]').textContent, '2', 'a click did not show the shell');
+  // A hidden page asks for the list only when it can notify.
+  const quiet = load(process.argv[1], { hidden: true, path: '/project/p1', shells: [inProject('1', 1, 'p1')] });
+  await wait(30);
+  quiet.polls[0]();
+  await wait(10);
+  assert.deepEqual(quiet.requests.filter((request) => request.startsWith('GET /_terminal/shells')), [], 'a hidden page that cannot notify asked');
+  quiet.window.Notification = class { static permission = 'granted'; };
+  quiet.window.localStorage.setItem('rotari-notifications-enabled', 'true');
+  quiet.polls[0]();
+  await wait(10);
+  assert.ok(quiet.requests.some((request) => request.startsWith('GET /_terminal/shells')), 'a hidden page that can notify did not ask');
+  }
   const noLast = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
   await wait(50);
   [...noLast.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'All shells').click();

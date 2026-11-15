@@ -382,6 +382,8 @@ function shellWord(value) {
   // How often a page in view picks up shells started or ended from elsewhere, for its tabs
   // and the count on the Terminal button, with the panel open or not.
   const shellsRefresh = 5000;
+  // A hidden page asks less often, for the desktop notifications of commands ending.
+  const hiddenShellsRefresh = 30000;
   // How often any open page says so, whether its panel is open or in view, which keeps
   // the shells. Browsers slow a background page's timers to about this. It is far under
   // the server's idle limit.
@@ -2265,6 +2267,70 @@ function shellWord(value) {
         at,
     };
   };
+  // Desktop notifications of commands that ended out of sight: a shell's last command newer
+  // than this page has seen, which its group's notification config asks to be notified
+  // (notify), in a shell this page does not show or while the page is hidden. The first
+  // list only says what has been seen, so that a page opened later announces nothing old.
+  // They go under the toggle and permission of the runs' notifications, and pages open on
+  // one browser give one notification of each.
+  const seenCommands = new Map();
+  let commandsSeen = false;
+  const noteCommandEnds = (listed) => {
+    const first = !commandsSeen;
+    commandsSeen = true;
+    for (const shell of listed) {
+      const last = shell.last_command;
+      if (!last) continue;
+      const seen = seenCommands.get(shell.id);
+      seenCommands.set(shell.id, last.ended_at);
+      if (first || seen === last.ended_at || !last.notify) continue;
+      if (!document.hidden && paneShowing(shell.id)) continue;
+      notifyCommandEnd(shell);
+    }
+  };
+  // canNotify says that desktop notifications can be shown: the browser permits them and the
+  // page's toggle is on.
+  const canNotify = () =>
+    typeof Notification !== "undefined" &&
+    Notification.permission === "granted" &&
+    typeof notificationsEnabled === "function" &&
+    notificationsEnabled() &&
+    !(
+      typeof notificationUnavailableReason === "function" &&
+      notificationUnavailableReason()
+    );
+  const notifyCommandEnd = (shell) => {
+    if (!canNotify()) return;
+    const tag =
+      "rotari-terminal-" + shell.id + "-" + shell.last_command.ended_at;
+    try {
+      if (localStorage.getItem("rotari-terminal-notified") === tag) return;
+      localStorage.setItem("rotari-terminal-notified", tag);
+    } catch {}
+    const ended = lastCommand(shell);
+    const where = shell.project
+      ? shell.project
+      : shell.basedir
+        ? "the state directory " + shell.basedir
+        : "no project";
+    const notification = new Notification(ended.sentence, {
+      body:
+        (shell.name || "Shell " + shell.number) +
+        " of " +
+        where +
+        ". Click to show it.",
+      tag,
+      ...(typeof notificationIconURL === "string" && {
+        icon: notificationIconURL,
+      }),
+    });
+    notification.onclick = () => {
+      window.focus();
+      notification.close();
+      setOpen(true);
+      chooseFromOverview(shell);
+    };
+  };
   const overviewCard = (shell, serial) => {
     const card = document.createElement("button");
     card.type = "button";
@@ -2832,6 +2898,7 @@ function shellWord(value) {
       if (superseding) return superseding;
       if (serial !== listSerial) return { ok: true };
       if (panel && !terminalWindow) noteEndedShells(listed.shells);
+      noteCommandEnds(listed.shells);
       shells = listed.shells;
       if (Number.isFinite(Date.parse(listed.now)))
         serverClock = Date.parse(listed.now) - Date.now();
@@ -6955,13 +7022,20 @@ function shellWord(value) {
           if (savedSize("width")) applySize("width", savedSize("width"));
         }).observe(sidebar);
       }
+      let hiddenRefreshAt = 0;
       setInterval(() => {
         if (
-          !document.hidden &&
-          !panes.some((pane) => pane.whenVisible) &&
-          (!latestList?.pending || latestList.serial !== listSerial)
+          panes.some((pane) => pane.whenVisible) ||
+          (latestList?.pending && latestList.serial === listSerial)
         )
-          refreshShells();
+          return;
+        // A page out of sight asks only to notify, and then less often.
+        if (document.hidden) {
+          if (!canNotify()) return;
+          if (Date.now() - hiddenRefreshAt < hiddenShellsRefresh) return;
+          hiddenRefreshAt = Date.now();
+        }
+        refreshShells();
       }, shellsRefresh);
     }
     // Opening a window asks for a shell, as opening the panel does.
