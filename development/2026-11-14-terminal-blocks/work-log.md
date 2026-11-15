@@ -297,3 +297,15 @@
   saying the run helper's line instead. `TestOldBashIntegrationMarksCommandsByTheDebugTrap` expects
   `C;cmdline_url=true%20%7C%20false`. The old version check in the bash test, which expected no `C` before 4.4, is
   gone, since the `DEBUG` trap gives one.
+
+## 2026-11-16 10:00 +09:00 — Copy command on the prompt's line
+
+- **Change:** the buttons a block shows at the right of its prompt's line while the pointer is over it are now
+  **Copy command** and **Copy output**, Copy output last where it was, in a `.terminal-block-actions` span that stops
+  `mousedown` and `mouseup` for both; Copy command is hidden for a block with no command line and copies through
+  `copyText` as "the command". WEB-48, its row, and docs/WEB.md say so.
+- **Reason:** the user asked for Copy command beside Copy output.
+- **Plan impact:** decision 4 and phase 9 now have two buttons.
+- **Validation:** `TestTerminalPanel` (Copy command shown with Copy output and only then, before it, copying `sleep 9`
+  and saying "Copied the command", a press on it reaching nothing, gone when the pointer leaves) passed; `tsc` clean;
+  prettier unchanged. The browser step's checks of Copy output, the line's last button, still hold.
