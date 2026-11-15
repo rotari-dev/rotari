@@ -5596,23 +5596,48 @@ function shellWord(value) {
     mark.hidden = state === "prompt";
     if (state === "prompt") mark.removeAttribute("title");
     else mark.title = blockTitle(block);
-    // Copy output, at the right of the prompt's line while the pointer is over the block.
-    let copy = element.querySelector(".terminal-block-copy");
-    if (!copy) {
-      copy = document.createElement("button");
-      copy.type = "button";
-      copy.className = "terminal-block-copy";
-      copy.textContent = "Copy output";
-      copy.title = "Copy this command's output";
+    // Copy command and Copy output, at the right of the prompt's line while the pointer is
+    // over the block; Copy command only when the block has a command line.
+    let actions = element.querySelector(".terminal-block-actions");
+    if (!actions) {
+      actions = document.createElement("span");
+      actions.className = "terminal-block-actions";
+      // The buttons are the block's, not a place in the text to select or click.
       for (const type of ["mousedown", "mouseup"])
-        copy.addEventListener(type, (event) => event.stopPropagation());
-      copy.addEventListener("click", (event) => {
-        event.stopPropagation();
-        copyBlockOutput(pane, block);
-      });
-      element.append(copy);
+        actions.addEventListener(type, (event) => event.stopPropagation());
+      const button = (className, label, title, run) => {
+        const made = document.createElement("button");
+        made.type = "button";
+        made.className = className;
+        made.textContent = label;
+        made.title = title;
+        made.addEventListener("click", (event) => {
+          event.stopPropagation();
+          run();
+        });
+        return made;
+      };
+      actions.append(
+        button(
+          "terminal-block-copy-command",
+          "Copy command",
+          "Copy this command's line",
+          () => copyText(block.command(), "the command"),
+        ),
+        button(
+          "terminal-block-copy",
+          "Copy output",
+          "Copy this command's output",
+          () => copyBlockOutput(pane, block),
+        ),
+      );
+      element.append(actions);
     }
-    copy.hidden = !block.output || pane.hovered !== block;
+    const shown = Boolean(block.output) && pane.hovered === block;
+    actions.hidden = !shown;
+    actions.querySelector(".terminal-block-copy").hidden = !shown;
+    actions.querySelector(".terminal-block-copy-command").hidden =
+      !shown || !block.command();
   };
   // copyBlockOutput copies a block's output, read only now, since a long one takes time to
   // put together, or says there is none.

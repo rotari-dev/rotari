@@ -4460,14 +4460,27 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   // A click copies it, and starts no selection in the text under it.
   const bpCopyButton = bpPane().blocks[3].decoration.render().querySelector('.terminal-block-copy');
   let bpPressed = false;
-  bpCopyButton.parentElement.addEventListener('mousedown', () => (bpPressed = true));
+  bpCopyButton.closest('.terminal-block').addEventListener('mousedown', () => (bpPressed = true));
   bpCopyButton.dispatchEvent(new bp.window.MouseEvent('mousedown', { bubbles: true }));
   assert.equal(bpPressed, false, 'a press on Copy output reached the terminal');
   bpCopyButton.click();
   await wait(20);
   assert.deepEqual(bpCopied, ['zz']);
   bpCopied.length = 0;
+  // Copy command beside it copies the command line, shown with Copy output.
+  const commandButtons = () => Array.from(bpPane().blocks, (block) => !block.decoration.render().querySelector('.terminal-block-copy-command').hidden);
+  assert.deepEqual(commandButtons(), [false, false, false, true], 'Copy command not shown with Copy output');
+  const bpCommandButton = bpPane().blocks[3].decoration.render().querySelector('.terminal-block-copy-command');
+  assert.equal(bpCommandButton.nextElementSibling, bpCopyButton, 'Copy output is not last, at the line\'s end');
+  bpCommandButton.dispatchEvent(new bp.window.MouseEvent('mousedown', { bubbles: true }));
+  assert.equal(bpPressed, false, 'a press on Copy command reached the terminal');
+  bpCommandButton.click();
+  await wait(20);
+  assert.deepEqual(bpCopied, ['sleep 9']);
+  assert.equal(bp.document.querySelector('.terminal-send-note').textContent, 'Copied the command');
+  bpCopied.length = 0;
   bpViewport.dispatchEvent(new bp.window.MouseEvent('mouseleave'));
+  assert.deepEqual(commandButtons(), [false, false, false, false], 'Copy command stayed after the pointer left');
   assert.deepEqual(copies(), [false, false, false, false], 'Copy output stayed after the pointer left');
   // None in vim or less.
   bpTerm.buffer.active.type = 'alternate';
