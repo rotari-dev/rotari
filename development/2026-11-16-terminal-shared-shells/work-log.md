@@ -76,3 +76,21 @@
 - **Validation:** `TestTerminalPanel` (two state directories: the divider says All projects, its title names /b);
   `tsc` and prettier clean.
 - **Remaining:** none.
+
+## 2026-11-16 01:31 +09:00 — A + on each side of the divider
+
+- **Change:** the bar is now the project's tabs, its **+**, then `.terminal-shared`: the **All projects** divider, a
+  `.terminal-shared-tabs` tablist ("Shells of all projects") of the state directory's own tabs, and
+  `.terminal-shared-add`, a **+** that starts another of them (`newSharedShell`: the place of the state directory's
+  All projects page from `sharedPlace`, retried the same way) and shows it in the pane with the keys, off at that
+  group's limit. The part is shown on every project's page, with no shared shell too, and hidden elsewhere; the
+  divider is no longer inside a tablist. Drag marks clear in both lists. WEB-56, its row, and docs/WEB.md say so.
+- **Reason:** the user asked for **+** left of the divider and another after the shared tabs, so that both kinds can
+  be started from a project's page.
+- **Plan impact:** decision 3 ("**+** starts a shell of the project"; **New shell in** for the state directory's) gains
+  the shared **+**, and the divider shows with no shared shells.
+- **Validation:** `TestTerminalPanel` (the bar's order; the shared + starting `basedir=` and showing it, + starting
+  the project's; the shared + off at its limit with the project's on; All projects and Activity hiding the part) passes;
+  `TestTerminalSharedShellsInBrowser` checks the order and the shared + (CI only; `node --check` here). `tsc` and
+  prettier clean.
+- **Remaining:** CI's browser run.

@@ -1054,6 +1054,24 @@ html.terminal-open[data-terminal-place]:not(.terminal-maximized)
   background: var(--terminal-background);
   color: var(--text);
 }
+/* A project's page's state directory's own tabs, with their divider and +. */
+.terminal-shared {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.terminal-shared[hidden] {
+  display: none;
+}
+.terminal-shared-tabs {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+}
 /* Before a state directory's own tabs on a project's page. */
 .terminal-tab-divider {
   flex: none;

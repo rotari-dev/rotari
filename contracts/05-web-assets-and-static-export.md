@@ -1507,14 +1507,16 @@ project of the same basedir keeps the panes that showed the basedir's own shells
 [web_shell.js](../internal/webui/assets/web_shell.js); covered by `TestTerminalPanel` and
 [`TestTerminalProjectLinkInBrowser`](../conformance/05-web/terminal_project_link_browser_test.go).
 
-**WEB-56** With `rotari web --allow-terminal`, a project's page shows, after the project's tabs, the tabs of its
-basedir's own shells (those of All projects and Recent jobs), behind a divider saying **All projects**, whose
-tooltip names the basedir; a basedir's own pages and the pages of no project show
+**WEB-56** With `rotari web --allow-terminal`, a project's page shows the project's tabs and its **+**, then a
+divider saying **All projects**, whose tooltip names the basedir, the tabs of its basedir's own shells (those of All
+projects and Recent jobs), and a second **+** that starts another of those where All projects would and shows it in
+the pane with the keys, off at that group's limit; the divider and second **+** are there with no shared shell
+yet. A basedir's own pages and the pages of no project show
 their own group alone, and no page shows another project's, another basedir's, or no project's shells beside its
 own. A shared tab is shown, split to, and chosen in All shells as the project's are, without moving the page, and
 the bell and unseen mark work on it alike; its menu and dragging arrange it among the shared tabs only, and the
-order goes to the server for that group. **+**, the group limit, and the project list keep to the project's own
-shells. Opening the panel on a project with no shell of its own but shared ones shows them and starts none. The
+order goes to the server for that group. The first **+**, its group limit, and the project list keep to the
+project's own shells. Opening the panel on a project with no shell of its own but shared ones shows them and starts none. The
 browser tab remembers the panes it last showed with their group; a page of another group, as following a link
 with the project link on loads, shows the remembered panes that held the basedir's own shells it shows, in their
 places, the focus staying on one that had it, while of the panes that held other shells the one with the focus,

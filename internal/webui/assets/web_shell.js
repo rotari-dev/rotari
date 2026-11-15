@@ -437,6 +437,9 @@ function shellWord(value) {
     groups,
     tabs,
     add,
+    sharedPart,
+    sharedTabs,
+    sharedAdd,
     launchButton,
     dirsButton,
     commandsButton,
@@ -1316,7 +1319,7 @@ function shellWord(value) {
   // draggingShell is the tab being dragged. Drawing the tabs again would end the drag.
   let draggingShell = null;
   const clearDropMarks = () => {
-    for (const tab of tabs.children)
+    for (const tab of [...tabs.children, ...sharedTabs.children])
       tab.classList.remove("terminal-drop-before", "terminal-drop-after");
   };
   const dropsAfter = (event, tab) => {
@@ -1529,9 +1532,16 @@ function shellWord(value) {
     const inGroup = shellsHere();
     add.disabled = inGroup.length >= groupLimit || shells.length >= shellLimit;
     updatePaneButtons();
+    // A project's page offers its state directory's own shells, and a + for another,
+    // whether it has any or not.
+    const sharing = Boolean(sharedGroup());
     const shared = sharedShells();
+    sharedPart.hidden = !sharing;
+    sharedAdd.disabled =
+      shared.length >= groupLimit || shells.length >= shellLimit;
     const drawn = JSON.stringify([
       here.basedir,
+      sharing,
       [...inGroup, ...shared].map((shell) => [
         shell.id,
         shell.number,
@@ -1621,20 +1631,21 @@ function shellWord(value) {
       tab.append(label, close);
       return tab;
     };
-    const drawnTabs = inGroup.map(drawTab);
-    if (shared.length) {
-      // The state directory's own shells, set apart and named as its All projects does;
-      // its path, often long, is only in the title.
-      const divider = document.createElement("span");
-      divider.className = "terminal-tab-divider";
-      divider.setAttribute("role", "presentation");
-      divider.textContent = "All projects";
-      divider.title =
+    tabs.replaceChildren(...inGroup.map(drawTab));
+    sharedTabs.replaceChildren(...shared.map(drawTab));
+    if (sharing)
+      sharedPart.querySelector(".terminal-tab-divider").title =
         "Shells of " + here.basedir + " for work across its projects";
-      drawnTabs.push(divider, ...shared.map(drawTab));
-    }
-    tabs.replaceChildren(...drawnTabs);
   };
+  // sharedPlace is where the state directory's own shells start: its All projects page's
+  // place, for the terminal's project.
+  const sharedPlace = () =>
+    placeOfPath(
+      groupPath(projectLinked ? pagePath() : terminalPath).replace(
+        /\/project\/[^/]+$/,
+        "/",
+      ),
+    );
   // A sign-in that has gone cannot be retried away.
   const signInGone = (pane, response) => {
     if (response?.status !== 401 && response?.status !== 403) return false;
@@ -3164,6 +3175,13 @@ function shellWord(value) {
     const shell = await startShell(pane, () => newShell(pane, dir), dir);
     if (shell) show(pane, shell.id);
   };
+  // newSharedShell starts one of the state directory's own shells from a project's page.
+  const newSharedShell = async (pane) => {
+    clearTimeout(pane.retryTimer);
+    placeOverride = sharedPlace();
+    const shell = await startShell(pane, () => newSharedShell(pane));
+    if (shell) show(pane, shell.id);
+  };
   // addPane gives a new row in the layout its pane, which gets its screen once placed.
   const addPane = (row) => {
     row.pane = newPane();
@@ -3514,6 +3532,8 @@ function shellWord(value) {
     rememberTerminalContext();
     if (panel) {
       tabs.replaceChildren();
+      sharedTabs.replaceChildren();
+      sharedPart.hidden = true;
       tabsDrawn = "";
       add.disabled = true;
       updatePaneButtons();
@@ -5443,6 +5463,27 @@ function shellWord(value) {
     add.textContent = "+";
     add.onclick = () => newShell(focused);
     add.onpointerenter = () => refreshHere().catch(() => {});
+    // The state directory's own tabs, after a divider named as its All projects page, and
+    // a + that starts another of them; the path, often long, is only in the title.
+    sharedPart = document.createElement("span");
+    sharedPart.className = "terminal-shared";
+    sharedPart.hidden = true;
+    const divider = document.createElement("span");
+    divider.className = "terminal-tab-divider";
+    divider.textContent = "All projects";
+    sharedTabs = document.createElement("div");
+    sharedTabs.className = "terminal-shared-tabs";
+    sharedTabs.setAttribute("role", "tablist");
+    sharedTabs.setAttribute("aria-label", "Shells of all projects");
+    sharedAdd = document.createElement("button");
+    sharedAdd.type = "button";
+    sharedAdd.className = "terminal-add terminal-shared-add";
+    sharedAdd.setAttribute("aria-label", "New shell of all projects");
+    sharedAdd.title =
+      "New shell of all projects, where its All projects page starts one";
+    sharedAdd.textContent = "+";
+    sharedAdd.onclick = () => newSharedShell(focused);
+    sharedPart.append(divider, sharedTabs, sharedAdd);
     const spacer = document.createElement("span");
     spacer.className = "terminal-spacer";
     const clear = document.createElement("button");
@@ -5563,6 +5604,7 @@ function shellWord(value) {
       projectLinkButton,
       tabs,
       add,
+      sharedPart,
       overviewButton,
       launchButton,
       dirsButton,

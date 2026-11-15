@@ -20,7 +20,7 @@ const { chrome, base, token, p1, p2, shared } = JSON.parse(readFileSync(input, '
 const { cdp, close } = await launchChrome(chrome);
 let failure = '';
 await withPage(cdp, base + '/_auth/login?next=/project/p1', { width: 1280, height: 900, settleMs: 200 }, async (page) => {
-  const state = 'JSON.stringify({ path: location.pathname, panes: [...document.querySelectorAll(".terminal-pane")].map((pane) => pane.terminalPane?.shown), tabs: [...document.querySelectorAll(".terminal-tabs > *")].map((item) => item.className + ":" + item.textContent), status: document.querySelector(".terminal-status")?.textContent })';
+  const state = 'JSON.stringify({ path: location.pathname, panes: [...document.querySelectorAll(".terminal-pane")].map((pane) => pane.terminalPane?.shown), tabs: [...document.querySelectorAll(".terminal-tabs > *, .terminal-shared > *")].map((item) => item.className + ":" + item.textContent), status: document.querySelector(".terminal-status")?.textContent })';
   const until = async (what, expression) => {
     for (const deadline = Date.now() + 30000; Date.now() < deadline; await sleep(100)) {
       try { if (await page.evaluate(expression)) return; } catch {}
@@ -29,7 +29,7 @@ await withPage(cdp, base + '/_auth/login?next=/project/p1', { width: 1280, heigh
   };
   const shownAre = (...ids) => 'JSON.stringify([...document.querySelectorAll(".terminal-pane")].map((pane) => pane.terminalPane?.shown)) === ' + JSON.stringify(JSON.stringify(ids));
   // The tab with the keys is one of the state directory's own, after the divider.
-  const sharedFocused = 'document.querySelector(".terminal-tab-divider ~ .terminal-tab [aria-selected=true]") !== null';
+  const sharedFocused = 'document.querySelector(".terminal-shared-tabs [aria-selected=true]") !== null';
   const go = (path) => page.evaluate('location.href = ' + JSON.stringify(path));
   const typeLine = async (line) => {
     await page.send('Input.insertText', { text: line });
@@ -42,8 +42,9 @@ await withPage(cdp, base + '/_auth/login?next=/project/p1', { width: 1280, heigh
   await until('the project page', 'location.pathname === "/project/p1" && document.getElementById("terminal-button") !== null');
   await page.evaluate('document.getElementById("terminal-button").click()');
   await until('the project\'s shell', shownAre(p1) + ' && document.querySelector(".terminal-status")?.hidden');
-  // The project's tab, then the divider, then the state directory's own tab.
-  await until('the shared tab after the divider', 'JSON.stringify([...document.querySelectorAll(".terminal-tabs > *")].map((item) => item.classList.contains("terminal-tab-divider") ? "|" + item.textContent : item.classList.contains("terminal-tab") ? "tab" : "?")) === ' + JSON.stringify(JSON.stringify(['tab', '|All projects', 'tab'])));
+  // The project's tab and +, then the divider, the state directory's own tab, and its +.
+  const barOrder = 'JSON.stringify([...document.querySelectorAll(".terminal-tabs > .terminal-tab, .terminal-add, .terminal-shared > .terminal-tab-divider, .terminal-shared-tabs > .terminal-tab")].map((item) => item.classList.contains("terminal-tab-divider") ? "|" + item.textContent : item.classList.contains("terminal-shared-add") ? "shared+" : item.classList.contains("terminal-add") ? "+" : item.closest(".terminal-shared") ? "shared" : "tab"))';
+  await until('the shared tab after the divider', barOrder + ' === ' + JSON.stringify(JSON.stringify(['tab', '+', '|All projects', 'shared', 'shared+'])));
   // Split shows the shared shell, the only one in no pane, in the new pane with the keys.
   await page.evaluate('[...document.querySelectorAll(".terminal-bar button")].find((item) => item.getAttribute("aria-label") === "Split right" || item.textContent === "Split right").click()');
   await until('the shared shell in a pane', shownAre(p1, shared) + ' && ' + sharedFocused);
@@ -58,6 +59,11 @@ await withPage(cdp, base + '/_auth/login?next=/project/p1', { width: 1280, heigh
   // And coming back finds the first project's shell beside it.
   await go('/project/p1');
   await until('the first project again', 'location.pathname === "/project/p1" && ' + shownAre(p1, shared) + ' && ' + sharedFocused);
+  // The shared + starts another of the state directory's own shells, shown with the keys.
+  await page.evaluate('document.querySelector(".terminal-shared-add").click()');
+  await until('a new shared shell', 'document.querySelectorAll(".terminal-shared-tabs .terminal-tab").length === 2 && ' + sharedFocused);
+  const sharedCount = await page.evaluate('fetch("/_terminal/shells").then((response) => response.json()).then((answer) => answer.shells.filter((shell) => shell.basedir && !shell.project).length)');
+  if (sharedCount !== 2) throw new Error('the shared + did not start a shell of the state directory: ' + sharedCount + ' of its own');
 }).catch((error) => { failure = error.stack || String(error); });
 await close();
 console.log(JSON.stringify({ failure }));
