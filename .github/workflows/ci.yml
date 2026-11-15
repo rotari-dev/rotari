@@ -66,9 +66,18 @@ jobs:
         run: go install gotest.tools/gotestsum@v1.13.0
 
       - name: Run tests
+        if: runner.os == 'Linux'
         env:
           ROTARI_REQUIRE_BROWSER_TESTS: "1"
         run: gotestsum --format pkgname-and-test-fails -- -timeout 15m -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./...
+
+      # The macOS leg collects no coverage, so its one run carries the race
+      # detector: code that runs only on macOS is never run by the race job.
+      - name: Run tests with the race detector (macOS)
+        if: runner.os == 'macOS'
+        env:
+          ROTARI_REQUIRE_BROWSER_TESTS: "1"
+        run: gotestsum --format pkgname-and-test-fails -- -race -timeout 30m ./...
 
       - name: Upload coverage to Codecov
         if: runner.os == 'Linux'
