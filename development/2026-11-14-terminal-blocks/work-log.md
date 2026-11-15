@@ -322,3 +322,11 @@
   inside it, scrolls nothing itself.
 - **Plan impact:** none.
 - **Validation:** the browser script passes `node --check`; the step runs only in CI.
+
+## 2026-11-16 11:00 +09:00 — The Commands row's copies in the prompt line's order
+
+- **Change:** a Commands row's buttons are **Copy command** then **Copy output**, as on a block's prompt line; WEB-48
+  says so.
+- **Reason:** the user asked for one order, the prompt line's, in the Commands dropdown.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalPanel` checks the row's order; see the commit.
