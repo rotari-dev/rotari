@@ -46,3 +46,14 @@
 - **Validation:** `TestContractStatus` passed; the browser script passes `node --check`; the step runs only in CI,
   where whether the grant takes decides which of its two endings it checks.
 - **Remaining:** nothing in this plan.
+
+## 2026-11-15 12:10 +09:00 — CI on macOS: the cut step's right click
+
+- **Change:** the browser step right-clicks on the selected `DROP` (its cells, from `.xterm-screen` and the terminal's
+  columns) rather than 20px into the line; ISSUES' entry for the macOS browser test says why that step failed.
+- **Reason:** macOS CI ran the cut line as `A$((2*3))DROPZ`, `echo` gone: xterm.js selects the word under a right
+  click outside the selection when `rightClickSelectsWord` is on, its default on macOS, and 20px in was `echo`, which
+  Cut then rightly cut. A right click inside the selection keeps it. The panel's behaviour, cutting the word a Mac user
+  right-clicks, is as the Mac's own text fields do, and is kept.
+- **Plan impact:** none.
+- **Validation:** the browser script passes `node --check`; the step runs only in CI, on Linux and macOS.
