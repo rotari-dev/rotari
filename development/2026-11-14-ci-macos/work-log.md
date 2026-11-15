@@ -312,3 +312,25 @@ timing out under high load names this test on Linux too.
 30-second grace period so a cancel that waits it out still fails.
 
 **Validation:** `go vet ./conformance/support`. The bound only lengthens how long a hung command is allowed.
+
+## 2026-11-15 — `e63b4e14` Keep the Table viewer's rows on show while a refusal is put back
+
+The first macOS race run also failed `TestTableViewRecoversFromARefusedFilterInBrowser` (`rows after a refusal []`),
+which had passed on macOS without `-race`.
+
+A product glitch, which load exposed: `addFilter` ran `loadRows` with the new filter; when the server refused it,
+`loadRows` showed the error and rendered an empty table (`rows = null`); `addFilter` then put the filters back
+and ran `loadRows` again. Until that second answer came, the page showed the error over an empty table, and the
+test, which counts rows once the error shows, could land there. `toggleDirectory` did the same for a refused
+expansion.
+
+**Change:** `internal/webui/assets/table_view.js`: `loadRows({ keepOnFailure })` returns a refusal's message
+without replacing the rows on show. `addFilter` (which also restores the page) and `toggleDirectory` use it, put
+their view back, rewrite the URL fragment, and show the error, with no second request. As before, a refused
+expansion forgets the current row, since the expansion is part of the table's identity.
+
+**Test:** the refused-filter test watches the table while the refusal happens and requires it never to fall below
+the three rows. Against the old page it fails with `the rows went while a refused filter was tried`.
+
+**Validation:** `node --check` and `tsc` clean; the test passed `-count=5` (JSDOM, node v24), and
+`internal/webui` passed.
