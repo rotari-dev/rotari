@@ -281,3 +281,18 @@ The ISSUES entry, which had concluded that macOS never trusts a launch's port, i
 
 **Validation:** On Linux, `go test ./internal/launcher -count=3` passed, and the listener role kept running for
 2 s. `GOOS=darwin go vet ./internal/launcher`: clean. Not yet run on macOS.
+
+## 2026-11-15 — `309bc122` Run the macOS leg's tests with the race detector
+
+**Change:** `.github/workflows/ci.yml`: the `go` job's test step is split by OS. Linux is unchanged (coverage,
+`-timeout 15m`, then the Codecov upload). macOS runs `gotestsum -- -race -timeout 30m ./...` without coverage.
+The `race` job stays Linux-only. The macOS leg keeps `continue-on-error`.
+
+**Reason:** The plan's step 3, which the user started on 2026-11-15. The macOS leg's only failure was by then
+`TestTerminalPanelInBrowser` (terminal work, recorded in ISSUES), so failures that appear with `-race` stand out.
+The timeout is doubled because the race detector slows tests several times over.
+
+**Validation:** The workflow parses with the two steps and their conditions. Its effect is seen only in CI.
+
+**Remaining:** Triage what `-race` finds on macOS; then step 4, making the leg required, once
+`TestTerminalPanelInBrowser` passes there.
