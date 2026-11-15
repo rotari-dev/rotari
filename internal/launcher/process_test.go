@@ -53,8 +53,11 @@ func fakeWeb() int {
 	select {}
 }
 
-// listenAndWait listens on host and an unused port, and writes the port to
-// portFile once it accepts connections.
+// listenAndWait listens on host and an unused port, writes the port to
+// portFile once it accepts connections, and keeps accepting them. Accepting,
+// rather than an empty select, is what keeps it alive: with no goroutine left
+// to run, the Go runtime ends the process as deadlocked, which it did on
+// macOS right after writing the port.
 func listenAndWait(host, portFile string) int {
 	listener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
 	if err != nil {
@@ -67,7 +70,14 @@ func listenAndWait(host, portFile string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	select {}
+	for {
+		connection, err := listener.Accept()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		connection.Close()
+	}
 }
 
 // testSpec runs command under the test binary acting as the wrapper. The
