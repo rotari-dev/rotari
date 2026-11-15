@@ -211,7 +211,7 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('false at the top and its scrollbar to settle', topRow + ' === "$ c false" && window.__commandScrolled === true').catch(async (error) => {
     throw new Error(error.message + '; the top row is ' + JSON.stringify(await page.evaluate(topRow)));
   });
-  await page.evaluate('document.querySelector(".xterm-viewport").scrollTop = 1e9');
+  await page.evaluate('document.querySelector(".terminal-pane")?.terminalPane?.term?.scrollToBottom()');
   // A mark's menu types its command again, without Enter.
   const trueMark = '[...document.querySelectorAll(".terminal-block-mark")].find((item) => item.title.startsWith("c true\\n"))';
   const markUnderPointer = '(() => { const mark = ' + trueMark + '; if (!mark || mark.hidden) return false; const box = mark.getBoundingClientRect(); return box.width > 0 && box.height > 0 && document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === mark; })()';
@@ -232,6 +232,9 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the project\'s shell to settle after the blocks', settled);
   // Pointing at a command's line shows Copy output at its right end, outside the text.
   const trueRow = '[...document.querySelectorAll(".xterm-rows > div")].find((row) => row.textContent.trim() === "$ c true")';
+  const scrollToTrue = '(() => { const term = document.querySelector(".terminal-pane")?.terminalPane?.term; const buffer = term?.buffer.active; if (!term || !buffer) return false; for (let line = 0; line < buffer.baseY + term.rows; line++) { if (buffer.getLine(line)?.translateToString(true).trim() === "$ c true") { term.scrollToLine(line); return true; } } return false; })()';
+  await until('the true command in scrollback', scrollToTrue);
+  await until('the true command on screen', trueRow + ' !== undefined');
   const truePoint = await page.evaluate('(() => { const box = ' + trueRow + '.getBoundingClientRect(); return { x: box.left + 40, y: box.top + box.height / 2 }; })()');
   await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...truePoint });
   const shownCopy = '[...document.querySelectorAll(".terminal-block-copy")].find((button) => !button.hidden && button.offsetParent !== null)';
