@@ -1485,8 +1485,11 @@ function shellWord(value) {
         const unseen = Boolean(shell.unseen_output) && !showing;
         // A command that ended out of sight rings a bell, in place of the dot.
         const finished = Boolean(shell.command_finished) && !showing;
+        // A command that ended out of sight with a failure rings a red bell.
+        const ended = finished ? lastCommand(shell) : null;
         tab.classList.toggle("terminal-tab-unseen", unseen && !finished);
         tab.classList.toggle("terminal-tab-finished", finished);
+        tab.classList.toggle("terminal-tab-failed", Boolean(ended?.failed));
         tab.classList.toggle("terminal-tab-other-pane", elsewhere);
         const label = document.createElement("button");
         label.type = "button";
@@ -1497,7 +1500,13 @@ function shellWord(value) {
           "Shell " +
             shell.number +
             (shell.name ? ", " + shell.name : "") +
-            (finished ? ", command finished" : unseen ? ", new output" : "") +
+            (ended?.failed
+              ? ", command failed"
+              : finished
+                ? ", command finished"
+                : unseen
+                  ? ", new output"
+                  : "") +
             (elsewhere ? ", in another pane" : ""),
         );
         // The times are worded as the pointer arrives: the list's refresh redraws no tab.
@@ -1506,7 +1515,13 @@ function shellWord(value) {
             shells.find((item) => item.id === shell.id) || shell,
           );
           label.title =
-            (finished ? "A command finished. " : unseen ? "New output. " : "") +
+            (ended
+              ? ended.sentence + " "
+              : finished
+                ? "A command finished. "
+                : unseen
+                  ? "New output. "
+                  : "") +
             (elsewhere ? "In another pane. " : "") +
             "Started in " +
             shell.dir +
@@ -2216,6 +2231,40 @@ function shellWord(value) {
     if (await endShell(shell, overviewRefusal))
       drawOverview(next?.dataset.shell);
   };
+  // A shell's last command, from the marks it prints (last_command in the list): whether it
+  // failed (an exit code other than 0; none is not a failure), a sentence for a title, and
+  // a line for its card.
+  const lastCommand = (shell) => {
+    const last = shell.last_command;
+    if (!last) return null;
+    const command = last.command || "A command";
+    const failed = typeof last.exit === "number" && last.exit !== 0;
+    const ms = Date.parse(last.ended_at) - Date.parse(last.started_at);
+    const took = ms >= 0 ? " after " + blockDuration(ms) : "";
+    const end =
+      last.exit === null
+        ? " ended without an exit code"
+        : failed
+          ? " failed (exit " + last.exit + ")"
+          : " finished";
+    const at = new Date(last.ended_at).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const code = last.exit === null ? "no exit code" : "exit " + last.exit;
+    return {
+      failed,
+      sentence: command + end + took + ".",
+      line:
+        "last: " +
+        (last.command || "a command") +
+        " \u2014 " +
+        code +
+        took +
+        ", at " +
+        at,
+    };
+  };
   const overviewCard = (shell, serial) => {
     const card = document.createElement("button");
     card.type = "button";
@@ -2228,9 +2277,14 @@ function shellWord(value) {
       Boolean(shell.unseen_output) && !(ours && paneShowing(shell.id));
     const finished =
       Boolean(shell.command_finished) && !(ours && paneShowing(shell.id));
+    const last = lastCommand(shell);
     card.classList.toggle("terminal-overview-current", current);
     card.classList.toggle("terminal-overview-unseen", unseen && !finished);
     card.classList.toggle("terminal-overview-finished", finished);
+    card.classList.toggle(
+      "terminal-overview-failed",
+      finished && Boolean(last?.failed),
+    );
     const name = document.createElement("span");
     name.className = "terminal-overview-name";
     name.textContent = shell.name || "Shell " + shell.number;
@@ -2239,7 +2293,11 @@ function shellWord(value) {
     state.textContent = [
       current && "shown",
       elsewhere && "in another pane",
-      finished ? "command finished" : unseen && "new output",
+      finished
+        ? last?.failed
+          ? "command failed"
+          : "command finished"
+        : unseen && "new output",
     ]
       .filter(Boolean)
       .join(", ");
@@ -2265,7 +2323,16 @@ function shellWord(value) {
         times.startedAgo +
         " \u00b7 " +
         (times.idle ? "idle " + times.idle : "active now");
-    card.append(top, dir, when);
+    // How its last command ended, in the run's tone: red for a failure.
+    const ended = document.createElement("span");
+    ended.className = "terminal-overview-last";
+    ended.hidden = !last;
+    if (last) {
+      ended.textContent = last.line;
+      ended.title = last.sentence;
+      ended.classList.toggle("terminal-overview-last-failed", last.failed);
+    }
+    card.append(top, dir, when, ended);
     card.onclick = () => chooseFromOverview(shell);
     // Under the card, outside its button: what runs in the foreground, and how many
     // processes the shell has started, which open into their tree.
@@ -5402,6 +5469,7 @@ function shellWord(value) {
   const blockDuration = (ms) => {
     const seconds = Math.round(ms / 1000);
     if (ms < 10000) return (ms / 1000).toFixed(1) + " s";
+    if (seconds < 60) return seconds + " s";
     if (seconds < 3600)
       return Math.floor(seconds / 60) + " min " + (seconds % 60) + " s";
     return (

@@ -854,6 +854,42 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const bellCard = (id) => belling.document.querySelector('.terminal-overview-card[data-shell="' + id + '"]');
   assert.deepEqual(['1', '2', '3'].map((id) => [bellCard(id).classList.contains('terminal-overview-finished'), bellCard(id).querySelector('.terminal-overview-state').textContent]), [[false, 'shown'], [true, 'command finished'], [false, 'new output']]);
   assert.match(webShellCSS, /\.terminal-tab-finished \[role="tab"\]::before,\s*\.terminal-overview-finished \.terminal-overview-name::before \{/);
+  // With the shells' marks, the server says how the last command ended: a failure rings the
+  // bell red, its title says the command, its code, and how long it took, and each card has a
+  // line on its shell's last command; a shown shell's failure rings no bell.
+  const lastOf = (command, exit, minutes) => ({ command, exit, started_at: '2026-11-15T01:40:00Z', ended_at: new Date(Date.parse('2026-11-15T01:40:00Z') + minutes * 60000).toISOString(), sequence: 1 });
+  const lasting = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [
+    { ...inProject('1', 1, 'p1'), command_finished: true, last_command: lastOf('make', 2, 3) },
+    { ...inProject('2', 2, 'p1'), command_finished: true, last_command: lastOf('make test', 2, 3) },
+    { ...inProject('3', 3, 'p1'), command_finished: true, last_command: lastOf('train.py', 0, 124) },
+    { ...inProject('4', 4, 'p1'), command_finished: true, last_command: lastOf('', null, 0.5) },
+    { ...inProject('5', 5, 'p1'), last_command: lastOf('ls', 1, 0) },
+  ], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const endTabs = [...lasting.document.querySelectorAll('.terminal-tab')];
+  assert.deepEqual(endTabs.map((tab) => [tab.classList.contains('terminal-tab-finished'), tab.classList.contains('terminal-tab-failed')]),
+    [[false, false], [true, true], [true, false], [true, false], [false, false]]);
+  assert.deepEqual(endTabs.slice(1, 4).map((tab) => tab.querySelector('[role=tab]').getAttribute('aria-label')), ['Shell 2, command failed', 'Shell 3, command finished', 'Shell 4, command finished']);
+  assert.deepEqual(endTabs.slice(1, 4).map((tab) => tab.querySelector('[role=tab]').title.replace(/ Started in .*/, '')), [
+    'make test failed (exit 2) after 3 min 0 s.', 'train.py finished after 2 h 4 min.', 'A command ended without an exit code after 30 s.']);
+  [...lasting.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'All shells').click();
+  await wait(30);
+  const endCard = (id) => lasting.document.querySelector('.terminal-overview-card[data-shell="' + id + '"]');
+  assert.deepEqual(['1', '2', '3', '4', '5'].map((id) => [endCard(id).classList.contains('terminal-overview-failed'), endCard(id).querySelector('.terminal-overview-state').textContent]),
+    [[false, 'shown'], [true, 'command failed'], [false, 'command finished'], [false, 'command finished'], [false, '']]);
+  const endLine = (id) => endCard(id).querySelector('.terminal-overview-last');
+  assert.match(endLine('2').textContent, /^last: make test \u2014 exit 2 after 3 min 0 s, at \S+/);
+  assert.equal(endLine('2').classList.contains('terminal-overview-last-failed'), true);
+  assert.match(endLine('3').textContent, /^last: train\.py \u2014 exit 0 after 2 h 4 min, at /);
+  assert.equal(endLine('3').classList.contains('terminal-overview-last-failed'), false);
+  assert.match(endLine('4').textContent, /^last: a command \u2014 no exit code after 30 s, at /);
+  assert.equal(endLine('5').classList.contains('terminal-overview-last-failed'), true, 'a failure the bell does not ring for is still red on the card');
+  assert.equal(endLine('1').hidden, false);
+  const noLast = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  [...noLast.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'All shells').click();
+  await wait(30);
+  assert.equal(noLast.document.querySelector('.terminal-overview-last').hidden, true, 'a line for a shell with no marked command');
 
   // Signing out asks first when anything runs in a shell, a command in front or processes
   // left behind, naming each and what runs there; a shell it cannot look into counts too.
