@@ -19,3 +19,20 @@
   `TestKeeperKeepsTheLastCommand` (rotari's bash: `sleep 0.2; false` as exit 1 lasting at least 0.2 s, then `true`
   as exit 0, sequence 2) pass twice in a row; see the commit for the package runs.
 - **Remaining:** phases 2 (the panel), 3 (the notification config), 4 (desktop notifications), 5 (contracts and docs).
+
+## 2026-11-15 12:50 +09:00 — The panel shows it
+
+- **Change:** `lastCommand` in `web_shell.js` reads a shell's `last_command`: failed when its exit is a number other
+  than 0 (none is no failure), a sentence ("make failed (exit 2) after 3 min 0 s.", "… finished after …", "… ended
+  without an exit code after …"), and a card line ("last: make — exit 2 after 3 min 0 s, at 10:43"). A tab whose
+  command ended out of sight with a failure gets `terminal-tab-failed` (the bell and the edge in `--s-bad`), its label
+  says "command failed", and its title leads with the sentence instead of "A command finished."; an All shells card gets
+  `terminal-overview-failed` and "command failed" the same way, and a `.terminal-overview-last` line, red for a
+  failure, whenever its shell has a last command. `blockDuration` now says "30 s" under a minute instead of
+  "0 min 30 s", for blocks too.
+- **Reason:** plan phase 2.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalPanel` (a failure, a success, no exit code, a failure in the shown shell, and one not
+  finished out of sight: their tabs' classes, labels, and titles, the cards' states, classes, and lines; no line without
+  a last command) passed; `tsc` clean; prettier unchanged.
+- **Remaining:** phases 3 (the notification config), 4 (desktop notifications), 5 (contracts and docs).

@@ -2,7 +2,7 @@
 
 Created: 2026-11-15
 Status: Accepted by the user on 2026-11-15, after asking for the settings to be in the notification config, with the
-open questions answered as proposed; phase 1 is done and phase 2 (the panel) is next. See [work-log.md](work-log.md).
+open questions answered as proposed; phases 1 and 2 are done and phase 3 (the notification config) is next. See [work-log.md](work-log.md).
 
 ## Goal
 
