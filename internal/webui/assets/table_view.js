@@ -733,7 +733,11 @@ function tableParams() {
 // replaces a later one.
 let loadSequence = 0;
 
-async function loadRows() {
+// loadRows fetches and shows the rows the view names, and returns the error
+// message of a refused request, or "". With keepOnFailure, a refused request
+// leaves the rows on show as they were, for a caller that puts the view back:
+// it would otherwise show an empty table until the rows came again.
+async function loadRows({ keepOnFailure = false } = {}) {
   const sequence = ++loadSequence;
   noteRowTable();
   writeView();
@@ -752,12 +756,13 @@ async function loadRows() {
     view.describe ? fetchJSON(apiURL("api/describe", params)) : null,
   ]);
   if (sequence !== loadSequence) return;
-  rows = rowsResult.status === "fulfilled" ? rowsResult.value : null;
-  description =
-    describeResult.status === "fulfilled" ? describeResult.value : null;
   const failure = [rowsResult, describeResult].find(
     (result) => result.status === "rejected",
   );
+  if (failure && keepOnFailure) return failure.reason.message;
+  rows = rowsResult.status === "fulfilled" ? rowsResult.value : null;
+  description =
+    describeResult.status === "fulfilled" ? describeResult.value : null;
   showError(failure ? failure.reason.message : "");
   if (rows && view.page > pageCount()) {
     view.page = pageCount();
@@ -770,10 +775,10 @@ async function loadRows() {
   return failure ? failure.reason.message : "";
 }
 
-function changeFilters(filters) {
+function changeFilters(filters, options) {
   view.filters = filters;
   view.page = 1;
-  return loadRows();
+  return loadRows(options);
 }
 
 function operatorOf(op) {
@@ -904,16 +909,20 @@ function renderFilterBar() {
 // addFilter adds the condition being written. A refused one comes off again,
 // back in the form to be corrected, with the rows as they were.
 async function addFilter() {
-  const previous = view.filters;
+  const previous = { filters: view.filters, page: view.page };
   const typed = draft.value;
   const filter = { column: draft.column, op: draft.op };
   if (!operatorOf(draft.op).noValue) filter.value = draft.value;
   draft.value = "";
-  const error = await changeFilters(view.filters.concat(filter));
+  const error = await changeFilters(view.filters.concat(filter), {
+    keepOnFailure: true,
+  });
   if (error) {
-    view.filters = previous;
+    // The rows on show are still those of the previous filters.
+    Object.assign(view, previous);
     draft.value = typed;
-    await loadRows();
+    writeView();
+    renderFilterBar();
     showError(error);
   }
 }
@@ -1028,10 +1037,11 @@ async function toggleDirectory(directory) {
       )
     : view.expanded.concat(directory);
   view.expanded = expanded;
-  const error = await loadRows();
+  const error = await loadRows({ keepOnFailure: true });
   if (error && view.expanded === expanded) {
+    // The rows on show are still those of the previous expansion.
     view.expanded = previous;
-    await loadRows();
+    writeView();
     showError(error);
   }
 }

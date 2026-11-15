@@ -1264,9 +1264,15 @@ func TestTableViewRecoversFromARefusedFilterInBrowser(t *testing.T) {
     value.dispatchEvent(new window.Event('input'));
     [...document.querySelectorAll('.tv-filter-form button')].find(button => button.textContent === '+ Add').click();
   };
-  // A bad pattern says why, keeps the rows, and puts it back to correct.
+  // A bad pattern says why, keeps the rows, and puts it back to correct. The
+  // rows stay on show throughout, never an empty table while it is refused.
+  let fewest = cells().length;
+  const watch = new window.MutationObserver(() => { fewest = Math.min(fewest, cells().length); });
+  watch.observe(document.getElementById('tv-table'), { childList: true, subtree: true });
   add(1, 'regex', '(unclosed');
   await until('refusal', () => errorText().includes('regex'));
+  watch.disconnect();
+  if (fewest !== 3) fail('the rows went while a refused filter was tried', fewest);
   if (cells().length !== 3 || document.querySelector('.tv-chip')) fail('rows after a refusal', cells());
   if (document.querySelector('.tv-filter-value').value !== '(unclosed' || document.querySelector('select[aria-label="Operator"]').value !== 'regex') fail('form after a refusal');
   if (fragment().has('filters')) fail('filter kept in the URL', window.location.hash);
