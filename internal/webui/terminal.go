@@ -335,10 +335,27 @@ type terminalShellResponse struct {
 	ActiveAt  time.Time `json:"active_at"`
 	// Link is the page that shows this shell's tabs.
 	Link string `json:"link"`
+	// LastCommand is how its last marked command ended, absent before one has.
+	LastCommand *terminalLastCommand `json:"last_command,omitempty"`
+}
+
+// terminalLastCommand is how a shell's last command ended, from the marks it prints.
+type terminalLastCommand struct {
+	// Command is its command line, or "" when the shell said none.
+	Command string `json:"command"`
+	// Exit is its exit status, or null when the shell gave none.
+	Exit      *int      `json:"exit"`
+	StartedAt time.Time `json:"started_at"`
+	EndedAt   time.Time `json:"ended_at"`
+	// Sequence counts the shell's ended commands, so that a page can tell a new one.
+	Sequence int `json:"sequence"`
 }
 
 func (s site) terminalShellResponse(shell terminal.ShellInfo) terminalShellResponse {
 	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Name: shell.Name, Dir: shell.Dir, UnseenOutput: shell.UnseenOutput, CommandFinished: shell.CommandFinished, Running: shell.Running, StartedAt: shell.StartedAt, ActiveAt: shell.ActiveAt, Link: terminalNoProjectLink}
+	if last := shell.LastCommand; last != nil {
+		response.LastCommand = &terminalLastCommand{Command: last.Command, Exit: last.Exit, StartedAt: last.StartedAt, EndedAt: last.EndedAt, Sequence: last.Sequence}
+	}
 	baseDir, project := terminalGroupPlace(shell.Group)
 	if baseDir == "" {
 		return response

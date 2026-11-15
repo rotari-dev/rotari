@@ -134,6 +134,9 @@ type ShellInfo struct {
 	// StartedAt is when the shell started, and ActiveAt when it last printed something or
 	// was typed into, or started; the time since ActiveAt is how long it has been idle.
 	StartedAt, ActiveAt time.Time
+	// LastCommand is how its last command ended, read from the marks it prints, or nil
+	// before one has.
+	LastCommand *LastCommand
 }
 
 // DirEntry is a directory that shells of a group have been in.
@@ -172,6 +175,7 @@ type keptShell struct {
 	info     ShellInfo
 	session  *Session
 	ring     outputRing
+	marks    commandMarks
 	attached *Attachment
 	// shown says something has attached before, so a program may be running that
 	// needs to redraw.
@@ -431,6 +435,14 @@ func (keeper *Keeper) deliver(shell *keptShell, output []byte) {
 	shell.ring.write(output)
 	shell.info.ActiveAt = time.Now()
 	attachment := shell.attached
+	if ended := shell.marks.read(output, shell.info.ActiveAt); len(ended) > 0 {
+		last := ended[len(ended)-1]
+		shell.info.LastCommand = &last
+		// A marked command's end is a command's end, whatever the foreground said.
+		if attachment == nil {
+			shell.info.CommandFinished = true
+		}
+	}
 	busy, err := shell.session.busy()
 	if attachment == nil {
 		shell.info.UnseenOutput = shell.info.UnseenOutput || shell.shown
