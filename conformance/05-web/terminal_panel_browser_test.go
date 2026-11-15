@@ -198,19 +198,16 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   const commandRows = '[...document.querySelectorAll(".terminal-commands .terminal-dirs-row .terminal-dirs-path")].map((item) => item.textContent)';
   await page.evaluate(barButton('Commands') + '.click()');
   await until('the commands listed', 'JSON.stringify(' + commandRows + '.slice(0, 3)) === ' + JSON.stringify(JSON.stringify(['c true', 'c long', 'c false'])));
-  // xterm updates the scrollbar asynchronously; wait for its scroll event before scrolling again.
-  await page.evaluate('(() => {' +
-    'const viewport = document.querySelector(".xterm-viewport");' +
-    'const before = viewport.scrollTop;' +
-    'window.__commandScrolled = false;' +
-    'const scrolled = () => { if (viewport.scrollTop < before) { window.__commandScrolled = true; viewport.removeEventListener("scroll", scrolled); } };' +
-    'viewport.addEventListener("scroll", scrolled);' +
-    '[...document.querySelectorAll(".terminal-commands .terminal-dirs-row")].find((row) => row.querySelector(".terminal-dirs-path").textContent === "c false").click();' +
-    '})()');
+  // xterm moves its scrollbar after the buffer, and a scroll event still to come would undo a
+  // later scroll; so this waits for the scrollbar to stand where the buffer does, then a moment
+  // for that event. A scrollTop read before choosing may not have caught up with the bottom yet.
+  await page.evaluate('[...document.querySelectorAll(".terminal-commands .terminal-dirs-row")].find((row) => row.querySelector(".terminal-dirs-path").textContent === "c false").click()');
   const topRow = 'document.querySelector(".xterm-rows > div")?.textContent.trim()';
-  await until('false at the top and its scrollbar to settle', topRow + ' === "$ c false" && window.__commandScrolled === true').catch(async (error) => {
-    throw new Error(error.message + '; the top row is ' + JSON.stringify(await page.evaluate(topRow)));
+  const scrollbarSettled = '(() => { const term = document.querySelector(".terminal-pane").terminalPane.term; const viewport = term.element.querySelector(".xterm-viewport"); const buffer = term.buffer.active; const row = viewport.scrollHeight / buffer.length; return buffer.viewportY < buffer.baseY && Math.abs(viewport.scrollTop - buffer.viewportY * row) < row; })()';
+  await until('false at the top and its scrollbar to settle', topRow + ' === "$ c false" && ' + scrollbarSettled).catch(async (error) => {
+    throw new Error(error.message + '; the top row is ' + JSON.stringify(await page.evaluate(topRow)) + ', the scrollbar at ' + await page.evaluate('(() => { const term = document.querySelector(".terminal-pane").terminalPane.term; const viewport = term.element.querySelector(".xterm-viewport"); return JSON.stringify({ scrollTop: viewport.scrollTop, scrollHeight: viewport.scrollHeight, viewportY: term.buffer.active.viewportY, baseY: term.buffer.active.baseY, length: term.buffer.active.length }); })()'));
   });
+  await sleep(250);
   // The chosen command's scroll is held against late scroll events (holdScroll) until the
   // viewer scrolls, so the wheel, as a viewer's, ends the hold before going to the bottom.
   await page.evaluate('document.querySelector(".terminal-viewport").dispatchEvent(new WheelEvent("wheel", { bubbles: true })); document.querySelector(".terminal-pane")?.terminalPane?.term?.scrollToBottom()');
