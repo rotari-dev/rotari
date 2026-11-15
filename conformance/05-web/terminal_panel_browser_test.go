@@ -211,7 +211,9 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('false at the top and its scrollbar to settle', topRow + ' === "$ c false" && window.__commandScrolled === true').catch(async (error) => {
     throw new Error(error.message + '; the top row is ' + JSON.stringify(await page.evaluate(topRow)));
   });
-  await page.evaluate('document.querySelector(".terminal-pane")?.terminalPane?.term?.scrollToBottom()');
+  // The chosen command's scroll is held against late scroll events (holdScroll) until the
+  // viewer scrolls, so the wheel, as a viewer's, ends the hold before going to the bottom.
+  await page.evaluate('document.querySelector(".terminal-viewport").dispatchEvent(new WheelEvent("wheel", { bubbles: true })); document.querySelector(".terminal-pane")?.terminalPane?.term?.scrollToBottom()');
   // A mark's menu types its command again, without Enter.
   const trueMark = '[...document.querySelectorAll(".terminal-block-mark")].find((item) => item.title.startsWith("c true\\n"))';
   const markUnderPointer = '(() => { const mark = ' + trueMark + '; if (!mark || mark.hidden) return false; const box = mark.getBoundingClientRect(); return box.width > 0 && box.height > 0 && document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === mark; })()';
