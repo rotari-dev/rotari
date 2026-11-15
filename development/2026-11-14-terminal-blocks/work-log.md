@@ -309,3 +309,16 @@
 - **Validation:** `TestTerminalPanel` (Copy command shown with Copy output and only then, before it, copying `sleep 9`
   and saying "Copied the command", a press on it reaching nothing, gone when the pointer leaves) passed; `tsc` clean;
   prettier unchanged. The browser step's checks of Copy output, the line's last button, still hold.
+
+## 2026-11-16 10:40 +09:00 — CI: the browser step's scroll to the bottom and the scroll hold
+
+- **Change:** before `scrollToBottom()`, the browser step sends a `wheel` event to `.terminal-viewport`; ISSUES' entry
+  for the browser test says why.
+- **Reason:** CI (Ubuntu) stopped at `the mark for true to be under the pointer`, the view on `c false`. `74dab5ab`
+  (another thread) made `goToBlock` hold the chosen line for half a second against scroll events, released only by the
+  viewer's wheel, key, mouse, or touch in the pane; the step chose `c false` and at once called `scrollToBottom()`,
+  which the hold put back. The hold is right for a viewer, so the test now scrolls as one would: the wheel ends the
+  hold (its capture listener on the viewport), and the event, sent to the viewport and not to xterm.js's element
+  inside it, scrolls nothing itself.
+- **Plan impact:** none.
+- **Validation:** the browser script passes `node --check`; the step runs only in CI.
