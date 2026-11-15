@@ -231,17 +231,17 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the blocks replayed', markTitles + '.includes("c true\\nExit 0") && document.querySelector(".terminal-viewport-blocks") !== null');
   await until('the project\'s shell to settle after the blocks', settled);
   // Pointing at a command's line shows Copy output at its right end, outside the text.
-  const trueRow = '[...document.querySelectorAll(".xterm-rows > div")].find((row) => row.textContent.trim() === "$ c true")';
+  const longRow = '[...document.querySelectorAll(".xterm-rows > div")].find((row) => row.textContent.trim() === "$ c long")';
   await page.evaluate(barButton('Commands') + '.click()');
-  await until('the true command listed', commandRows + '.includes("c true")');
-  await page.evaluate('[...document.querySelectorAll(".terminal-commands .terminal-dirs-row")].find((row) => row.querySelector(".terminal-dirs-path").textContent === "c true").click()');
-  await until('the true command at the top', topRow + ' === "$ c true"');
-  await until('the true command on screen', trueRow + ' !== undefined');
-  const truePoint = await page.evaluate('(() => { const box = ' + trueRow + '.getBoundingClientRect(); return { x: box.left + 40, y: box.top + box.height / 2 }; })()');
-  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...truePoint });
+  await until('the long command listed', commandRows + '.includes("c long")');
+  await page.evaluate('[...document.querySelectorAll(".terminal-commands .terminal-dirs-row")].find((row) => row.querySelector(".terminal-dirs-path").textContent === "c long").click()');
+  await until('the long command at the top', topRow + ' === "$ c long"');
+  await until('the long command on screen', longRow + ' !== undefined');
+  const longPoint = await page.evaluate('(() => { const box = ' + longRow + '.getBoundingClientRect(); return { x: box.left + 40, y: box.top + box.height / 2 }; })()');
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...longPoint });
   const shownCopy = '[...document.querySelectorAll(".terminal-block-copy")].find((button) => !button.hidden && button.offsetParent !== null)';
   await until('Copy output on the line pointed at', shownCopy + ' !== undefined');
-  const copyFacts = JSON.parse(await page.evaluate('JSON.stringify((() => { const button = ' + shownCopy + '.getBoundingClientRect(); const row = ' + trueRow + '.getBoundingClientRect(); const screen = document.querySelector(".xterm-screen").getBoundingClientRect(); return { top: button.top - row.top, right: screen.right - button.right, width: button.width, x: button.left + button.width / 2, y: button.top + button.height / 2, hit: document.elementFromPoint(button.left + button.width / 2, button.top + button.height / 2)?.className }; })())'));
+  const copyFacts = JSON.parse(await page.evaluate('JSON.stringify((() => { const button = ' + shownCopy + '.getBoundingClientRect(); const row = ' + longRow + '.getBoundingClientRect(); const screen = document.querySelector(".xterm-screen").getBoundingClientRect(); return { top: button.top - row.top, right: screen.right - button.right, width: button.width, x: button.left + button.width / 2, y: button.top + button.height / 2, hit: document.elementFromPoint(button.left + button.width / 2, button.top + button.height / 2)?.className }; })())'));
   if (Math.abs(copyFacts.top) > 2 || copyFacts.right < 0 || copyFacts.right > 20 || copyFacts.width < 20 || copyFacts.hit !== 'terminal-block-copy') throw new Error('Copy output is not at the right of the line pointed at: ' + JSON.stringify(copyFacts));
   // A click copies, or says why it could not, which a headless browser may.
   await page.evaluate('document.querySelector(".terminal-send-note")?.replaceChildren()');
