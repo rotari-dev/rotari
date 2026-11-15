@@ -2572,7 +2572,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.deepEqual(told[0], [{ type: 'rotari-terminal-window', linked: true, path: '/project/p1', shared: false, windowID: '' }, origin]);
   sp(takes).tab('1');
   const saved = told.filter(([message]) => message.type === 'rotari-terminal-saved').at(-1);
-  assert.deepEqual(saved, [{ type: 'rotari-terminal-saved', entries: { 'rotari-terminal-shell:/b:p1': '1', 'rotari-terminal-layout:/b:p1': null } }, origin]);
+  assert.deepEqual(saved, [{ type: 'rotari-terminal-saved', entries: { 'rotari-terminal-shell:/b:p1': '1', 'rotari-terminal-layout:/b:p1': null, 'rotari-terminal-last-panes': '{"group":"/b:p1","columns":[{"share":1,"rows":[{"share":1,"shell":"1"}]}],"focused":"1"}' } }, origin]);
   // It types what its page sends, answering which project took it, and takes nothing from
   // anyone else.
   const takesOpener = takes.window.opener;
@@ -2704,6 +2704,65 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     assert.deepEqual(tabRow(alone), row, path);
     assert.equal(alone.document.querySelector('.terminal-tab-divider'), null, path + ' drew a divider');
   }
+
+  // Following a link to another project of the state directory keeps the panes showing its
+  // own shells, in their places and with the focus; the pane that showed the old project's
+  // shell shows the new one's, and coming back finds the project's shell again. Another
+  // state directory's page, or a page of no project, has none of them.
+  const carryShells = [inProject('1', 1, 'p1'), inProject('2', 2, 'p2'), ofBasedir('5', 5), ofBasedir('7', 7, '/c'), plain('8', 8), inProject('11', 11, 'p1')];
+  const sessionAt = (page) => Object.fromEntries(Array.from({ length: page.window.sessionStorage.length }, (_, index) => {
+    const key = page.window.sessionStorage.key(index);
+    return [key, page.window.sessionStorage.getItem(key)];
+  }));
+  const carryFrom = load(process.argv[1], { stored: '1', path: '/project/p1', shells: carryShells });
+  await wait(50);
+  sp(carryFrom).split();
+  await wait(30);
+  sp(carryFrom).tab('5');
+  await wait(30);
+  assert.deepEqual(sp(carryFrom).live(), ['1', '5']);
+  assert.equal(sp(carryFrom).selected(), '5');
+  const carryTo = load(process.argv[1], { stored: '1', path: '/project/p2', shells: carryShells, session: sessionAt(carryFrom) });
+  await wait(60);
+  assert.deepEqual(sp(carryTo).live(), ['2', '5'], 'the shared shell did not stay in its pane');
+  assert.equal(sp(carryTo).selected(), '5', 'the focus did not stay on the shared shell');
+  assert.equal(sp(carryTo).panes().length, 2);
+  assert.equal(carryTo.requests.some((request) => request.startsWith('POST')), false, 'following the link started a shell');
+  const carryBack = load(process.argv[1], { stored: '1', path: '/project/p1', shells: carryShells, session: sessionAt(carryTo) });
+  await wait(60);
+  assert.deepEqual(sp(carryBack).live(), ['1', '5'], 'coming back did not find the project\'s shell');
+  assert.equal(sp(carryBack).selected(), '5');
+  // With the focus on the project's shell, the new project's takes it.
+  sp(carryBack).focus(0);
+  sp(carryBack).tab('11');
+  await wait(30);
+  assert.equal(sp(carryBack).selected(), '11');
+  const focusedOwn = load(process.argv[1], { stored: '1', path: '/project/p2', shells: carryShells, session: sessionAt(carryBack) });
+  await wait(60);
+  assert.deepEqual(sp(focusedOwn).live(), ['2', '5']);
+  assert.equal(sp(focusedOwn).selected(), '2', 'the focus did not go to the new project\'s shell');
+  // A project with no shell of its own keeps the shared pane alone and starts none.
+  const carryEmpty = load(process.argv[1], { stored: '1', path: '/project/p3', shells: carryShells, session: sessionAt(carryTo) });
+  await wait(60);
+  assert.deepEqual(sp(carryEmpty).live(), ['5']);
+  assert.equal(sp(carryEmpty).panes().length, 1);
+  assert.equal(carryEmpty.requests.some((request) => request.startsWith('POST')), false);
+  // Another state directory's page and a page of no project show their own.
+  for (const [path, shown] of [['/_basedir/c/', ['7']], ['/activity', ['8']]]) {
+    const elsewhere = load(process.argv[1], { stored: '1', path, shells: carryShells, session: sessionAt(carryTo) });
+    await wait(60);
+    assert.deepEqual(sp(elsewhere).live(), shown, path + ' kept another state directory\'s shell');
+  }
+  // With the link off, the terminal stays with its project, as before.
+  const carryUnlinked = load(process.argv[1], { stored: '1', path: '/project/p2', shells: carryShells, session: { ...sessionAt(carryFrom), 'rotari-terminal-project-link': '0', 'rotari-terminal-project-path': '/project/p1' } });
+  await wait(60);
+  assert.deepEqual(sp(carryUnlinked).live(), ['1', '5']);
+  // Choosing another project's shell in All shells shows that one, not the carried panes.
+  sp(carryTo).bar('All shells').click();
+  await wait(30);
+  carryTo.document.querySelector('.terminal-overview-card[data-shell="1"]').click();
+  await wait(30);
+  assert.equal(carryTo.window.sessionStorage.getItem('rotari-terminal-last-panes'), null, 'the carried panes outlived a chosen shell');
 
   // Unlinking keeps the terminal's group and its split layout while the page moves,
   // and a group or overview choice moves only the terminal.

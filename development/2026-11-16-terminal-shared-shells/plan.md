@@ -1,7 +1,7 @@
 # Plan: A state directory's shells beside its projects' in the Web terminal
 
 Created: 2026-11-16
-Status: Accepted by the user on 2026-11-16, with the open questions answered as proposed; phase 1 is done. See
+Status: Accepted by the user on 2026-11-16, with the open questions answered as proposed; phases 1 and 2 are done. See
 [work-log.md](work-log.md).
 
 ## Goal
@@ -21,9 +21,11 @@ page replaced them.
 - **Groups** (WEB-34). Each shell belongs to a group: a project of a state directory, a state directory's own pages, or
   no project. `here` is the terminal's group; `sameGroup` and `shellsHere()` (used for the tabs, the panes, the
   project list, counting, and choosing what to show) take only the shells of exactly that group.
-- **The link** (WEB-54, by another thread). With **Link terminal and project** on, a page of another group switches the
-  terminal to it (`switchGroup`): the panes are reset (`resetGroupPanes` closes all but one and disconnects it), and the
-  group's remembered layout and shown shell (session keys by group) are put back. Off, the terminal keeps its group.
+- **The link** (WEB-54, by another thread). With **Link terminal and project** on, the terminal's group is the page's:
+  following a link loads the other page, whose panel begins with that group's remembered layout and shown shell
+  (session keys by group). Choosing a group with the link off, or turning it on, switches in place (`switchGroup`:
+  `resetGroupPanes` closes all panes but one and disconnects it, then the same begin). Off, a page keeps the terminal's
+  group.
 - **Starting.** Opening the panel starts a shell if the group has none; following a link starts nothing, and the panel
   offers to start one (docs/WEB.md).
 - **All shells** groups cards by project, the terminal's first; choosing a card of another group takes the page there,
@@ -37,9 +39,11 @@ page replaced them.
    and a page of no project show their own group alone, as now. The terminal's group (`here`) keeps its meaning: what
    **+**, the send buttons' fallback, and a new shell's directory use, and what the link follows.
 2. **Following a link keeps a shared shell.** Moving between pages of B's projects with the link on still switches the
-   terminal's group, but a pane showing one of B's own shells keeps it, connected, with its place in the layout; panes
-   showing the old project's shells are reset as now. When the focused pane shows a shared shell, it stays focused. The
-   layout remembered for a project holds its shared shells too, so coming back finds them where they were.
+   terminal's group, but a pane showing one of B's own shells shows it again, in its place in the layout (it connects
+   again, as every pane does on a new page); of the panes showing the old project's shells, the focused one (or the
+   first) shows the new project's last shown or first shell, and the rest go. When the focused pane shows a shared
+   shell, it stays focused. The layout remembered for a project holds its shared shells too, so coming back finds them
+   where they were. Choosing a shell of another project in All shells shows that shell in that project's own layout.
 3. **Starting.** Opening the panel on a project's page with no shells of its own but some of B's shows B's, and starts
    none (see open question 1). **+** starts a shell of the project, as now; **New shell in** under All shells starts B's.
 4. **Counting and lists.** The project list beside the tabs counts each group's own shells, and lists B's own as its

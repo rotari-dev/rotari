@@ -22,3 +22,26 @@
   divider refused, the divider naming the state directory with two; a project with no shells showing the shared one and
   starting none, **+** starting the project's; All projects and Activity unchanged) passes; `tsc` and prettier clean.
 - **Remaining:** phases 2 (keeping shared shells across a link) and 3 (contracts and docs).
+
+## 2026-11-16 00:52 +09:00 — Keeping shared shells across a link
+
+- **Change:** `web_shell.js`: `rememberLayout` also writes `rotari-terminal-last-panes`, the panes last shown (one
+  pane too) with their group, handed to and from a window like the per-group keys. `carriedLayout`, read by `begin`
+  before the group's own remembered layout, applies when that record is another group's and holds a state directory's
+  own shell still in view here: those rows keep their shells and places; of the other rows, the one that had focus (or
+  the first) shows this group's last shown shell, else its first, else any free one in view, and the rest go; the focus
+  stays on a carried shell that had it, else goes to the filled row. `readLayout` is the parsing `rememberedLayout`
+  had. `preferShell` (All shells choosing another group's shell) removes the record, here and in the opener, so the
+  chosen shell is shown in that group's layout.
+- **Reason:** plan phase 2.
+- **Plan impact:** with the link on, following a link loads the new page (the plan had it as `switchGroup` in place),
+  so "keeps" is the new page showing the shared shells again in their places, connecting again as every pane does on
+  a page load; decision 2 and Existing implementation reworded. Because `switchGroup` ends in the same `begin`, a
+  group chosen with the link off, and turning the link on, carry the shared panes the same way; with the link off a
+  page of another project leaves the terminal as it was, as before.
+- **Validation:** `TestTerminalPanel`: p1 with its shell and the shared one focused, then p2 (both panes, the shared
+  one focused, nothing started), back to p1 (p1's shell again), p2 with the focus on p1's shell (p2's takes the
+  focus), a project with no shells (the shared pane alone, nothing started), another state directory's page and
+  Activity (their own shells), the link off (unchanged), and an All shells choice clearing the record; the window
+  handover test now expects the record among the saved entries. `tsc` and prettier clean.
+- **Remaining:** phase 3 (contracts and docs).

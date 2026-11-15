@@ -331,12 +331,17 @@ function shellWord(value) {
   };
   const shownKey = "rotari-terminal-shell";
   const layoutKey = "rotari-terminal-layout";
+  // The panes last shown, with their group, which a page of another group reads for the
+  // state directory's own shells among them.
+  const lastPanesKey = "rotari-terminal-last-panes";
   const projectLinkKey = "rotari-terminal-project-link";
   const projectPathKey = "rotari-terminal-project-path";
   // What a browser tab's panes showed for each project, which goes to its window and back.
   const isPaneKey = (key) =>
     typeof key === "string" &&
-    (key.startsWith(shownKey + ":") || key.startsWith(layoutKey + ":"));
+    (key.startsWith(shownKey + ":") ||
+      key.startsWith(layoutKey + ":") ||
+      key === lastPanesKey);
   const isHandoverKey = (key) =>
     isPaneKey(key) || key === projectLinkKey || key === projectPathKey;
   // A browser tab whose panel is in a window says so here, so that following a link finds
@@ -813,27 +818,30 @@ function shellWord(value) {
     try {
       if (panes[0].shown !== null)
         sessionStorage.setItem(shownStorageKey(), panes[0].shown);
+      const arrangement = {
+        columns: columns.map((column) => ({
+          share: column.share,
+          rows: column.rows.map((row) => ({
+            share: row.share,
+            shell: row.pane.shown,
+          })),
+        })),
+        focused: focused.shown,
+      };
       if (panes.length > 1) {
-        sessionStorage.setItem(
-          layoutStorageKey(),
-          JSON.stringify({
-            columns: columns.map((column) => ({
-              share: column.share,
-              rows: column.rows.map((row) => ({
-                share: row.share,
-                shell: row.pane.shown,
-              })),
-            })),
-            focused: focused.shown,
-          }),
-        );
+        sessionStorage.setItem(layoutStorageKey(), JSON.stringify(arrangement));
       } else {
         sessionStorage.removeItem(layoutStorageKey());
       }
+      sessionStorage.setItem(
+        lastPanesKey,
+        JSON.stringify({ group: groupKeyOf(here), ...arrangement }),
+      );
       if (inWindow) {
         const entries = {
           [shownStorageKey()]: sessionStorage.getItem(shownStorageKey()),
           [layoutStorageKey()]: sessionStorage.getItem(layoutStorageKey()),
+          [lastPanesKey]: sessionStorage.getItem(lastPanesKey),
         };
         shareWithOpener(entries);
         tellOpener({ type: "rotari-terminal-saved", entries });
@@ -875,6 +883,7 @@ function shellWord(value) {
     if (neighbor) neighbor.share += column.share;
     return neighbor?.rows[0];
   };
+  const groupKeyOf = (group) => group.basedir + ":" + group.project;
   // rememberedLayout reads what this project last had, as far as it still makes sense: only
   // shells there are, each once, up to the limit, as if the panes of the rest had closed.
   const rememberedLayout = (available) => {
@@ -882,6 +891,47 @@ function shellWord(value) {
     try {
       saved = JSON.parse(sessionStorage.getItem(layoutStorageKey()));
     } catch {}
+    return readLayout(saved, available);
+  };
+  // carriedLayout keeps, coming from a page of another group, the panes that showed a state
+  // directory's own shells still shown here, in their places and with the focus they had.
+  // The pane that had focus otherwise, or the first other, shows this group's shell, the
+  // one last shown here or its first; the others go, as following a link reset them.
+  const carriedLayout = (available) => {
+    let last;
+    try {
+      last = JSON.parse(sessionStorage.getItem(lastPanesKey));
+    } catch {}
+    if (!last || last.group === groupKeyOf(here)) return null;
+    const layout = readLayout(last, shells)?.layout;
+    const carries = (id) =>
+      available.some(
+        (shell) => shell.id === id && shell.basedir && !shell.project,
+      );
+    const rows = layout?.flatMap((column) => column.rows) || [];
+    if (!rows.some((row) => carries(row.shell))) return null;
+    const kept = new Set(
+      rows.filter((row) => carries(row.shell)).map((row) => row.shell),
+    );
+    const free = available.filter((shell) => !kept.has(shell.id));
+    const fillShell =
+      free.find((shell) => shell.id === rememberedShown()) ||
+      free.find((shell) => sameGroup(shell, here)) ||
+      free[0];
+    const others = rows.filter((row) => !kept.has(row.shell));
+    const fill =
+      others.find((row) => row.shell === last.focused) || others[0] || null;
+    for (const row of others) {
+      if (row === fill && fillShell) row.shell = fillShell.id;
+      else removeRow(layout, row);
+    }
+    return {
+      layout,
+      focused: kept.has(last.focused) ? last.focused : fillShell?.id,
+    };
+  };
+  // readLayout is a saved arrangement of panes as far as it still makes sense.
+  const readLayout = (saved, available) => {
     if (!Array.isArray(saved?.columns)) return null;
     const layout = saved.columns
       .filter((column) => Array.isArray(column?.rows) && column.rows.length)
@@ -2062,10 +2112,11 @@ function shellWord(value) {
     overviewButton?.setAttribute("aria-pressed", "false");
   };
   // preferShell has the focused pane of a shell's project show it when that project's page
-  // next begins in this browser tab, in the layout it had.
+  // next begins in this browser tab, in the layout it had, rather than the panes carried.
   const preferShell = (shell) => {
     const suffix = ":" + shell.basedir + ":" + shell.project;
     try {
+      sessionStorage.removeItem(lastPanesKey);
       sessionStorage.setItem(shownKey + suffix, shell.id);
       const saved = JSON.parse(sessionStorage.getItem(layoutKey + suffix));
       const rows = Array.isArray(saved?.columns)
@@ -2084,6 +2135,7 @@ function shellWord(value) {
       shareWithOpener({
         [shownKey + suffix]: sessionStorage.getItem(shownKey + suffix),
         [layoutKey + suffix]: sessionStorage.getItem(layoutKey + suffix),
+        [lastPanesKey]: null,
       });
     } catch {}
   };
@@ -3390,7 +3442,9 @@ function shellWord(value) {
     const inGroup = shellsInView().filter(
       (item) => item.id === pane.shown || !paneShowing(item.id),
     );
-    const saved = others ? null : rememberedLayout(inGroup);
+    const saved = others
+      ? null
+      : carriedLayout(inGroup) || rememberedLayout(inGroup);
     const wanted = saved?.layout[0].rows[0].shell ?? rememberedShown();
     const shell = inGroup.find((item) => item.id === wanted) || inGroup[0];
     if (saved && saved.layout.flatMap((column) => column.rows).length > 1) {
