@@ -2,7 +2,7 @@
 
 Created: 2026-11-15
 Status: Accepted by the user on 2026-11-15, after asking for the settings to be in the notification config, with the
-open questions answered as proposed; phases 1–4 are done and phase 5 (contracts and docs) is next. See [work-log.md](work-log.md).
+open questions answered as proposed; all five phases are done. See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -69,7 +69,7 @@ shells, the bell, or notifications"), proposed on 2026-11-15 as the next termina
    bell or notification, as it already can draw a false mark; SECURITY.md says so. The command line kept is what was
    already in the output, held only in memory with the shell, so "rotari records nothing typed" still holds.
 7. **No command-line option.** It follows the marks, and the notification config: a shell that prints none gets no
-   `last_command`, as today. The contract is a new WEB-54, and additions to WEB-34 and to the notification config's
+   `last_command`, as today. The contract is a new WEB-55 (WEB-54 having gone to other work first), and additions to WEB-34 and to the notification config's
    contract notes.
 
 ## Phases
@@ -84,7 +84,7 @@ shells, the bell, or notifications"), proposed on 2026-11-15 as the next termina
    and JSDOM tests of the form.
 4. **Desktop notifications.** Seeing a new sequence marked `notify` for a shell out of view, the toggle and
    permission, the tag, and the click. JSDOM tests with a fake `Notification`.
-5. **Contracts and docs.** WEB-54 and the additions, conformance through the binary (a bash shell running `false` and
+5. **Contracts and docs.** WEB-55 and the additions, conformance through the binary (a bash shell running `false` and
    `true` with a `[terminal]` setting, the list's `last_command`, `sequence`, and `notify`), docs/WEB.md,
    docs/NOTIFICATIONS.md, docs/SECURITY.md, and the generated CLI reference if the template's text is in it.
 

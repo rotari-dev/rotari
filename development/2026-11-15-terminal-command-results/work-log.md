@@ -75,3 +75,18 @@
   with the toggle off; a click showing the shell; a hidden page asking only once it can notify), and the existing
   "a page out of sight went on asking" check, passed; `tsc` clean; prettier formatted.
 - **Remaining:** phase 5 (contracts and docs).
+
+## 2026-11-15 15:20 +09:00 — Contracts and docs
+
+- **Change:** contract **WEB-55** (the server reading the marks, `last_command` and `notify`, the red bell, the All
+  shells line, and the desktop notifications) and its row; WEB-34's `command_finished` counts a marked end and points to
+  WEB-55 for `last_command`; the notification config's contract notes in `01-resolution-and-config.md` gain
+  `[terminal]` and which file a terminal shell reads. `TestTerminalShellListSaysTheLastCommand` covers WEB-55 through
+  the binary: a bash shell of no project, with a global `[terminal]` asking for failures only and no minimum, gives
+  `sleep 0.3; false` as exit 1, at least 0.3 s, `notify` true, and then `true` as exit 0, `notify` false, the next
+  sequence. docs/WEB.md (the red bell, the cards, the notifications), docs/NOTIFICATIONS.md (a **Terminal commands**
+  section with `[terminal]`), and docs/SECURITY.md (a false `D`) follow.
+- **Reason:** plan phase 5. WEB-54 had been taken by the Link terminal and project button in the meantime.
+- **Plan impact:** the contract is WEB-55.
+- **Validation:** the new test passed twice in a row; `TestContractStatus` passed; see the commit for the package runs.
+- **Remaining:** nothing in this plan.
