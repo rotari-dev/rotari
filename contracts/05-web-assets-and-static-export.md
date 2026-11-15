@@ -1508,8 +1508,8 @@ project of the same basedir keeps the panes that showed the basedir's own shells
 [`TestTerminalProjectLinkInBrowser`](../conformance/05-web/terminal_project_link_browser_test.go).
 
 **WEB-56** With `rotari web --allow-terminal`, a project's page shows, after the project's tabs, the tabs of its
-basedir's own shells (those of All projects and Recent jobs), behind a divider saying **All projects**, with the
-basedir's path when the sidebar lists more than one basedir; a basedir's own pages and the pages of no project show
+basedir's own shells (those of All projects and Recent jobs), behind a divider saying **All projects**, whose
+tooltip names the basedir; a basedir's own pages and the pages of no project show
 their own group alone, and no page shows another project's, another basedir's, or no project's shells beside its
 own. A shared tab is shown, split to, and chosen in All shells as the project's are, without moving the page, and
 the bell and unseen mark work on it alike; its menu and dragging arrange it among the shared tabs only, and the

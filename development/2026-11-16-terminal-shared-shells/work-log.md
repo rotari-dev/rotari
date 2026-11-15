@@ -65,3 +65,14 @@
   script passes `node --check`. `scripts/check.sh` was not run: npm is broken here, and the full and race runs are too
   heavy for the shared machine.
 - **Remaining:** CI's run of `TestTerminalSharedShellsInBrowser`.
+
+## 2026-11-16 01:19 +09:00 — The divider says only All projects
+
+- **Change:** the divider before the shared tabs says **All projects** whatever the number of state directories; the
+  state directory's path, which the user found too long beside the tabs (a `.rotari-state` under a deep workspace), is
+  only in its tooltip. `sharedTabsLabel` goes. WEB-56, docs/WEB.md, and plan decision 1 say so.
+- **Reason:** the user's request after seeing "All projects · /data/…/.rotari-state".
+- **Plan impact:** decision 1's mark changed.
+- **Validation:** `TestTerminalPanel` (two state directories: the divider says All projects, its title names /b);
+  `tsc` and prettier clean.
+- **Remaining:** none.

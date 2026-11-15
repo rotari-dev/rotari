@@ -221,7 +221,7 @@ work across its projects. Activity and History search, which cover every state d
 shells of no project.
 
 Those shells of the state directory itself stay at hand on its projects' pages: after a project's tabs, behind a
-divider marked **All projects**, come the state directory's own (with its path when more than one is registered).
+divider marked **All projects**, come the state directory's own (its path is in the divider's tooltip).
 Choose one, split to it, or pick it in **All shells** as you would a project's tab; the page stays where it is.
 Following a link to another project of the same state directory keeps a pane that showed one in its place, and the
 keys with it if it had them, while the pane that showed the old project's shell shows the new project's. So a shell

@@ -1530,9 +1530,8 @@ function shellWord(value) {
     add.disabled = inGroup.length >= groupLimit || shells.length >= shellLimit;
     updatePaneButtons();
     const shared = sharedShells();
-    const sharedLabel = shared.length ? sharedTabsLabel() : "";
     const drawn = JSON.stringify([
-      sharedLabel,
+      here.basedir,
       [...inGroup, ...shared].map((shell) => [
         shell.id,
         shell.number,
@@ -1624,23 +1623,18 @@ function shellWord(value) {
     };
     const drawnTabs = inGroup.map(drawTab);
     if (shared.length) {
-      // The state directory's own shells, set apart and named as its All projects does.
+      // The state directory's own shells, set apart and named as its All projects does;
+      // its path, often long, is only in the title.
       const divider = document.createElement("span");
       divider.className = "terminal-tab-divider";
       divider.setAttribute("role", "presentation");
-      divider.textContent = sharedLabel;
+      divider.textContent = "All projects";
       divider.title =
         "Shells of " + here.basedir + " for work across its projects";
       drawnTabs.push(divider, ...shared.map(drawTab));
     }
     tabs.replaceChildren(...drawnTabs);
   };
-  // sharedTabsLabel names the state directory's own tabs, with the state directory when
-  // more than one is registered.
-  const sharedTabsLabel = () =>
-    document.querySelectorAll("#sidebar-basedirs .basedir-row").length > 1
-      ? "All projects \u00b7 " + here.basedir
-      : "All projects";
   // A sign-in that has gone cannot be retried away.
   const signInGone = (pane, response) => {
     if (response?.status !== 401 && response?.status !== 403) return false;

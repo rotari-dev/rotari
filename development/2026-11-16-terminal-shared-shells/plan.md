@@ -34,8 +34,8 @@ page replaced them.
 ## Decisions
 
 1. **What a page shows.** A page of a project of state directory B shows the shells of that project and, after them,
-   B's own shells. The tabs of the two kinds are set apart by a divider, and B's are marked as **All projects** (with
-   B's name when more than one state directory is registered). A page of B's own (**All projects**, **Recent jobs**)
+   B's own shells. The tabs of the two kinds are set apart by a divider, and B's are marked as **All projects** (B's
+   path, often long, only in the divider's tooltip; changed on 2026-11-16 at the user's request). A page of B's own (**All projects**, **Recent jobs**)
    and a page of no project show their own group alone, as now. The terminal's group (`here`) keeps its meaning: what
    **+**, the send buttons' fallback, and a new shell's directory use, and what the link follows.
 2. **Following a link keeps a shared shell.** Moving between pages of B's projects with the link on still switches the

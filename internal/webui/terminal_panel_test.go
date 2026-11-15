@@ -2681,13 +2681,15 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   sharedTabEl('1').dispatchEvent(new sharing.window.Event('drop', { bubbles: true, cancelable: true }));
   sharedTabEl('5').dispatchEvent(new sharing.window.Event('dragend', { bubbles: true }));
   assert.deepEqual(tabRow(sharing), ['1', '2', '|All projects', '6', '5']);
-  // With more than one state directory, the divider names the state directory.
+  // With more than one state directory, the divider still says only All projects; the
+  // state directory, whose path is long, is in its title.
   sharing.document.getElementById('sidebar-basedirs').innerHTML =
     '<div class="sidebar-project-row basedir-row"><a class="sidebar-project-link" href="/">b</a></div>' +
     '<div class="sidebar-project-row basedir-row"><a class="sidebar-project-link" href="/_basedir/c/">c</a></div>';
   sharing.polls[0]();
   await wait(30);
-  assert.equal(sharing.document.querySelector('.terminal-tab-divider').textContent, 'All projects · /b');
+  assert.equal(sharing.document.querySelector('.terminal-tab-divider').textContent, 'All projects');
+  assert.match(sharing.document.querySelector('.terminal-tab-divider').title, /^Shells of \/b /);
   // A project with no shells of its own shows the shared ones and starts none.
   const borrowing = load(process.argv[1], { stored: '1', path: '/project/p3', shells: [ofBasedir('5', 5), inProject('9', 9, 'p2')] });
   await wait(50);
