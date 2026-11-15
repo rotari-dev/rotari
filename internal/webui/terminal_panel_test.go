@@ -57,10 +57,14 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     if (status() !== 200) return refused(status(), 'refused');
     const linksAsked = /\/_terminal\/shells\/([^/]+)\/links$/.exec(url);
     if (linksAsked) {
-      const candidates = JSON.parse(body).candidates;
+      const asked = JSON.parse(body);
+      const candidates = asked.candidates;
       (server.linkAsks ||= []).push(candidates);
+      (server.linkBodies ||= []).push(asked);
       if (server.linksStatus) return refused(server.linksStatus, 'links refused');
-      const links = candidates.filter((text) => server.links?.[text]).map((text) => ({ text, ...server.links[text] }));
+      // server.linksIn answers for a directory the panel says, as the server resolves there.
+      const known = { ...server.links, ...(asked.dir !== undefined ? server.linksIn?.[asked.dir] : {}) };
+      const links = candidates.filter((text) => known[text]).map((text) => ({ text, ...known[text] }));
       return Promise.resolve({ ok: true, status: 200, json: async () => ({ links }) });
     }
     const dirsAsked = /\/_terminal\/shells\/([^/]+)\/dirs$/.exec(url);
@@ -4128,6 +4132,73 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   lkTerm.lines = ['other 20261114-000800-bbbbbbbb'];
   assert.equal(await linksOn(1), undefined);
   assert.match(lk.document.querySelector('.terminal-send-note').textContent, /did not say which words in the terminal are links/);
+  }
+
+  // Relative paths link where the command that printed them ran, as the shell said at its
+  // prompt (OSC 7): after a cd, an earlier block's paths still name what they did. A block
+  // whose directory did not decode links no relative path; another host's directory goes
+  // to the server with its host; output with no OSC 7 asks as before; a replay brings them
+  // back.
+  {
+  const cd = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const cdSocket = cd.sockets.at(-1);
+  cdSocket.onopen?.();
+  const cdTerm = cd.terminals.at(-1);
+  assert.equal(cdTerm.oscHandlers[7]?.length, 1, 'the pane reads no OSC 7');
+  cd.server.linksIn = {
+    '/w/a b/日本': { 'src/x.csv': { kind: 'file', path: '/w/a b/日本/src/x.csv' } },
+    '/tmp': {},
+  };
+  cd.server.links = { '/abs/y.csv': { kind: 'file', path: '/abs/y.csv' } };
+  const cdLinks = (y) => new Promise((resolve) => cdTerm.linkProviders[0].provideLinks(y, resolve)).then((links) => Array.from(links || [], (link) => link.text));
+  cdTerm.lines = ['$ ls', 'src/x.csv', '$ cd /tmp', '$ ls', 'src/x.csv /abs/y.csv', '$ odd', 'src/x.csv /abs/y.csv', '$ far', 'src/x.csv', '$ '];
+  const prompt = (y, place) => {
+    if (place !== undefined) assert.equal(cdTerm.osc(7, place, 0, y), true);
+    cdTerm.osc(133, 'A', 0, y);
+    cdTerm.osc(133, 'B', 2, y);
+    cdTerm.osc(133, 'C', 0, y + 1);
+  };
+  const host = 'myhost';
+  // The first block comes in the replay, as after reconnecting: its directory with it.
+  cd.parser.held = true;
+  cdSocket.onmessage({ data: new TextEncoder().encode('replay').buffer });
+  prompt(0, 'file://' + host + '/w/a%20b/%E6%97%A5%E6%9C%AC');
+  cdTerm.osc(133, 'D;0', 0, 2);
+  cd.parser.release();
+  cdSocket.onmessage({ data: new TextEncoder().encode('live').buffer });
+  prompt(2, 'file://' + host + '/w/a%20b/%E6%97%A5%E6%9C%AC');
+  cdTerm.osc(133, 'D;0', 0, 3);
+  prompt(3, 'file://' + host + '/tmp');
+  cdTerm.osc(133, 'D;0', 0, 5);
+  prompt(5, 'file://' + host + '/w/%FF');
+  cdTerm.osc(133, 'D;0', 0, 7);
+  prompt(7, 'file://elsewhere/w/a%20b/%E6%97%A5%E6%9C%AC');
+  assert.deepEqual(await cdLinks(2), ['src/x.csv'], 'the first block\'s path did not link where it ran');
+  assert.deepEqual(JSON.parse(JSON.stringify(cd.server.linkBodies.at(-1))), { candidates: ['src/x.csv'], dir: '/w/a b/日本', host });
+  assert.deepEqual(await cdLinks(5), ['/abs/y.csv'], 'the block after the cd');
+  assert.equal(cd.server.linkBodies.at(-1).dir, '/tmp');
+  // A directory that does not decode asks only about absolute paths, with no directory.
+  assert.deepEqual(await cdLinks(7), ['/abs/y.csv']);
+  assert.deepEqual(JSON.parse(JSON.stringify(cd.server.linkBodies.at(-1))), { candidates: ['/abs/y.csv'] }, 'a block whose directory did not decode asked about a relative path');
+  // Another host's directory is sent with its host, for the server to refuse its paths.
+  cd.server.linksIn['/w/a b/日本'] = {};
+  await cdLinks(9);
+  assert.deepEqual(JSON.parse(JSON.stringify(cd.server.linkBodies.at(-1))), { candidates: ['src/x.csv'], dir: '/w/a b/日本', host: 'elsewhere' });
+  }
+  // Output with no OSC 7 asks with no directory, as before.
+  {
+  const plainPage = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  plainPage.sockets.at(-1).onopen?.();
+  const plainTerm = plainPage.terminals.at(-1);
+  plainPage.server.links = { 'src/x.csv': { kind: 'file', path: '/w/p1/src/x.csv' } };
+  plainTerm.lines = ['$ ls', 'src/x.csv'];
+  plainTerm.osc(133, 'A', 0, 0);
+  plainTerm.osc(133, 'C', 0, 1);
+  const plainLinks = await new Promise((resolve) => plainTerm.linkProviders[0].provideLinks(2, resolve));
+  assert.deepEqual(Array.from(plainLinks || [], (link) => link.text), ['src/x.csv']);
+  assert.deepEqual(JSON.parse(JSON.stringify(plainPage.server.linkBodies.at(-1))), { candidates: ['src/x.csv'] });
   }
 
   // Blocks: OSC 133 marks make one block per command, with its command line and exit

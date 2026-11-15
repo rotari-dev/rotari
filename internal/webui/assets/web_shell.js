@@ -4375,10 +4375,16 @@ function shellWord(value) {
     return [...found.values()];
   };
   // askLinks is what the server says each text is, null for none, or null altogether when
-  // it could not be asked.
-  const askLinks = async (id, texts) => {
+  // it could not be asked. place is where the command that printed them ran, as the shell
+  // said it (OSC 7): relative paths are resolved there, none at all when it could not be
+  // read, and where the shell is now when no shell said.
+  const askLinks = async (id, asked, place = null) => {
+    const texts = place?.unknown
+      ? asked.filter((text) => !relativePath(text))
+      : asked;
     const now = Date.now();
-    const key = (text) => id + "\n" + text;
+    const where = place ? place.dir + "\n" + place.host : "";
+    const key = (text) => id + "\n" + where + "\n" + text;
     const unknown = texts
       .filter((text) => !(linkAnswers.get(key(text))?.until > now))
       .slice(0, linkAskLimit);
@@ -4388,7 +4394,11 @@ function shellWord(value) {
         const response = await serverFetch(shellURL(id, "links"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ candidates: unknown }),
+          body: JSON.stringify({
+            candidates: unknown,
+            ...(place && !place.unknown ? { dir: place.dir } : {}),
+            ...(place?.host ? { host: place.host } : {}),
+          }),
         });
         answer = response.ok ? await response.json() : null;
       } catch {}
@@ -4417,7 +4427,52 @@ function shellWord(value) {
               : asked + linkAnswerLife,
         });
     }
-    return texts.map((text) => linkAnswers.get(key(text))?.link || null);
+    const answers = new Map(
+      texts.map((text) => [text, linkAnswers.get(key(text))?.link || null]),
+    );
+    return asked.map((text) => answers.get(text) || null);
+  };
+  // relativePath says whether a candidate would be read as a path relative to a directory:
+  // not a run's or job's ID, and not starting at /.
+  const relativePath = (text) =>
+    !linkForms
+      .slice(0, 2)
+      .some((form) => new RegExp("^" + form.source + "$").test(text)) &&
+    text.includes("/") &&
+    !text.startsWith("/");
+  // readDirMark keeps the directory a shell says at its prompt (OSC 7, file://HOST/PATH
+  // with the path percent-encoded), for the block that prompt starts. One that does not
+  // decode to an absolute path is kept as unknown, so that later output is not read
+  // against an older directory.
+  const readDirMark = (pane, data) => {
+    const found = /^file:\/\/([^/]*)(\/.*)?$/.exec(data);
+    let dir = null;
+    if (found?.[2]) {
+      try {
+        const bytes = [];
+        const raw = found[2];
+        for (let i = 0; i < raw.length; i++) {
+          if (
+            raw[i] === "%" &&
+            /^[0-9A-Fa-f]{2}$/.test(raw.slice(i + 1, i + 3))
+          ) {
+            bytes.push(parseInt(raw.slice(i + 1, i + 3), 16));
+            i += 2;
+          } else if (raw.charCodeAt(i) < 128) bytes.push(raw.charCodeAt(i));
+          else throw new Error("not percent-encoded");
+        }
+        dir = new TextDecoder("utf-8", { fatal: true }).decode(
+          new Uint8Array(bytes),
+        );
+      } catch {
+        dir = null;
+      }
+    }
+    pane.place =
+      dir && dir.startsWith("/")
+        ? { dir, host: found[1] }
+        : { dir: "", host: "", unknown: true };
+    return true;
   };
   // joinedLine is a line of the screen with the lines it wraps onto, and the cell of each
   // character, so that a link may run across the wrap.
@@ -4482,7 +4537,7 @@ function shellWord(value) {
         return;
       }
       const texts = [...new Set(found.map((candidate) => candidate.text))];
-      askLinks(id, texts).then((answers) => {
+      askLinks(id, texts, placeAt(pane, y - 1)).then((answers) => {
         if (!answers || pane.shown !== id) {
           callback(undefined);
           return;
@@ -5774,6 +5829,17 @@ function shellWord(value) {
     if (text) copyText(text, "the output");
     else showNote("This command printed nothing.", 4000);
   };
+  // placeAt is where the command whose prompt or output is on a buffer line ran, as its
+  // shell said at that prompt, or null when it said nothing.
+  const placeAt = (pane, line) => {
+    let found = null;
+    for (const block of pane.blocks || []) {
+      const at = block.prompt.marker.line;
+      if (at > line) break;
+      if (at >= 0) found = block;
+    }
+    return found?.place || null;
+  };
   // blockAt is the block of the command whose prompt or output is on a buffer line.
   const blockAt = (pane, line) => {
     let found = null;
@@ -6100,6 +6166,7 @@ function shellWord(value) {
   const dropBlocks = (pane) => {
     const blocks = pane.blocks || [];
     pane.blocks = [];
+    pane.place = null;
     pane.hovered = null;
     blocks.forEach(disposeBlock);
   };
@@ -6142,6 +6209,8 @@ function shellWord(value) {
         decoration: null,
         // rotari's zsh says on A that a click can put its cursor at a character index.
         goto: rest.includes("rotari_goto=1"),
+        // Where the command runs, as the shell said before this prompt (OSC 7).
+        place: pane.place,
       };
       const marker = block.prompt.marker;
       if (!marker || marker.isDisposed) return true;
@@ -6399,10 +6468,12 @@ function shellWord(value) {
     );
     term.registerLinkProvider(outputLinkProvider(pane));
     pane.blocks = [];
+    pane.place = null;
     pane.blocksLive = false;
     term.parser.registerOscHandler(blockMark, (data) =>
       readBlockMark(pane, data),
     );
+    term.parser.registerOscHandler(7, (data) => readDirMark(pane, data));
     term.open(viewport);
     viewport.addEventListener("mousemove", (event) => hoverBlock(pane, event));
     viewport.addEventListener("mouseleave", () => hoverBlock(pane, null));

@@ -17,3 +17,20 @@
   shell's directory; this host by several names; another host linking only the run; a relative or long `dir` and a
   long `host` refused) pass; `go test ./internal/terminal ./internal/webui ./conformance/05-web` pass.
 - **Remaining:** phases 2 (the panel) and 3 (contracts and docs).
+
+## 2026-11-16 02:12 +09:00 — Panel
+
+- **Change:** `web_shell.js`: each pane reads OSC 7 (`readDirMark`, `registerOscHandler(7)`) into `pane.place`:
+  `{dir, host}` when the path percent-decodes to UTF-8 (strictly, `TextDecoder` fatal) and is absolute, else
+  `{unknown: true}`; a new connection drops it with the blocks, and the replay brings it back. A block takes the
+  pane's place at its `A`. The link provider asks with the place of the block holding the hovered line
+  (`placeAt`, null for a line in no block): `dir` and `host` in the body; an unknown place asks about no
+  relative path (`relativePath`: not a run or job ID, holding / and not starting with it) and sends no `dir`;
+  answers are cached per shell, place, and text.
+- **Reason:** plan phase 2.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalPanel`: a block from the replay in `/w/a b/日本` (percent-encoded) linking `src/x.csv`
+  there with `dir` and `host` sent; the block after `cd /tmp` asking with `/tmp`; a block whose directory does not
+  decode asking only about the absolute path, with no `dir`; another host's block sending its host; output with no
+  OSC 7 asking with no directory. `tsc` and prettier clean.
+- **Remaining:** phase 3 (contracts and docs).
