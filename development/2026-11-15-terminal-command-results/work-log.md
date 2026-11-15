@@ -56,3 +56,22 @@
   `TestLoadWithNoBasedirReadsTheGlobalFile` pass; the editor's JSDOM test in `webui_test.go` shows the group with the
   file's values and saves the form's; see the commit for the package runs.
 - **Remaining:** phases 4 (desktop notifications) and 5 (contracts and docs).
+
+## 2026-11-15 14:30 +09:00 — Desktop notifications
+
+- **Change:** `refreshShells` passes each list to `noteCommandEnds`, which remembers each shell's last `ended_at` and,
+  after the page's first list, raises `notifyCommandEnd` for a newer one marked `notify` in a shell the page does not
+  show, or any while the page is hidden. `canNotify` is the runs' rule: `Notification.permission` granted, the page's
+  toggle (`notificationsEnabled`) on, and `notificationUnavailableReason` empty; a page without those (no runs'
+  notifications script) notifies nothing. The notification's title is `lastCommand`'s sentence, its body the shell and
+  its project, its tag `rotari-terminal-ID-ENDED_AT`, also kept in `localStorage` (`rotari-terminal-notified`) so that
+  a second page skips it; a click focuses the page, closes it, opens the panel, and chooses the shell as an All shells
+  card does. The list poll now runs while the page is hidden too, every 30 s instead of 5, and only when `canNotify`, so
+  that a hidden page still asks nothing unless it can notify.
+- **Reason:** plan phase 4.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalPanel` (nothing for the first list's command; a new failure in a shell not shown told
+  with its title, body, and tag; not twice; nothing for the shown shell, one not asked for, one another page took, or
+  with the toggle off; a click showing the shell; a hidden page asking only once it can notify), and the existing
+  "a page out of sight went on asking" check, passed; `tsc` clean; prettier formatted.
+- **Remaining:** phase 5 (contracts and docs).

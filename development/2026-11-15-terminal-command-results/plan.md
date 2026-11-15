@@ -2,7 +2,7 @@
 
 Created: 2026-11-15
 Status: Accepted by the user on 2026-11-15, after asking for the settings to be in the notification config, with the
-open questions answered as proposed; phases 1–3 are done and phase 4 (desktop notifications) is next. See [work-log.md](work-log.md).
+open questions answered as proposed; phases 1–4 are done and phase 5 (contracts and docs) is next. See [work-log.md](work-log.md).
 
 ## Goal
 
