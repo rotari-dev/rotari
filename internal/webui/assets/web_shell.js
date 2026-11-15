@@ -6239,8 +6239,9 @@ function shellWord(value) {
       };
       actions.append(button);
     };
-    copy("Copy output", block.output, () => copyBlockOutput(pane, block));
+    // In the order of the buttons on a block's prompt line.
     copy("Copy command", command, () => copyText(command, "the command"));
+    copy("Copy output", block.output, () => copyBlockOutput(pane, block));
     row.append(actions);
     return row;
   };

@@ -1620,7 +1620,7 @@ command is marked on the scroll bar in the theme's red. The bar's **Commands** b
 focused pane, lists that pane's blocks whose command has started, newest first, each with its state, command line,
 and how it ended, narrowed by a filter on the command line, or says where commands come from when there are none;
 choosing one by click or by the arrow keys and Enter scrolls the pane to its prompt and lights the prompt up for 1.5
-seconds, and a row's **Copy output** and **Copy command** copy those without scrolling (output read when asked, so
+seconds, and a row's **Copy command** and **Copy output**, in that order as on the prompt's line, copy those without scrolling (output read when asked, so
 far for one running; none printed says so). While the pointer is over a command's prompt or output, outside the
 alternate screen, **Copy command** (when the block has a command line) and **Copy output** buttons show at the right
 end of its prompt's line, Copy output last, when that line is in view, and copy the same way; a press on either starts

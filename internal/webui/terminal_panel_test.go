@@ -4404,6 +4404,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.deepEqual(cmdRows().map((row) => [row.querySelector('.terminal-commands-state').dataset.state, row.querySelector('.terminal-dirs-path').textContent, row.querySelector('.terminal-dirs-detail').textContent.replace(/ after .*/, '')]), [
     ['running', 'sleep 9', 'Running'], ['ok', 'echo a\n> b', 'Exit 0'], ['failed', 'false', 'Exit 1'], ['ok', 'make', 'Exit 0']]);
   assert.equal(cmdRows()[0].getAttribute('aria-selected'), 'true');
+  assert.deepEqual([...cmdRows()[0].querySelectorAll('button')].map((item) => item.textContent), ['Copy command', 'Copy output'], 'a row\'s copies are not in the prompt line\'s order');
   // The arrow keys and Enter go to one: its prompt at the top, lit up for a moment.
   cmdKey('ArrowDown');
   cmdKey('ArrowDown');
