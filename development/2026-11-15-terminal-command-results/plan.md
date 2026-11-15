@@ -1,7 +1,8 @@
 # Plan: Command results in the Web terminal's server
 
 Created: 2026-11-15
-Status: Proposed; waiting for the user's decision on the open questions.
+Status: Proposed; revised on 2026-11-15 after the user asked for the terminal's notifications to be set in the
+notification config; waiting for the user's decision on the open questions.
 
 ## Goal
 
@@ -27,6 +28,10 @@ shells, the bell, or notifications"), proposed on 2026-11-15 as the next termina
 - **All shells** shows each shell's directory and, from the preview, what runs now.
 - **Desktop notifications** (the Settings toggle, `--notifications` for its default, `web_app_notifications.js`) come
   from runs' notification records; the browser's permission and the toggle are per page origin.
+- **Notification config** ([docs/NOTIFICATIONS.md](../../docs/NOTIFICATIONS.md)). `notifications.toml`, the first
+  found in the project, the basedir, then the global config directory (`notification.Load(baseDir, project)`), holds
+  `[browser]` and `[webhook]` settings; the Web UI's **Notification config** (Settings) edits it as a form through
+  `/api/notification-config`, and `rotari config --notifications` writes a template.
 
 ## Decisions
 
@@ -41,17 +46,31 @@ shells, the bell, or notifications"), proposed on 2026-11-15 as the next termina
 3. **The panel shows it.** A tab's bell is red when the command that ended out of sight exited with a code other than
    0, with a title saying the command, its code, and how long it took; the All shells card gains a line, "last:
    `make` — exit 2 after 3 min, at 10:42", in the run's tone (red for a failure).
-4. **Desktop notifications.** A page with the terminal, seeing in the list a newly ended command that ran at least 30
-   seconds in a shell it does not show (or with the page itself hidden), raises a desktop notification under the same
-   toggle and permission as runs' notifications: "`make` failed (exit 2) after 3 min" or "`make` finished after 3
-   min", with the shell's project; clicking it brings the page forward with that shell shown. Pages open on the same
-   browser give it the same tag (shell and sequence), so the browser shows one. Nothing is notified with no page open,
-   and nothing is written to the runs' notification records or the inbox.
-5. **Marks are only output.** A file shown with `cat` can print a false `D;1`, which would at worst ring a false red
+4. **Set in the notification config.** `notifications.toml` gains a `[terminal]` section:
+   ```toml
+   [terminal]
+   command_failure = true   # a command that ended with a code other than 0, or none
+   command_success = true   # a command that ended with 0
+   min_seconds = 30         # only commands that ran at least this long
+   ```
+   with those defaults when the section or a key is missing. The file that applies is the shell's group's, as for its
+   runs: a project's shell the project's (then the basedir's, then the global one), a basedir's own shell the
+   basedir's (then the global one), a shell of no project the global one. The server reads it when a marked command
+   ends and says in `last_command` whether to notify (`"notify": true`); a file that cannot be read notifies nothing and
+   is named in the server's log. The Web UI's **Notification config** form gains a **Terminal** group with the two
+   events and the length, and `rotari config --notifications`'s template the section.
+5. **Desktop notifications.** A page with the terminal, seeing in the list a newly ended command marked `notify` in a
+   shell it does not show (or with the page itself hidden), raises a desktop notification under the same toggle and
+   permission as runs' notifications: "`make` failed (exit 2) after 3 min" or "`make` finished after 3 min", with the
+   shell's project; clicking it brings the page forward with that shell shown. Pages open on the same browser give it
+   the same tag (shell and sequence), so the browser shows one. Nothing is notified with no page open, and nothing is
+   written to the runs' notification records or the inbox.
+6. **Marks are only output.** A file shown with `cat` can print a false `D;1`, which would at worst ring a false red
    bell or notification, as it already can draw a false mark; SECURITY.md says so. The command line kept is what was
    already in the output, held only in memory with the shell, so "rotari records nothing typed" still holds.
-6. **No option.** It follows the marks: a shell that prints none gets no `last_command`, as today. The contract is a new
-   WEB-54 and an addition to WEB-34.
+7. **No command-line option.** It follows the marks, and the notification config: a shell that prints none gets no
+   `last_command`, as today. The contract is a new WEB-54, and additions to WEB-34 and to the notification config's
+   contract notes.
 
 ## Phases
 
@@ -60,10 +79,14 @@ shells, the bell, or notifications"), proposed on 2026-11-15 as the next termina
    fields. Unit tests: marks split across chunks, a status that is no number, the command line decoded, a `D` without
    `C`, the alternate screen, and a real bash and zsh with the integration.
 2. **The panel shows it.** The red bell and its title, and the All shells line. JSDOM tests.
-3. **Desktop notifications.** Seeing a new sequence for a shell out of view, the 30-second threshold, the toggle and
+3. **The notification config.** `[terminal]` in `internal/notification` (parsing, defaults, validation), the server's
+   `notify` from the shell's group's file, the editor form's Terminal group and its saving, and the template. Go tests
+   and JSDOM tests of the form.
+4. **Desktop notifications.** Seeing a new sequence marked `notify` for a shell out of view, the toggle and
    permission, the tag, and the click. JSDOM tests with a fake `Notification`.
-4. **Contracts and docs.** WEB-54 and WEB-34's addition, conformance through the binary (a bash shell running `false`
-   and `true`, the list's `last_command` and `sequence`), docs/WEB.md, docs/SECURITY.md.
+5. **Contracts and docs.** WEB-54 and the additions, conformance through the binary (a bash shell running `false` and
+   `true` with a `[terminal]` setting, the list's `last_command`, `sequence`, and `notify`), docs/WEB.md,
+   docs/NOTIFICATIONS.md, docs/SECURITY.md, and the generated CLI reference if the template's text is in it.
 
 ## Tests and validation
 
@@ -73,18 +96,17 @@ shells, the bell, or notifications"), proposed on 2026-11-15 as the next termina
 
 ## Non-goals
 
-- Notifications with no page open (by email, chat, or the runs' notification records).
+- Notifications with no page open (by email, chat, the Webhook, or the runs' notification records); a
+  `[webhook]` event for terminal commands could follow.
 - A history of commands; only the last one is kept.
 - Reading exit codes without marks (a shell rotari does not start or integrate).
 
 ## Open questions
 
-1. **How long a command must run to be notified.** Proposed: 30 seconds, fixed. The alternatives are another fixed
-   length, or a setting.
-2. **Which ends are notified.** Proposed: both failures and successes, since waiting for a long command to succeed is
-   the common case; a failure's title says so first. The alternative is failures only.
-3. **The toggle.** Proposed: the existing desktop-notification toggle, which already holds the browser's permission.
-   The alternative is a toggle of its own for the terminal.
+1. **Defaults.** Proposed: both events on and 30 seconds, so that a long command's end is announced with nothing set.
+   The alternative is failures only by default.
+2. **Where the section lives.** Proposed: `[terminal]` of its own, since its events and fields are not a run's. The
+   alternative is keys in `[browser]` (`terminal_command_failure`, and so on).
 
 ## Coordination
 
