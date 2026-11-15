@@ -21,6 +21,10 @@ const testWait = 15 * time.Second
 
 var oscSequence = regexp.MustCompile("\x1b\\][^\a]*\a")
 
+// bashSetpgidRace is the line bash prints when a child it starts could not join its own
+// process group, which a loaded host's timing can bring about.
+var bashSetpgidRace = regexp.MustCompile(`bash: child setpgid \([0-9]+ to [0-9]+\): Operation not permitted\r?\n`)
+
 // startedShell is a shell whose output a goroutine collects.
 type startedShell struct {
 	*Session
@@ -82,7 +86,10 @@ func (shell *startedShell) run(t *testing.T, command string) string {
 		if start := strings.Index(text, left); start >= 0 {
 			output := text[start+len(left):]
 			if end := strings.Index(output, right); end >= 0 {
-				found = strings.TrimRight(output[:end], "\r\n")
+				// bash may say that its child could not set its process group, a race of
+				// its job control with the subshell above on a loaded host, which says
+				// nothing of the command's output.
+				found = strings.TrimRight(bashSetpgidRace.ReplaceAllString(output[:end], ""), "\r\n")
 			}
 		}
 		if found != "" {
