@@ -84,12 +84,12 @@ func shutdownDetachedWeb(yes bool) int {
 		return 1
 	}
 	for deadline := time.Now().Add(webShutdownWait); ; time.Sleep(50 * time.Millisecond) {
-		current, stillFound, err = webdetach.Find(paths)
+		stillRunning, err := detachedWebStillRunning(paths, running.PID)
 		if err != nil {
 			printErrorf("cannot tell whether rotari web (PID %d) stopped: %v", running.PID, err)
 			return 1
 		}
-		if !stillFound || current.PID != running.PID {
+		if !stillRunning {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -99,6 +99,17 @@ func shutdownDetachedWeb(yes bool) int {
 	}
 	fmt.Printf("Stopped rotari web at %s (PID %d).\n", running.URL, running.PID)
 	return 0
+}
+
+func detachedWebStillRunning(paths webdetach.Paths, pid int) (bool, error) {
+	current, found, err := webdetach.Find(paths)
+	if errors.Is(err, webdetach.ErrStarting) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return found && current.PID == pid, nil
 }
 
 // webShellLines describes what runs in the server's shells, one line each for those

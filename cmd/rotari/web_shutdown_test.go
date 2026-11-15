@@ -36,3 +36,35 @@ func TestConfirmWebShutdown(t *testing.T) {
 		t.Fatalf("a long list is not cut to five: %v", err)
 	}
 }
+
+func TestDetachedWebStillRunningDuringShutdown(t *testing.T) {
+	paths, err := webdetach.PathsFor(t.TempDir(), "node1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	holder, err := webdetach.Hold(paths, 0o700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := holder.Close(); err != nil {
+			t.Errorf("close detached web holder: %v", err)
+		}
+	})
+
+	if stillRunning, err := detachedWebStillRunning(paths, 42); err != nil || !stillRunning {
+		t.Fatalf("during record removal: still running = %v, err = %v; want true, nil", stillRunning, err)
+	}
+	if err := holder.Publish(webdetach.Record{PID: 42}); err != nil {
+		t.Fatal(err)
+	}
+	if stillRunning, err := detachedWebStillRunning(paths, 42); err != nil || !stillRunning {
+		t.Fatalf("with the same server recorded: still running = %v, err = %v; want true, nil", stillRunning, err)
+	}
+	if err := holder.Publish(webdetach.Record{PID: 43}); err != nil {
+		t.Fatal(err)
+	}
+	if stillRunning, err := detachedWebStillRunning(paths, 42); err != nil || stillRunning {
+		t.Fatalf("with another server recorded: still running = %v, err = %v; want false, nil", stillRunning, err)
+	}
+}

@@ -101,10 +101,10 @@ func TestAShellStartedInsideIsTheCurrentShell(t *testing.T) {
 	}
 	expect("the inner shell's prompt again", inner, false, "")
 	// A shell running a script is a command, not a shell waiting for the user.
-	if _, err := shell.Write([]byte("sh -c 'sleep 30'\n")); err != nil {
+	if _, err := shell.Write([]byte("sh -c 'sleep 30; :'\n")); err != nil {
 		t.Fatal(err)
 	}
-	expect("a script in the inner shell", inner, true, "sh -c sleep 30")
+	expect("a script in the inner shell", inner, true, "sh -c sleep 30; :")
 	if _, err := shell.Write([]byte("\x03")); err != nil {
 		t.Fatal(err)
 	}

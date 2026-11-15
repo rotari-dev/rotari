@@ -110,7 +110,7 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the second tab again', screenHas('second-[]'));
   await page.evaluate('document.querySelectorAll(".terminal-tab [role=tab]")[0].click()');
   await until('the long output replayed', screenHas('printed-3000'));
-  await page.evaluate('document.querySelector(".xterm-viewport").scrollTop = 0');
+  await page.evaluate('document.querySelector(".terminal-pane")?.terminalPane?.term?.scrollToTop()');
   await until('the first line of the long output in the scrollback', screenHas('line-1.'));
 
   // Recent directories offers where the shell has been; choosing one types cd, which
