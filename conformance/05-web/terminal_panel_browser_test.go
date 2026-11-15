@@ -232,8 +232,10 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the project\'s shell to settle after the blocks', settled);
   // Pointing at a command's line shows Copy output at its right end, outside the text.
   const trueRow = '[...document.querySelectorAll(".xterm-rows > div")].find((row) => row.textContent.trim() === "$ c true")';
-  const scrollToTrue = '(() => { const term = document.querySelector(".terminal-pane")?.terminalPane?.term; const buffer = term?.buffer.active; if (!term || !buffer) return false; for (let line = 0; line < buffer.baseY + term.rows; line++) { if (buffer.getLine(line)?.translateToString(true).trim() === "$ c true") { term.scrollToLine(line); return true; } } return false; })()';
-  await until('the true command in scrollback', scrollToTrue);
+  await page.evaluate(barButton('Commands') + '.click()');
+  await until('the true command listed', commandRows + '.includes("c true")');
+  await page.evaluate('[...document.querySelectorAll(".terminal-commands .terminal-dirs-row")].find((row) => row.querySelector(".terminal-dirs-path").textContent === "c true").click()');
+  await until('the true command at the top', topRow + ' === "$ c true"');
   await until('the true command on screen', trueRow + ' !== undefined');
   const truePoint = await page.evaluate('(() => { const box = ' + trueRow + '.getBoundingClientRect(); return { x: box.left + 40, y: box.top + box.height / 2 }; })()');
   await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...truePoint });
