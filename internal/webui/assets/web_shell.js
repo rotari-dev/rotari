@@ -6112,12 +6112,34 @@ function shellWord(value) {
       ],
     ]);
   };
+  // holdScroll scrolls a pane to line and keeps it there for a moment. xterm.js follows
+  // its scroll bar asynchronously, so on a loaded page a scroll event for where the bar
+  // was a little earlier, such as the bottom while a replay was still being written, can
+  // arrive after this and move the view back. Anything the viewer does to scroll, or
+  // half a second, ends the hold.
+  const holdScroll = (pane, line) => {
+    const { term, viewport } = pane;
+    term.scrollToLine(line);
+    const kinds = ["wheel", "keydown", "mousedown", "touchstart"];
+    let release = null;
+    const watch = term.onScroll(() => {
+      if (term.buffer.active.viewportY !== line) term.scrollToLine(line);
+    });
+    const timer = setTimeout(() => release(), 500);
+    release = () => {
+      clearTimeout(timer);
+      watch.dispose();
+      for (const kind of kinds)
+        viewport.removeEventListener(kind, release, true);
+    };
+    for (const kind of kinds) viewport.addEventListener(kind, release, true);
+  };
   // goToBlock scrolls a pane to a block's prompt, and lights the prompt up for a moment.
   const goToBlock = (pane, block) => {
     closeDropdown();
     const line = block.prompt.marker.line;
     if (line < 0) return;
-    pane.term.scrollToLine(line);
+    holdScroll(pane, line);
     clearTimeout(block.flashTimer);
     block.flash = true;
     paintBlock(pane, block);

@@ -325,6 +325,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
         onData(callback) { this.data = callback; }
         onBinary() {}
         onResize(callback) { this.resize = callback; }
+        onScroll(callback) { this.scrolled = callback; return { dispose: () => { if (this.scrolled === callback) this.scrolled = null; } }; }
       };
       window.FitAddon = { FitAddon: class { fit() { fits.push(1); } } };
       window.WebLinksAddon = { WebLinksAddon: class { constructor(handler) { this.handler = handler; } } };
@@ -4408,6 +4409,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   cmdKey('ArrowDown');
   cmdKey('Enter');
   assert.equal(bpTerm.buffer.active.viewportY, 3, 'Enter did not go to false');
+  // A late scroll event for where xterm.js's scroll bar was before does not undo it.
+  bpTerm.buffer.active.viewportY = 8;
+  bpTerm.scrolled?.();
+  assert.equal(bpTerm.buffer.active.viewportY, 3, 'a late scroll event moved the view off false');
   assert.equal(cmdBox(), null, 'choosing left Commands open');
   assert.ok(bpPane().blocks[1].decoration.render().classList.contains('terminal-block-flash'), 'the prompt gone to was not lit up');
   await wait(1600);
@@ -4420,6 +4425,11 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.deepEqual(cmdRows().map((row) => row.querySelector('.terminal-dirs-path').textContent), ['make']);
   cmdRows()[0].click();
   assert.equal(bpTerm.buffer.active.viewportY, 0, 'a click did not go to make');
+  // The viewer's own scroll ends the hold.
+  bpPane().viewport.dispatchEvent(new bp.window.Event('wheel'));
+  bpTerm.buffer.active.viewportY = 6;
+  bpTerm.scrolled?.();
+  assert.equal(bpTerm.buffer.active.viewportY, 6, 'the view was held against the viewer\'s scroll');
   // A row copies its output, so far for one running, or its line.
   await cmdCopy(3, 'Copy output');
   await cmdCopy(2, 'Copy command');
