@@ -546,7 +546,9 @@ func (s site) baseHandler() http.Handler {
 			forbiddenReadOnly(writer)
 			return
 		}
-		var save webSaveNotificationConfigRequest
+		// A client that knows no section, as one from before terminal notifications, keeps
+		// its defaults rather than zero values.
+		save := webSaveNotificationConfigRequest{Settings: notification.Defaults()}
 		if err := json.NewDecoder(request.Body).Decode(&save); err != nil {
 			writeWebError(writer, err)
 			return

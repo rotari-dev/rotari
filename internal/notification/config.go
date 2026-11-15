@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 
@@ -61,9 +62,30 @@ type WebhookSettings struct {
 	Format string `json:"format"`
 }
 
+// TerminalSettings say which commands run in the Web terminal's shells raise a desktop
+// notification when they end out of sight: by how they ended and how long they ran.
+type TerminalSettings struct {
+	CommandFailure bool `json:"command_failure"`
+	CommandSuccess bool `json:"command_success"`
+	MinSeconds     int  `json:"min_seconds"`
+}
+
+// Notifies says whether a command that ended with exit (nil for none) after took is one
+// to notify: a failure is a status other than 0, or none.
+func (settings TerminalSettings) Notifies(exit *int, took time.Duration) bool {
+	if took < time.Duration(settings.MinSeconds)*time.Second {
+		return false
+	}
+	if exit != nil && *exit == 0 {
+		return settings.CommandSuccess
+	}
+	return settings.CommandFailure
+}
+
 type Settings struct {
-	Webhook WebhookSettings `json:"webhook"`
-	Browser ChannelSettings `json:"browser"`
+	Webhook  WebhookSettings  `json:"webhook"`
+	Browser  ChannelSettings  `json:"browser"`
+	Terminal TerminalSettings `json:"terminal"`
 }
 
 type Loaded struct {
@@ -87,9 +109,16 @@ type rawWebhook struct {
 	Format *string `toml:"format"`
 }
 
+type rawTerminal struct {
+	CommandFailure *bool `toml:"command_failure"`
+	CommandSuccess *bool `toml:"command_success"`
+	MinSeconds     *int  `toml:"min_seconds"`
+}
+
 type rawSettings struct {
-	Webhook rawWebhook `toml:"webhook"`
-	Browser rawChannel `toml:"browser"`
+	Webhook  rawWebhook  `toml:"webhook"`
+	Browser  rawChannel  `toml:"browser"`
+	Terminal rawTerminal `toml:"terminal"`
 }
 
 func Defaults() Settings {
@@ -105,6 +134,7 @@ func Defaults() Settings {
 			JobFailure: true, RunFailure: true, RunSuccess: true, MaxJobs: 10,
 			Fields: []string{"project", "job_name", "job_status", "exit_code", "diagnosis_name", "command", "started_at", "run_name", "run_status", "run_id", "attempt_id", "link"},
 		},
+		Terminal: TerminalSettings{CommandFailure: true, CommandSuccess: true, MinSeconds: 30},
 	}
 }
 
@@ -129,14 +159,29 @@ func Parse(data []byte) (Settings, error) {
 	if raw.Webhook.Format != nil {
 		settings.Webhook.Format = *raw.Webhook.Format
 	}
+	if raw.Terminal.CommandFailure != nil {
+		settings.Terminal.CommandFailure = *raw.Terminal.CommandFailure
+	}
+	if raw.Terminal.CommandSuccess != nil {
+		settings.Terminal.CommandSuccess = *raw.Terminal.CommandSuccess
+	}
+	if raw.Terminal.MinSeconds != nil {
+		settings.Terminal.MinSeconds = *raw.Terminal.MinSeconds
+	}
 	if err := validate(settings); err != nil {
 		return Settings{}, err
 	}
 	return settings, nil
 }
 
+// Load reads the first notifications.toml of the project, the basedir, and the global
+// config directory. With no basedir, as for a Web terminal shell of no project, only the
+// global one.
 func Load(baseDir, projectName string) (Loaded, error) {
 	paths := make([]string, 0, 3)
+	if baseDir == "" {
+		projectName = ""
+	}
 	if projectName != "" {
 		projectDir, err := state.SafeJoin(filepath.Join(baseDir, "projects"), projectName)
 		if err != nil {
@@ -144,7 +189,9 @@ func Load(baseDir, projectName string) (Loaded, error) {
 		}
 		paths = append(paths, filepath.Join(projectDir, FileName))
 	}
-	paths = append(paths, filepath.Join(baseDir, FileName))
+	if baseDir != "" {
+		paths = append(paths, filepath.Join(baseDir, FileName))
+	}
 	configHome, err := config.HomeDir()
 	if err != nil {
 		return Loaded{}, err
@@ -197,6 +244,9 @@ func validate(settings Settings) error {
 		if err != nil || !parsed.IsAbs() || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
 			return fmt.Errorf("webhook web_url must be an absolute HTTP or HTTPS URL without credentials, query, or fragment")
 		}
+	}
+	if settings.Terminal.MinSeconds < 0 {
+		return fmt.Errorf("terminal min_seconds must not be negative")
 	}
 	for name, channel := range map[string]ChannelSettings{"webhook": settings.Webhook.ChannelSettings, "browser": settings.Browser} {
 		if err := validateChannel(name, channel); err != nil {
@@ -253,6 +303,7 @@ func Marshal(settings Settings) ([]byte, error) {
 	writeChannel(settings.Webhook.ChannelSettings)
 	output.WriteString("\n[browser]\n")
 	writeChannel(settings.Browser)
+	fmt.Fprintf(&output, "\n[terminal]\ncommand_failure = %t\ncommand_success = %t\nmin_seconds = %d\n", settings.Terminal.CommandFailure, settings.Terminal.CommandSuccess, settings.Terminal.MinSeconds)
 	return []byte(output.String()), nil
 }
 

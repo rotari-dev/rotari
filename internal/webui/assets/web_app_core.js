@@ -1208,6 +1208,55 @@ function notificationChannelEditor(name, settings, fields, maxJobsContainer) {
   fieldset.append(contentGroup);
   return fieldset;
 }
+// notificationTerminalEditor is the form's group for commands run in the Web terminal: which
+// ends raise a desktop notification, and how long a command must run for one.
+function notificationTerminalEditor(settings) {
+  const fieldset = document.createElement("fieldset");
+  fieldset.className = "notification-channel notification-terminal";
+  const legend = document.createElement("legend");
+  legend.textContent = "Terminal commands (this browser)";
+  const description = document.createElement("p");
+  description.className = "notification-channel-description";
+  description.textContent =
+    "Display a desktop notification when a command run in a Web terminal shell of this project ends while its shell is not in view.";
+  const group = document.createElement("div");
+  group.className = "notification-setting-group";
+  const heading = document.createElement("h3");
+  heading.textContent = "When to notify";
+  group.append(heading);
+  for (const [key, labelText] of [
+    ["command_failure", "Command failure"],
+    ["command_success", "Command success"],
+  ]) {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.name = "terminal-" + key;
+    input.checked = !!settings[key];
+    label.append(input, labelText);
+    group.append(label);
+  }
+  const minLabel = document.createElement("label");
+  minLabel.className = "notification-max-jobs";
+  const minText = document.createElement("span");
+  minText.textContent = "Only commands that ran at least (seconds)";
+  const minInput = document.createElement("input");
+  minInput.type = "number";
+  minInput.name = "terminal-min-seconds";
+  minInput.min = "0";
+  minInput.value = settings.min_seconds;
+  minLabel.append(minText, minInput);
+  group.append(minLabel);
+  fieldset.append(legend, description, group);
+  return fieldset;
+}
+function readNotificationTerminal(form) {
+  return {
+    command_failure: form.elements["terminal-command_failure"].checked,
+    command_success: form.elements["terminal-command_success"].checked,
+    min_seconds: Number(form.elements["terminal-min-seconds"].value),
+  };
+}
 function readNotificationChannel(form, name) {
   const checked = (suffix) => form.elements[name + "-" + suffix].checked;
   return {
@@ -1433,6 +1482,7 @@ async function showNotificationConfig() {
       notificationChannelEditor("browser", settings.browser, payload.fields),
     );
     form.append(webhook);
+    form.append(notificationTerminalEditor(settings.terminal));
     setModalConfigPaths([payload.path]);
     initializeNotificationConfigDirtyState(form);
     const save = document.getElementById("notification-config-save");
@@ -1451,6 +1501,7 @@ async function showNotificationConfig() {
           settings: {
             webhook: webhookSettings,
             browser: readNotificationChannel(form, "browser"),
+            terminal: readNotificationTerminal(form),
           },
           webhook_url: webhookURLChanged ? url.value : "",
           change_webhook_url: webhookURLChanged,

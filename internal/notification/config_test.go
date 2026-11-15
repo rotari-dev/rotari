@@ -1,10 +1,12 @@
 package notification
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestParseAppliesDefaultsAndOverrides(t *testing.T) {
@@ -130,5 +132,74 @@ func TestMarshalRoundTripsSettings(t *testing.T) {
 	}
 	if got.Webhook.URL != want.Webhook.URL || got.Webhook.WebURL != want.Webhook.WebURL || !got.Browser.JobSuccess {
 		t.Fatalf("settings = %#v", got)
+	}
+}
+
+// The [terminal] section: its defaults, its keys, its check, and its round trip.
+func TestTerminalSettings(t *testing.T) {
+	if got := Defaults().Terminal; got != (TerminalSettings{CommandFailure: true, CommandSuccess: true, MinSeconds: 30}) {
+		t.Fatalf("defaults %+v", got)
+	}
+	settings, err := Parse([]byte("[terminal]\ncommand_success = false\nmin_seconds = 5\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.Terminal != (TerminalSettings{CommandFailure: true, CommandSuccess: false, MinSeconds: 5}) {
+		t.Fatalf("parsed %+v", settings.Terminal)
+	}
+	for _, bad := range []string{"[terminal]\nmin_seconds = -1\n", "[terminal]\nevery = true\n"} {
+		if _, err := Parse([]byte(bad)); err == nil {
+			t.Errorf("%q parsed", bad)
+		}
+	}
+	data, err := Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := Parse(data)
+	if err != nil || again.Terminal != settings.Terminal {
+		t.Fatalf("round trip %+v, %v:\n%s", again.Terminal, err, data)
+	}
+	if !bytes.Contains(Template(), []byte("[terminal]\ncommand_failure = true\ncommand_success = true\nmin_seconds = 30\n")) {
+		t.Errorf("the template has no [terminal]:\n%s", Template())
+	}
+	zero, one := 0, 1
+	for _, test := range []struct {
+		settings TerminalSettings
+		exit     *int
+		took     time.Duration
+		want     bool
+	}{
+		{Defaults().Terminal, &one, 30 * time.Second, true},
+		{Defaults().Terminal, &zero, 30 * time.Second, true},
+		{Defaults().Terminal, nil, time.Minute, true},
+		{Defaults().Terminal, &one, 29 * time.Second, false},
+		{TerminalSettings{CommandFailure: true, MinSeconds: 0}, &zero, time.Hour, false},
+		{TerminalSettings{CommandSuccess: true}, nil, time.Hour, false},
+	} {
+		if got := test.settings.Notifies(test.exit, test.took); got != test.want {
+			t.Errorf("%+v, exit %v, after %v: %v", test.settings, test.exit, test.took, got)
+		}
+	}
+}
+
+// With no basedir, as for a Web terminal shell of no project, only the global file counts.
+func TestLoadWithNoBasedirReadsTheGlobalFile(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	if err := os.MkdirAll(filepath.Join(configHome, "rotari"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configHome, "rotari", FileName), []byte("[terminal]\nmin_seconds = 7\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A notifications.toml where the server runs is no basedir's.
+	t.Chdir(t.TempDir())
+	if err := os.WriteFile(FileName, []byte("[terminal]\nmin_seconds = 99\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load("", "")
+	if err != nil || loaded.Settings.Terminal.MinSeconds != 7 {
+		t.Fatalf("loaded %+v, %v", loaded, err)
 	}
 }

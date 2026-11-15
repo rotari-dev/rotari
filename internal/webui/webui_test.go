@@ -752,6 +752,7 @@ setTimeout(() => {
 				: { path: '/state/notifications.toml', url_set: true, fields: [], settings: {
 					webhook: { format: 'json', web_url: 'https://rotari.example.test', job_failure: true, job_success: false, run_failure: true, run_success: true, max_jobs: 20, fields: [] },
 					browser: { job_failure: true, job_success: false, run_failure: true, run_success: true, max_jobs: 10, fields: [] },
+					terminal: { command_failure: true, command_success: false, min_seconds: 45 },
 				} };
 			return { ok: true, text: async () => JSON.stringify(payload) };
 		}
@@ -806,7 +807,7 @@ setTimeout(() => {
 		if (notificationPath.hidden || !notificationPath.textContent.includes('/state/notifications.toml')) process.exit(54);
 		if (notificationPath.querySelector('[data-copy-value="/state/notifications.toml"]') === null) process.exit(55);
 		const channelTitles = [...dom.window.document.querySelectorAll('#notification-config-editor > fieldset > legend')].map(legend => legend.textContent);
-		if (JSON.stringify(channelTitles) !== JSON.stringify(['Desktop notifications (this browser)', 'External notifications (webhook)'])) process.exit(40);
+		if (JSON.stringify(channelTitles) !== JSON.stringify(['Desktop notifications (this browser)', 'External notifications (webhook)', 'Terminal commands (this browser)'])) process.exit(40);
 		const notificationForm = dom.window.document.getElementById('notification-config-editor');
 		const webhookURL = notificationForm.elements['webhook-url'];
 		const savedURLMessage = 'Webhook URL is set — edit to replace or clear';
@@ -843,6 +844,13 @@ setTimeout(() => {
 		await submitNotificationForm();
 		if (notificationSaveRequests.at(-1).change_webhook_url !== false) process.exit(49);
 		if (notificationSaveRequests.at(-1).settings.webhook.web_url !== 'https://rotari.example.test') process.exit(71);
+		// The terminal's group shows what the config says, and saves what the form says.
+		const terminalForm = notificationForm.elements;
+		if (!terminalForm['terminal-command_failure'].checked || terminalForm['terminal-command_success'].checked || terminalForm['terminal-min-seconds'].value !== '45') process.exit(77);
+		terminalForm['terminal-command_success'].checked = true;
+		terminalForm['terminal-min-seconds'].value = '120';
+		await submitNotificationForm();
+		if (JSON.stringify(notificationSaveRequests.at(-1).settings.terminal) !== JSON.stringify({ command_failure: true, command_success: true, min_seconds: 120 })) process.exit(78);
 		const urlToClear = notificationForm.elements['webhook-url'];
 		urlToClear.value = '';
 		urlToClear.dispatchEvent(new dom.window.Event('input', { bubbles: true }));

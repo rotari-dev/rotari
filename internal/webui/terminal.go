@@ -19,6 +19,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/rotari-dev/rotari/internal/config"
+	"github.com/rotari-dev/rotari/internal/notification"
 	"github.com/rotari-dev/rotari/internal/resolve"
 	stateinternal "github.com/rotari-dev/rotari/internal/state"
 	"github.com/rotari-dev/rotari/internal/terminal"
@@ -349,14 +350,24 @@ type terminalLastCommand struct {
 	EndedAt   time.Time `json:"ended_at"`
 	// Sequence counts the shell's ended commands, so that a page can tell a new one.
 	Sequence int `json:"sequence"`
+	// Notify says that its shell's group's notification config ([terminal]) asks for a
+	// desktop notification of it, and NotifyError why that config could not be read.
+	Notify      bool   `json:"notify"`
+	NotifyError string `json:"notify_error,omitempty"`
 }
 
 func (s site) terminalShellResponse(shell terminal.ShellInfo) terminalShellResponse {
 	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Name: shell.Name, Dir: shell.Dir, UnseenOutput: shell.UnseenOutput, CommandFinished: shell.CommandFinished, Running: shell.Running, StartedAt: shell.StartedAt, ActiveAt: shell.ActiveAt, Link: terminalNoProjectLink}
+	baseDir, project := terminalGroupPlace(shell.Group)
 	if last := shell.LastCommand; last != nil {
 		response.LastCommand = &terminalLastCommand{Command: last.Command, Exit: last.Exit, StartedAt: last.StartedAt, EndedAt: last.EndedAt, Sequence: last.Sequence}
+		// Read as the list is made, so that a changed config applies at once.
+		if loaded, err := notification.Load(baseDir, project); err != nil {
+			response.LastCommand.NotifyError = err.Error()
+		} else {
+			response.LastCommand.Notify = loaded.Settings.Terminal.Notifies(last.Exit, last.EndedAt.Sub(last.StartedAt))
+		}
 	}
-	baseDir, project := terminalGroupPlace(shell.Group)
 	if baseDir == "" {
 		return response
 	}
