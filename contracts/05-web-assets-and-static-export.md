@@ -1954,8 +1954,10 @@ project's **+** starts another shell there, off at the limit and saying which, a
 basedir with no shell of its own, each of its projects with no shell, and no project, starts one where the page
 of the choice would start it (WEB-34), shown in no pane but as a card with the keys; a basedir whose projects cannot be
 listed is named.
-It is a view of when it opened, or of **Refresh**, and Escape, **Close**, a click beside it, or hiding the panel
-closes it. When a list request is overtaken by a newer one, it waits for the newer answer rather than treating an
+It is a view of when it opened, or of **Refresh**, and Escape, **Close**, **All shells** again, a click beside it,
+or hiding the panel closes it. So does every icon of the bar for what it opened, clicked again: **Panel position**'s
+menu, **Launch here**'s dialog, and the **Recent directories** and **Commands** lists, as a block's mark does for its
+menu; a press on the icon does not close it first, and a right-clicked menu opens again where the next right click is. When a list request is overtaken by a newer one, it waits for the newer answer rather than treating an
 old empty list or refusal as the overview; a newer local shell change takes precedence over a stale successful
 list, but does not hide a list refusal. Periodic refresh does not overtake a still-pending current list.
 Opening the panel with no shell there starts one, **+**

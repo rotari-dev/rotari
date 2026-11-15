@@ -3396,6 +3396,35 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.deepEqual([...launchBox().querySelectorAll('.terminal-launch-problem, .terminal-launch-hint')].map((item) => item.textContent), ['Launching is disabled on this server.', 'Restart with rotari web --allow-exec.']);
   launching.document.activeElement.dispatchEvent(new launching.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(launchBox(), null, 'Escape left the launch dialog');
+  // Each icon in the bar that opens something closes it on a second click: Launch here,
+  // All shells, Recent directories, Commands, and Panel position. A press on the icon
+  // does not close it first, only for the click to open it again.
+  const barIcon = (label) => [...launching.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === label);
+  const pressAndClick = (label) => {
+    barIcon(label).dispatchEvent(new launching.window.Event('pointerdown', { bubbles: true }));
+    barIcon(label).click();
+  };
+  for (const [label, opened] of [
+    ['Launch here', '.terminal-launch'],
+    ['All shells', '.terminal-overview'],
+    ['Recent directories', '.terminal-dirs'],
+    ['Commands', '.terminal-dirs'],
+    ['Panel position', '.terminal-tab-menu'],
+  ]) {
+    pressAndClick(label);
+    await wait(30);
+    assert.notEqual(launching.document.querySelector(opened), null, label + ' opened nothing');
+    pressAndClick(label);
+    await wait(30);
+    assert.equal(launching.document.querySelector(opened), null, 'a second click on ' + label + ' left it open');
+  }
+  // The tab's menu, opened by a right click, opens again where the next one is.
+  const tabEl = launching.document.querySelector('.terminal-tab');
+  for (let time = 0; time < 2; time++) {
+    tabEl.dispatchEvent(new launching.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+    assert.notEqual(launching.document.querySelector('.terminal-tab-menu'), null, 'a second right click closed the tab menu');
+  }
+  launching.document.dispatchEvent(new launching.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   // The Web UI's own viewers need no launching: the shell's directory is pinned under a
   // source, and the viewer opens it in a new tab, with why commands are not offered.
   const tableViewer = { name: 'Table viewer', path: '/tableview/', targets: ['directory'] };
@@ -4717,8 +4746,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   hover(4);
   assert.deepEqual(copies(), [false, false, false, false], 'Copy output in the alternate screen');
   bpTerm.buffer.active.type = 'normal';
-  // menu opens the n-th block's menu from its mark, which keeps the pointer from the text.
+  // menu opens the n-th block's menu from its mark, which keeps the pointer from the text,
+  // closing one left open first, since a second click on the same mark closes its menu.
   const menu = (n) => {
+    bp.document.dispatchEvent(new bp.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     const element = bpPane().blocks[n].decoration.render();
     const mark = element.querySelector('.terminal-block-mark');
     let reached = false;

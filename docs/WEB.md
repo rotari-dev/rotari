@@ -175,6 +175,8 @@ a panel along the bottom of the page, so you can type while watching jobs or rea
 the panel's top edge to change its height. The **Panel position** icon in its bar moves it down the left or
 right of the window, for a tall shell beside the jobs; the browser remembers the choice, and in a window
 under 1000 pixels wide the panel stays at the bottom. Panes stack when the panel is too narrow for columns.
+An icon in the bar that opens a menu, list, or dialog (**Panel position**, **Launch here**, **All shells**,
+**Recent directories**, **Commands**) closes it when you click it again, as does a command's mark for its menu.
 
 **Window** in the same menu moves the whole panel, with its tabs, panes, and project list, into a browser
 window of its own, for a second screen. The page gets all of its room back. The page and the window keep to one
@@ -208,8 +210,8 @@ name ends its shells, and **End all shells** at the top every shell, after askin
 starts another shell there, and **New shell in** under the cards starts one in a project or state directory that
 has none (**All projects** under the state directory), or in no project; each starts where that page would, and the new shell appears as a card without being shown
 in a pane. The list is taken when the dialog
-opens, and **Refresh** takes it again. Escape, **Close**, or a click
-beside the dialog closes it. The directory is the shell's own, not that of a program running in it, and when the
+opens, and **Refresh** takes it again. Escape, **Close**, **All shells**
+again, or a click beside the dialog closes it. The directory is the shell's own, not that of a program running in it, and when the
 server cannot find it the card says where the shell started instead. The command is the one in the foreground,
 the first of a pipeline; a shell with no job control runs everything in its own process group, so its cards
 show no command.

@@ -1403,16 +1403,26 @@ function shellWord(value) {
     return true;
   };
   let panelMenu = null;
+  // The button whose click opened the menu, which a second click closes it with.
+  let panelMenuButton = null;
   const closePanelMenu = () => {
     panelMenu?.remove();
     panelMenu = null;
+    panelMenuButton = null;
   };
   // openPanelMenu lists choices by the pointer, or by what opened it for the keyboard. Each
   // is a label, what it does, and whether it can be chosen, and in a list of alternatives
   // whether it is the current one.
   const openPanelMenu = (event, choices) => {
     event.preventDefault();
+    const button = event.type === "click" ? event.currentTarget : null;
+    if (panelMenu && button && panelMenuButton === button) {
+      closePanelMenu();
+      focused.term?.focus();
+      return;
+    }
     closePanelMenu();
+    panelMenuButton = button;
     panelMenu = document.createElement("div");
     panelMenu.className = "terminal-tab-menu";
     panelMenu.setAttribute("role", "menu");
@@ -1488,7 +1498,12 @@ function shellWord(value) {
     );
   };
   document.addEventListener("pointerdown", (event) => {
-    if (panelMenu && !panelMenu.contains(event.target)) closePanelMenu();
+    if (
+      panelMenu &&
+      !panelMenu.contains(event.target) &&
+      !panelMenuButton?.contains(event.target)
+    )
+      closePanelMenu();
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && panelMenu) {
@@ -5601,6 +5616,12 @@ function shellWord(value) {
       "Launch here",
       icons.launch,
       () => {
+        // A second click closes it, as the bar's other dialogs and lists do.
+        if (launchDialog) {
+          closeLaunchDialog();
+          focused.term?.focus();
+          return;
+        }
         const shell = shells.find((item) => item.id === focused.shown);
         if (shell) openLaunchDialog(shell);
       },
