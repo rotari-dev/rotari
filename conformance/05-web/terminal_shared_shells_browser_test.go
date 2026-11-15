@@ -47,7 +47,9 @@ await withPage(cdp, base + '/_auth/login?next=/project/p1', { width: 1280, heigh
   await until('the shared tab after the divider', barOrder + ' === ' + JSON.stringify(JSON.stringify(['tab', '+', '|All projects', 'shared', 'shared+'])));
   // Split shows the shared shell, the only one in no pane, in the new pane with the keys.
   await page.evaluate('[...document.querySelectorAll(".terminal-bar button")].find((item) => item.getAttribute("aria-label") === "Split right" || item.textContent === "Split right").click()');
-  await until('the shared shell in a pane', shownAre(p1, shared) + ' && ' + sharedFocused);
+  // Both panes connected before typing: what is typed before a pane connects reaches no shell.
+  const connected = '[...document.querySelectorAll(".terminal-status")].every((item) => item.hidden)';
+  await until('the shared shell in a pane', shownAre(p1, shared) + ' && ' + sharedFocused + ' && ' + connected);
   await page.evaluate('document.querySelectorAll(".terminal-pane")[1].querySelector(".xterm-helper-textarea").focus()');
   await typeLine('echo "shared-$((2+3))"');
   await until('the shared shell\'s output', '[...document.querySelectorAll(".xterm-rows")].some((rows) => rows.textContent.includes("shared-5"))');
