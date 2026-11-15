@@ -174,6 +174,9 @@ func (f PairFixture) Sample(t *testing.T, flag PairFlag) []string {
 
 // Adapters own isolation and restoration for mutating commands. Finished runs
 // ensure --follow exits; the deadline is a failure bound, never an expected result.
+// It is 20 s: 5 s was exceeded by cancel --wait on a loaded macOS runner under
+// the race detector, and 20 s still stops short of the 30-second grace period
+// a cancel waits when its job does not end, so that fault still shows.
 func PairInvoke(t *testing.T, e *Env, args ...string) Result {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
@@ -184,7 +187,7 @@ func PairInvoke(t *testing.T, e *Env, args ...string) Result {
 	}
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
-	timer := time.NewTimer(5 * time.Second)
+	timer := time.NewTimer(20 * time.Second)
 	defer timer.Stop()
 	var err error
 	select {
