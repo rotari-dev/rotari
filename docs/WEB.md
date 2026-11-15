@@ -357,7 +357,11 @@ no exit code. Pointing at the dot shows the command, its exit code, and how long
 while the page was open. Failed commands are also marked in red on the scroll bar, and a thin line sets each prompt
 apart from the output before it. The **Commands** icon in the bar lists the pane's commands, newest first, with how
 each ended; type to filter them, and choose one to scroll back to it, or copy its output or command line from its
-row without scrolling. Point at a command's prompt or output to show **Copy output** at the right end of its prompt's
+row without scrolling. When a command ends in a tab you are not looking at, the tab's bell is red if it failed, and
+pointing at the tab says the command, its exit code, and how long it took; each card in **All shells** says how its
+shell's last command ended. A command that ran at least 30 seconds raises a desktop notification when it ends out of
+sight, under the same toggle as runs' notifications; set which ends and how long in the `[terminal]` section of the
+notification config ([Notifications](NOTIFICATIONS.md#terminal-commands)). Point at a command's prompt or output to show **Copy output** at the right end of its prompt's
 line. Click in the command line you are typing to move the cursor there, as in an editor; zsh started by rotari
 puts it at the exact character, and other shells get the arrow keys, so in a zsh not started that way a click past the
 typed text may take a zsh-autosuggestions suggestion, as the right arrow would. Alt+click keeps xterm.js's own

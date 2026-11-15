@@ -179,6 +179,25 @@ initial value. Live-server options
 (`--host`, `--port`, `--auth-token`, and `--allow-control`) cannot be combined
 with `--static-dir`; use them only when starting the HTTP server.
 
+### Terminal commands
+
+With `rotari web --allow-terminal`, a command run in a Web terminal shell can raise a desktop notification when it
+ends while its shell is not shown, or the page is in the background: "make failed (exit 2) after 3 min". It needs a
+shell that marks its commands, as bash and zsh started by rotari do, and a page open in the browser; it uses the same
+browser permission and on/off toggle as runs' notifications, shows one notification across the browser's pages, and
+clicking it shows the shell. It is not recorded in the inbox. The `[terminal]` section says which ends count:
+
+```toml
+[terminal]
+command_failure = true   # an exit code other than 0, or none
+command_success = true   # exit code 0
+min_seconds = 30         # only commands that ran at least this long
+```
+
+The file is the shell's project's, as for its runs; a shell of a state directory's own pages uses that directory's,
+and a shell of no project the global one. The **Terminal commands** group of **Notification config** edits it. A
+saved change applies to the next command that ends.
+
 ## Webhook notifications
 
 Rotari can send JSON `POST` requests for job results and run completions.

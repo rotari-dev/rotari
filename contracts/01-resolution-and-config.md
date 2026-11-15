@@ -410,6 +410,10 @@ Implemented by [internal/config/layers.go](../internal/config/layers.go),
   selects click navigation for browser notifications or an absolute event URL
   for webhooks; webhook links are omitted when `web_url` is empty.
   `ROTARI_WEBHOOK_URL` overrides `webhook.url`.
+- `[terminal]` holds `command_failure` and `command_success` (default true) and `min_seconds` (default 30, not
+  negative), which say which commands ended in the Web terminal's shells are notified on the desktop (WEB-55). For a
+  terminal shell the file is its group's: a project's, a basedir's own (basedir, then global), or, for a shell of no
+  project, the global one alone. The Web UI editor has a Terminal commands group for them.
 - A run resolves its webhook settings when it starts and snapshots the file
   with its other configs, so later edits do not change that run. `rotari web`
   validates the file for its own basedir at startup and applies each

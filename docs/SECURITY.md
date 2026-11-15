@@ -235,7 +235,9 @@ percent-encoded (bash's only when its history took the line), which passes throu
 already is. Any program can print the marks, and a file
 shown with `cat` can draw false ones. They change only the page's display: **Copy output** and **Copy command**
 write to the clipboard only when chosen, and **Type command again** types the text shown, never with Enter and only
-while the shell is at its prompt, so a false mark can at worst put text in front of you.
+while the shell is at its prompt, so a false mark can at worst put text in front of you. The server reads the same
+marks to say how a shell's last command ended, keeping only that, in memory with the shell, so a false `D` can at
+worst ring a false red bell or desktop notification.
 
 Shells outlive their connections, like a launched VS Code server, so ones left open stay reachable
 to anyone with your session for as long as the server runs, or, with `--terminal-idle-timeout`, until that

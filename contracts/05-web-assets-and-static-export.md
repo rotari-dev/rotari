@@ -1444,7 +1444,8 @@ rejected on the command line without `--allow-terminal`, and with a bad value fr
 before the server starts. `--allow-terminal`, `--allowed-host`, and these options may also come from the environment or
 a config, as WEB-36 says. A shell's `unseen_output` says it has printed something since a connection last showed it, and starts false
 until one has; its `command_finished` says a command it ran in its foreground ended, back at its current shell's prompt
-(WEB-52), while no connection showed it, and a connection showing it clears it; its `running` says a command holds
+(WEB-52), or its marks said a command ended (WEB-55), while no connection showed it, and a connection showing it clears
+it; its `last_command` is WEB-55's; its `running` says a command holds
 its foreground, rather than its current shell at its prompt, as the list is made; its `started_at` is when it started and its `active_at` when it last printed or was typed into,
 which the list's `now` dates by the server's clock. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
 use in its project when it started, and its `link` is the page that shows it: its project's page, its basedir's
@@ -1467,6 +1468,27 @@ limit is checked at the package level by `TestIdleLimitAppliesToTheShellsTogethe
 `TestKeepAliveHoldsTheIdleLimitOff`. A process that left its session or ignores the hangup,
 including a run started in a shell, goes on. Covered by the tests in
 [conformance/05-web/terminal_test.go](../conformance/05-web/terminal_test.go).
+
+**WEB-55** With `rotari web --allow-terminal`, the server reads the OSC 133 marks in each shell's output as it passes,
+outside the alternate screen (private modes 1049, 1047, and 47) and across the chunks it comes in, an escape sequence
+longer than 64 KiB being dropped: `C` starts a command, its line from `cmdline_url=` percent-decoded (none when absent
+or undecodable), and `D;STATUS`, or an `A` before any `D`, ends it, with the status when it is an integer; a `D` or `A`
+with no command started is nothing. It keeps each shell's last ended command, in memory with the shell, and the shell
+list gives it as `last_command`: `command`, `exit` (null for none), `started_at`, `ended_at`, `sequence` counting the
+shell's ended commands, and `notify`, whether its group's notification config asks for it (its `[terminal]`:
+`command_failure` for an exit other than 0 or none, `command_success` for 0, and `min_seconds` for how long it must have
+run; the file read as the list is made, project then basedir then global, the global one alone for a shell of no
+project), or `notify_error` saying why that file could not be read; absent before a command has ended. The panel rings
+a tab's bell red, saying the command, its exit, and how long it took, when the command that ended out of sight exited
+other than 0, and each All shells card has a line on its shell's last command, red for such a failure. A page offering
+the terminal, after its first list, raises a desktop notification for a newly ended command marked `notify` in a shell
+it does not show or while it is hidden, only when the browser permits notifications and the page's toggle for runs'
+notifications is on, with the shell's ID and end as its tag and once across the browser's pages; a click brings the
+page forward and shows the shell. A hidden page asks for the list every 30 seconds, and only when it can notify.
+Nothing is written to the runs' notification records. Implemented in `internal/terminal/commandmarks.go`,
+`internal/notification`, `internal/webui/terminal.go`, and the panel in `web_shell.js`; covered by
+[`TestTerminalShellListSaysTheLastCommand`](../conformance/05-web/terminal_command_results_test.go), `TestCommandMarks`,
+`TestKeeperKeepsTheLastCommand`, `TestTerminalSettings`, and `TestTerminalPanel`.
 
 **WEB-54** The terminal's **Link terminal and project** button is on by default. Turned off, a page moving to
 another project, basedir, or global page leaves the selected terminal group and its panes alone; choosing another
