@@ -125,7 +125,9 @@ await withPage(cdp, base + '/_auth/login?next=/project/p1', { width: 1280, heigh
   await chooseGroup(page, '/project/p1');
   await until(page, 'the first shell before popping out', shown(p1));
   await page.evaluate(barButton('Panel position') + '.click()');
-  await page.evaluate('[...document.querySelectorAll(".terminal-tab-menu button")].find((item) => item.textContent === "Window").click()');
+  // Earlier keyboard input must not accidentally authorize this synthetic click.
+  await until(page, 'the earlier user activation to expire', '!navigator.userActivation.isActive');
+  await page.send('Runtime.evaluate', { expression: '[...document.querySelectorAll(".terminal-tab-menu button")].find((item) => item.textContent === "Window").click()', userGesture: true });
   let target;
   for (const deadline = Date.now() + 30000; Date.now() < deadline && !target; await sleep(100)) {
     const { targetInfos } = await cdp.send('Target.getTargets');
