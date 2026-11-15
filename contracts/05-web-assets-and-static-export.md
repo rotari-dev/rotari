@@ -1502,9 +1502,27 @@ and splits start in the terminal's group, and the Explorer starts a shell there 
 terminal here** explicitly switches to the page's project and starts in its run. A send button still types into
 the displayed shell without Enter, naming its project when it differs from the page's. Differently escaped paths
 to the same project name its group once, and starting a shell keeps characters such as `+` and `&` in that name.
-A later group choice wins over an earlier pending lookup or shell start. Implemented in
+A later group choice wins over an earlier pending lookup or shell start. With the link on, a page of another
+project of the same basedir keeps the panes that showed the basedir's own shells (WEB-56). Implemented in
 [web_shell.js](../internal/webui/assets/web_shell.js); covered by `TestTerminalPanel` and
 [`TestTerminalProjectLinkInBrowser`](../conformance/05-web/terminal_project_link_browser_test.go).
+
+**WEB-56** With `rotari web --allow-terminal`, a project's page shows, after the project's tabs, the tabs of its
+basedir's own shells (those of All projects and Recent jobs), behind a divider saying **All projects**, with the
+basedir's path when the sidebar lists more than one basedir; a basedir's own pages and the pages of no project show
+their own group alone, and no page shows another project's, another basedir's, or no project's shells beside its
+own. A shared tab is shown, split to, and chosen in All shells as the project's are, without moving the page, and
+the bell and unseen mark work on it alike; its menu and dragging arrange it among the shared tabs only, and the
+order goes to the server for that group. **+**, the group limit, and the project list keep to the project's own
+shells. Opening the panel on a project with no shell of its own but shared ones shows them and starts none. The
+browser tab remembers the panes it last showed with their group; a page of another group, as following a link
+with the project link on loads, shows the remembered panes that held the basedir's own shells it shows, in their
+places, the focus staying on one that had it, while of the panes that held other shells the one with the focus,
+or the first, shows the page's group's last shown shell, or its first, and the rest close. Choosing another
+group's shell in All shells shows it in that group's own layout instead. With the link off, a page leaves the
+terminal as WEB-54 says. Implemented in [web_shell.js](../internal/webui/assets/web_shell.js); covered by
+`TestTerminalPanel` and
+[`TestTerminalSharedShellsInBrowser`](../conformance/05-web/terminal_shared_shells_browser_test.go).
 
 **WEB-53** With `rotari web --allow-terminal` and `--terminal-shell-integration`, a bash or zsh started inside a panel's
 shell marks its prompts and commands as WEB-49 says, with nothing in the user's files. The marks are in `marks.bash` and
@@ -1897,8 +1915,8 @@ with the panel open or not and without connecting to any, on a page in view; wit
 shows no number. Each project row in the sidebar whose project has shells is marked with how many, and so is a
 basedir's All projects row when the basedir has shells of its own. It opens a panel along the bottom, or down the left or right of the window as the browser
 keeps from a menu in the panel's bar, by default with a tab for each
-shell of the page's project; on a basedir's other pages, such as All projects and Recent jobs, of that basedir's
-own; and on Activity and History search, of no project. A list names the projects with
+shell of the page's project, followed by its basedir's own (WEB-56); on a basedir's other pages, such as All
+projects and Recent jobs, of that basedir's own; and on Activity and History search, of no project. A list names the projects with
 shells, and choosing one goes to its page while the link is on (WEB-54). A tab not shown whose `command_finished` is set shows a bell in place of
 its unseen-output mark, as its All shells card does. A tab's tooltip and an All shells card say when the shell
 started and how long it has been idle, by the server's clock. A card's line of what runs also says how many

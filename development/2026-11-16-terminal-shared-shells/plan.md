@@ -1,7 +1,7 @@
 # Plan: A state directory's shells beside its projects' in the Web terminal
 
 Created: 2026-11-16
-Status: Accepted by the user on 2026-11-16, with the open questions answered as proposed; phases 1 and 2 are done. See
+Status: Accepted by the user on 2026-11-16, with the open questions answered as proposed; all three phases are done. See
 [work-log.md](work-log.md).
 
 ## Goal

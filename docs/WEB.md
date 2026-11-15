@@ -220,6 +220,14 @@ directory's **All projects** and **Recent jobs** show the shells of that state d
 work across its projects. Activity and History search, which cover every state directory, show the
 shells of no project.
 
+Those shells of the state directory itself stay at hand on its projects' pages: after a project's tabs, behind a
+divider marked **All projects**, come the state directory's own (with its path when more than one is registered).
+Choose one, split to it, or pick it in **All shells** as you would a project's tab; the page stays where it is.
+Following a link to another project of the same state directory keeps a pane that showed one in its place, and the
+keys with it if it had them, while the pane that showed the old project's shell shows the new project's. So a shell
+started on **All projects** for work across projects stays beside each project's own as you move between them. A
+project with no shells of its own shows the shared ones and starts none; **+** still starts one in the project.
+
 The **Link terminal and project** icon beside the project list is on by default. Turn it off to keep the
 terminal's project and panes when you open another page, and to choose another project in the terminal's
 list or **All shells** without moving the page. The choice and terminal project stay with this browser tab

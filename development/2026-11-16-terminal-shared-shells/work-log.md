@@ -45,3 +45,23 @@
   Activity (their own shells), the link off (unchanged), and an All shells choice clearing the record; the window
   handover test now expects the record among the saved entries. `tsc` and prettier clean.
 - **Remaining:** phase 3 (contracts and docs).
+
+## 2026-11-16 01:02 +09:00 — Contracts and docs
+
+- **Change:** WEB-56 in `contracts/05-web-assets-and-static-export.md` (the shared tabs and divider, what they share
+  with the project's tabs and what keeps to the project's own, starting none, carrying the panes to a page of another
+  group, an All shells choice, the link off) and its row in `contracts/README.md`; WEB-34's panel paragraph says a
+  project's page shows its basedir's own shells after its own, and WEB-54 points to WEB-56 for following a link.
+  `TestTerminalSharedShellsInBrowser` (new, `conformance/05-web/terminal_shared_shells_browser_test.go`): shells of p1,
+  p2, and the basedir's own started through the API; p1's page shows its tab, the divider, and the shared tab; a split
+  shows the shared shell with the keys, which prints a marker; following a link to p2 shows p2's shell and the shared
+  one (its output replayed) with the keys still on it; back on p1, p1's shell beside it. docs/WEB.md: a paragraph on
+  the shared tabs after the grouping one.
+- **Reason:** plan phase 3.
+- **Plan impact:** the browser step is a test of its own, in the manner of `TestTerminalProjectLinkInBrowser`, rather
+  than a step in `TestTerminalPanelInBrowser`, which another thread is also changing; it covers WEB-56 alone.
+- **Validation:** `go vet ./...`; `go test ./internal/webui ./conformance/05-web` (Node 24) and `go test ./conformance
+  -run 'TestContractStatus|TestConformanceLayout'` pass. The browser test skips here (no Chrome) and runs in CI; its
+  script passes `node --check`. `scripts/check.sh` was not run: npm is broken here, and the full and race runs are too
+  heavy for the shared machine.
+- **Remaining:** CI's run of `TestTerminalSharedShellsInBrowser`.
