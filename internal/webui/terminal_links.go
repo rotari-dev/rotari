@@ -47,8 +47,14 @@ var (
 	terminalLinePosition = regexp.MustCompile(`(:[0-9]+){1,2}$`)
 )
 
+// terminalLinksRequest asks about candidates. Dir, when given, is the directory the
+// command that printed them ran in, as the shell said it (OSC 7): relative paths are
+// resolved there rather than where the shell is now. Host is the host that directory is
+// on, as the shell said it; another host's paths are no links here.
 type terminalLinksRequest struct {
 	Candidates []string `json:"candidates"`
+	Dir        string   `json:"dir,omitempty"`
+	Host       string   `json:"host,omitempty"`
 }
 
 // terminalLink is a candidate that names something: Kind is run, job, dir, or file. A
@@ -86,7 +92,7 @@ func (s site) serveTerminalLinks(writer http.ResponseWriter, request *http.Reque
 		return
 	}
 	var asked terminalLinksRequest
-	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, (terminalLinkLimit+16)*terminalLinksLimit))
+	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, (terminalLinkLimit+16)*(terminalLinksLimit+2)))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&asked); err != nil {
 		http.Error(writer, "invalid request: "+err.Error(), http.StatusBadRequest)
@@ -102,12 +108,30 @@ func (s site) serveTerminalLinks(writer http.ResponseWriter, request *http.Reque
 			return
 		}
 	}
+	if asked.Dir != "" && (!filepath.IsAbs(asked.Dir) || len(asked.Dir) > terminalLinkLimit) {
+		http.Error(writer, fmt.Sprintf("dir must be an absolute path of at most %d bytes", terminalLinkLimit), http.StatusBadRequest)
+		return
+	}
+	if len(asked.Host) > terminalLinkLimit {
+		http.Error(writer, fmt.Sprintf("host is longer than %d bytes", terminalLinkLimit), http.StatusBadRequest)
+		return
+	}
 	group, ok := s.terminalShellGroup(id)
 	if !ok {
 		http.Error(writer, terminal.ErrNoShell.Error(), http.StatusNotFound)
 		return
 	}
 	finder := terminalLinkFinder{site: s, shell: id, group: group, projects: make(map[string][]string)}
+	if asked.Dir != "" {
+		finder.dir, finder.dirRead = asked.Dir, true
+	}
+	if asked.Host != "" {
+		local, err := terminalLocalHost(asked.Host)
+		if err != nil {
+			finder.problem(err)
+		}
+		finder.remote = !local
+	}
 	response := terminalLinksResponse{Links: []terminalLink{}}
 	seen := make(map[string]bool)
 	for _, candidate := range asked.Candidates {
@@ -134,6 +158,9 @@ type terminalLinkFinder struct {
 	dirRead  bool
 	dirError string
 	problems []string
+	// remote is set when the candidates were printed on another host, whose paths are
+	// no links here.
+	remote bool
 }
 
 func (finder *terminalLinkFinder) find(candidate string) (terminalLink, bool) {
@@ -147,7 +174,7 @@ func (finder *terminalLinkFinder) find(candidate string) (terminalLink, bool) {
 		link.Kind = "job"
 		link.Project, link.Link = finder.job(candidate)
 		return link, link.Link != ""
-	case strings.Contains(candidate, "/"):
+	case strings.Contains(candidate, "/") && !finder.remote:
 		link.Kind, link.Path = finder.path(candidate)
 		return link, link.Path != ""
 	}
@@ -226,8 +253,9 @@ func (finder *terminalLinkFinder) job(jobID string) (project, link string) {
 	return "", ""
 }
 
-// path is what a path names, absolute or relative to where the shell is now, with a
-// line and column left off: a directory or a file. Anything else is no link.
+// path is what a path names, absolute or relative to the directory asked about or, with
+// none, where the shell is now, with a line and column left off: a directory or a file.
+// Anything else is no link.
 func (finder *terminalLinkFinder) path(candidate string) (kind, path string) {
 	path = terminalLinePosition.ReplaceAllString(candidate, "")
 	if !filepath.IsAbs(path) {
@@ -248,6 +276,24 @@ func (finder *terminalLinkFinder) path(candidate string) (kind, path string) {
 		return "file", path
 	}
 	return "", ""
+}
+
+// terminalLocalHost says whether a host a shell named in OSC 7 is this one: the same name
+// ignoring case, the same up to the first dot (a short name and a full one), empty, or
+// localhost. A host name that cannot be read makes every named host another's.
+func terminalLocalHost(host string) (bool, error) {
+	if host == "" || strings.EqualFold(host, "localhost") {
+		return true, nil
+	}
+	own, err := os.Hostname()
+	if err != nil {
+		return false, fmt.Errorf("the server's host name could not be read, so paths from %s are no links: %w", host, err)
+	}
+	short := func(name string) string {
+		name, _, _ = strings.Cut(name, ".")
+		return name
+	}
+	return strings.EqualFold(host, own) || strings.EqualFold(short(host), short(own)), nil
 }
 
 func (finder *terminalLinkFinder) shellDir() string {

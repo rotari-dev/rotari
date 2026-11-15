@@ -1,5 +1,6 @@
 # rotari's marks for zsh: OSC 133 for the Web terminal's blocks, D (the last command's end,
-# with its exit status) and A (a prompt) before each prompt, B (the command line) when the
+# with its exit status) and A (a prompt) before each prompt, after OSC 7 (the directory, as
+# file://HOST/PATH), B (the command line) when the
 # line editor starts, and C (the output, saying the command line) before a command runs;
 # the cursor's place in the line before each redraw; and the widget for a click. rotari's
 # own zsh reads this after the user's .zshrc, and a zsh started inside one of the panel's
@@ -18,6 +19,7 @@ __rotari_keep() {
 # __rotari_prompt runs last, unless a hook is added later, as some themes add theirs at the
 # first prompt.
 __rotari_prompt() {
+	__rotari_dir
 	print -n "\e]133;D;${__rotari_status}\a\e]133;A${__rotari_goto_said}\a"
 	(( __rotari_line_init )) || [[ $PS1 == *'133;B'* ]] || PS1="$PS1"$'%{\e]133;B\a%}'
 	return $__rotari_status
@@ -46,21 +48,40 @@ fi
 # percent-encoded), since a prompt may redraw the line it was typed on before it runs, as
 # powerlevel10k's transient prompt does, leaving nothing between B and C on the screen.
 __rotari_preexec() {
+	__rotari_encode "${1:-$3}"
+	print -n "\e]133;C;cmdline_url=$__rotari_url\a"
+}
+# __rotari_encode percent-encodes $1 byte by byte into __rotari_url, keeping / as it is
+# when $2 is set, for a path.
+typeset -g __rotari_url=
+__rotari_encode() {
 	emulate -L zsh
 	setopt no_multibyte
-	local text=${1:-$3} url= char hex
+	local text=$1 char hex
 	local -i i
+	__rotari_url=
 	for ((i = 1; i <= ${#text}; i++)); do
 		char=${text[i]}
-		if [[ $char == [A-Za-z0-9._~-] ]]; then
-			url+=$char
+		if [[ $char == [A-Za-z0-9._~-] || ( -n $2 && $char == / ) ]]; then
+			__rotari_url+=$char
 		else
 			# A byte above 127 can read as negative, by the locale.
 			printf -v hex '%%%02X' $((#char & 255))
-			url+=$hex
+			__rotari_url+=$hex
 		fi
 	done
-	print -n "\e]133;C;cmdline_url=$url\a"
+}
+# __rotari_dir prints OSC 7, the directory the next command runs in, as file://HOST/PATH
+# with the path percent-encoded, so that the Web terminal resolves the relative paths a
+# command prints where it ran. It encodes a directory once.
+typeset -g __rotari_dir_said= __rotari_dir_url=
+__rotari_dir() {
+	if [[ $PWD != $__rotari_dir_said || -z $__rotari_dir_url ]]; then
+		__rotari_encode "$PWD" path
+		__rotari_dir_url=$__rotari_url
+		__rotari_dir_said=$PWD
+	fi
+	print -n "\e]7;file://${HOST}${__rotari_dir_url}\a"
 }
 # __rotari_goto puts the cursor where the Web terminal was clicked: the panel sends a key
 # sequence no terminal does, the line's character index, and ";". CURSOR stops at the

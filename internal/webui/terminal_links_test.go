@@ -142,6 +142,52 @@ func TestTerminalLinksAreWhatExists(t *testing.T) {
 		t.Errorf("a job beyond the newest 20 runs linked: %+v", got)
 	}
 
+	// Relative paths are resolved in the directory the command ran in when the panel says
+	// it, and another host's paths are no links, while IDs still are.
+	elsewhere := filepath.Join(root, "elsewhere")
+	if err := os.MkdirAll(filepath.Join(elsewhere, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(elsewhere, "sub", "y.txt"), []byte("y\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	own, err := os.Hostname()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownShort, _, _ := strings.Cut(own, ".")
+	ask := func(request terminalLinksRequest) terminalLinksResponse {
+		t.Helper()
+		body, err := json.Marshal(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, text := askTerminalLinks(t, server, project, "application/json", string(body))
+		var response terminalLinksResponse
+		if err := json.Unmarshal([]byte(text), &response); status != http.StatusOK || err != nil {
+			t.Fatalf("links with %+v: status %d, %v: %s", request, status, err, text)
+		}
+		return response
+	}
+	moved := ask(terminalLinksRequest{Candidates: []string{"sub/y.txt", "sub/x.csv", work}, Dir: elsewhere})
+	wantMoved := []terminalLink{
+		{Text: "sub/y.txt", Kind: "file", Path: filepath.Join(elsewhere, "sub", "y.txt")},
+		{Text: work, Kind: "dir", Path: work},
+	}
+	if !reflect.DeepEqual(moved.Links, wantMoved) || moved.DirError != "" {
+		t.Errorf("links in the directory a command ran in:\n got %+v\nwant %+v", moved, wantMoved)
+	}
+	for _, host := range []string{"", "localhost", "LOCALHOST", own, strings.ToUpper(own), ownShort, ownShort + ".some.domain"} {
+		if got := ask(terminalLinksRequest{Candidates: []string{"sub/y.txt"}, Dir: elsewhere, Host: host}).Links; len(got) != 1 {
+			t.Errorf("a path from host %q, which is this one, did not link: %+v", host, got)
+		}
+	}
+	far := ask(terminalLinksRequest{Candidates: []string{"sub/y.txt", work, newer}, Dir: elsewhere, Host: "far-away-" + ownShort})
+	wantFar := []terminalLink{{Text: newer, Kind: "run", Project: "p", Link: "/project/p/run/" + newer}}
+	if !reflect.DeepEqual(far.Links, wantFar) || len(far.Problems) != 0 {
+		t.Errorf("links from another host:\n got %+v\nwant %+v", far, wantFar)
+	}
+
 	for name, test := range map[string]struct {
 		id, contentType, body string
 		want                  int
@@ -151,6 +197,9 @@ func TestTerminalLinksAreWhatExists(t *testing.T) {
 		"unknown fields": {project, "application/json", `{"candidates":[],"more":1}`, http.StatusBadRequest},
 		"not JSON":       {project, "text/plain", `{"candidates":[]}`, http.StatusUnsupportedMediaType},
 		"unknown shell":  {"nope", "application/json", `{"candidates":[]}`, http.StatusNotFound},
+		"relative dir":   {project, "application/json", `{"candidates":["sub"],"dir":"work"}`, http.StatusBadRequest},
+		"long dir":       {project, "application/json", `{"candidates":[],"dir":"/` + strings.Repeat("a", terminalLinkLimit) + `"}`, http.StatusBadRequest},
+		"long host":      {project, "application/json", `{"candidates":[],"host":"` + strings.Repeat("a", terminalLinkLimit+1) + `"}`, http.StatusBadRequest},
 	} {
 		if status, body := askTerminalLinks(t, server, test.id, test.contentType, test.body); status != test.want {
 			t.Errorf("%s: status %d: %s, want %d", name, status, body, test.want)

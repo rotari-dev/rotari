@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -245,6 +246,67 @@ func TestZshIntegrationReadsTheUsersFilesAndMarks(t *testing.T) {
 			want := strings.ReplaceAll(test.want, "HOME", home)
 			if got := shell.run(t, `echo "$FROM-$LAST-${ZDOTDIR-unset}-${ROTARI_USER_ZDOTDIR-}"`); got != want+"-" {
 				t.Errorf("files, status, ZDOTDIR = %q, want %q", got, want+"-")
+			}
+		})
+	}
+}
+
+// The integration says the directory before each prompt (OSC 7, file://HOST/PATH with the
+// path percent-encoded byte by byte, / kept), in bash and zsh, so that the Web terminal
+// resolves a command's relative paths where it ran: a space and a non-ASCII name included.
+func TestIntegrationSaysTheDirectory(t *testing.T) {
+	own, err := os.Hostname()
+	if err != nil {
+		t.Fatal(err)
+	}
+	encode := func(path string) string {
+		var url strings.Builder
+		for _, b := range []byte(path) {
+			switch {
+			case b >= 'A' && b <= 'Z', b >= 'a' && b <= 'z', b >= '0' && b <= '9', strings.IndexByte("._~-/", b) >= 0:
+				url.WriteByte(b)
+			default:
+				fmt.Fprintf(&url, "%%%02X", b)
+			}
+		}
+		return url.String()
+	}
+	osc7 := regexp.MustCompile("\x1b\\]7;file://([^/\a]*)(/[^\a]*)\a")
+	for _, shellName := range []string{"bash", "zsh"} {
+		t.Run(shellName, func(t *testing.T) {
+			home := t.TempDir()
+			writeFiles(t, home, map[string]string{".zshenv": "unsetopt GLOBAL_RCS\n"})
+			moved := filepath.Join(home, "a b", "日本")
+			if err := os.MkdirAll(moved, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			shell := integrated(t, shellName, home)
+			// The name's bytes are typed through printf: zsh's line editor, with no UTF-8
+			// locale here, would take them apart.
+			if _, err := shell.Write([]byte(`cd "a b/$(printf '\346\227\245\346\234\254')"` + "\n")); err != nil {
+				t.Fatal(err)
+			}
+			want := encode(moved)
+			for deadline := time.Now().Add(testWait); ; time.Sleep(10 * time.Millisecond) {
+				var said [][]string
+				for _, match := range osc7.FindAllStringSubmatch(shell.text(), -1) {
+					said = append(said, match[1:])
+				}
+				if len(said) > 0 && said[len(said)-1][1] == want {
+					host := said[len(said)-1][0]
+					short, _, _ := strings.Cut(own, ".")
+					if hostShort, _, _ := strings.Cut(host, "."); !strings.EqualFold(hostShort, short) {
+						t.Errorf("OSC 7 names host %q, want this one, %q", host, own)
+					}
+					// The prompt before the cd said the starting directory.
+					if len(said) < 2 || said[len(said)-2][1] != encode(home) {
+						t.Errorf("OSC 7 before cd: %q, want %q", said, encode(home))
+					}
+					return
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("no OSC 7 for %q (%q); the terminal shows:\n%q", moved, want, shell.text())
+				}
 			}
 		})
 	}

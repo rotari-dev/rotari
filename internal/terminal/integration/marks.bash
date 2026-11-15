@@ -1,6 +1,7 @@
 # rotari's marks for bash: OSC 133 for the Web terminal's blocks, D (the last command's end,
-# with its exit status) and A (a prompt) before each prompt, B (the command line) at the
-# prompt's end, and C (the output) before a command runs. rotari's own bash reads this
+# with its exit status) and A (a prompt) before each prompt, after OSC 7 (the directory, as
+# file://HOST/PATH), B (the command line) at the prompt's end, and C (the output) before a
+# command runs. rotari's own bash reads this
 # after the user's files, and a bash started inside one of the panel's shells reads it at
 # its first prompt, from the loader in the PROMPT_COMMAND it inherits. It loads once per
 # shell, and changes nothing else of the shell but what is said here.
@@ -40,6 +41,7 @@ __rotari_prompt() {
 	__rotari_at_prompt=1
 	# Unlike fc -l -0, history 1 includes the newest entry on bash 3.2.
 	__rotari_history=$(HISTTIMEFORMAT= builtin history 1 2>/dev/null)
+	__rotari_dir
 	printf '\033]133;D;%s\007\033]133;A\007' "$__rotari_status"
 	case $PS1 in
 	*'133;B'*) ;;
@@ -54,7 +56,7 @@ __rotari_prompt() {
 # would be said as the one before it, and is left to the screen instead.
 __rotari_history=
 __rotari_c() {
-	local now line url= char hex i
+	local now line
 	now=$(HISTTIMEFORMAT= builtin history 1 2>/dev/null)
 	if [ -z "$now" ] || [ "$now" = "$__rotari_history" ]; then
 		printf '\033]133;C\007'
@@ -63,19 +65,40 @@ __rotari_c() {
 	line=${now#"${now%%[![:space:]]*}"}
 	line=${line#"${line%%[!0-9]*}"}
 	line=${line:2}
-	local LC_ALL=C
-	for ((i = 0; i < ${#line}; i++)); do
-		char=${line:i:1}
+	__rotari_encode "$line"
+	printf '\033]133;C;cmdline_url=%s\007' "$__rotari_url"
+}
+# __rotari_encode percent-encodes $1 byte by byte into __rotari_url, keeping / as it is
+# when $2 is set, for a path.
+__rotari_url=
+__rotari_encode() {
+	local LC_ALL=C char hex i
+	__rotari_url=
+	for ((i = 0; i < ${#1}; i++)); do
+		char=${1:i:1}
 		case $char in
-		[A-Za-z0-9._~-]) url+=$char ;;
+		[A-Za-z0-9._~-]) __rotari_url+=$char ;;
+		/) if [ -n "${2:-}" ]; then __rotari_url+=/; else __rotari_url+=%2F; fi ;;
 		*)
 			# A byte above 127 can read as negative, by the locale.
 			printf -v hex '%02X' "'$char"
-			url+="%${hex: -2}"
+			__rotari_url+="%${hex: -2}"
 			;;
 		esac
 	done
-	printf '\033]133;C;cmdline_url=%s\007' "$url"
+}
+# __rotari_dir prints OSC 7, the directory the next command runs in, as file://HOST/PATH
+# with the path percent-encoded, so that the Web terminal resolves the relative paths a
+# command prints where it ran. It encodes a directory once.
+__rotari_dir_said=
+__rotari_dir_url=
+__rotari_dir() {
+	if [ "$PWD" != "$__rotari_dir_said" ] || [ -z "$__rotari_dir_url" ]; then
+		__rotari_encode "$PWD" path
+		__rotari_dir_url=$__rotari_url
+		__rotari_dir_said=$PWD
+	fi
+	printf '\033]7;file://%s%s\007' "${HOSTNAME:-}" "$__rotari_dir_url"
 }
 
 # PROMPT_COMMAND is made again from what the user's files left, rotari's pieces taken out

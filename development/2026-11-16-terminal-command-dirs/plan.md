@@ -1,7 +1,8 @@
 # Plan: Relative paths in the Web terminal's output, from where each command ran
 
 Created: 2026-11-16
-Status: Proposed; waiting for the user's decision on the open questions.
+Status: Accepted by the user on 2026-11-16, with the open questions answered as proposed; phase 1 is done. See
+[work-log.md](work-log.md).
 
 ## Goal
 
@@ -84,7 +85,10 @@ terminal candidates.
 - Opening a remote host's paths (decision 4).
 - fish and other shells beyond reading the OSC 7 they print.
 
-## Open questions
+## Settled questions
+
+All three were accepted as proposed on 2026-11-16.
+
 
 1. **Unknown directory.** Proposed: a block whose OSC 7 does not decode links no relative path (decision 2). The
    alternative is to fall back to the shell's directory now, as today, at the risk of a wrong link.
