@@ -357,7 +357,8 @@ when they name something: a run of any project of the state directory (of any st
 project), a job of the tab's project in its last 20 runs or its queue, or a file or directory on the server. A nine-digit
 hex word that is no job, such as a git hash, stays text. Click a run or job to open its run page with the job chosen
 (a job only queued opens the project's page); the panel and its shells stay, and Ctrl- or Cmd-click opens a new tab
-instead. Click a directory to show it in the Explorer, or a file to open it in the Table viewer. A `:12` or
+instead. Click a directory to open a new terminal tab there, or a file to open it in the Table viewer;
+right-click a path for the menu its row in the Explorer has, with **Show in the Explorer** too. A `:12` or
 `:12:3` after a path is left out. A relative path is taken from the directory the command that printed it ran in:
 bash and zsh started by rotari say it at each prompt (OSC 7, as other terminals read it), as do fish and many prompts,
 so a path printed before a `cd` still names what it did. A command line that changes directory itself, such as

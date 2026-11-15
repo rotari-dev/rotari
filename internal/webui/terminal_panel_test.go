@@ -4132,17 +4132,38 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   runLink.hover();
   assert.equal(lkViewport.title, 'Open this run of p1; Ctrl- or Cmd-click opens a new tab');
   fileLink.hover();
-  assert.equal(lkViewport.title, 'Open /w/p1/out/x.csv in the Table viewer');
+  assert.equal(lkViewport.title, 'Open /w/p1/out/x.csv in the Table viewer; right-click for more');
   fileLink.leave();
   assert.equal(lkViewport.hasAttribute('title'), false);
+  dirLink.hover();
+  assert.equal(lkViewport.title, 'Open a new terminal tab in /w/p1/out; right-click for more');
+  // A right click on a path's link offers what its row in the Explorer does, and Show in
+  // the Explorer; elsewhere, the terminal's own menu.
+  const lkMenu = () => [...lk.document.querySelectorAll('.terminal-tab-menu button')].map((item) => item.textContent);
+  const rightClick = () => lkViewport.dispatchEvent(new lk.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+  rightClick();
+  assert.deepEqual(lkMenu(), ['Open in the Table viewer', 'Open in a new terminal tab', 'Show in the Explorer', 'Send the path to the terminal', 'Download', 'Upload...', 'New File...', 'New Folder...', 'Cut', 'Copy', 'Paste', 'Rename...', 'Delete...', 'Copy the path', 'Copy the path from here']);
+  [...lk.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Show in the Explorer').click();
+  await wait(30);
+  assert.equal(lk.document.querySelector('.terminal-explorer-where').textContent, '/w/p1/out');
+  dirLink.leave();
+  fileLink.hover();
+  rightClick();
+  [...lk.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Open in a new terminal tab').click();
+  await wait(30);
+  assert.match(lk.requests.findLast((request) => request.startsWith('POST /_terminal/shells')), /dir=%2Fw%2Fp1%2Fout$/, 'a file\'s link opened a tab elsewhere than its folder');
+  fileLink.leave();
+  rightClick();
+  assert.deepEqual(lkMenu().slice(0, 4), ['Cut', 'Copy', 'Paste', 'Select all'], 'off a link, the terminal\'s menu');
+  lk.document.dispatchEvent(new lk.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   // Ctrl- or Cmd-click opens a run or job in a new tab.
   runLink.activate({ ctrlKey: true });
   jobLink.activate({ metaKey: true });
   assert.deepEqual(lkOpened.map((args) => args[0]), ['/project/p1/run/' + run, '/project/p1/run/' + run + '?job_id=aaaaaaaa1']);
-  // A directory opens in the Explorer without following the shell, and a file in the Table viewer.
+  // A directory opens a new terminal tab there, and a file in the Table viewer.
   dirLink.activate({});
   await wait(30);
-  assert.equal(lk.document.querySelector('.terminal-explorer-where').textContent, '/w/p1/out');
+  assert.match(lk.requests.findLast((request) => request.startsWith('POST /_terminal/shells')), /dir=%2Fw%2Fp1%2Fout$/, 'a directory\'s link did not open a tab there');
   fileLink.activate({});
   await wait(30);
   assert.ok(lk.requests.includes('POST /api/tableview-sources {"path":"/w/p1/out/x.csv"}'), lk.requests.join(', '));

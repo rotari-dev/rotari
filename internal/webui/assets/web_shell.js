@@ -4522,11 +4522,12 @@ function shellWord(value) {
         "Open this job of " +
         link.project +
         "; Ctrl- or Cmd-click opens a new tab",
-      dir: "Show " + link.path + " in the Explorer",
-      file: "Open " + link.path + " in the Table viewer",
+      dir: "Open a new terminal tab in " + link.path + "; right-click for more",
+      file: "Open " + link.path + " in the Table viewer; right-click for more",
     })[link.kind] || "";
   const followOutputLink = (link, event) => {
-    if (link.kind === "dir") showDirInExplorer(link.path);
+    // A directory opens a shell there, which leaves the Explorer following the shell.
+    if (link.kind === "dir") newShell(focused, link.path);
     else if (link.kind === "file") openInViewer(link.path);
     else if (event?.ctrlKey || event?.metaKey)
       window.open(link.link, "_blank", "noopener");
@@ -4585,9 +4586,11 @@ function shellWord(value) {
                 decorations: { pointerCursor: true, underline: true },
                 activate: (event) => followOutputLink(link, event),
                 hover: () => {
+                  pane.hoveredLink = link;
                   pane.viewport.title = linkTitle(link);
                 },
                 leave: () => {
+                  if (pane.hoveredLink === link) pane.hoveredLink = null;
                   pane.viewport.removeAttribute("title");
                 },
               }))
@@ -4733,25 +4736,7 @@ function shellWord(value) {
         showNote(unnamedNote, 6000);
         return;
       }
-      openPanelMenu(event, [
-        ["Open in the Table viewer", () => openInViewer(path), true],
-        // A file's folder, as editors open a terminal for a file.
-        [
-          "Open in a new terminal tab",
-          () => newShell(focused, folder ? path : dir),
-          true,
-        ],
-        ["Send the path to the terminal", () => sendExplorerPath(path), true],
-        ["Download", () => downloadExplorerItem(path), true],
-        ["Upload...", () => chooseUploads(folder ? path : dir), true],
-        ...explorerChangeChoices(path, folder),
-        ["Copy the path", () => copyText(path), true],
-        [
-          "Copy the path from here",
-          () => copyText(pathFromShell(path)),
-          Boolean(explorer.shellDir) && under(path, explorer.shellDir),
-        ],
-      ]);
+      openPanelMenu(event, pathChoices(path, folder));
     };
     explorer.visible.push({ path, folder, named, parent: dir, level });
     return row;
@@ -5102,6 +5087,36 @@ function shellWord(value) {
     document.body.append(chooser);
     chooser.click();
   };
+  // pathChoices is the menu of a file or folder, an Explorer row's or a link's in a shell's
+  // output, which adds Show in the Explorer.
+  const pathChoices = (path, folder, fromLink = false) => [
+    ["Open in the Table viewer", () => openInViewer(path), true],
+    // A file's folder, as editors open a terminal for a file.
+    [
+      "Open in a new terminal tab",
+      () => newShell(focused, folder ? path : parentOf(path)),
+      true,
+    ],
+    ...(fromLink
+      ? [
+          [
+            "Show in the Explorer",
+            () => showDirInExplorer(folder ? path : parentOf(path)),
+            true,
+          ],
+        ]
+      : []),
+    ["Send the path to the terminal", () => sendExplorerPath(path), true],
+    ["Download", () => downloadExplorerItem(path), true],
+    ["Upload...", () => chooseUploads(folder ? path : parentOf(path)), true],
+    ...explorerChangeChoices(path, folder),
+    ["Copy the path", () => copyText(path), true],
+    [
+      "Copy the path from here",
+      () => copyText(pathFromShell(path)),
+      Boolean(explorer.shellDir) && under(path, explorer.shellDir),
+    ],
+  ];
   // The menu of a row's changes, after its other choices.
   const explorerChangeChoices = (path, folder) => [
     [
@@ -6088,6 +6103,12 @@ function shellWord(value) {
     const { term } = pane;
     if (event.shiftKey || term.modes.mouseTrackingMode !== "none") return;
     if (pane !== focused) focusPane(pane);
+    // A path's link offers what its row in the Explorer does.
+    const link = pane.hoveredLink;
+    if (link?.kind === "dir" || link?.kind === "file") {
+      openPanelMenu(event, pathChoices(link.path, link.kind === "dir", true));
+      return;
+    }
     const selection = term.hasSelection() ? term.getSelection() : "";
     const cut = selection ? cutPlace(pane) : null;
     const choices = [

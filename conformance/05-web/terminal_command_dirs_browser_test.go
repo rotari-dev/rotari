@@ -52,7 +52,7 @@ await withPage(cdp, base + '/_auth/login?next=/activity', { width: 1280, height:
   await until('the cd', screenHas('moved-2'));
   const point = await page.evaluate('(() => { const box = ' + printed + '.getBoundingClientRect(); return { x: box.left + 20, y: box.top + box.height / 2 }; })()');
   await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
-  await until('the path to link where it was printed', 'document.querySelector(".terminal-viewport")?.title.startsWith("Open ") && document.querySelector(".terminal-viewport").title.endsWith("/ran here/sub/y.txt in the Table viewer")');
+  await until('the path to link where it was printed', 'document.querySelector(".terminal-viewport")?.title.startsWith("Open ") && document.querySelector(".terminal-viewport").title.endsWith("/ran here/sub/y.txt in the Table viewer; right-click for more")');
 }).catch((error) => { failure = error.stack || String(error); });
 await close();
 console.log(JSON.stringify({ failure }));

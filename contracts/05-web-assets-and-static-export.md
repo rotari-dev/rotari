@@ -1704,7 +1704,13 @@ directory, keeps answers for IDs for the
 page's life and for paths a few seconds, and underlines only what is answered, a link inside a longer one giving
 way to it. Pointing at a link says what it opens. Clicking a run or job takes the page there with the panel's
 shells kept (with the panel in a window of its own, the page it belongs to); Ctrl- or Cmd-click opens it in a new
-tab. A directory shows in the Explorer with Follow off, and a file opens in the Table viewer (WEB-42). When the
+tab. A directory opens a new terminal tab of the terminal's group there (WEB-34's `dir`), which leaves the
+Explorer following, and a file opens in the Table viewer (WEB-42). A right click on a path's link, unless Shift is
+held or a program tracks the mouse (WEB-51), opens the menu its row in the Explorer has (WEB-42 to WEB-44: Open in
+the Table viewer, Open in a new terminal tab, in a file's folder, Send the path to the terminal, Download,
+Upload..., New File..., New Folder..., Cut, Copy, Paste, Rename..., Delete..., Copy the path, Copy the path from
+here), with **Show in the Explorer** after the second, showing the directory, or a file's folder, with Follow off;
+off a link, the terminal's own menu (WEB-51). When the
 server cannot be asked, nothing is a link and a note says so once. Implemented in
 `internal/webui/terminal_links.go` and the panel in `web_shell.js`; covered by
 [`TestTerminalOutputLinks`](../conformance/05-web/terminal_links_test.go),
