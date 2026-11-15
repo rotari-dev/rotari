@@ -129,12 +129,14 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await typeLine(' && echo "at-$(basename "$(pwd -P)" | tr " " _)"');
   await until('the chosen directory', screenHas('at-dir_one'));
 
-  // A project's page has tabs of its own, and starts none by itself.
+  // A project's page has tabs of its own, and starts none by itself. The state directory's
+  // own shells, started on All projects above, follow them (WEB-56), the pane keeping the one
+  // it showed, so the project's shell is started with its +.
   await page.evaluate('location.href = "/project/p1"');
-  await until('the project page', 'location.pathname === "/project/p1" && document.querySelector(".terminal-action")?.textContent === "Start a shell"');
-  if (await page.evaluate('document.querySelectorAll(".terminal-tab").length !== 0')) throw new Error('another page\'s tabs showed on the project page');
-  await page.evaluate('document.querySelector(".terminal-action").click()');
-  await until('the project\'s shell', 'document.querySelectorAll(".terminal-tab").length === 1 && document.querySelectorAll(".terminal-groups option").length === 2');
+  await until('the project page', 'location.pathname === "/project/p1" && document.querySelectorAll(".terminal-shared-tabs .terminal-tab").length === 2 && document.querySelector(".terminal-pane")?.terminalPane?.shown && document.querySelector(".terminal-status")?.hidden');
+  if (await page.evaluate('document.querySelectorAll(".terminal-tabs .terminal-tab").length !== 0')) throw new Error('another page\'s tabs showed on the project page');
+  await page.evaluate('document.querySelector(".terminal-add").click()');
+  await until('the project\'s shell', 'document.querySelectorAll(".terminal-tabs .terminal-tab").length === 1 && document.querySelector(".terminal-tabs .terminal-tab [aria-selected=true]") !== null && document.querySelectorAll(".terminal-groups option").length === 2');
   await until('the project\'s shell to settle', settled);
   await collect();
 
@@ -158,9 +160,9 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
   await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
   await until('the run page', 'location.pathname === "/project/p1/run/' + runID + '"');
-  await until('the shell on the run page', screenHas(runID) + ' && document.querySelectorAll(".terminal-tab").length === 1');
+  await until('the shell on the run page', screenHas(runID) + ' && document.querySelectorAll(".terminal-tabs .terminal-tab").length === 1');
   await page.evaluate('location.href = "/project/p1"');
-  await until('the project page again', 'location.pathname === "/project/p1" && document.querySelectorAll(".terminal-tab").length === 1');
+  await until('the project page again', 'location.pathname === "/project/p1" && document.querySelectorAll(".terminal-tabs .terminal-tab").length === 1');
   await until('the project\'s shell to settle again', settled);
   await collect();
 
@@ -381,7 +383,9 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
     if (!icon.hit || !icon.title) throw new Error('a split icon\'s picture hides its button\'s title: ' + icons);
   }
   await page.evaluate(barButton('Split right') + '.click()');
-  await until('a second pane', 'document.querySelectorAll(".xterm-helper-textarea").length === 2 && document.querySelectorAll(".terminal-tab").length === 2');
+  // It shows a shell in no pane: here one of the state directory's own, shown beside the
+  // project's tabs (WEB-56).
+  await until('a second pane', 'document.querySelectorAll(".xterm-helper-textarea").length === 2 && [...document.querySelectorAll(".terminal-pane")].every((pane) => pane.terminalPane?.shown)');
   await until('both panes to settle', bothSettled);
   await typeLine('echo "left-$((1+1))"', 0);
   await until('the first pane to run a command', paneHas(0, 'left-2'));

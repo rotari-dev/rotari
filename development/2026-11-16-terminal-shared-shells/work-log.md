@@ -94,3 +94,16 @@
   `TestTerminalSharedShellsInBrowser` checks the order and the shared + (CI only; `node --check` here). `tsc` and
   prettier clean.
 - **Remaining:** CI's browser run.
+
+## 2026-11-16 01:57 +09:00 — TestTerminalPanelInBrowser after WEB-56
+
+- **Change:** `TestTerminalPanelInBrowser` opens the panel on All projects, so its first shells are the state
+  directory's own; on `/project/p1` WEB-56 shows them after the project's tabs and starts none, where the test waited
+  for **Start a shell** (CI: "timed out waiting for the project page"). The project step now waits for the two shared
+  tabs and a shown shell, finds no tab of the project's, and starts the project's shell with its **+**; the later tab
+  counts count the project's tablist (`.terminal-tabs`); the split step, whose new pane now shows a shared shell
+  in no pane rather than starting one, waits for both panes to show a shell.
+- **Reason:** phase 3 should have adapted this test with WEB-56 and did not; the browser tests run only in CI.
+- **Plan impact:** none.
+- **Validation:** the script passes `node --check`; no Chrome here, so CI runs it.
+- **Remaining:** CI's run.
