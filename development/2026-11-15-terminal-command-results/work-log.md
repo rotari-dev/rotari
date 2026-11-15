@@ -36,3 +36,23 @@
   finished out of sight: their tabs' classes, labels, and titles, the cards' states, classes, and lines; no line without
   a last command) passed; `tsc` clean; prettier unchanged.
 - **Remaining:** phases 3 (the notification config), 4 (desktop notifications), 5 (contracts and docs).
+
+## 2026-11-15 13:40 +09:00 — The notification config
+
+- **Change:** `internal/notification` has `TerminalSettings` (`command_failure`, `command_success`, `min_seconds`;
+  defaults true, true, 30) as `Settings.Terminal`, read from `[terminal]` (unknown keys refused, a negative
+  `min_seconds` refused), written by `Marshal` and so in `Template` and `rotari config --notifications`, and
+  `Notifies(exit, took)`: long enough, and a success (exit 0) or a failure (any other exit, or none) asked for. `Load`
+  with no basedir reads only the global file, where it used to take a relative `notifications.toml` for the basedir's.
+  The shell list's `last_command` gains `notify`, from the shell's group's file read as the list is made, or
+  `notify_error` with why it could not be read. The editor (`web_app_core.js`) gains a **Terminal commands** group with
+  the two events and the length, saved as `settings.terminal`; the save handler starts from the defaults, so a client
+  that sends no `terminal` keeps them rather than zeroes.
+- **Reason:** plan phase 3.
+- **Plan impact:** decision 4 said a config that cannot be read would be named in the server's log; reading it as the
+  list is made, every poll, would fill the log, so the list says it in `notify_error` instead.
+- **Validation:** `TestTerminalSettings` (defaults; parsed keys; a negative length and an unknown key refused; the round
+  trip; the template; `Notifies` for a failure, a success, none, too short, and each event off) and
+  `TestLoadWithNoBasedirReadsTheGlobalFile` pass; the editor's JSDOM test in `webui_test.go` shows the group with the
+  file's values and saves the form's; see the commit for the package runs.
+- **Remaining:** phases 4 (desktop notifications) and 5 (contracts and docs).

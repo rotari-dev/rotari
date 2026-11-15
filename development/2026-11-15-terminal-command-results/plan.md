@@ -2,7 +2,7 @@
 
 Created: 2026-11-15
 Status: Accepted by the user on 2026-11-15, after asking for the settings to be in the notification config, with the
-open questions answered as proposed; phases 1 and 2 are done and phase 3 (the notification config) is next. See [work-log.md](work-log.md).
+open questions answered as proposed; phases 1–3 are done and phase 4 (desktop notifications) is next. See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -55,9 +55,9 @@ shells, the bell, or notifications"), proposed on 2026-11-15 as the next termina
    ```
    with those defaults when the section or a key is missing. The file that applies is the shell's group's, as for its
    runs: a project's shell the project's (then the basedir's, then the global one), a basedir's own shell the
-   basedir's (then the global one), a shell of no project the global one. The server reads it when a marked command
-   ends and says in `last_command` whether to notify (`"notify": true`); a file that cannot be read notifies nothing and
-   is named in the server's log. The Web UI's **Notification config** form gains a **Terminal** group with the two
+   basedir's (then the global one), a shell of no project the global one. The server reads it as the list is made and
+   says in `last_command` whether to notify (`"notify": true`); a file that cannot be read notifies nothing and is named
+   in `notify_error`. The Web UI's **Notification config** form gains a **Terminal** group with the two
    events and the length, and `rotari config --notifications`'s template the section.
 5. **Desktop notifications.** A page with the terminal, seeing in the list a newly ended command marked `notify` in a
    shell it does not show (or with the page itself hidden), raises a desktop notification under the same toggle and
