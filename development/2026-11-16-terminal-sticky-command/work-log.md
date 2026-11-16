@@ -32,3 +32,15 @@
   ./conformance/05-web` is clean; the browser test skips here (no Chrome) and runs in CI; its script passes `node
   --check`. `scripts/check.sh` was not run (npm is broken here, and the full run is too heavy for the shared machine).
 - **Remaining:** CI's run of `TestTerminalStickyCommandInBrowser`.
+
+## 2026-11-16 23:25 +09:00 — A scroll by the viewer
+
+- **Change:** `web_shell.js`: the sticky line and the top-right buttons follow the pane viewport's own `scroll`
+  events (heard while capturing), besides xterm.js's `onScroll`.
+- **Reason:** the user found that scrolling to the top and back left the command's line unseen: xterm.js fires
+  `onScroll` only when output moves the view (its viewport asks for the lines with `suppressScrollEvent`), so a scroll
+  with the wheel or the scroll bar left the sticky line as it was, covering the prompt at the top.
+- **Plan impact:** decision 4's updates include the viewer's scroll.
+- **Validation:** `TestTerminalPanel`: a viewport scroll event into the output shows the line and one back to the
+  prompt hides it, with no `onScroll`.
+- **Remaining:** CI's browser tests.

@@ -4635,6 +4635,18 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     return shown ? [sticky().querySelector('.terminal-sticky-command').textContent, sticky().querySelector('.terminal-sticky-mark').dataset.state] : null;
   };
   assert.equal(at(0), null, 'shown with the prompt in view');
+  // A scroll by the viewer (the wheel, the scroll bar) is no onScroll of xterm.js's but the
+  // viewport's own scroll event, which counts too: to the output and back to the top.
+  const skBar = sk.document.createElement('div');
+  sk.document.querySelector('.terminal-viewport').append(skBar);
+  const userScroll = (line) => {
+    skTerm.buffer.active.viewportY = line;
+    skBar.dispatchEvent(new sk.window.Event('scroll'));
+  };
+  userScroll(20);
+  assert.equal(sticky()?.hidden, false, 'a viewer\'s scroll into the output did not show it');
+  userScroll(0);
+  assert.equal(sticky().hidden, true, 'a viewer\'s scroll back to the prompt left it covering the prompt');
   assert.deepEqual(JSON.parse(JSON.stringify(at(1))), ['$ seq 30', 'ok']);
   assert.deepEqual(JSON.parse(JSON.stringify(at(20))), ['$ seq 30', 'ok']);
   assert.equal(at(31), null, 'shown at the next prompt');

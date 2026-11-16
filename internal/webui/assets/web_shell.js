@@ -7481,10 +7481,16 @@ function shellWord(value) {
         Uint8Array.from(data, (character) => character.charCodeAt(0)),
       ),
     );
-    term.onScroll(() => {
+    // xterm.js's onScroll is only for output moving the view: a scroll by the viewer, with
+    // the wheel or the scroll bar, fires none, so the viewport's own scroll events count
+    // too. They do not bubble; a listener here hears them while capturing, after xterm.js
+    // has moved its view, as its listener is on the element itself.
+    const followScroll = () => {
       updateSticky(pane);
       updateFloat(pane);
-    });
+    };
+    term.onScroll(followScroll);
+    viewport.addEventListener("scroll", followScroll, true);
     term.onResize(({ rows, cols }) => {
       updateSticky(pane);
       if (dragging) pane.heldResize = { rows, cols };
