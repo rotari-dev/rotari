@@ -90,6 +90,17 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       const answer = { ok: true, status: 200, json: async () => ({ shells: [...server.shells], limit: 32, group_limit: server.limit, ...(server.now ? { now: server.now } : {}) }) };
       return server.holdLists ? new Promise((resolve) => (server.heldLists ||= []).push((response = answer) => resolve(response))) : Promise.resolve(answer);
     }
+    // A move takes the shell to the place the query names, its name and movable kept.
+    const placed = /\/_terminal\/shells\/([^/?]+)\/place\?(.*)$/.exec(url);
+    if (placed) {
+      if (server.placeRefuse) return refused(409, server.placeRefuse);
+      const shell = server.shells.find((item) => item.id === decodeURIComponent(placed[1]));
+      const project = decodeURIComponent(/(?:^|&)project=([^&]*)/.exec(placed[2])?.[1] || '');
+      const number = server.shells.filter((item) => item.basedir === '/b' && item.project === project).length + 1;
+      const moved = { ...(project ? inProject(shell.id, number, project) : ofBasedir(shell.id, number)), name: shell.name, movable: shell.movable };
+      server.shells = server.shells.map((item) => (item === shell ? moved : item));
+      return Promise.resolve({ ok: true, status: 200, json: async () => moved });
+    }
     if (method === 'POST') {
       if (server.startError) return refused(500, server.startError);
       const project = decodeURIComponent(/project=([^&]*)/.exec(url)?.[1] || '');
@@ -4260,6 +4271,77 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const plainLinks = await new Promise((resolve) => plainTerm.linkProviders[0].provideLinks(2, resolve));
   assert.deepEqual(Array.from(plainLinks || [], (link) => link.text), ['src/x.csv']);
   assert.deepEqual(JSON.parse(JSON.stringify(plainPage.server.linkBodies.at(-1))), { candidates: ['src/x.csv'] });
+  }
+
+  // All shells moves a shell to another project: its card dragged onto another group, which
+  // takes it only with room and never as no project, or its Move button's menu, listing the
+  // groups with shells and the projects with none. A pane showing a shell that moved out of
+  // the page's view shows another, or says so; a shell of no project, or one without the
+  // integration, does not move, and says why.
+  {
+  const movable = (shell) => ({ ...shell, movable: true });
+  const mv = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [movable(inProject('1', 1, 'p1')), movable(inProject('2', 1, 'p2')), movable(ofBasedir('3', 1)), plain('4', 1), inProject('5', 2, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  mv.server.limit = 2;
+  mv.server.projects = { b: ['p1', 'p2', 'p3'] };
+  await wait(50);
+  mv.sockets.at(-1).onopen?.();
+  const mvPane = () => mv.document.querySelector('.terminal-pane').terminalPane;
+  assert.equal(mvPane().shown, '1');
+  [...mv.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'All shells').click();
+  await wait(50);
+  const item = (id) => mv.document.querySelector('.terminal-overview-card[data-shell="' + id + '"]').parentElement;
+  const moveButton = (id) => item(id).querySelector('.terminal-overview-move');
+  const group = (name) => [...mv.document.querySelectorAll('.terminal-overview-group')].find((section) => section.getAttribute('aria-label') === name);
+  assert.equal(moveButton('1').disabled, false);
+  assert.equal(moveButton('1').getAttribute('aria-label'), 'Move shell 1 to another project');
+  assert.equal(moveButton('4').disabled, true);
+  assert.match(moveButton('4').title, /^A shell of no project does not move/);
+  assert.equal(moveButton('5').disabled, true);
+  assert.match(moveButton('5').title, /not started with rotari's shell integration/);
+  assert.deepEqual([item('1').draggable, item('4').draggable, item('5').draggable], [true, false, false]);
+  // Dragging: only another group with a basedir and room takes the card.
+  const drag = (target, type) => {
+    const event = new mv.window.Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: { setData() {}, effectAllowed: '', dropEffect: '' } });
+    target.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  drag(item('1'), 'dragstart');
+  assert.ok(item('1').classList.contains('terminal-overview-dragged'));
+  assert.equal(drag(group('p1'), 'dragover'), false, 'its own group took the card');
+  assert.equal(drag(group('No project'), 'dragover'), false, 'no project took the card');
+  assert.equal(drag(group('p2'), 'dragover'), true, 'another project did not take the card');
+  assert.ok(group('p2').classList.contains('terminal-overview-drop'));
+  drag(group('p2'), 'drop');
+  await wait(50);
+  assert.ok(mv.requests.includes('POST /_terminal/shells/1/place?project=p2'), mv.requests.join(', '));
+  // The pane showed it, and shows another shell of the view instead.
+  assert.equal(mvPane().shown, '5');
+  assert.match(mv.document.querySelector('.terminal-send-note').textContent, /^Moved shell 1 of p1 to p2\. Its next command uses p2; a command running now keeps the project it had\.$/);
+  assert.equal(mv.document.querySelector('.terminal-overview-drop'), null, 'the drop mark stayed');
+  // p2 is full now: the drag is refused there, and the menu says so.
+  drag(item('3'), 'dragstart');
+  assert.equal(drag(group('p2'), 'dragover'), false, 'a full group took the card');
+  drag(item('3'), 'dragend');
+  const menu = () => [...mv.document.querySelectorAll('.terminal-tab-menu button')].map((button) => [button.textContent, !button.disabled]);
+  moveButton('3').click();
+  assert.deepEqual(menu(), [['p1', true], ['p2 (full)', false], ['p3', true]]);
+  [...mv.document.querySelectorAll('.terminal-tab-menu button')].find((button) => button.textContent === 'p3').click();
+  await wait(50);
+  assert.ok(mv.requests.includes('POST /_terminal/shells/3/place?project=p3'), mv.requests.join(', '));
+  // A move the server refuses is told in the overview.
+  mv.server.placeRefuse = 'at most 2 shells can run for one project';
+  moveButton('2').click();
+  [...mv.document.querySelectorAll('.terminal-tab-menu button')].find((button) => button.textContent === 'p1').click();
+  await wait(50);
+  assert.equal(mv.document.querySelector('.terminal-overview-problem').textContent, 'Shell 1 of p2 did not move to p1: at most 2 shells can run for one project');
+  mv.server.placeRefuse = '';
+  // A move made elsewhere, seen in the next list: the only pane has nothing left to show.
+  mv.server.shells = mv.server.shells.map((shell) => (shell.id === '5' ? inProject('5', 2, 'p3') : shell));
+  mv.polls.forEach((poll) => poll());
+  await wait(50);
+  assert.equal(mvPane().shown, null);
+  assert.equal(mv.document.querySelector('.terminal-status').textContent.startsWith('Shell 2 of p1 moved to p3.'), true, mv.document.querySelector('.terminal-status').textContent);
   }
 
   // Links a program prints with OSC 8, which xterm.js finds itself: a web address opens a

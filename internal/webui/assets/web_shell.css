@@ -1396,6 +1396,15 @@ html.terminal-open .output-panel.terminal-overview {
 .terminal-overview-item > .terminal-overview-card {
   flex: none;
 }
+/* A card being dragged to another project, and the group it would move to. */
+.terminal-overview-dragged {
+  opacity: 0.5;
+}
+.terminal-overview-group.terminal-overview-drop {
+  outline: 2px dashed var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 .terminal-overview-run {
   display: flex;
   align-items: baseline;
@@ -1454,7 +1463,7 @@ html.terminal-open .output-panel.terminal-overview {
   text-align: right;
 }
 .terminal-overview-item .terminal-overview-top {
-  padding-right: 66px;
+  padding-right: 88px;
 }
 .terminal-overview-actions {
   position: absolute;
@@ -1478,6 +1487,10 @@ html.terminal-open .output-panel.terminal-overview {
 .terminal-overview-actions button.terminal-icon:focus-visible {
   background: var(--surface-2);
   color: var(--text);
+}
+.terminal-overview-actions button.terminal-icon:disabled {
+  opacity: 0.4;
+  background: none;
 }
 /* The launch dialog's own parts; its frame is the overview's. */
 .output-panel.terminal-launch,

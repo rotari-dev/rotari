@@ -281,6 +281,7 @@ function shellWord(value) {
     ],
     rename: ["M10 3.5l2.5 2.5L6 12.5H3.5V10z", "M8.5 5l2.5 2.5"],
     endShell: ["M4.5 4.5l7 7", "M11.5 4.5l-7 7"],
+    moveShell: ["M2.5 8h8", "M8 5l3 3-3 3", "M13.5 3.5v9"],
     // A play mark: run something here.
     launch: ["M5 3.5l7.5 4.5L5 12.5z"],
     // A prompt's chevron over lines: the commands run in a pane.
@@ -2230,6 +2231,66 @@ function shellWord(value) {
     const started = await response.json();
     drawOverview(started.id);
   };
+  // moveToGroup moves a shell to the group whose page is link, named name: the server gives
+  // it that place's project at its next command, or when what runs now ends.
+  const moveToGroup = async (shell, link, name) => {
+    let response;
+    try {
+      response = await serverFetch(
+        shellsPath +
+          "/" +
+          encodeURIComponent(shell.id) +
+          "/place?" +
+          placeOfPath(link),
+        { method: "POST" },
+      );
+    } catch {}
+    if (!response?.ok) {
+      await overviewRefusal(
+        response,
+        "Shell " +
+          shell.number +
+          " of " +
+          projectName(shell) +
+          " did not move to " +
+          name,
+      );
+      return false;
+    }
+    await refreshShells();
+    showNote(
+      "Moved shell " +
+        shell.number +
+        " of " +
+        projectName(shell) +
+        " to " +
+        name +
+        ". Its next command uses " +
+        name +
+        "; a command running now keeps the project it had.",
+      6000,
+    );
+    if (overview) drawOverview(shell.id);
+    return true;
+  };
+  // Where the overview's shells can move: the groups listed with shells (overviewGroups)
+  // and the projects with none yet (overviewNewGroups, from drawOverviewNew), each
+  // { name, link, basedir, project, full }; never no project.
+  let overviewGroups = [];
+  let overviewNewGroups = [];
+  const moveTargets = (shell) =>
+    [...overviewGroups, ...overviewNewGroups].filter(
+      (target) => target.basedir && !sameGroup(target, shell),
+    );
+  // Why a shell cannot move, or "" when it can.
+  const unmovable = (shell) =>
+    !shell.basedir
+      ? "A shell of no project does not move: rotari set no project in it to replace."
+      : !shell.movable
+        ? "This shell was not started with rotari's shell integration, so it cannot take another project."
+        : "";
+  // The shell a card's drag carries, while it is dragged.
+  let overviewDragged = null;
   // drawOverviewNew offers, under the cards, a shell where there is none yet: every basedir
   // the server knows and each of its projects that has no shell, and no project at all,
   // which starts in the home directory.
@@ -2291,19 +2352,33 @@ function shellWord(value) {
       return item;
     };
     const options = [];
+    overviewNewGroups = [];
+    const target = (basedir, project, link) =>
+      overviewNewGroups.push({
+        name:
+          (project || "All projects") +
+          (basedirs.length > 1 ? " in " + basedir.path : ""),
+        link,
+        basedir: basedir.path,
+        project,
+        full: false,
+      });
     if (!hasShells("", ""))
       options.push(option("No project (home directory)", "/activity"));
     for (const { basedir, projects } of lists) {
       const prefix = basedir.current ? "" : "/_basedir/" + basedir.id;
       // The basedir's own shells, which its All projects shows.
-      const items = hasShells(basedir.path, "")
-        ? []
-        : [option("All projects (the basedir)", prefix + "/")];
+      const items = [];
+      if (!hasShells(basedir.path, "")) {
+        items.push(option("All projects (the basedir)", prefix + "/"));
+        target(basedir, "", prefix + "/");
+      }
       for (const project of projects || []) {
-        if (!hasShells(basedir.path, project))
-          items.push(
-            option(project, prefix + "/project/" + encodeURIComponent(project)),
-          );
+        if (!hasShells(basedir.path, project)) {
+          const link = prefix + "/project/" + encodeURIComponent(project);
+          items.push(option(project, link));
+          target(basedir, project, link);
+        }
       }
       if (!items.length) continue;
       if (basedirs.length > 1) {
@@ -2550,12 +2625,55 @@ function shellWord(value) {
       "Launch a registered command, such as TensorBoard, in the directory this shell is in now";
     drawIcon(launchHere, icons.launch);
     launchHere.onclick = () => openLaunchDialog(shell);
+    // Move to another project: a menu of where it can go, as dragging its card does.
+    const moveTo = document.createElement("button");
+    moveTo.type = "button";
+    moveTo.className = "terminal-overview-move";
+    moveTo.setAttribute("aria-label", "Move " + label + " to another project");
+    moveTo.setAttribute("aria-haspopup", "menu");
+    const why = unmovable(shell);
+    moveTo.disabled = Boolean(why);
+    moveTo.title =
+      why ||
+      "Move this shell to another project, or drag its card onto one; its next command uses that project";
+    drawIcon(moveTo, icons.moveShell);
+    moveTo.onclick = (event) => {
+      const targets = moveTargets(shell);
+      openPanelMenu(
+        event,
+        targets.length
+          ? targets.map((target) => [
+              target.full ? target.name + " (full)" : target.name,
+              () => moveToGroup(shell, target.link, target.name),
+              !target.full,
+            ])
+          : [["No other project", () => {}, true]],
+      );
+    };
     const actions = document.createElement("span");
     actions.className = "terminal-overview-actions";
-    actions.append(launchHere, rename, end);
+    actions.append(launchHere, moveTo, rename, end);
     const item = document.createElement("div");
     item.className = "terminal-overview-item";
     item.append(card, run, tree, actions);
+    item.dataset.shell = shell.id;
+    if (!why) {
+      item.draggable = true;
+      item.ondragstart = (event) => {
+        overviewDragged = shell;
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", shell.name || label);
+        item.classList.add("terminal-overview-dragged");
+      };
+      item.ondragend = () => {
+        overviewDragged = null;
+        item.classList.remove("terminal-overview-dragged");
+        for (const group of overview?.querySelectorAll(
+          ".terminal-overview-drop",
+        ) || [])
+          group.classList.remove("terminal-overview-drop");
+      };
+    }
     const started = (reason) => {
       if (serial !== overviewSerial) return;
       path.textContent = "started in " + shell.dir;
@@ -2809,6 +2927,14 @@ function shellWord(value) {
       entry.shells.push(shell);
     }
     const listed = entries.filter((entry) => entry.shells.length);
+    overviewGroups = listed.map((entry) => ({
+      name: projectName(entry) + inBasedir(entry, listed),
+      link: entry.link,
+      basedir: entry.basedir,
+      project: entry.project,
+      full: entry.shells.length >= groupLimit,
+    }));
+    overviewNewGroups = [];
     endEvery.disabled = !shells.length;
     if (!listed.length) {
       body.textContent = "No shells are running.";
@@ -2892,6 +3018,31 @@ function shellWord(value) {
         );
         group.setAttribute("aria-label", name);
         group.append(heading, projectState, cards);
+        // A card dragged here from another group moves its shell here, when there is room;
+        // no project takes none.
+        const takes = () =>
+          Boolean(entry.basedir) &&
+          overviewDragged !== null &&
+          !sameGroup(entry, overviewDragged) &&
+          entry.shells.length < groupLimit;
+        group.ondragover = (event) => {
+          if (!takes()) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          group.classList.add("terminal-overview-drop");
+        };
+        group.ondragleave = (event) => {
+          if (!group.contains(event.relatedTarget))
+            group.classList.remove("terminal-overview-drop");
+        };
+        group.ondrop = (event) => {
+          group.classList.remove("terminal-overview-drop");
+          if (!takes()) return;
+          event.preventDefault();
+          const shell = overviewDragged;
+          overviewDragged = null;
+          moveToGroup(shell, entry.link, name);
+        };
         return group;
       }),
     );
@@ -3027,6 +3178,7 @@ function shellWord(value) {
       if (serial !== listSerial) return { ok: true };
       if (panel && !terminalWindow) noteEndedShells(listed.shells);
       noteCommandEnds(listed.shells);
+      const before = shells;
       shells = listed.shells;
       if (Number.isFinite(Date.parse(listed.now)))
         serverClock = Date.parse(listed.now) - Date.now();
@@ -3037,6 +3189,7 @@ function shellWord(value) {
       if (panel) {
         renderTabs();
         refreshExplorer();
+        followMovedShells(before);
       }
       return { ok: true };
     })();
@@ -3342,6 +3495,41 @@ function shellWord(value) {
     const next = left[Math.min(Math.max(place, 0), left.length - 1)];
     if (next) show(pane, next.id, false);
     else closePane(pane); // The other panes have all there is. With none, this stays.
+  };
+  // followMovedShells lets go of a shell a pane shows that has moved to another project
+  // out of this page's view since the list before, here or from another page: the pane
+  // shows another shell of the view, closes if others show them all, or else says so, as
+  // when a shell ends.
+  const followMovedShells = (before) => {
+    for (const pane of [...panes]) {
+      const now = shells.find((shell) => shell.id === pane.shown);
+      const was = before.find((shell) => shell.id === pane.shown);
+      if (!now || !was || sameGroup(now, was) || inView(now)) continue;
+      const message =
+        "Shell " +
+        was.number +
+        " of " +
+        projectName(was) +
+        " moved to " +
+        projectName(now) +
+        ".";
+      const left = shellsInView().filter((shell) => !paneShowing(shell.id));
+      if (left.length) {
+        show(pane, left[0].id, false);
+        showNote(message, 4000);
+      } else if (panes.length > 1) {
+        closePane(pane);
+        showNote(message, 4000);
+      } else {
+        const previous = pane.socket;
+        pane.socket = null;
+        previous?.close();
+        pane.shown = null;
+        rememberLayout();
+        renderTabs();
+        showStatus(pane, message, "New shell", () => newShell(pane));
+      }
+    }
   };
   const endShell = async (shell, refused = paneRefusal) => {
     if (

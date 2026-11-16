@@ -41,3 +41,28 @@
   refusal, a full project, its own, a GET), `TestTerminalDoesNotMoveAShellWithoutTheIntegration`, and the route added
   to `TestTerminalShellRoutesAreGuarded` pass; `go test ./internal/webui -skip 'TestTerminalPanel$'` passes.
 - **Remaining:** phases 3 (All shells) and 4 (contracts and docs).
+
+## 2026-11-16 17:08 +09:00 — All shells
+
+- **Change:** `web_shell.js`: each card gets a **Move** icon (`moveShell`) between Launch and Rename, whose menu lists
+  where the shell can go: the groups listed with shells (`overviewGroups`, "(full)" and disabled at the group
+  limit) and the projects and basedirs' own with none yet (`overviewNewGroups`, from `drawOverviewNew`'s lists),
+  never no project; a shell of no project or one not `movable` has it disabled with a title saying why. A movable
+  card's item is draggable; another group's section with a basedir and room takes it (`terminal-overview-drop`
+  outline), and a drop or a menu choice calls `moveToGroup` (`POST …/place?` + `placeOfPath` of the group's link),
+  then refreshes the list, redraws the overview with the keys on the card, and notes "Moved shell N of P to Q. Its next
+  command uses Q; a command running now keeps the project it had."; a refusal is said at the overview's top.
+  `refreshShells` calls `followMovedShells` with the list before: a pane showing a shell whose group changed out of
+  this page's view shows the next free shell of the view, or closes when other panes remain, or else drops the
+  connection and says "Shell N of P moved to Q." with **New shell**, so a move from another page is followed too.
+  CSS: the dragged card dims, the drop target is outlined, a disabled icon dims, and the card's top leaves room for
+  four icons.
+- **Reason:** plan phase 3.
+- **Plan impact:** decision 6's keyboard way is the Move icon's menu (a button among the card's icons, reached by Tab),
+  not a separate card menu; messages name the shell's project, since numbers repeat across projects.
+- **Validation:** `TestTerminalPanel` (Move enabled and labeled, disabled with reasons for no project and no
+  integration, draggable only when movable; a drag refused by its own group, no project, and a full group, taken by
+  another project and sent there; the pane showing the moved shell taking the next one; the note; the menu with a full
+  group and a project with no shells, sent there; a refusal at the top; a move seen in the next list leaving the only
+  pane with its message) passes; `tsc` and prettier clean.
+- **Remaining:** phase 4 (contracts and docs).
