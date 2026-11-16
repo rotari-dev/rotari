@@ -53,6 +53,13 @@ await withPage(cdp, base + '/_auth/login?next=/activity', { width: 1280, height:
   const point = await page.evaluate('(() => { const box = ' + printed + '.getBoundingClientRect(); return { x: box.left + 20, y: box.top + box.height / 2 }; })()');
   await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
   await until('the path to link where it was printed', 'document.querySelector(".terminal-viewport")?.title.startsWith("Open ") && document.querySelector(".terminal-viewport").title.endsWith("/ran here/sub/y.txt in the Table viewer; right-click for more")');
+  // A link a program prints with OSC 8, its text hiding a file: address, links to that file.
+  await typeLine("printf '\\033]8;;file://%s/ran%%20here/sub/y.txt\\033\\\\open-%s\\033]8;;\\033\\\\\\n' \"$HOME\" me");
+  const hidden = '[...document.querySelectorAll(".xterm-rows > div")].find((row) => row.textContent.trim() === "open-me")';
+  await until('the OSC 8 link', hidden + ' !== undefined');
+  const linked = await page.evaluate('(() => { const box = ' + hidden + '.getBoundingClientRect(); return { x: box.left + 20, y: box.top + box.height / 2 }; })()');
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...linked });
+  await until('the OSC 8 link to say its file', 'document.querySelector(".terminal-viewport")?.title.endsWith("/ran here/sub/y.txt in the Table viewer; right-click for more")');
 }).catch((error) => { failure = error.stack || String(error); });
 await close();
 console.log(JSON.stringify({ failure }));
@@ -61,7 +68,8 @@ process.exit(0);
 
 // TestTerminalCommandDirsInBrowser checks in a real browser that a relative path a command
 // printed links where that command ran after the shell has moved, from the directory
-// rotari's bash says at each prompt.
+// rotari's bash says at each prompt, and that a file: link printed with OSC 8 links to
+// its file.
 func TestTerminalCommandDirsInBrowser(t *testing.T) {
 	covers(t, "WEB-46")
 	chrome, node, helper := browserCheckTools(t)

@@ -2,7 +2,7 @@
 
 Created: 2026-11-16
 Status: Accepted by the user on 2026-11-16, with open question 1 answered the other way (a prompt for every web
-address) and 2 as proposed. See [work-log.md](work-log.md).
+address) and 2 as proposed; both phases are done. See [work-log.md](work-log.md).
 
 ## Goal
 
@@ -49,8 +49,8 @@ from the remaining terminal candidates.
 6. **The typed command line.** OSC 8 is output; a program does not print it into the line being typed, so the rule
    that the command line has no links needs nothing here.
 7. **Server.** No change: the links route already takes an absolute candidate with `host`.
-8. **Contracts.** WEB-46 gains the OSC 8 rule (schemes, `file:` as a path, the prompt for web addresses) and WEB-51
-   the right-click entries; no new ID.
+8. **Contracts.** WEB-46 gains the OSC 8 rule (schemes, `file:` as a path, the prompt for web addresses) and the
+   right-click entries, beside the path link's menu; no new ID.
 
 ## Phases
 

@@ -1714,7 +1714,15 @@ held or a program tracks the mouse (WEB-51), opens the menu its row in the Explo
 the Table viewer, Open in a new terminal tab, in a file's folder, Send the path to the terminal, Download,
 Upload..., New File..., New Folder..., Cut, Copy, Paste, Rename..., Delete..., Copy the path, Copy the path from
 here), with **Show in the Explorer** after the second, showing the directory, or a file's folder, with Follow off;
-off a link, the terminal's own menu (WEB-51). When the
+off a link, the terminal's own menu (WEB-51). A link a program prints with OSC 8 (`ESC ] 8 ; params ; URI ST`, as
+`ls --hyperlink` and compilers do) is underlined by xterm.js whatever the line, and opens by its address's scheme: a
+`file://HOST/PATH` (the path percent-decoded as UTF-8) is asked about as the absolute candidate PATH with `host`, and
+opens, points, and right-clicks as that path's link does; `http:` and `https:` open as a web address; any other
+scheme, and a path that does not decode or is not answered, opens nothing, with a note saying why. Pointing at one
+says its address, then what it opens; a right click on one that is not a path offers **Open link** (for a web address
+only) and **Copy link address**. A web address, a word holding `://` or an OSC 8 link, opens in a new tab with no
+hold on the page only after `confirm()` shows the address and is accepted; any program may print one, and an OSC 8
+link's text may hide where it goes. When the
 server cannot be asked, nothing is a link and a note says so once. Implemented in
 `internal/webui/terminal_links.go` and the panel in `web_shell.js`; covered by
 [`TestTerminalOutputLinks`](../conformance/05-web/terminal_links_test.go),

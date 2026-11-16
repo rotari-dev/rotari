@@ -439,8 +439,14 @@ this project's tabs, or close every shell of every project. All shells offers th
 beside a project's name and **End all shells** at the top. A new tab goes at the right end, and keeps the lowest number free. Names and places last
 as long as their shells.
 
-A web address in the output opens in a new tab when clicked. A program can print any address, so look
-before you click, as in any terminal.
+A web address in the output opens in a new tab when clicked, after the browser asks you with the address shown: a
+program can print any address, so check it before you say yes.
+
+Links that a program prints itself (OSC 8, as `ls --hyperlink`, gcc, and newer tools do) work too, even when their
+text is not the address. Pointing at one shows the address. A `file://` link to a file or directory on the server opens
+as a path in the output does, and right-clicking it gives the same menu; one to another host, or to a path that does
+not exist, opens nothing and says why. A web address asks first, as above. Other kinds, such as `mailto:`, do not
+open; right-click one to copy its address.
 
 **A-** and **A+** change the text size, which the browser remembers.
 

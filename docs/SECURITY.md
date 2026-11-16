@@ -223,7 +223,10 @@ Links in a shell's output (`POST /_terminal/shells/ID/links`) are found the same
 screen, at most 64 at once, behind the same checks and with a JSON body, with the directory the shell said a command
 ran in (OSC 7), and the server answers which name a run, a job, or a path that exists, there or absolute. That tells
 nothing a shell on the server could not. The directory is only output a shell printed, so a file shown with `cat` can
-say a false one, which at worst links a path wrongly, as a false mark draws a false block.
+say a false one, which at worst links a path wrongly, as a false mark draws a false block. A link a program prints
+with OSC 8 is asked about the same way when it is a `file:` path; the page opens no other scheme, and asks you, with
+the address shown, before opening any web address from the terminal, since any output, `cat` of a file included, can
+print one and an OSC 8 link's text can hide it.
 
 So that bash and zsh print those marks, rotari starts them with its own startup files (`--terminal-shell-integration`,
 on by default), kept under your cache directory in directories that must be yours and that only you can write, so

@@ -21,3 +21,21 @@
   path, a web address with Copy link address, a `mailto:` with Open link disabled, and off a link) passes; `tsc` and
   prettier clean.
 - **Remaining:** phase 2 (contracts, docs, and the browser step).
+
+## 2026-11-16 16:07 +09:00 — Contracts and docs
+
+- **Change:** WEB-46 in `contracts/05-web-assets-and-static-export.md` and its row in `contracts/README.md`: OSC 8
+  links by scheme, pointing at and right-clicking one, and the prompt before any web address.
+  `TestTerminalCommandDirsInBrowser` gains a step: bash prints, with `printf`, an OSC 8 link whose text is
+  `open-me` and whose address is a percent-encoded `file:` path; pointing at it says it opens that file in the
+  Table viewer. docs/WEB.md says web addresses ask first and how OSC 8 links open; docs/SECURITY.md that only
+  `file:` links are asked about and that a web address is confirmed.
+- **Reason:** plan phase 2.
+- **Plan impact:** the right-click entries are in WEB-46 with the path link's menu rather than in WEB-51, which keeps
+  the terminal's own menu; WEB-51 is unchanged.
+- **Validation:** `go test ./conformance -run 'TestContractStatus|TestConformanceLayout'` and `go test
+  ./conformance/05-web -run 'TestTerminalCommandDirsInBrowser|TestTerminalOutputLinks'` pass; the browser test skips
+  here (no Chrome) and runs in CI; its script passes `node --check`, and the command it types was run through bash
+  to check the bytes it prints. `scripts/check.sh` was not run (npm is broken here, and the full run is too heavy for
+  the shared machine).
+- **Remaining:** CI's run of `TestTerminalCommandDirsInBrowser`.
