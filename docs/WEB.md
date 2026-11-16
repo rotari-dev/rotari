@@ -195,7 +195,9 @@ in the sidebar with a shell running has a terminal icon, as does a state directo
 state directory has shells of its own; point at it to see how many.
 
 The **All shells** icon beside **+** opens a dialog over the page, as a log does, listing every running shell,
-grouped by project with the terminal's first. Under each project's name, a line says what its last run (the one
+grouped by project with the terminal's first, each group headed by its state directory over the project's name
+(**All projects** for the state directory's own shells), so projects of one name in two state directories are told
+apart. Under each project's name, a line says what its last run (the one
 `rotari show` shows) is doing, such as `Last run running, started 12m ago · 3 in progress · 5 pending · 0 failed`,
 counted as the run page's Jobs card counts them; click it to open that run. Each card shows its tab name, the directory its shell is in now, and
 the command running in it, if any, and when it started and how long it has been idle (no output and no

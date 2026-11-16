@@ -45,6 +45,8 @@ const home = '/home/u';
 // A shell of no project shows on Activity, and a basedir's own on its All projects.
 const plain = (id, number) => ({ id, number, basedir: '', project: '', dir: home, link: '/activity' });
 const ofBasedir = (id, number, basedir = '/b') => ({ id, number, basedir, project: '', dir: '/w', link: basedir === '/b' ? '/' : '/_basedir/' + basedir.slice(1) + '/' });
+// overviewHeadings are All shells' group headings, their lines joined by " / ".
+const overviewHeadings = (root) => [...root.querySelectorAll('.terminal-overview-heading')].map((heading) => [...heading.children].map((line) => line.textContent).join(' / '));
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
 const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/activity', maximized = false, fontSize = '', explorer = '', session = {}, holdHere = [], holdLists = false, windowName = '' } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
@@ -3140,7 +3142,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.ok(tour().classList.contains('output-panel'));
   assert.equal(tourDialog.getAttribute('aria-modal'), 'true');
   assert.equal(touring.document.getElementById(tourDialog.getAttribute('aria-labelledby')).textContent, 'All shells');
-  assert.deepEqual([...tour().querySelectorAll('h3 span')].map((item) => item.textContent), ['p2', 'p1 in /b', 'p1 in /c']);
+  // Each group is headed by its basedir over its project, so that p1 of /b and of /c are
+  // told apart; its buttons still name it in a line.
+  assert.deepEqual(overviewHeadings(tour()), ['/b / p2', '/b / p1', '/c / p1']);
+  assert.notEqual(tour().querySelector('[aria-label="New shell in p1 in /c"]'), null);
   assert.deepEqual(cards().map((item) => [item.dataset.shell, item.querySelector('.terminal-overview-name').textContent, item.querySelector('.terminal-overview-state').textContent, item.querySelector('.terminal-overview-dir').textContent]), [
     ['3', 'Shell 1', 'shown', '/w/p2/deep'],
     ['1', 'Shell 1', '', '/w/p1/src'],
@@ -3294,7 +3299,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   await wait(30);
   const growTour = () => growing.document.querySelector('.terminal-overview');
   const addFor = (name) => growTour().querySelector('[aria-label="New shell in ' + name + '"]');
-  assert.deepEqual([...growTour().querySelectorAll('h3 span')].map((item) => item.textContent), ['p2', 'p1', 'q']);
+  assert.deepEqual(overviewHeadings(growTour()), ['/b / p2', '/b / p1', '/c / q']);
   const growSockets = growing.sockets.length;
   addFor('p1').click();
   await wait(30);
@@ -3332,7 +3337,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   [...newRow().querySelectorAll('button')].find((item) => item.textContent === 'Start').click();
   await wait(50);
   assert.ok(growing.requests.includes('POST /_terminal/shells?rows=24&cols=80&basedir='), growing.requests.join(', '));
-  assert.equal([...growTour().querySelectorAll('h3 span')].at(-1).textContent, '/b', 'the basedir\'s shells are not named by it');
+  assert.equal(overviewHeadings(growTour()).at(-1), '/b / All projects', 'the basedir\'s shells are not headed as its All projects');
   assert.deepEqual([...newChoice().children].map((item) => item.label || item.textContent)[1], '/b');
   assert.deepEqual([...newChoice().children][1] && [...[...newChoice().children][1].children].map((option) => option.textContent), ['fresh'], 'the basedir with a shell was still offered');
   assert.equal(growing.sockets.length, growSockets, 'the new shell was shown in a pane');
@@ -3359,7 +3364,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.deepEqual(endAllAsked, ['End the 2 shells of p1? Nothing runs in them.']);
   assert.deepEqual(endingAll.requests.filter((request) => request.startsWith('DELETE')), ['DELETE /_terminal/shells/1', 'DELETE /_terminal/shells/2']);
   assert.notEqual(endTour(), null, 'ending closed the overview');
-  assert.deepEqual([...endTour().querySelectorAll('h3 span')].map((item) => item.textContent), ['p2']);
+  assert.deepEqual(overviewHeadings(endTour()), ['/b / p2']);
   // A refusal is told in the overview.
   endingAll.server.refuse = 'busy';
   const endEveryButton = () => [...endTour().querySelectorAll('header button')].find((item) => item.textContent === 'End all shells');

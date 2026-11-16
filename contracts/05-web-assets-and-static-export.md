@@ -1947,7 +1947,8 @@ processes the shell has started, background ones when nothing runs in its foregr
 each shell with a command `running` or processes below it and what runs there, since signing out ends every shell;
 a shell whose processes cannot be listed is named as such, it asks too, saying why, when the shells cannot be
 listed, and signs out at once when nothing runs. **All shells** in the bar opens a dialog over the page, as a log's is,
-with the panel's room left to it: every running shell, grouped by project with the terminal's first, each with its tab
+with the panel's room left to it: every running shell, grouped by project with the terminal's first, each group headed by its basedir's path over
+its project's name, **All projects** for a basedir's own shells, or **No project**, each shell with its tab
 name, its shell's working directory now, or where it started, said as such, when that cannot be found, and the
 command running in its foreground, if any, or that it is not known (WEB-34); it connects to none. Under each
 project's name a line says what its last run is doing (WEB-34): its lifecycle, when it ended or, while it goes on, when it started, and its

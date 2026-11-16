@@ -1334,6 +1334,20 @@ html.terminal-open .output-panel.terminal-overview {
   align-items: center;
   gap: 6px;
 }
+.terminal-overview-heading {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.terminal-overview-basedir {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.terminal-overview-project {
+  color: var(--text);
+}
 .terminal-overview-end-all {
   min-height: 0;
   margin-left: auto;

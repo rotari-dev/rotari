@@ -2821,8 +2821,26 @@ function shellWord(value) {
         group.className = "terminal-overview-group";
         const heading = document.createElement("h3");
         const name = projectName(entry) + inBasedir(entry, listed);
+        // Shown as its basedir over the project, or All projects for the basedir's own, so
+        // that projects of one name in two basedirs are told apart at a glance.
         const named = document.createElement("span");
-        named.textContent = name;
+        named.className = "terminal-overview-heading";
+        if (entry.basedir) {
+          const base = makeElement(
+            "span",
+            "terminal-overview-basedir",
+            entry.basedir,
+          );
+          base.title = entry.basedir;
+          named.append(base);
+        }
+        named.append(
+          makeElement(
+            "span",
+            "terminal-overview-project",
+            entry.project || (entry.basedir ? "All projects" : "No project"),
+          ),
+        );
         const more = document.createElement("button");
         more.type = "button";
         more.className = "terminal-overview-add";
