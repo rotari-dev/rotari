@@ -110,8 +110,10 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the second tab again', screenHas('second-[]'));
   await page.evaluate('document.querySelectorAll(".terminal-tab [role=tab]")[0].click()');
   await until('the long output replayed', screenHas('printed-3000'));
-  await page.evaluate('document.querySelector(".terminal-pane")?.terminalPane?.term?.scrollToTop()');
-  await until('the first line of the long output in the scrollback', screenHas('line-1.'));
+  // The end of a replay holds the bottom for a moment against scrolls that are not the
+  // viewer's, and this one may end after the screen shows its last line; so scroll as the
+  // viewer does, a wheel first, until the top is in view.
+  await until('the first line of the long output in the scrollback', '(() => { document.querySelector(".terminal-viewport").dispatchEvent(new WheelEvent("wheel", { bubbles: true })); document.querySelector(".terminal-pane")?.terminalPane?.term?.scrollToTop(); return ' + screenHas('line-1.') + '; })()');
 
   // Recent directories offers where the shell has been; choosing one types cd, which
   // Enter then runs.

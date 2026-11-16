@@ -384,3 +384,17 @@
 - **Validation:** `TestTerminalPanel` fails without the replay's hold and passes with it; the typecheck and the
   `conformance/05-web` package pass; the browser step runs only in CI.
 - **Remaining:** CI on macOS.
+
+## 2026-11-17 02:56 +09:00 — Browser steps scroll as a viewer after a replay
+
+- **Change:** the browser step that looks for `line-1.` at the top of the scrollback, and the sticky-line browser test's
+  scroll into `seq 1001 1200`, send a `wheel` to `.terminal-viewport` before scrolling and repeat both until what they
+  wait for is in view.
+- **Reason:** Ubuntu CI for `3bc78b08` stopped at `the first line of the long output in the scrollback` with the bottom
+  of the 3000 lines on screen. `df9b46aa` holds the bottom for a moment at the end of a replay against scrolls that are
+  not the viewer's, and the step's `scrollToTop()`, called at once after the replay showed `printed-3000`, was one.
+  A viewer's scroll comes with a wheel, key, or pointer, which ends the hold; and a long replay may end after its last
+  line shows, so the step repeats the scroll rather than making it once. The sticky test scrolls just after its shell
+  connects, within the same moment on a fast host.
+- **Plan impact:** none.
+- **Validation:** both scripts pass `node --check`; they run only in CI.

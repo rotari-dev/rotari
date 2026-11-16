@@ -45,8 +45,9 @@ await withPage(cdp, base + '/_auth/login?next=/activity', { width: 1280, height:
   const sticky = 'document.querySelector(".terminal-sticky")';
   // Scrolled into the middle of the output: the line says the command.
   await until('the block to end', 'document.querySelector(".terminal-pane").terminalPane.blocks.some((block) => block.ended && block.command() === "seq 1001 1200")');
-  await page.evaluate(term + '.scrollToLine(' + term + '.buffer.active.baseY - 100)');
-  await until('the sticky line', sticky + ' && !' + sticky + '.hidden && ' + sticky + '.textContent.includes("$ seq 1001 1200")');
+  // As the viewer scrolls, a wheel first: the end of the shell's replay holds the bottom
+  // for a moment against other scrolls.
+  await until('the sticky line', '(() => { document.querySelector(".terminal-viewport").dispatchEvent(new WheelEvent("wheel", { bubbles: true })); ' + term + '.scrollToLine(' + term + '.buffer.active.baseY - 100); return ' + sticky + ' && !' + sticky + '.hidden && ' + sticky + '.textContent.includes("$ seq 1001 1200"); })()');
   // A click goes to the prompt, where the line goes.
   const point = await page.evaluate('(() => { const box = ' + sticky + '.getBoundingClientRect(); return { x: box.left + 80, y: box.top + box.height / 2 }; })()');
   await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...point });
