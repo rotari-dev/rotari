@@ -211,7 +211,14 @@ the same for the card with the keys, and the dialog stays open for the next one.
 name ends its shells, and **End all shells** at the top every shell, after asking. The **+** beside a project's name
 starts another shell there, and **New shell in** under the cards starts one in a project or state directory that
 has none (**All projects** under the state directory), or in no project; each starts where that page would, and the new shell appears as a card without being shown
-in a pane. The list is taken when the dialog
+in a pane.
+
+To move a shell to another project, drag its card onto that project's group, or use the **Move** icon on the card,
+which lists the projects (and **All projects** of each state directory) it can go to, those without shells too. The
+shell keeps running as it is; its next command uses the new project (`rotari add` without `-p` adds there), and a
+command running now keeps the project it had until it ends. A pane showing it on a page of the old project shows
+another of that project's shells instead. Moving works for bash and zsh started with rotari's shell integration
+(the default); a shell of no project, or another shell, cannot move, and its icon says why. The list is taken when the dialog
 opens, and **Refresh** takes it again. Escape, **Close**, **All shells**
 again, or a click beside the dialog closes it. The directory is the shell's own, not that of a program running in it, and when the
 server cannot find it the card says where the shell started instead. The command is the one in the foreground,

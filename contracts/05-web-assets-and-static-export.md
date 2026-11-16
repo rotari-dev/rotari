@@ -1526,6 +1526,28 @@ terminal as WEB-54 says. Implemented in [web_shell.js](../internal/webui/assets/
 `TestTerminalPanel` and
 [`TestTerminalSharedShellsInBrowser`](../conformance/05-web/terminal_shared_shells_browser_test.go).
 
+**WEB-57** With `rotari web --allow-terminal`, `POST /_terminal/shells/ID/place` moves a running shell to the place
+its query names as `POST /_terminal/shells` names a new shell's (`basedir` ID, `project`): a project that exists in
+that basedir, or with no project the basedir's own shells. A run or directory, or no place, is 400; an unknown
+basedir, project, or shell 404; a shell of no project, a shell not started with rotari's integration (WEB-49: other
+shells, or the integration off), and a group at its limit 409; a closed server 503. The shell keeps its ID and name,
+goes after its new group's shells with the lowest number free there, and its later directories count for that group's
+history (WEB-45); the answer is the shell as the list gives it, which also says `movable` for a shell of a basedir
+that follows moves. The shell takes `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME` of its new place (the latter unset for a
+basedir's own) as WEB-49 says, before the next command typed at its prompt or, while a command runs, when it returns
+to its prompt; what already runs keeps its own, and a bash or zsh started inside takes it too. In **All shells**, a
+movable shell's card can be dragged onto another group with a basedir and room, and its **Move** icon lists those groups
+and the projects and basedirs' own with no shell (a full group shown and disabled); either moves it, redraws the list
+with the keys on its card, and says where it went and that its next command uses it; a refusal is said at the
+dialog's top. Shells of no project, and shells that do not follow moves, have the icon disabled saying why and cannot
+be dragged; nothing takes a drop as no project. A pane showing a shell that moved out of its page's view, by this page
+or another, shows the next free shell of the view, closes when other panes remain, or else says where it went with
+**New shell**. Implemented in `internal/terminal/keeper.go`, `internal/webui/terminal.go`, and
+[web_shell.js](../internal/webui/assets/web_shell.js); covered by
+[`TestTerminalMovesAShell`](../conformance/05-web/terminal_move_test.go),
+[`TestTerminalMoveInBrowser`](../conformance/05-web/terminal_move_browser_test.go), `TestMoveTakesAShellToAnotherGroup`,
+`TestMovedShellTakesItsPlaceVariables`, the `internal/webui` `TestTerminalMovesAShell`, and `TestTerminalPanel`.
+
 **WEB-53** With `rotari web --allow-terminal` and `--terminal-shell-integration`, a bash or zsh started inside a panel's
 shell marks its prompts and commands as WEB-49 says, with nothing in the user's files. The marks are in `marks.bash` and
 `marks.zsh` beside rotari's startup files, which source them, and each loads once per shell. rotari's bash exports
@@ -1623,7 +1645,15 @@ when asked for otherwise (WEB-40). Implemented in `internal/terminal/integration
 covered by [`TestTerminalShellIntegration`](../conformance/05-web/terminal_integration_test.go) and the unit tests
 `TestBashIntegrationReadsTheLoginFilesAndMarks`, `TestOldBashIntegrationMarksCommandsByTheDebugTrap`,
 `TestZshIntegrationReadsTheUsersFilesAndMarks`, `TestIntegrationSaysTheDirectory`,
-`TestShellCommandWithIntegration`, and `TestKeeperWritesAndRemovesTheIntegration`.
+`TestShellCommandWithIntegration`, and `TestKeeperWritesAndRemovesTheIntegration`. With the integration, each bash
+and zsh also has `ROTARI_TERMINAL_PLACE` naming a file of its own in a private directory the server makes and
+removes when it stops (one inherited from a shell the server runs in is dropped), from which a move (WEB-57) is
+taken: at each prompt, and before the first command after one (zsh's `preexec`; in bash a `DEBUG` trap, set also on
+bash 4.4 and later in such a shell unless the user's files set one, when a move waits for the next prompt), the hook
+reads the file, a line `rotari-place N` then `set ROTARI_NAME=VALUE` and `unset ROTARI_NAME` lines, and for an N above
+`ROTARI_TERMINAL_PLACE_APPLIED`, which it then exports, sets or unsets those variables, only `ROTARI_` names, assigning
+values without evaluating them; a value set by hand afterwards stays. Covered by `TestMovedShellTakesItsPlaceVariables`
+and `TestShellsDoNotInheritAPlaceFile`.
 
 **WEB-48** With `rotari web --allow-terminal`, the panel reads the OSC 133 marks a shell or its prompt prints (bash
 and zsh print them by default, WEB-49):

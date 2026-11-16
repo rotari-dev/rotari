@@ -66,3 +66,22 @@
   group and a project with no shells, sent there; a refusal at the top; a move seen in the next list leaving the only
   pane with its message) passes; `tsc` and prettier clean.
 - **Remaining:** phase 4 (contracts and docs).
+
+## 2026-11-16 17:14 +09:00 — Contracts and docs
+
+- **Change:** WEB-57 in `contracts/05-web-assets-and-static-export.md` and its row in `contracts/README.md` (the route,
+  its refusals, the number and history, the variables and when they apply, All shells' drag and Move menu, and a pane
+  letting a moved shell go); WEB-49's paragraph and row add `ROTARI_TERMINAL_PLACE`, the hook, and the DEBUG trap on
+  newer bash. Conformance: `TestTerminalMovesAShell` (`conformance/05-web/terminal_move_test.go`: rotari's bash moved
+  from p1 to p2 and to the basedir's own, its `ROTARI_PROJECT_NAME` read after each, the list, a missing project 404,
+  a shell of no project 409) and `TestTerminalMoveInBrowser` (a p1 and a p2 shell through the API; on p1's page the
+  p1 card dragged onto p2's group with Chrome's own `DragEvent`s, the note, the card under p2, the pane's message, and
+  the server's list). docs/WEB.md: a paragraph on moving in All shells; docs/SECURITY.md: the place file.
+- **Reason:** plan phase 4.
+- **Plan impact:** the browser test dispatches the drag events in the page rather than driving the mouse through CDP,
+  whose drag interception would make the test depend on Chrome's drag timing; the events and handlers are the
+  browser's own.
+- **Validation:** `go test ./conformance -run 'TestContractStatus|TestConformanceLayout'` and `go test
+  ./conformance/05-web` pass; the browser test skips here (no Chrome) and runs in CI; its script passes `node
+  --check`. `scripts/check.sh` was not run (npm is broken here, and the full run is too heavy for the shared machine).
+- **Remaining:** CI's run of `TestTerminalMoveInBrowser`.

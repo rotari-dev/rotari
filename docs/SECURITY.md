@@ -233,6 +233,10 @@ on by default), kept under your cache directory in directories that must be your
 that shells started from them still read them after the server stops. They
 read your usual startup files and add prompt hooks that print the marks; they change none of your files, and run
 nothing a shell would not. `--terminal-shell-integration=false` starts bash and zsh as plain login shells.
+Moving a shell to another project (`POST /_terminal/shells/ID/place`, behind the same checks) writes the new project's
+`ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME` to a file of that shell's own, in a directory the server makes that only you
+can read and write and removes when it stops; the shell's prompt hook reads it and sets only `ROTARI_` variables,
+assigning their values without running them, so a project or path name cannot run a command there.
 
 Blocks are read in the page alone, from the OSC 133 marks in the output it already shows; the server parses and
 keeps nothing for them, so it still records nothing that is typed. The `C` mark of bash and zsh carries the command line,

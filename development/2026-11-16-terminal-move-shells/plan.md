@@ -1,7 +1,8 @@
 # Plan: Moving a shell to another project from All shells
 
 Created: 2026-11-16
-Status: Accepted by the user on 2026-11-16 ("go"), with the open questions as proposed. See [work-log.md](work-log.md).
+Status: Accepted by the user on 2026-11-16 ("go"), with the open questions as proposed; all four phases are done. See
+[work-log.md](work-log.md).
 
 ## Goal
 
