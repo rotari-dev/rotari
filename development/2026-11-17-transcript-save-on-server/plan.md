@@ -1,7 +1,8 @@
 # Plan: Saving a transcript on the server, where the shell is
 
 Created: 2026-11-17
-Status: Accepted by the user on 2026-11-17 ("ok" to the UI proposed in conversation). See [work-log.md](work-log.md).
+Status: Accepted by the user on 2026-11-17 ("ok" to the UI proposed in conversation); all three phases are done. See
+[work-log.md](work-log.md).
 
 ## Goal
 

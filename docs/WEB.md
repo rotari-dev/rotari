@@ -418,9 +418,10 @@ the end of the pane's right-click menu.
 
 **Open transcript** in the pane's right-click menu (or **Open transcript from here** on a command's dot) opens the
 shell's commands on a page of their own, one card each with how it ended, where it ran, how long it took, and its
-output in color. Filter them, keep the failed ones, uncheck the ones you do not want, and save the rest as Markdown, as
-one HTML file, or as a bash script of the commands alone (with a `cd` where the directory changed, and the failures
-marked). The page takes the transcript from the tab that opened it, so it holds what that tab has received (the last
+output in color. Filter them, keep the failed ones, uncheck the ones you do not want, choose Markdown, HTML (one file), or Shell
+script (the commands alone, with a `cd` where the directory changed, and the failures marked), and **Download** the
+rest, or **Save on the server…**, which offers the shell's current directory and a file name to change; a file of that
+name is replaced only after you say so, and **Show in the Explorer** shows where it went. The page takes the transcript from the tab that opened it, so it holds what that tab has received (the last
 8 MiB) and nothing goes through the server; **Refresh** takes it again. Blocks are kept
 only in the page, from the output it shows, so they come back after following a link for as much output as is shown
 again. A shell that sends no marks looks as it always did.

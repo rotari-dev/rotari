@@ -1674,9 +1674,14 @@ output as text with SGR colours (16, 256, true colour), bold, dim, italic, under
 sequences left out, a line written over after a carriage return read as written last. The page shows a card per
 command with its state's dot, a checkbox, Copy command and Copy output, and its output in the theme's terminal colours,
 drawn as it comes into view and folded past 30 lines until **Show all**; a filter by command line and **Failed only**
-narrow them; **Refresh** asks again; with no opener, or no answer within 4 seconds, it says why. **Save Markdown**,
-**Save HTML**, and **Save shell script** download, made in the page, the cards shown and checked as `<shell
-name>-<UTC time>.md`, `.html`, or `.sh`: Markdown with each command in a code span (and a `sh` fence for one of
+narrow them; **Refresh** asks again; with no opener, or no answer within 4 seconds, it says why. A format, Markdown,
+HTML, or Shell script, is chosen once and remembered by the browser; **Download** downloads, made in the page, the
+cards shown and checked as `<shell name>-<UTC time>.md`, `.html`, or `.sh`, and **Save on the server…** offers that
+name in the shell's directory now (from `GET /_terminal/shells/ID/preview`, or where it started, saying why), as an
+editable absolute path, and writes it there with WEB-44's upload, asking with `confirm()` before replacing a file of
+that name (`replace=1`) and keeping it when told not to; saved, it says where, with **Show in the Explorer**, which
+asks the opening tab, by `postMessage`, to show the file's folder in its Explorer (the tab takes it only from a
+transcript page it opened). The files are: Markdown with each command in a code span (and a `sh` fence for one of
 several lines), its directory, state, and time, and its output in a `text` fence longer than any backquotes in it;
 one HTML file with inline styles and colours, output escaped, and no script; a bash script of the commands alone, with
 `cd` and the quoted directory where it changes and a comment above a failed or still running command. Output is put
@@ -1859,7 +1864,9 @@ rather than ending a short archive. Anything but a file or folder is 400, a path
 /_terminal/files/upload?dir=/ABS&name=NAME` writes the body, which must be `application/octet-stream` (415), as the
 new file, under a temporary name in that folder first and then renamed into place without replacing, so a broken
 upload leaves nothing; a name taken is 409, a bad name (as WEB-43) 400, and other failures 422, each with the reason,
-and success answers `{"path"}`. Uploads go one at a time through `XMLHttpRequest`, the footer naming the file and how far it has come, as a
+and success answers `{"path"}`. With `replace=1` (`0` or none is the default; another value is 400) it replaces a
+regular file of that name, keeping its permissions, renamed over it once written whole, and refuses anything else
+under the name, a folder or a symbolic link among them, with 422; the transcript page (WEB-60) uses it after asking. Uploads go one at a time through `XMLHttpRequest`, the footer naming the file and how far it has come, as a
 percentage, the bytes sent of the total, and a bar, and a note says how many
 uploaded and why any did not. Both routes are served only where the terminal is, behind its checks. Implemented in
 `internal/fileops` (`WriteNew`, `WriteZip`), `serveTerminalDownload` and `serveTerminalUpload` in

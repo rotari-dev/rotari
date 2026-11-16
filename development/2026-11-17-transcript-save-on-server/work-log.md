@@ -31,3 +31,15 @@
   shell's ID and directory in the transcript; the show message from its page, not another window, showing the folder)
   pass; `tsc` and prettier clean.
 - **Remaining:** phase 3 (contracts and docs).
+
+## 2026-11-17 00:19 +09:00 — Contracts and docs
+
+- **Change:** WEB-60's paragraph and row describe the format choice, Download, Save on the server, replacing after
+  asking, and Show in the Explorer; WEB-44's describe `replace=1`. `TestTerminalTranscriptInBrowser` saves the shell
+  script by Download with the format chosen, then on the server, and Go reads the file from the shell's home.
+  docs/WEB.md says how to save on the server.
+- **Reason:** plan phase 3.
+- **Plan impact:** none.
+- **Validation:** `go test ./conformance -run 'TestContractStatus|TestConformanceLayout'` passes and `go vet
+  ./conformance/05-web` is clean; the browser test runs only in CI; its script passes `node --check`.
+- **Remaining:** CI's run of `TestTerminalTranscriptInBrowser`.

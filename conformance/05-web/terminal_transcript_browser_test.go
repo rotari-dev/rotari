@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rotari-dev/rotari/conformance/support"
@@ -18,6 +19,7 @@ const { launchChrome, withPage, sleep } = await import(pathToFileURL(helper));
 const { chrome, base, token } = JSON.parse(readFileSync(input, 'utf8'));
 const { cdp, close } = await launchChrome(chrome);
 let failure = '';
+let saved = '';
 await withPage(cdp, base + '/_auth/login?next=/activity', { width: 1280, height: 900, settleMs: 200 }, async (page) => {
   const rows = '[...document.querySelectorAll(".xterm-rows > div")].map((row) => row.textContent.trimEnd())';
   const until = async (target, what, expression) => {
@@ -69,13 +71,21 @@ await withPage(cdp, base + '/_auth/login?next=/activity', { width: 1280, height:
   if (!green || !green.green || green.state !== 'ok' || !failed || failed.state !== 'failed') throw new Error('the cards: ' + JSON.stringify(facts));
   // The shell script, made in the page.
   await transcript.evaluate('URL.createObjectURL = (blob) => { window.__saved = blob; return "blob:saved"; }; HTMLAnchorElement.prototype.click = function () { window.__savedName = this.download; }');
-  await transcript.evaluate('[...document.querySelectorAll(".transcript-tools button")].find((button) => button.textContent === "Save shell script").click()');
+  await transcript.evaluate('(() => { const radio = document.querySelector(".transcript-format input[value=\\"sh\\"]"); radio.checked = true; radio.dispatchEvent(new Event("change")); })()');
+  await transcript.evaluate('[...document.querySelectorAll(".transcript-tools button")].find((button) => button.textContent === "Download").click()');
   const script = await transcript.evaluate('window.__saved.text()');
   const name = await transcript.evaluate('window.__savedName');
   if (!script.startsWith('#!/usr/bin/env bash\n') || !script.includes('\n# Failed with exit 1:\nfalse\n') || script.includes('green-42\n') || !name.endsWith('.sh')) throw new Error('the shell script ' + name + ':\n' + script);
+  // Saved on the server, where the shell is: its home here.
+  await transcript.evaluate('[...document.querySelectorAll(".transcript-tools button")].find((button) => button.textContent === "Save on the server\u2026").click()');
+  await until(transcript, 'the path to save to', 'document.querySelector(".transcript-save input").value.endsWith(".sh")');
+  const savedPath = await transcript.evaluate('document.querySelector(".transcript-save input").value');
+  await transcript.evaluate('document.querySelector(".transcript-save button[type=submit]").click()');
+  await until(transcript, 'the file saved', 'document.querySelector(".transcript-status").textContent.startsWith("Saved ")');
+  saved = savedPath;
 }).catch((error) => { failure = error.stack || String(error); });
 await close();
-console.log(JSON.stringify({ failure }));
+console.log(JSON.stringify({ failure, saved }));
 process.exit(0);
 `
 
@@ -106,11 +116,29 @@ func TestTerminalTranscriptInBrowser(t *testing.T) {
 	}
 	var result struct {
 		Failure string `json:"failure"`
+		Saved   string `json:"saved"`
 	}
 	if err := json.Unmarshal(output, &result); err != nil {
 		t.Fatalf("browser check output: %v\n%s", err, output)
 	}
 	if result.Failure != "" {
-		t.Error(result.Failure)
+		t.Fatal(result.Failure)
 	}
+	// The file the page saved on the server is the shell script, in the shell's home.
+	if filepath.Dir(result.Saved) != base.Root && filepath.Dir(result.Saved) != realPath(t, base.Root) {
+		t.Errorf("saved to %s, not in the shell's home %s", result.Saved, base.Root)
+	}
+	if content, err := os.ReadFile(result.Saved); err != nil || !strings.Contains(string(content), "\n# Failed with exit 1:\nfalse\n") {
+		t.Errorf("the saved script %s: %q %v", result.Saved, content, err)
+	}
+}
+
+// realPath is a directory with its symbolic links followed, as a shell reports it.
+func realPath(t *testing.T, dir string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resolved
 }
