@@ -21,3 +21,27 @@
   another shell says so. The older menus that are listed whole gain the new items, and the mark menu's Type command
   again is found by its label (also in `TestTerminalPanelInBrowser`'s list). `tsc` and prettier clean.
 - **Remaining:** phases 2 (the page), 3 (saving), and 4 (contracts and docs).
+
+## 2026-11-17 00:00 +09:00 — The page and saving
+
+- **Change:** `/_terminal/transcript` (`internal/webui/terminal_transcript.go`): GET or HEAD, served only with the
+  terminal behind its checks, `no-store`, from `assets/terminal_transcript.html` with `web_transcript.js` inlined under
+  the page's nonce at the end of the body; `/_terminal/transcript.css` is served with the terminal's assets.
+  `web_transcript.js` applies the stored theme, asks its opener (`rotari-transcript-ask`, this origin), hears only its
+  opener of this origin, says why when there is no opener, no answer within 4 seconds, or a reason, and draws a card per
+  command: a checkbox, the state's dot, the command (`pre` for one of several lines), Copy command / Copy output, a line
+  of the state, directory, and time, and the output as text with styled spans (the theme's `--terminal-*` colours,
+  the 256-colour cube and grey ramp, true colour, bold, dim, italic, underline, inverse), drawn as the card comes into
+  view, folded past 30 lines with **Show all N lines**. A filter by command and **Failed only**, **Check all** /
+  **Check none**, **Refresh**, and **Save Markdown**, **Save HTML**, **Save shell script** for the cards shown and
+  checked, each made in the page and downloaded as `<shell name>-<UTC stamp>.<md|html|sh>`: Markdown with code spans and
+  fences longer than the backquotes inside; one HTML file with inline styles, a fixed dark palette, escaped output, no
+  script; a bash script with `cd` (quoted) where the directory changes and comments above failed and running commands.
+- **Reason:** plan phases 2 and 3, together, as saving is the page's.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalTranscriptPage` (the page with its nonce and script, its styles, POST 405, 404 without the
+  terminal), the route in `TestTerminalShellRoutesAreGuarded`, and `TestTerminalTranscript` (JSDOM: no opener; another
+  origin and another window ignored; a reason; seven cards with states, metas, a multi-line command, styled spans, 256
+  colours, markup kept as text, no output; a long output folded and shown; Copy command; the filter and Failed only; the
+  shell script, the Markdown of two checked cards, and the HTML file, each in full; nothing checked; Refresh) pass.
+- **Remaining:** phase 4 (contracts and docs).

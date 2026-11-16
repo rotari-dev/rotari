@@ -68,6 +68,7 @@ var terminalAssets = map[string]struct{ contentType, content string }{
 	terminalPrefix + "xterm-addon-web-links.js": {"text/javascript; charset=utf-8", xtermWebLinksJS},
 	terminalPrefix + "xterm.css":                {"text/css; charset=utf-8", xtermCSS},
 	terminalPrefix + "xterm-license.txt":        {"text/plain; charset=utf-8", xtermLicense},
+	terminalPrefix + "transcript.css":           {"text/css; charset=utf-8", webTranscriptCSS},
 }
 
 // Close codes the page tells apart. Private codes start at 4000.
@@ -139,6 +140,8 @@ func (s site) serveTerminal(writer http.ResponseWriter, request *http.Request) {
 		s.serveTerminalFileChange(writer, request, strings.TrimPrefix(path, terminalFilesPath+"/"))
 	case path == terminalWindowPath || strings.HasPrefix(path, terminalWindowPath+"/"):
 		serveTerminalWindow(writer, request)
+	case path == terminalTranscriptPath:
+		serveTerminalTranscript(writer, request)
 	case strings.HasPrefix(path, terminalShellsPath+"/"):
 		s.serveTerminalShell(writer, request, strings.TrimPrefix(path, terminalShellsPath+"/"))
 	default:

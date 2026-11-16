@@ -1,0 +1,155 @@
+/* The transcript page (WEB-60): one terminal pane's commands, one card each. */
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 var(--font-sans);
+}
+.transcript-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 16px 24px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.transcript-head h1 {
+  margin: 0;
+  font-size: 18px;
+}
+.transcript-about,
+.transcript-note {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.transcript-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.transcript-tools input[type="search"] {
+  min-width: 16em;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-sunken);
+  color: var(--text);
+  font: inherit;
+}
+.transcript-head button,
+.transcript-card button {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.transcript-head button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.transcript-failed {
+  font-size: 13px;
+}
+.transcript-status {
+  margin: 12px 24px 0;
+  color: var(--muted);
+}
+.transcript-status[hidden] {
+  display: none;
+}
+.transcript-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 24px 32px;
+}
+.transcript-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.transcript-card[hidden] {
+  display: none;
+}
+.transcript-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-soft, var(--line));
+}
+.transcript-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--terminal-bright-black);
+  box-sizing: border-box;
+}
+.transcript-dot[data-state="ok"] {
+  border: 0;
+  background: var(--terminal-green);
+}
+.transcript-dot[data-state="failed"] {
+  border: 0;
+  background: var(--terminal-red);
+}
+.transcript-dot[data-state="running"] {
+  border: 0;
+  background: var(--terminal-white);
+}
+.transcript-command {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: 13px/1.4 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.transcript-command-none {
+  color: var(--muted);
+  font-family: var(--font-sans);
+}
+.transcript-actions {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+.transcript-meta {
+  margin: 0;
+  padding: 4px 12px 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.transcript-output {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--terminal-background);
+  color: var(--terminal-foreground);
+  font: 12px/1.45 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* A long output opens to its first lines, faded at the foot, until Show all. */
+.transcript-output-folded {
+  max-height: calc(30 * 1.45em);
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 80%, transparent);
+}
+.transcript-more {
+  margin: 6px 12px 10px;
+}
+.transcript-empty {
+  margin: 0;
+  padding: 2px 12px 10px;
+  color: var(--muted);
+  font-style: italic;
+}
