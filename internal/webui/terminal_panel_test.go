@@ -4633,14 +4633,32 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   // On a command's output, the menu has that command's copies too; not on a prompt's line
   // with no command yet.
   const onRow = (row) => ({ clientX: 100, clientY: 100 + row * 10 + 5 });
-  assert.deepEqual(rightClick(onRow(1)).items.slice(4), [['Copy command', true], ['Copy output', true]]);
+  // The cursor's moves while a command line is typed come after Select all, here only on
+  // the command line.
+  assert.deepEqual(rightClick(onRow(1)).items.slice(4), [['Move the cursor here', false], ['Move the cursor to the start', true], ['Move the cursor to the end', true], ['Copy command', true], ['Copy output', true]]);
   rcCopied.length = 0;
   rightClick(onRow(1));
   await rcChoose('Copy output');
   rightClick(onRow(0));
   await rcChoose('Copy command');
   assert.deepEqual(rcCopied, ['built', 'make']);
-  assert.deepEqual(rightClick(onRow(3)).items.length, 4, 'copies of a prompt with no command yet');
+  assert.deepEqual(rightClick(onRow(3)).items.length, 7, 'copies of a prompt with no command yet');
+  // "Move the cursor here" on "$ echo abc", at its b, index 6 of the line; the start and
+  // the end, here told as indexes, since the shell takes them.
+  assert.deepEqual(rightClick(onRow(3)).items[4], ['Move the cursor here', true]);
+  assert.equal(await sentBy('Move the cursor here', onRow(3)), '\x1b[9998~6;');
+  assert.equal(await sentBy('Move the cursor to the start', onRow(3)), '\x1b[9998~0;');
+  Object.assign(rcTerm.buffer.active, { cursorX: 4 });
+  assert.equal(await sentBy('Move the cursor to the end', onRow(3)), '\x1b[9998~8;');
+  Object.assign(rcTerm.buffer.active, { cursorX: 10 });
+  // Paths on the command line being typed are no links, so that a click there moves in it.
+  rc.server.links = { 'out/x.csv': { kind: 'file', path: '/w/out/x.csv' } };
+  rcTerm.lines[3] = '$ cat out/x.csv';
+  rcTerm.lines[1] = 'out/x.csv';
+  Object.assign(rcTerm.buffer.active, { cursorX: 15 });
+  const rcLinks = (y) => new Promise((resolve) => rcTerm.linkProviders[0].provideLinks(y, resolve)).then((links) => Array.from(links || [], (link) => link.text));
+  assert.deepEqual(await rcLinks(4), [], 'a path on the command line being typed was a link');
+  assert.deepEqual(await rcLinks(2), ['out/x.csv'], 'a path in output was no link');
   }
 
   // Blocks acted on: Commands lists the pane's commands, newest first, to go to one or copy

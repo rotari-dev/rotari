@@ -1568,8 +1568,10 @@ the selection and, only if that succeeds, moves the cursor to its end as WEB-50 
 then clears the selection; **Copy**, of the terminal's selection, off without one; **Paste**, which reads the
 clipboard and gives it to the terminal as Ctrl+V does (bracketed when the program asked, with no Enter of its own),
 or, when the browser does not let the page read it, says to use Ctrl+V (Cmd+V on a Mac), and says when it holds no
-text; **Select all**; and, on a command's prompt or output (WEB-48), that command's **Copy command** and **Copy
-output**. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
+text; **Select all**; while a command line is being typed at the prompt (found as WEB-50 finds it), **Move the
+cursor here**, on only when the right click is in that line, **Move the cursor to the start**, and **Move the cursor
+to the end** (past its text, or the cursor if further), each moving it as WEB-50's click does; and, on a command's
+prompt or output (WEB-48), that command's **Copy command** and **Copy output**. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
 [`TestTerminalPanelInBrowser`](../conformance/05-web/terminal_panel_browser_test.go).
 
 **WEB-50** With `rotari web --allow-terminal`, a click in the command line being typed at a shell's prompt moves the
@@ -1695,7 +1697,8 @@ distinct candidate that names something, in the order asked, with its `text` and
 run's snapshot, the queue, a basedir's projects); neither turns the answer into an error. A shell not running is
 404, a method but POST 405, and the route is served only where the terminal is (404 without it), behind its checks.
 The panel finds candidates on the line under the pointer, its wrapped parts joined, leaving out trailing
-punctuation and words holding `://`, which stay web links. A line in a block (WEB-48) is asked with the directory the
+punctuation and words holding `://`, which stay web links, and none on the rows of the command line being typed at
+the prompt (as WEB-50 finds it), which are for moving in and copying. A line in a block (WEB-48) is asked with the directory the
 shell said by OSC 7 (`file://HOST/PATH`, the path percent-decoded as UTF-8) before that block's prompt, as `dir` and
 `host`; when what it said does not decode to an absolute path, relative paths on its lines are not asked about, and
 a line in no block, or after no OSC 7, is asked with neither. A command line that changes directory itself prints

@@ -382,8 +382,10 @@ notification config ([Notifications](NOTIFICATIONS.md#terminal-commands)). Point
 line. Click in the command line you are typing to move the cursor there, as in an editor; zsh started by rotari
 puts it at the exact character, and other shells get the arrow keys, so in a zsh not started that way a click past the
 typed text may take a zsh-autosuggestions suggestion, as the right arrow would. Alt+click keeps xterm.js's own
-cursor move. Right-click for **Cut**, **Copy**, **Paste**, and **Select all**, and on a command's output for its
-**Copy command** and **Copy output**; Cut works on a selection inside the command line you are typing, and removes
+cursor move. Right-click for **Cut**, **Copy**, **Paste**, and **Select all**; while you type a command line, for
+**Move the cursor here**, **to the start**, and **to the end**; and on a command's output for its
+**Copy command** and **Copy output**. Paths in the command line you are typing are not links, so that a click there
+moves the cursor and a drag selects; Cut works on a selection inside the command line you are typing, and removes
 nothing if the copy fails. Paste asks the browser to read the clipboard, which it may ask you to allow; Ctrl+V (Cmd+V
 on a Mac) always works. Shift+right-click opens the browser's own menu. Clicking a dot offers **Copy
 command**, **Copy output**, **Select output**, and **Type command again**, which types a one-line command at the

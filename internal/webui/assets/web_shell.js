@@ -4542,6 +4542,12 @@ function shellWord(value) {
         callback(undefined);
         return;
       }
+      // The command line being typed is for moving in and copying, not for following.
+      const typing = commandLine(pane);
+      if (typing && y - 1 >= typing.start.y && y - 1 <= typing.last) {
+        callback(undefined);
+        return;
+      }
       const { text, cells } = joinedLine(pane.term, y);
       const found = linkCandidates(text).filter((candidate) =>
         cells
@@ -6117,8 +6123,41 @@ function shellWord(value) {
       ["Paste", () => pasteClipboard(pane), true],
       ["Select all", () => term.selectAll(), true],
     ];
-    // On a command's prompt or output, that command's copies, as its mark offers them.
+    // While a command line is typed at the prompt, the cursor's moves, which a click in it
+    // also makes, offered here where they can be seen.
     const cell = screenCell(pane, event);
+    const line = commandLine(pane);
+    if (line) {
+      const buffer = term.buffer.active;
+      const lastRow = buffer.getLine(line.last);
+      const end = {
+        y: line.last,
+        x: Math.max(
+          lastRow ? rowEnd(lastRow) : 0,
+          line.last === line.cursor.y ? line.cursor.x : 0,
+        ),
+      };
+      const here = cell ? clickTarget(pane, cell.col, cell.row) : null;
+      choices.push(
+        [
+          "Move the cursor here",
+          () =>
+            moveToIndex(pane, here, charsFrom(buffer, here.start, here.target)),
+          Boolean(here),
+        ],
+        [
+          "Move the cursor to the start",
+          () => moveToIndex(pane, line, 0),
+          true,
+        ],
+        [
+          "Move the cursor to the end",
+          () => moveToIndex(pane, line, charsFrom(buffer, line.start, end)),
+          true,
+        ],
+      );
+    }
+    // On a command's prompt or output, that command's copies, as its mark offers them.
     const block =
       cell && term.buffer.active.type !== "alternate"
         ? blockAt(pane, term.buffer.active.viewportY + cell.row)
