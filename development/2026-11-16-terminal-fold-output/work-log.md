@@ -40,3 +40,17 @@
   back to the first with more output after the block (folded again, the rest kept), then unfolded and switched away
   and back (not folded) passes; `tsc` and prettier clean.
 - **Remaining:** phase 4 (contracts and docs).
+
+## 2026-11-16 22:43 +09:00 — Contracts and docs
+
+- **Change:** WEB-58 in `contracts/05-web-assets-and-static-export.md` and its row in `contracts/README.md`.
+  `TestTerminalFoldInBrowser` (`conformance/05-web/terminal_fold_browser_test.go`): bash prints `seq 101 140`, its
+  Commands row's **Fold** folds it to 101–103, the line "⋯ 34 lines folded — click to unfold", and 138–140, and a
+  click on that line brings 104 back. docs/WEB.md: a paragraph on folding after the blocks' menu.
+- **Reason:** plan phase 4.
+- **Plan impact:** the browser step is a test of its own, as the plan allowed, rather than a step in
+  `TestTerminalPanelInBrowser`.
+- **Validation:** `go test ./conformance -run 'TestContractStatus|TestConformanceLayout'` passes and `go vet
+  ./conformance/05-web` is clean; the browser test skips here (no Chrome) and runs in CI; its script passes `node
+  --check`. `scripts/check.sh` was not run (npm is broken here, and the full run is too heavy for the shared machine).
+- **Remaining:** CI's run of `TestTerminalFoldInBrowser`.

@@ -399,7 +399,16 @@ moves the cursor and a drag selects; Cut works on a selection inside the command
 nothing if the copy fails. Paste asks the browser to read the clipboard, which it may ask you to allow; Ctrl+V (Cmd+V
 on a Mac) always works. Shift+right-click opens the browser's own menu. Clicking a dot offers **Copy
 command**, **Copy output**, **Select output**, and **Type command again**, which types a one-line command at the
-prompt without pressing Enter, only while nothing runs in the shell, as **Recent directories** does. Blocks are kept
+prompt without pressing Enter, only while nothing runs in the shell, as **Recent directories** does.
+
+A finished command's output longer than 10 lines can be folded, with **Fold** beside its copy buttons, **Fold output**
+on its dot, or **Fold** on its row in **Commands**: its first and last 3 lines stay, with a dim line between them
+saying how many are folded, so that the commands around it come together and the scroll bar is shorter. Click that
+line, or **Unfold**, to bring the output back. Copying a folded output copies all of it. Folds stay while this browser
+tab shows the shell, coming back after switching tabs or following a link; other tabs and browsers see it unfolded.
+The page writes the screen again from the output it has received to fold, so an output must still be in the last
+8 MiB the page has seen, and nothing folds while a full-screen program such as `vim` runs. A setting a folded output
+itself left changed in the terminal, such as a color it never reset, is gone while it is folded. Blocks are kept
 only in the page, from the output it shows, so they come back after following a link for as much output as is shown
 again. A shell that sends no marks looks as it always did.
 

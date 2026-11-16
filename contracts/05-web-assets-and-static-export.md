@@ -1655,6 +1655,22 @@ reads the file, a line `rotari-place N` then `set ROTARI_NAME=VALUE` and `unset 
 values without evaluating them; a value set by hand afterwards stays. Covered by `TestMovedShellTakesItsPlaceVariables`
 and `TestShellsDoNotInheritAPlaceFile`.
 
+**WEB-58** With `rotari web --allow-terminal`, a finished command's output (WEB-48: a block whose `D` has come) of
+more than 10 lines, counted by line feeds, can be folded, unless the terminal is in the alternate screen or the output
+is no longer all in the bytes the pane keeps: the raw bytes it has written since the connection's replay began (or a
+group change), up to 8 MiB, the oldest going first, Clear keeping those from the last prompt on. Folding writes the
+screen again from those bytes, the folded output's middle given way to one dim line, `⋯ N lines folded — click to
+unfold` (N with thousands separators), after its first 3 lines and before its last 3; output arriving meanwhile is
+written after, once; the blocks come back with their exit codes and times, and the view goes to the folded command's
+prompt. **Fold output** on the block's mark menu, a **Fold** button with the prompt line's copy buttons, and a **Fold**
+button on its **Commands** row fold it, offered only when it can fold; once folded they say **Unfold**, the row says
+"folded", and clicking the folded line unfolds it too. Copying a folded output gives all of it as text, read from the
+kept bytes with escape sequences left out; Select output unfolds first. A pane remembers, for the page's life, each
+shell's folded blocks by their command line and output, and folds them again after a replay (a reconnect, a tab
+switch, a link followed); other pages, tabs, and the server keep nothing of it. Implemented in
+[web_shell.js](../internal/webui/assets/web_shell.js); covered by `TestTerminalPanel` and
+[`TestTerminalFoldInBrowser`](../conformance/05-web/terminal_fold_browser_test.go).
+
 **WEB-48** With `rotari web --allow-terminal`, the panel reads the OSC 133 marks a shell or its prompt prints (bash
 and zsh print them by default, WEB-49):
 `A` (a prompt starts), `B` (its command line starts), `C` (the command's output starts), and `D` with an optional
