@@ -3268,6 +3268,10 @@ function shellWord(value) {
       const at = recordBytes(pane, bytes);
       const done = () => {
         if (replay && pane.socket === current) {
+          // xterm.js follows output only while the view is at the bottom, and a late
+          // scroll event for where its scroll bar stood partway through the replay can
+          // leave the view there, off the bottom, for good.
+          holdScroll(pane);
           pane.blocksLive = true;
           // A shell whose replay brought no marks needs no gutter.
           if (!pane.blocks.length) showBlockGutter(pane, false);
@@ -7476,14 +7480,18 @@ function shellWord(value) {
       ["Open transcript from here", () => openTranscript(pane, block), true],
     ]);
   };
-  // holdScroll scrolls a pane to line and keeps it there for a moment. xterm.js follows
-  // its scroll bar asynchronously, so on a loaded page a scroll event for where the bar
-  // was a little earlier, such as the bottom while a replay was still being written, can
-  // arrive after this and move the view back. Anything the viewer does to scroll, or
-  // half a second, ends the hold.
-  const holdScroll = (pane, line) => {
+  // holdScroll scrolls a pane to line, or without one to the bottom, wherever that is as
+  // output comes, and keeps it there for a moment. xterm.js follows its scroll bar
+  // asynchronously, so on a loaded page a scroll event for where the bar was a little
+  // earlier, such as the bottom while a replay was still being written, can arrive after
+  // this and move the view back. Anything the viewer does to scroll, or half a second,
+  // ends the hold.
+  const holdScroll = (pane, line = null) => {
     const { term, viewport } = pane;
-    term.scrollToLine(line);
+    // A newer hold, such as a command chosen just after a replay, replaces the one before.
+    pane.releaseScroll?.();
+    const target = () => line ?? term.buffer.active.baseY;
+    term.scrollToLine(target());
     const kinds = ["wheel", "keydown", "mousedown", "touchstart"];
     let release = null;
     // A late scroll comes as xterm.js's onScroll, or, when its scroll bar catches up with
@@ -7491,7 +7499,8 @@ function shellWord(value) {
     // firing onScroll: both bring the view back. The viewer's own scroll ends the hold first.
     let held = true;
     const repin = () => {
-      if (held && term.buffer.active.viewportY !== line) term.scrollToLine(line);
+      if (held && term.buffer.active.viewportY !== target())
+        term.scrollToLine(target());
     };
     const watch = term.onScroll(repin);
     // xterm.js moves the view in its own listener on the scroll bar, which runs after this
@@ -7518,6 +7527,7 @@ function shellWord(value) {
     wait(500);
     release = () => {
       held = false;
+      if (pane.releaseScroll === release) pane.releaseScroll = null;
       clearTimeout(timer);
       watch.dispose();
       viewport.removeEventListener("scroll", repinLater, true);
@@ -7525,6 +7535,7 @@ function shellWord(value) {
         viewport.removeEventListener(kind, release, true);
     };
     for (const kind of kinds) viewport.addEventListener(kind, release, true);
+    pane.releaseScroll = release;
   };
   // The sticky line (WEB-59): while the top line in view is a command's output and its
   // prompt is above the view, a line over the pane's first row says which command it is,

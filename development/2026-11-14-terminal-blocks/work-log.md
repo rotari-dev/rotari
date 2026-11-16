@@ -368,3 +368,19 @@
 - **Validation:** `TestTerminalPanel` fails on the old `holdScroll` and passes with this one; the typecheck passes; the
   browser step runs only in CI.
 - **Remaining:** CI on macOS.
+
+## 2026-11-17 02:35 +09:00 — CI (macOS): the replay left off the bottom by the same late scroll
+
+- **Change:** `holdScroll` without a line holds the bottom, wherever output takes it, and the end of a shell's replay
+  calls it; a new hold on a pane ends the one before (`pane.releaseScroll`), so a command chosen just after a replay is
+  not pulled back to the bottom. `TestTerminalPanel` checks that a late scroll in xterm.js's own listener after the
+  replay is brought back to the bottom, and its sticky-line part, which scrolls by `onScroll` alone, as no viewer does,
+  waits for that hold to end first.
+- **Reason:** macOS CI for `9f9d5588` stopped at `the replay written to its end` with rows 33 to 48 of `c long` on
+  screen: after the reload, the late scroll event for the scroll bar's place partway through the replay (the bottom at
+  58 lines, so line 42) moved the view off the bottom, where xterm.js stops following output. No hold was involved, so
+  this was there before the previous change; earlier runs met the event later, at the chosen command.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalPanel` fails without the replay's hold and passes with it; the typecheck and the
+  `conformance/05-web` package pass; the browser step runs only in CI.
+- **Remaining:** CI on macOS.

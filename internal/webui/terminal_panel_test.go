@@ -447,6 +447,19 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   sockets[0].onmessage({ data: new TextEncoder().encode('hello').buffer });
   assert.equal(document.querySelector('.terminal-status').hidden, true, 'the wait stayed on screen');
   assert.deepEqual(written, ['hello']);
+  // The replay ends at the bottom, even when xterm.js's scroll bar, catching up late with
+  // where it stood partway through, moves the view back in its own listener; output after
+  // it moves the bottom, and the view with it.
+  const replayBar = document.createElement('div');
+  document.querySelector('.terminal-viewport').append(replayBar);
+  replayBar.addEventListener('scroll', () => { terminals[0].buffer.active.viewportY = 4; });
+  terminals[0].buffer.active.baseY = 20;
+  replayBar.dispatchEvent(new window.Event('scroll'));
+  await wait(0);
+  assert.equal(terminals[0].buffer.active.viewportY, 20, 'a late scroll left the replay off the bottom');
+  terminals[0].buffer.active.baseY = 0;
+  terminals[0].buffer.active.viewportY = 0;
+  replayBar.remove();
   terminals[0].data('typed');
   assert.equal(Buffer.from(sockets[0].sent[0]).toString(), 'typed');
   terminals[0].resize({ rows: 30, cols: 100 });
@@ -4626,7 +4639,9 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   // seq 30 on lines 0–30, echo hi on 31–32, a two-line command on 33–34 with output 35–46,
   // and sleep, running, from 47.
   out(started('seq 30', numbered(30)) + '\x1b]133;D;0\x07' + started('echo hi', 'hi\r\n') + '\x1b]133;D;0\x07' + started('for i in 1\ndo echo $i; done', numbered(12)) + '\x1b]133;D;0\x07' + started('sleep 9', numbered(5)));
-  await wait(10);
+  // That was the replay, whose bottom is held for half a second against scrolls that come
+  // without the viewer's wheel, key, or pointer, as these do.
+  await wait(600);
   const sticky = () => sk.document.querySelector('.terminal-sticky');
   const at = (line) => {
     skTerm.buffer.active.viewportY = line;
