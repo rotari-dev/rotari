@@ -53,7 +53,7 @@ jobs:
         run: go install gotest.tools/gotestsum@v1.13.0
 
       - name: Test
-        run: gotestsum --format pkgname-and-test-fails -- ./...
+        run: gotestsum --format pkgname-and-test-fails -- -timeout 15m ./...
 
       - name: Build
         env:

@@ -44,3 +44,15 @@
 - **Validation:** `TestTerminalPanel`: a viewport scroll event into the output shows the line and one back to the
   prompt hides it, with no `onScroll`.
 - **Remaining:** CI's browser tests.
+
+## 2026-11-16 23:26 +09:00 — CI: conformance/05-web past Go's ten minutes
+
+- **Change:** `sonarcloud.yml`, `release.yml`, and `scheduler-integration.yml` run their Go tests with `-timeout
+  15m`, as `ci.yml`'s coverage run already does.
+- **Reason:** a run of one of them (gotestsum over `./...` with no `-timeout`, on an Ubuntu runner, whose Chrome runs the
+  browser tests) panicked with "test timed out after 10m0s" in `conformance/05-web`, `TestTerminalSharedShellsInBrowser`
+  running for 0s: the package as a whole passed ten minutes, as the browser tests added today (`TestTerminalMoveInBrowser`,
+  `TestTerminalFoldInBrowser`, `TestTerminalStickyCommandInBrowser`) lengthen it, not one test hanging.
+- **Plan impact:** none.
+- **Validation:** CI to confirm.
+- **Remaining:** CI.
