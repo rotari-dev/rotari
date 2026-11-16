@@ -85,3 +85,13 @@
   ./conformance/05-web` pass; the browser test skips here (no Chrome) and runs in CI; its script passes `node
   --check`. `scripts/check.sh` was not run (npm is broken here, and the full run is too heavy for the shared machine).
 - **Remaining:** CI's run of `TestTerminalMoveInBrowser`.
+
+## 2026-11-16 21:59 +09:00 — zsh on CI asked about compinit
+
+- **Change:** `movingKeeper` in `internal/terminal/move_test.go` writes `.zshenv` with `unsetopt GLOBAL_RCS`, as the
+  other zsh tests do, so that the host's `/etc/zshrc` is not read.
+- **Reason:** CI's `TestMovedShellTakesItsPlaceVariables/zsh` timed out at its first prompt: the host's
+  `/etc/zshrc` ran compinit, which asked "Ignore insecure directories and continue [y] or abort compinit [n]?".
+- **Plan impact:** none.
+- **Validation:** `go test ./internal/terminal -run 'TestMove|TestShellsDoNotInherit'` passes here; CI to confirm.
+- **Remaining:** CI's runs of this test and of `TestTerminalMoveInBrowser`.

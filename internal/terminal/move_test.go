@@ -22,10 +22,9 @@ func movingKeeper(t *testing.T, shell string, env ...string) *Keeper {
 	}
 	useCache(t)
 	home := t.TempDir()
-	// zsh asks a new user to set it up without a .zshrc.
-	if err := os.WriteFile(filepath.Join(home, ".zshrc"), []byte("PS1='$ '\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	// zsh asks a new user to set it up without a .zshrc, and the host's /etc/zshrc may run
+	// compinit and ask about insecure directories, taking what the test types as the answer.
+	writeFiles(t, home, map[string]string{".zshenv": "unsetopt GLOBAL_RCS\n", ".zshrc": "PS1='$ '\n"})
 	keeper, err := NewKeeper(KeeperOptions{
 		Shell:    Options{Shell: path, Dir: home, Env: append([]string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "PS1=$ "}, env...)},
 		RingSize: 1 << 16, ShellLimit: 4, GroupLimit: 2, ShellIntegration: true,
