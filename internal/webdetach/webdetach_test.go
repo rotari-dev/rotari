@@ -207,3 +207,103 @@ func TestReadLogFrom(t *testing.T) {
 		t.Fatalf("ReadLogFrom with a limit = %q, %v", text, err)
 	}
 }
+
+func TestLogTailFollowsTruncationAndReplacement(t *testing.T) {
+	paths := testPaths(t)
+	if err := os.MkdirAll(paths.Dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tail, err := TailLog(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func() string {
+		t.Helper()
+		var shown strings.Builder
+		if err := tail.CopyTo(&shown); err != nil {
+			t.Fatal(err)
+		}
+		return shown.String()
+	}
+	if got := read(); got != "" {
+		t.Fatalf("a missing log gave %q", got)
+	}
+	appendLog := func(text string) {
+		t.Helper()
+		file, err := os.OpenFile(paths.Log, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+		if _, err := file.WriteString(text); err != nil {
+			t.Fatal(err)
+		}
+	}
+	appendLog("first\n")
+	if got := read(); got != "first\n" {
+		t.Fatalf("a log that appeared gave %q", got)
+	}
+	appendLog("second\n")
+	if got := read(); got != "second\n" {
+		t.Fatalf("appended lines gave %q", got)
+	}
+	if got := read(); got != "" {
+		t.Fatalf("nothing new gave %q", got)
+	}
+	if err := os.Truncate(paths.Log, 0); err != nil {
+		t.Fatal(err)
+	}
+	appendLog("third\n")
+	if got := read(); got != "third\n" {
+		t.Fatalf("after truncation in place: %q", got)
+	}
+	replacement := paths.Log + ".new"
+	if err := os.WriteFile(replacement, []byte("fourth line, longer than the rest\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(replacement, paths.Log); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got != "fourth line, longer than the rest\n" {
+		t.Fatalf("after replacement: %q", got)
+	}
+
+	started, err := TailLog(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendLog("fifth\n")
+	var shown strings.Builder
+	if err := started.CopyTo(&shown); err != nil || shown.String() != "fifth\n" {
+		t.Fatalf("a tail started on an existing log gave %q, %v; want only what came after", shown.String(), err)
+	}
+}
+
+func TestEnded(t *testing.T) {
+	paths := testPaths(t)
+	holder, err := Hold(paths, 0o700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(what string, pid int, wantEnded, wantClean bool) {
+		t.Helper()
+		ended, clean, err := Ended(paths, pid)
+		if err != nil || ended != wantEnded || (ended && clean != wantClean) {
+			t.Errorf("%s: Ended = %v, %v, %v; want %v, %v", what, ended, clean, err, wantEnded, wantClean)
+		}
+	}
+	check("held without a record", 42, false, false)
+	if err := holder.Publish(Record{PID: 42}); err != nil {
+		t.Fatal(err)
+	}
+	check("running", 42, false, false)
+	check("another server running", 7, true, true)
+	if err := holder.Close(); err != nil {
+		t.Fatal(err)
+	}
+	check("stopped cleanly", 42, true, true)
+	if err := os.WriteFile(paths.Record, []byte(`{"pid": 42}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	check("gone with its record left", 42, true, false)
+}

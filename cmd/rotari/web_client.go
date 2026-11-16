@@ -14,8 +14,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/rotari-dev/rotari/internal/webdetach"
 )
 
 // webClientDrain bounds how long a detaching client waits for the server's last output.
@@ -29,26 +27,24 @@ func webRunsAsClient(flags webCommandFlags) bool {
 	return stdinIsTerminal() || flags.disconnectAction == webDisconnectDetach
 }
 
-// runWebClient starts the server of flags in a session of its own and stays attached:
-// it shows the server's output, stops it on Ctrl-C, detaches it on Ctrl-D, and on
+// runWebClient attaches to this host's detached server when it runs with the options
+// flags give. Otherwise it starts the server of flags in a session of its own and stays
+// attached: it shows the server's output, stops it on Ctrl-C, detaches it on Ctrl-D, and on
 // SIGHUP, SIGTERM, or a lost terminal lets it follow --disconnect-action. A server the
 // client loses without a word, such as to SIGKILL, follows that action too.
-func runWebClient(flags webCommandFlags) int {
+func runWebClient(flags webCommandFlags, baseDir string) int {
 	action := flags.disconnectAction
-	if action == webDisconnectDetach {
-		paths, err := webDetachPaths()
-		if err == nil {
-			var running webdetach.Record
-			var found bool
-			if running, found, err = webdetach.Find(paths); err == nil && found {
-				printErrorf("--disconnect-action detach: a detached rotari web is already running on this host at %s (PID %d), so this one could not detach; stop it with rotari web --shutdown, or use --disconnect-action stop", running.URL, running.PID)
-				return 1
-			}
-		}
-		if err != nil {
-			printErrorf("--disconnect-action detach: %v", err)
-			return 1
-		}
+	running, paths, found, differences, err := detachedWebToReattach(flags, baseDir)
+	if err != nil {
+		printErrorf("cannot start rotari web: %v", err)
+		return 1
+	}
+	if found && len(differences) == 0 {
+		return reattachWebClient(running, paths, flags)
+	}
+	if found && action == webDisconnectDetach {
+		printErrorf("--disconnect-action detach: a detached rotari web is already running on this host at %s (PID %d) with different %s, so this one could not detach; stop it with rotari web --shutdown, or use --disconnect-action stop", running.URL, running.PID, differentWebOptions(differences))
+		return 1
 	}
 	executable, err := os.Executable()
 	if err != nil {

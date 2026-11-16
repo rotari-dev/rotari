@@ -1747,8 +1747,8 @@ under WEB-45's rule (only after the shell's preview shows nothing running at its
 off for a command of more than one line. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel`
 and a step of [`TestTerminalPanelInBrowser`](../conformance/05-web/terminal_panel_browser_test.go).
 
-**WEB-47** `rotari web` run at a terminal, or with `--disconnect-action detach`, starts its server as `--detach`
-does (WEB-40), in a session of its own, and stays attached as its client: it shows the server's output, including
+**WEB-47** `rotari web` run at a terminal, or with `--disconnect-action detach`, unless a server with its options is
+already detached on the host, which it attaches to (WEB-61), starts its server as `--detach` does (WEB-40), in a session of its own, and stays attached as its client: it shows the server's output, including
 `rotari web listening at URL`, and then says on stderr `Press Ctrl-D to detach and keep the server running; Ctrl-C to
 stop it.` (only when stdin is a terminal) and, with the terminal on, `Shells end D after the last page closes
 (--terminal-idle-timeout), and when the server stops.` with the limit in effect written without zero units (`3h`,
@@ -1759,14 +1759,32 @@ URL (PID N)`, the log, and `rotari web --shutdown`, and exits 0. While another s
 is refused, naming that server, and the client stays attached. SIGHUP or SIGTERM to the client, a terminal that went
 away, or a client gone without a word (even by SIGKILL, which the server sees as the end of a pipe) follow
 `--disconnect-action`: `stop` (the default) stops the server, and `detach` detaches it as Ctrl-D does, or, when it
-cannot, stops it and says why in the log. `--disconnect-action detach` fails at start while a server is already
-detached. The action comes from the flag, then `disconnect-action` under `[web]` in a config, then
+cannot, stops it and says why in the log. `--disconnect-action detach` fails at start while a server with other
+options is already detached, naming them. The action comes from the flag, then `disconnect-action` under `[web]` in a config, then
 `ROTARI_WEB_DISCONNECT_ACTION`. A top-level `disconnect-action` and `ROTARI_DISCONNECT_ACTION`, which are a run's, do
 not apply. A bad value is an error naming its source. `--disconnect-action` with `--detach` or `--static-dir` is an
 error. Started without a terminal and with `stop`, `rotari web` serves in its own process and starts none. Implemented
 in `cmd/rotari/web_client.go` and the attached mode of `cmd/rotari/web_detach.go`; covered by the tests in
 [conformance/05-web/web_client_test.go](../conformance/05-web/web_client_test.go) and the unit tests
 `TestShortDuration` and `TestWatchWebClientInput`.
+
+**WEB-61** While a detached server (WEB-40) runs on the host with the options a `rotari web` run at a terminal, or with
+`--disconnect-action detach`, is given, as `--detach` compares them, that command attaches to it and starts none. It
+prints `rotari web listening at URL in the background (PID N, running since T); showing its log`, the note on another
+binary (CLI-31), and, when the server needs a token the command was not given, how to sign in, and then the lines of
+WEB-47: how to detach (only at a terminal) and how long shells last. It then shows what the server writes to its log
+from then on, starting again when the log is rotated, but not what it wrote before. Ctrl-D, SIGHUP, SIGTERM, or a
+terminal that went away leave the server running; but for the last, the client prints `rotari web keeps running in the
+background at URL (PID N)`, the log, and `rotari web --shutdown`, and exits 0. Ctrl-C sends the server SIGTERM, once its
+record shows it is still the server attached to. Once the server stops, however it was stopped, Ctrl-C, `rotari web
+--shutdown`, or the Web UI's Stop, the client prints `Stopped rotari web at URL (PID N).` and exits 0; when the server
+went without removing its record, as when killed, the client says so, naming the log, and exits 1, and it fails too when
+the server does not stop within 30 seconds of Ctrl-C. With other options, at a terminal, it starts a server of its own
+as WEB-47 says; with `--disconnect-action detach`, it fails, naming them and the server's PID. A detached server that is
+starting, or a lease that cannot be probed, makes it fail rather than start another. Implemented in
+`cmd/rotari/web_reattach.go`, with `TailLog` and `Ended` in `internal/webdetach`; covered by
+[conformance/05-web/web_reattach_test.go](../conformance/05-web/web_reattach_test.go) and the unit tests
+`TestLogTailFollowsTruncationAndReplacement` and `TestEnded`.
 
 **WEB-46** With `rotari web --allow-terminal`, words a shell prints are links when they name something that exists.
 `POST /_terminal/shells/ID/links` takes a JSON body `{"candidates": [...]}`, at most 64 candidates of at most 4096
@@ -1958,7 +1976,8 @@ a server killed without cleaning up does not count and its record is removed whe
 files count, and a lease that cannot be probed is an error, never "not running". SIGTERM shuts it down as WEB-34 says
 and removes its record, even when sent as soon as `--detach` returns, since the server handles it before it reports
 that it listens. Its shells see neither the token nor the mark of the detached process. A `rotari web` without
-`--detach` is unchanged and not counted, and says on stderr which detached server runs on the host. The log keeps
+`--detach` is not counted, and says on stderr which detached server runs on the host; run at a terminal with the same
+options, it attaches to that server instead (WEB-61). The log keeps
 about 1 MiB and one rotated `.log.1`, rotated when a server starts and, while it runs, copied and truncated in place,
 never relying on `rotari gc`. `rotari web --shutdown` (command line only, taking no other option but `--yes` and
 `--config`; `--yes` alone is an error) stops this host's detached server: with none it says so and exits 0. Before

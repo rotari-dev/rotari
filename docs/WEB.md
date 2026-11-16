@@ -77,6 +77,23 @@ Shells end when the server stops or you sign out.
   runs and do not apply. A `rotari web` killed outright follows it too.
 - **`--detach`** starts the server already detached, and returns once it listens.
 
+Running `rotari web` again at a terminal, with the same options, attaches to the detached server instead of
+starting another, much as `rotari wait` attaches to a run:
+
+```console
+$ rotari web --allow-terminal
+rotari web listening at http://127.0.0.1:8080 in the background (PID 12345, running since 2026-11-17 09:12:03); showing its log
+Press Ctrl-D to detach and keep the server running; Ctrl-C to stop it.
+Shells end when the server stops or you sign out.
+```
+
+It shows what the server logs from then on. Ctrl-D, or closing the terminal, leaves the server running, whatever
+`--disconnect-action` says, since it was already detached; Ctrl-C stops it, as `rotari web --shutdown` does but
+without asking. When the server stops some other way, for example from the Web UI, `rotari web` says so and exits.
+Options that differ from the detached server's, such as another `--basedir` or no `--allow-terminal`, start a
+second server of its own, and `rotari web` names the detached one. A generated token is not printed again; use the
+one printed when the server started, or set `ROTARI_WEB_AUTH_TOKEN`.
+
 The default differs from `rotari run`'s on purpose. A run ends by itself, so leaving it running costs nothing
 later. A server runs until it is stopped, so one left behind by every closed terminal would pile up, and most
 Web tools stop when their terminal closes.

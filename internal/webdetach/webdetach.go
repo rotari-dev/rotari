@@ -308,3 +308,80 @@ func writeReplacing(path string, data []byte) error {
 	}
 	return err
 }
+
+// LogTail follows the log of a running server from where it was opened,
+// starting over when the server truncates it in place (KeepLogBounded) or a
+// new log replaces it.
+type LogTail struct {
+	path   string
+	offset int64
+	file   os.FileInfo
+}
+
+// TailLog starts following the log at its current end. A log that does not
+// exist yet is followed from its start once it appears.
+func TailLog(paths Paths) (*LogTail, error) {
+	tail := &LogTail{path: paths.Log}
+	info, err := os.Stat(paths.Log)
+	if errors.Is(err, os.ErrNotExist) {
+		return tail, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	tail.offset, tail.file = info.Size(), info
+	return tail, nil
+}
+
+// CopyTo writes what the log gained since the last call to w.
+func (tail *LogTail) CopyTo(w io.Writer) error {
+	file, err := os.Open(tail.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if tail.file == nil || !os.SameFile(tail.file, info) || info.Size() < tail.offset {
+		tail.offset = 0
+	}
+	tail.file = info
+	if info.Size() == tail.offset {
+		return nil
+	}
+	copied, err := io.Copy(w, io.NewSectionReader(file, tail.offset, info.Size()-tail.offset))
+	tail.offset += copied
+	return err
+}
+
+// Ended says whether the detached server with pid is no longer running, and
+// for one that is not, whether it stopped cleanly, removing its record, or
+// went without, as when killed. A record of another server counts as this
+// one having ended cleanly, since that server could not have started before
+// this one released the lease. A held lease without a record is a server
+// stopping or starting, so not yet an answer. A server that stops cleanly
+// between the look at its record and the probe of its lease is reported as
+// gone without cleaning up.
+func Ended(paths Paths, pid int) (ended, clean bool, err error) {
+	_, statErr := os.Stat(paths.Record)
+	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return false, false, statErr
+	}
+	recorded := statErr == nil
+	current, found, err := Find(paths)
+	if errors.Is(err, ErrStarting) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, err
+	}
+	if found {
+		return current.PID != pid, true, nil
+	}
+	return true, !recorded, nil
+}

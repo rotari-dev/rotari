@@ -188,12 +188,16 @@ func TestWebClientStopsOnCtrlC(t *testing.T) {
 }
 
 // TestWebClientCannotDetachBesideAnother checks that Ctrl-D, while another server is
-// detached on the host, says so and leaves this one attached.
+// detached on the host with other options, says so and leaves this one attached.
 func TestWebClientCannotDetachBesideAnother(t *testing.T) {
 	covers(t, "WEB-47")
 	e := terminalEnv(t)
 	other, _ := startDetached(t, e)
-	web := startAttached(t, e)
+	// Other options than the detached server's, which it would otherwise attach to (WEB-61).
+	web := startAttached(t, e, "--allow-control=false")
+	if web.url == other.url {
+		t.Fatalf("rotari web with other options attached to the detached server at %s", other.url)
+	}
 	web.await(regexp.MustCompile(`Press Ctrl-D`))
 	web.press("\x04")
 	web.await(regexp.MustCompile(`cannot detach: a detached rotari web is already running on this host at ` + regexp.QuoteMeta(other.url) + ` \(PID ` + strconv.Itoa(other.pid) + `\)`))

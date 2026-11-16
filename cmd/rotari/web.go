@@ -87,7 +87,7 @@ func cmdWeb(args []string) int {
 	case flags.detach:
 		return startDetachedWeb(flags, baseDir)
 	case webRunsAsClient(flags):
-		return runWebClient(flags)
+		return runWebClient(flags, baseDir)
 	}
 	return serveWeb(flags, baseDir, options)
 }

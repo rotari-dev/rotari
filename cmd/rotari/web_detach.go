@@ -144,15 +144,13 @@ func startDetachedWeb(flags webCommandFlags, baseDir string) int {
 // running, unless the options given differ from its own.
 func reportDetachedWeb(running webdetach.Record, want webdetach.Settings, flags webCommandFlags, paths webdetach.Paths) int {
 	if names := running.Settings.Differences(want, flags.portExplicit); len(names) != 0 {
-		printErrorf("a detached rotari web (PID %d) is already running on this host with different --%s; stop it with rotari web --shutdown first, or run rotari web without --detach",
-			running.PID, strings.Join(names, ", --"))
+		printErrorf("a detached rotari web (PID %d) is already running on this host with different %s; stop it with rotari web --shutdown first, or run rotari web without --detach",
+			running.PID, differentWebOptions(names))
 		return 1
 	}
 	fmt.Printf("rotari web listening at %s in the background (PID %d, already running since %s)\n", running.URL, running.PID, running.StartedAt.Local().Format(time.DateTime))
 	printDetachedWebBinaryNote(running)
-	if running.Settings.TokenSHA256 != "" && flags.authToken == "" {
-		fmt.Fprintf(os.Stderr, "Sign in with user name %q and the token printed when it started; set %s to keep one token across restarts.\n", "rotari", envWebAuthToken)
-	}
+	printDetachedWebTokenHint(running, flags)
 	printDetachedWebHelp(paths)
 	if running.Settings.AllowTerminal {
 		if limit, err := time.ParseDuration(running.Settings.TerminalIdleTimeout); err == nil {

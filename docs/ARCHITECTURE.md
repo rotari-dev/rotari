@@ -167,6 +167,9 @@ flowchart LR
    to stop, and Ctrl-D asks it to detach: it takes the host's lease, records itself, and moves its output onto
    the log with `dup3`. A disconnect, or the lifeline closing however the client went, follows the disconnect
    action. Without a terminal, with the default action, `rotari web` serves in its own process.
+   When a detached server runs with the options given, the client attaches to it instead
+   ([cmd/rotari/web_reattach.go](../cmd/rotari/web_reattach.go)): with no pipe to that server, it follows its log
+   (`webdetach.TailLog`), watches its lease and record (`webdetach.Ended`), and stops it with SIGTERM on Ctrl-C.
    `rotari web --shutdown` ([cmd/rotari/web_shutdown.go](../cmd/rotari/web_shutdown.go)) finds that server the same
    way. It reads what its shells run from the process table (`terminal.ServerShells`), since it has no token to ask
    the server, then sends SIGTERM and waits for the lease. `POST /_server/shutdown`
