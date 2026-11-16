@@ -238,6 +238,11 @@ Moving a shell to another project (`POST /_terminal/shells/ID/place`, behind the
 can read and write and removes when it stops; the shell's prompt hook reads it and sets only `ROTARI_` variables,
 assigning their values without running them, so a project or path name cannot run a command there.
 
+The transcript page (`/_terminal/transcript`) is served behind the same checks and holds nothing of a shell when it is
+served: it asks the tab that opened it for the transcript by `postMessage`, and each side accepts only the other,
+from the same origin, so another site or window cannot ask for one. Output is shown and saved as text, never as markup,
+and a saved HTML file has no script.
+
 Blocks are read in the page alone, from the OSC 133 marks in the output it already shows; the server parses and
 keeps nothing for them, so it still records nothing that is typed. The `C` mark of bash and zsh carries the command line,
 percent-encoded (bash's only when its history took the line), which passes through the server as all output does and is kept in the replayed output as its echo

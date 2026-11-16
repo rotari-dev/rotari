@@ -2,7 +2,7 @@
 
 Created: 2026-11-16
 Status: Accepted by the user on 2026-11-16 without PDF (open question 1), the `cd` lines as proposed. See
-[work-log.md](work-log.md).
+[work-log.md](work-log.md); all four phases are done.
 
 ## Goal
 

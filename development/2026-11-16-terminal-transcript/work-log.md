@@ -45,3 +45,19 @@
   colours, markup kept as text, no output; a long output folded and shown; Copy command; the filter and Failed only; the
   shell script, the Markdown of two checked cards, and the HTML file, each in full; nothing checked; Refresh) pass.
 - **Remaining:** phase 4 (contracts and docs).
+
+## 2026-11-17 00:01 +09:00 — Contracts and docs
+
+- **Change:** WEB-60 in `contracts/05-web-assets-and-static-export.md` and its row in `contracts/README.md`; WEB-51's
+  paragraph and row add **Open transcript**. `TestTerminalTranscriptInBrowser`
+  (`conformance/05-web/terminal_transcript_browser_test.go`): bash prints a green line with `printf` and runs `false`;
+  **Open transcript** from the pane's menu, clicked as the viewer's gesture, opens a tab found among the browser's
+  targets, whose cards show the green span in the theme's green and `false` failed, and whose shell script, made in the
+  page, has the failure comment and no output. docs/WEB.md: a paragraph after the sticky line; docs/SECURITY.md: the
+  page, the exchange, and output kept as text.
+- **Reason:** plan phase 4.
+- **Plan impact:** none.
+- **Validation:** `go test ./conformance -run 'TestContractStatus|TestConformanceLayout'` passes and `go vet
+  ./conformance/05-web` is clean; the browser test skips here (no Chrome) and runs in CI; its script passes `node
+  --check`. `scripts/check.sh` was not run (npm is broken here, and the full run is too heavy for the shared machine).
+- **Remaining:** CI's run of `TestTerminalTranscriptInBrowser`.

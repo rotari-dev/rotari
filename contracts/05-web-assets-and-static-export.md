@@ -1594,8 +1594,9 @@ text; **Select all**; while a command line is being typed at the prompt (found a
 cursor to text...**, which asks for text and moves the cursor to its next place in the line after the cursor, then
 from the line's start, or says it is not there, **Move the cursor to the start**, and **Move the cursor to the end**
 (past its text, or the cursor if further), each moving it as WEB-50's click does; and, on a command's
-prompt or output (WEB-48), that command's **Copy command** and **Copy output**; and last, **Keep the command at the
-top**, checked while the sticky line (WEB-59) is on. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
+prompt or output (WEB-48), that command's **Copy command** and **Copy output**; **Open transcript** (WEB-60), off
+before the pane has any output; and last, **Keep the command at the top**, checked while the sticky line (WEB-59) is
+on. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
 [`TestTerminalPanelInBrowser`](../conformance/05-web/terminal_panel_browser_test.go).
 
 **WEB-50** With `rotari web --allow-terminal`, a click in the command line being typed at a shell's prompt moves the
@@ -1658,6 +1659,31 @@ reads the file, a line `rotari-place N` then `set ROTARI_NAME=VALUE` and `unset 
 `ROTARI_TERMINAL_PLACE_APPLIED`, which it then exports, sets or unsets those variables, only `ROTARI_` names, assigning
 values without evaluating them; a value set by hand afterwards stays. Covered by `TestMovedShellTakesItsPlaceVariables`
 and `TestShellsDoNotInheritAPlaceFile`.
+
+**WEB-60** With `rotari web --allow-terminal`, **Open transcript** in a pane's right-click menu (WEB-51) and **Open
+transcript from here** in a block's mark menu (WEB-48) open `/_terminal/transcript` in a new tab: a page served only
+with the terminal, behind its checks (GET or HEAD, else 405), under the page's nonce, which asks the tab that opened
+it for the transcript by `postMessage` (`rotari-transcript-ask`, same origin) and hears only that window, of this
+origin. The opening tab answers only transcript pages it opened, with the pane's shell as it is then, or a reason when
+the pane has closed or shows another shell; nothing of the transcript passes through the server. The transcript is the
+shell's name and project, when it was taken, whether older output is no longer kept, and one card per command whose
+output is all in the bytes the pane keeps (WEB-58), oldest first (from the block chosen, for the mark menu's item),
+with any output before the first prompt as a card of its own: the command line, its state (ok, failed with its exit
+code, running, no exit code), the directory its shell said by OSC 7, its time for a command seen running, and its
+output as text with SGR colours (16, 256, true colour), bold, dim, italic, underline, and inverse kept and other escape
+sequences left out, a line written over after a carriage return read as written last. The page shows a card per
+command with its state's dot, a checkbox, Copy command and Copy output, and its output in the theme's terminal colours,
+drawn as it comes into view and folded past 30 lines until **Show all**; a filter by command line and **Failed only**
+narrow them; **Refresh** asks again; with no opener, or no answer within 4 seconds, it says why. **Save Markdown**,
+**Save HTML**, and **Save shell script** download, made in the page, the cards shown and checked as `<shell
+name>-<UTC time>.md`, `.html`, or `.sh`: Markdown with each command in a code span (and a `sh` fence for one of
+several lines), its directory, state, and time, and its output in a `text` fence longer than any backquotes in it;
+one HTML file with inline styles and colours, output escaped, and no script; a bash script of the commands alone, with
+`cd` and the quoted directory where it changes and a comment above a failed or still running command. Output is put
+into the page and the HTML file as text, never as markup. Implemented in `internal/webui/terminal_transcript.go`,
+[web_transcript.js](../internal/webui/assets/web_transcript.js), and the panel in `web_shell.js`; covered by
+`TestTerminalTranscriptPage`, `TestTerminalTranscript`, `TestTerminalPanel`, and
+[`TestTerminalTranscriptInBrowser`](../conformance/05-web/terminal_transcript_browser_test.go).
 
 **WEB-59** With `rotari web --allow-terminal`, while the top line in a pane's view is a command's output (WEB-48: at
 or after the line where its `C` was, before the next prompt) and that command's prompt is above the view, a line over

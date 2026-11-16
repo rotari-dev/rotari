@@ -414,7 +414,14 @@ itself left changed in the terminal, such as a color it never reset, is gone whi
 When you scroll up into a command's output and its prompt goes off the top, a line at the top of the pane keeps
 showing that command, with its dot, so you know what printed what you see; click it to go back to its prompt. It
 covers the pane's first row while it shows. Turn it off, for every pane, with **Keep the command at the top** at
-the end of the pane's right-click menu. Blocks are kept
+the end of the pane's right-click menu.
+
+**Open transcript** in the pane's right-click menu (or **Open transcript from here** on a command's dot) opens the
+shell's commands on a page of their own, one card each with how it ended, where it ran, how long it took, and its
+output in color. Filter them, keep the failed ones, uncheck the ones you do not want, and save the rest as Markdown, as
+one HTML file, or as a bash script of the commands alone (with a `cd` where the directory changed, and the failures
+marked). The page takes the transcript from the tab that opened it, so it holds what that tab has received (the last
+8 MiB) and nothing goes through the server; **Refresh** takes it again. Blocks are kept
 only in the page, from the output it shows, so they come back after following a link for as much output as is shown
 again. A shell that sends no marks looks as it always did.
 
