@@ -24,7 +24,9 @@ await withPage(cdp, base + '/_auth/login?next=/activity', { width: 1280, height:
     for (const deadline = Date.now() + 30000; Date.now() < deadline; await sleep(100)) {
       try { if (await page.evaluate(expression)) return; } catch {}
     }
-    throw new Error('timed out waiting for ' + what + '; the terminal shows: ' + await page.evaluate('JSON.stringify(' + rows + ')').catch(() => '(not available)'));
+    // Where the rewriting stands, to tell a screen never written again from one not drawn.
+    const state = 'JSON.stringify((() => { const pane = document.querySelector(".terminal-pane").terminalPane; const buffer = pane.term.buffer.active; return { rewriting: Boolean(pane.rewriting), record: [pane.record.start, pane.record.end], folds: pane.folds.size, blocks: pane.blocks.length, marksLost: pane.marksLost, length: buffer.length, baseY: buffer.baseY, viewportY: buffer.viewportY, type: buffer.type, socket: pane.socket?.readyState ?? null, status: document.querySelector(".terminal-status")?.hidden === false ? document.querySelector(".terminal-status").textContent : "", line0: buffer.getLine(0)?.translateToString(true) }; })())';
+    throw new Error('timed out waiting for ' + what + '; the terminal shows: ' + await page.evaluate('JSON.stringify(' + rows + ')').catch(() => '(not available)') + '; the pane: ' + await page.evaluate(state).catch((error) => '(not available: ' + error.message + ')'));
   };
   const screenHas = (text) => rows + '.some((row) => row === ' + JSON.stringify(text) + ')';
   const typeLine = async (line) => {

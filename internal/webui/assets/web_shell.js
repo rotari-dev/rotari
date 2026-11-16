@@ -6858,55 +6858,60 @@ function shellWord(value) {
       ]),
     );
     const live = pane.blocksLive;
-    term.write("", () => {
-      if (serial !== pane.recordSerial) return;
-      dropBlocks(pane);
-      pane.markQueue = [];
-      pane.marksLost = false;
-      pane.scan = { state: 0, begin: 0, data: "" };
-      pane.blocksLive = false;
-      term.reset();
-      const { start, end } = pane.record;
-      const folds = [...pane.folds.values()]
-        .filter((fold) => fold.outStart >= start && fold.outEnd <= end)
-        .sort((a, b) => a.outStart - b.outStart);
-      let at = start;
-      for (const fold of folds) {
-        feed(pane, recordSlice(pane, at, fold.headEnd), at);
-        pane.markQueue.push({
-          kind: "rotari_fold",
-          at: fold.headEnd,
-          after: fold.headEnd,
-        });
-        term.write(foldLine(fold));
-        at = fold.tailStart;
-      }
-      feed(pane, recordSlice(pane, at, end), at, () => {
+    // After what is waiting to be written, and in a task of its own rather than inside
+    // xterm.js's write callback, which runs within its write loop, and at once after the
+    // viewer's input, so that the reset and the writes are never made from inside it.
+    term.write("", () =>
+      setTimeout(() => {
         if (serial !== pane.recordSerial) return;
-        // What came while it was written follows it.
-        if (pane.record.end > end)
-          feed(pane, recordSlice(pane, end, pane.record.end), end);
-        pane.blocksLive = live;
-        for (const block of pane.blocks) {
-          const kept = times.get(block.bytes?.prompt);
-          if (!kept) continue;
-          block.startedAt = kept.startedAt;
-          block.endedAt = kept.endedAt;
-          paintBlock(pane, block);
+        dropBlocks(pane);
+        pane.markQueue = [];
+        pane.marksLost = false;
+        pane.scan = { state: 0, begin: 0, data: "" };
+        pane.blocksLive = false;
+        term.reset();
+        const { start, end } = pane.record;
+        const folds = [...pane.folds.values()]
+          .filter((fold) => fold.outStart >= start && fold.outEnd <= end)
+          .sort((a, b) => a.outStart - b.outStart);
+        let at = start;
+        for (const fold of folds) {
+          feed(pane, recordSlice(pane, at, fold.headEnd), at);
+          pane.markQueue.push({
+            kind: "rotari_fold",
+            at: fold.headEnd,
+            after: fold.headEnd,
+          });
+          term.write(foldLine(fold));
+          at = fold.tailStart;
         }
-        if (!pane.blocks.length) showBlockGutter(pane, false);
-        pane.rewriting = null;
-        for (const done of rewriting.after) done();
-        const target = pane.blocks.find(
-          (block) => block.bytes?.prompt === focus,
-        );
-        if (target && target.prompt.marker.line >= 0)
-          holdScroll(pane, target.prompt.marker.line);
-        if (target) then?.(target);
-        updateSticky(pane);
-        if (rewriting.again !== undefined) rewrite(pane, rewriting.again);
-      });
-    });
+        feed(pane, recordSlice(pane, at, end), at, () => {
+          if (serial !== pane.recordSerial) return;
+          // What came while it was written follows it.
+          if (pane.record.end > end)
+            feed(pane, recordSlice(pane, end, pane.record.end), end);
+          pane.blocksLive = live;
+          for (const block of pane.blocks) {
+            const kept = times.get(block.bytes?.prompt);
+            if (!kept) continue;
+            block.startedAt = kept.startedAt;
+            block.endedAt = kept.endedAt;
+            paintBlock(pane, block);
+          }
+          if (!pane.blocks.length) showBlockGutter(pane, false);
+          pane.rewriting = null;
+          for (const done of rewriting.after) done();
+          const target = pane.blocks.find(
+            (block) => block.bytes?.prompt === focus,
+          );
+          if (target && target.prompt.marker.line >= 0)
+            holdScroll(pane, target.prompt.marker.line);
+          if (target) then?.(target);
+          updateSticky(pane);
+          if (rewriting.again !== undefined) rewrite(pane, rewriting.again);
+        });
+      }),
+    );
   };
   // foldBlock and unfoldBlock fold a block's output, or bring it back, by writing the
   // screen again.

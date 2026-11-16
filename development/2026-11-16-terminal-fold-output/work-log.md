@@ -86,3 +86,20 @@
   at the top right, Fold there folds it (and the buttons go with the blocks written again), and with the prompt in
   view none show at the top right; the contract checks pass.
 - **Remaining:** CI's browser tests.
+
+## 2026-11-17 00:10 +09:00 — CI: an empty screen after unfolding
+
+- **Change:** `rewrite` resets the terminal and writes the kept bytes in a task of its own (`setTimeout`) after
+  xterm.js's callback for the pending writes, rather than inside that callback. `TestTerminalFoldInBrowser` says, when
+  it times out, where the pane's rewriting stands (whether one is under way, the kept bytes, folds, blocks, the buffer's
+  length and view, the socket, the status, and its first line).
+- **Reason:** CI's `TestTerminalFoldInBrowser` folded `seq 101 140` and then, after a real click on the folded line,
+  showed sixteen empty rows, as a terminal just reset with nothing written. Folding from Commands, by a DOM click, works.
+  xterm.js's write queue runs its loop at once inside `write` when the viewer has just given input
+  (`_didUserInput`), so the rewrite's reset and writes could be made from inside that loop; the panel's own reconnect
+  resets inside such a callback but writes nothing there. That this was the cause is not shown: Chrome could not be run
+  here, and the new report is for the next failure, if any.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalPanel` passes (its folds were already awaited); the browser test's script passes `node
+  --check`; CI to confirm.
+- **Remaining:** CI's run of `TestTerminalFoldInBrowser`.
