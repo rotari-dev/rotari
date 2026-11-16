@@ -339,3 +339,16 @@
 - **Reason:** the user asked for the same order in the mark's and right-click menus.
 - **Plan impact:** none.
 - **Validation:** see the commit.
+
+## 2026-11-17 00:46 +09:00 — CI (macOS): a chosen command's scroll undone by the scroll bar
+
+- **Change:** `holdScroll` brings the view back on the viewport's own `scroll` events (heard while capturing) as well
+  as on xterm.js's `onScroll`, and stops listening when the hold ends.
+- **Reason:** macOS CI's `TestTerminalPanelInBrowser` twice found the view at line 42, not the long command's prompt at
+  9, after choosing it in Commands on a reloaded page, with 74 lines and baseY 58: 42 is 58 less 16 rows, the bottom
+  while the replay was still being written. The scroll bar catching up with that place moves the view by xterm.js's
+  scroll-bar path, which fires no `onScroll`, so the hold, listening only to `onScroll`, never saw it; waiting longer
+  (an earlier change) could not help.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalPanel` (a viewport scroll event alone during the hold is undone) passes; CI to confirm.
+- **Remaining:** CI on macOS.
