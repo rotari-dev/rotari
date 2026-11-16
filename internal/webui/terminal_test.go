@@ -516,6 +516,7 @@ func TestTerminalShellRoutesAreGuarded(t *testing.T) {
 		{http.MethodPut, terminalOrderPath},
 		{http.MethodGet, terminalWindowPath + "/project/p"},
 		{http.MethodGet, terminalShellsPath + "/" + shell.ID + "/" + terminalPreviewName},
+		{http.MethodPost, terminalShellsPath + "/" + shell.ID + "/" + terminalPlaceName + "?project=p"},
 		{http.MethodGet, terminalFilesPath + "?path=/"},
 		{http.MethodPost, terminalFilesPath + "/mkdir"},
 		{http.MethodGet, terminalFilesPath + "/download?path=/"},

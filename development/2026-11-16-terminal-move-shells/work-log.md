@@ -25,3 +25,19 @@
   during `sleep` seen after it, an inner shell inheriting the applied move and taking the next, the outer shell after
   it) pass; with the before-command hooks taken out, the at-prompt checks fail. `go test ./internal/terminal` passes.
 - **Remaining:** phases 2 (route), 3 (All shells), and 4 (contracts and docs).
+
+## 2026-11-16 16:59 +09:00 — Route
+
+- **Change:** `POST /_terminal/shells/ID/place` in `internal/webui/terminal.go` (`serveTerminalPlace`): the place is
+  named in the query as a new shell's is (`basedir` ID, `project`) and read by the same `terminalPlaceFor`; a run,
+  a directory, or neither name is 400, a project that `resolve.ProjectExists` does not find 404, as is an unknown
+  basedir or shell; a shell of no project 409; then `Keeper.Move` with `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME`
+  (unset for a basedir's own), mapping `ErrCannotMove` and the group limit to 409 and a closed keeper to 503. The
+  answer is the shell as listed. The shell list gains `movable` (of a basedir and following moves).
+- **Reason:** plan phase 2.
+- **Plan impact:** the place is named in the query, as `POST /_terminal/shells` names it, rather than in a JSON body,
+  so both share one check.
+- **Validation:** `TestTerminalMovesAShell` (a real bash server: to another project, to the basedir's own, each
+  refusal, a full project, its own, a GET), `TestTerminalDoesNotMoveAShellWithoutTheIntegration`, and the route added
+  to `TestTerminalShellRoutesAreGuarded` pass; `go test ./internal/webui -skip 'TestTerminalPanel$'` passes.
+- **Remaining:** phases 3 (All shells) and 4 (contracts and docs).

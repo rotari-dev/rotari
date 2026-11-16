@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -34,9 +35,11 @@ const (
 	terminalShellsPath = terminalPrefix + "shells"
 	// terminalPreviewName follows a shell's path for what the overview shows of it.
 	terminalPreviewName = "preview"
-	terminalHerePath    = terminalPrefix + "here"
-	terminalAlivePath   = terminalPrefix + "alive"
-	terminalOrderPath   = terminalPrefix + "order"
+	// terminalPlaceName follows a shell's path for moving it to another project.
+	terminalPlaceName = "place"
+	terminalHerePath  = terminalPrefix + "here"
+	terminalAlivePath = terminalPrefix + "alive"
+	terminalOrderPath = terminalPrefix + "order"
 	// terminalWindowPath is the panel in a window of its own. What follows it is the path
 	// of the page whose project it shows, such as /project/p.
 	terminalWindowPath = terminalPrefix + "window"
@@ -338,6 +341,9 @@ type terminalShellResponse struct {
 	Link string `json:"link"`
 	// LastCommand is how its last marked command ended, absent before one has.
 	LastCommand *terminalLastCommand `json:"last_command,omitempty"`
+	// Movable says it can move to another project: it is of a project or a basedir's own,
+	// and follows moves (started with rotari's integration).
+	Movable bool `json:"movable"`
 }
 
 // terminalLastCommand is how a shell's last command ended, from the marks it prints.
@@ -372,6 +378,7 @@ func (s site) terminalShellResponse(shell terminal.ShellInfo) terminalShellRespo
 		return response
 	}
 	response.BaseDir, response.Project = baseDir, project
+	response.Movable = shell.FollowsMoves
 	if prefix, ok := s.basedirLinkPrefix(baseDir); ok {
 		// A basedir's shells show on its All projects.
 		response.Link = prefix + "/"
@@ -508,6 +515,10 @@ func (s site) serveTerminalShell(writer http.ResponseWriter, request *http.Reque
 		s.serveTerminalLinks(writer, request, id)
 		return
 	}
+	if id, ok := strings.CutSuffix(id, "/"+terminalPlaceName); ok {
+		s.serveTerminalPlace(writer, request, id)
+		return
+	}
 	switch request.Method {
 	case http.MethodDelete:
 		if err := s.Terminal.End(id); errors.Is(err, terminal.ErrNoShell) {
@@ -520,6 +531,77 @@ func (s site) serveTerminalShell(writer http.ResponseWriter, request *http.Reque
 	default:
 		writer.Header().Set("Allow", "DELETE, PATCH")
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// serveTerminalPlace moves a shell, on POST, to the place named as a new shell's is (the
+// basedir ID and project in the query): a project, or a basedir's own shells with no
+// project. The shell gets that place's ROTARI_BASEDIR and ROTARI_PROJECT_NAME (unset for a
+// basedir's own) at its next command or prompt. A shell of no project, which rotari gave
+// neither, does not move, nor does one that would not take them.
+func (s site) serveTerminalPlace(writer http.ResponseWriter, request *http.Request, id string) {
+	if request.Method != http.MethodPost {
+		writer.Header().Set("Allow", http.MethodPost)
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	query := request.URL.Query()
+	if query.Get("run") != "" || query.Has("dir") {
+		http.Error(writer, "a move names a basedir and a project, not a run or a directory", http.StatusBadRequest)
+		return
+	}
+	if query.Get("project") == "" && !query.Has("basedir") {
+		http.Error(writer, "a shell moves to a project or to a basedir's own shells, not to no project", http.StatusBadRequest)
+		return
+	}
+	place, ok := s.terminalPlaceFor(writer, request)
+	if !ok {
+		return
+	}
+	if place.Project != "" && !resolve.ProjectExists(place.BaseDir, place.Project) {
+		http.Error(writer, fmt.Sprintf("project %q was not found in %s", place.Project, place.BaseDir), http.StatusNotFound)
+		return
+	}
+	if strings.ContainsAny(place.BaseDir, "\n\r\x00") {
+		http.Error(writer, "a shell cannot be told a basedir whose path holds a line break", http.StatusBadRequest)
+		return
+	}
+	shells := s.Terminal.Shells()
+	index := slices.IndexFunc(shells, func(shell terminal.ShellInfo) bool { return shell.ID == id })
+	if index < 0 {
+		http.Error(writer, terminal.ErrNoShell.Error(), http.StatusNotFound)
+		return
+	}
+	if baseDir, _ := terminalGroupPlace(shells[index].Group); baseDir == "" {
+		http.Error(writer, "a shell of no project does not move: rotari set no project in it to replace", http.StatusConflict)
+		return
+	}
+	set := []string{stateinternal.BaseDirEnv + "=" + place.BaseDir}
+	var unset []string
+	if place.Project != "" {
+		set = append(set, stateinternal.ProjectNameEnv+"="+place.Project)
+	} else {
+		unset = []string{stateinternal.ProjectNameEnv}
+	}
+	shell, err := s.Terminal.Move(id, terminalGroup(place), set, unset)
+	switch {
+	case errors.Is(err, terminal.ErrNoShell):
+		http.Error(writer, err.Error(), http.StatusNotFound)
+	case errors.Is(err, terminal.ErrCannotMove):
+		http.Error(writer, err.Error(), http.StatusConflict)
+	case errors.Is(err, terminal.ErrTooManyInGroup):
+		owner := "project"
+		if place.Project == "" {
+			owner = "basedir"
+		}
+		_, groupLimit := s.Terminal.Limits()
+		http.Error(writer, "at most "+strconv.Itoa(groupLimit)+" shells can run for one "+owner, http.StatusConflict)
+	case errors.Is(err, terminal.ErrKeeperClosed):
+		http.Error(writer, "the server is stopping", http.StatusServiceUnavailable)
+	case err != nil:
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
+	default:
+		writeTerminalJSON(writer, http.StatusOK, s.terminalShellResponse(shell))
 	}
 }
 
