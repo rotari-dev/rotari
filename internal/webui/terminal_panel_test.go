@@ -330,10 +330,48 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
         constructor(options) { Object.assign(this.options, options); terminals.push(this); }
         loadAddon(addon) { (this.addons ||= []).push(addon); } open() {}
         registerLinkProvider(provider) { (this.linkProviders ||= []).push(provider); } focus() { this.focuses = (this.focuses || 0) + 1; }
-        reset() { written.length = 0; this.writes = []; }
+        reset() {
+          written.length = 0; this.writes = [];
+          // A terminal that parses (below) starts again empty, its markers gone, as xterm.js's does.
+          if (this.parses) { this.lines = ['']; Object.assign(this.buffer.active, { cursorX: 0, cursorY: 0 }); this.markers.forEach((marker) => marker.dispose()); }
+        }
+        // With parses set, what is written is read as xterm.js would: OSC sequences go to their
+        // handlers where the cursor is, CSI sequences are skipped, and text fills lines.
+        parseText(text) {
+          this.lines ||= [''];
+          const at = this.buffer.active;
+          for (let i = 0; i < text.length;) {
+            if (text[i] === '\x1b' && text[i + 1] === ']') {
+              const bel = text.indexOf('\x07', i);
+              const st = text.indexOf('\x1b\\', i + 2);
+              const end = bel >= 0 && (st < 0 || bel < st) ? bel : st;
+              if (end < 0) break;
+              const body = text.slice(i + 2, end);
+              const semi = body.indexOf(';');
+              const ident = Number(semi < 0 ? body : body.slice(0, semi));
+              (this.oscHandlers[ident] || []).some((handler) => handler(semi < 0 ? '' : body.slice(semi + 1)));
+              i = end + (end === bel ? 1 : 2);
+            } else if (text[i] === '\x1b' && text[i + 1] === '[') {
+              const csi = /^\x1b\[[0-?]*[ -\/]*[@-~]/.exec(text.slice(i, i + 32));
+              i += csi ? csi[0].length : 2;
+            } else if (text[i] === '\r') {
+              at.cursorX = 0;
+              i++;
+            } else if (text[i] === '\n') {
+              at.cursorY++;
+              this.lines[at.cursorY] ??= '';
+              i++;
+            } else {
+              const line = this.lines[at.cursorY].padEnd(at.cursorX);
+              this.lines[at.cursorY] = line.slice(0, at.cursorX) + text[i] + line.slice(at.cursorX + 1);
+              at.cursorX++;
+              i++;
+            }
+          }
+        }
         dispose() { this.disposed = true; }
         write(data, done) {
-          const parse = () => { written.push(Buffer.from(data).toString()); (this.writes ||= []).push(Buffer.from(data).toString()); done?.(); };
+          const parse = () => { written.push(Buffer.from(data).toString()); (this.writes ||= []).push(Buffer.from(data).toString()); if (this.parses) this.parseText(Buffer.from(data).toString()); done?.(); };
           if (parser.held) parser.waiting.push(parse);
           else parse();
         }
@@ -4424,6 +4462,95 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   o8Right();
   assert.deepEqual(o8Menu().slice(0, 2).map(([label]) => label), ['Cut', 'Copy'], 'off a link, the terminal\'s menu');
   escape();
+  }
+
+  // Folding: a finished command's long output folds, the screen written again from the
+  // bytes kept with its middle given way to a line that unfolds; copying a folded output
+  // copies all of it; output that comes while the screen is written follows it once; a
+  // short or running output, the alternate screen, and output no longer kept do not fold.
+  {
+  const fo = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const foSocket = fo.sockets.at(-1);
+  foSocket.onopen?.();
+  const foTerm = fo.terminals.at(-1);
+  foTerm.parses = true;
+  foTerm.lines = [''];
+  const out = (text) => foSocket.onmessage({ data: new TextEncoder().encode(text).buffer });
+  const ran = (command, output, exit = 0) => '\x1b]133;A\x07$ \x1b]133;B\x07' + command + '\r\n\x1b]133;C;cmdline_url=' + encodeURIComponent(command) + '\x07' + output + '\x1b]133;D;' + exit + '\x07';
+  const numbered = (n) => Array.from({ length: n }, (_, i) => 'line ' + (i + 1) + '\r\n').join('');
+  out(ran('seq 20', numbered(20)) + ran('echo hi', 'hi\r\n') + '\x1b]133;A\x07$ \x1b]133;B\x07');
+  await wait(10);
+  const foPane = () => fo.document.querySelector('.terminal-pane').terminalPane;
+  const foBlocks = () => foPane().blocks;
+  assert.deepEqual(JSON.parse(JSON.stringify(foBlocks().map((block) => [block.command(), Boolean(block.foldable)]))), [['seq 20', true], ['echo hi', false], ['', false]]);
+  const foMenu = () => [...fo.document.querySelectorAll('.terminal-tab-menu button')];
+  const openMark = (block) => {
+    fo.document.dispatchEvent(new fo.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    block.decoration.render().querySelector('.terminal-block-mark').click();
+  };
+  const choose = (label) => foMenu().find((item) => item.textContent === label).click();
+  openMark(foBlocks()[1]);
+  assert.equal(foMenu().find((item) => item.textContent === 'Fold output'), undefined, 'a short output offered to fold');
+  openMark(foBlocks()[0]);
+  assert.equal(foMenu().find((item) => item.textContent === 'Fold output').disabled, false);
+  choose('Fold output');
+  await wait(10);
+  const screen = () => foTerm.lines.map((line) => line.trimEnd());
+  assert.deepEqual(screen(), ['$ seq 20', 'line 1', 'line 2', 'line 3', '⋯ 14 lines folded — click to unfold', 'line 18', 'line 19', 'line 20', '$ echo hi', 'hi', '$', ''].slice(0, screen().length));
+  assert.equal(screen().filter((line) => line === 'hi').length, 1, 'the screen was written twice');
+  assert.equal(foBlocks().length, 3, 'the blocks were not read again');
+  assert.ok(foBlocks()[0].fold, 'the folded block has no fold line');
+  assert.equal(foBlocks()[0].exit, 0);
+  // Copying a folded output copies all of it.
+  const copied = [];
+  Object.defineProperty(fo.window.navigator, 'clipboard', { configurable: true, value: { writeText: async (value) => copied.push(value) } });
+  openMark(foBlocks()[0]);
+  assert.deepEqual(JSON.parse(JSON.stringify(foMenu().map((item) => item.textContent).slice(0, 4))), ['Copy command', 'Copy output', 'Select output', 'Unfold output']);
+  choose('Copy output');
+  await wait(10);
+  assert.equal(copied.at(-1), numbered(20).replace(/\r\n/g, '\n').trimEnd());
+  // The prompt line's buttons offer to unfold it.
+  const actions = foBlocks()[0].decoration.render().querySelector('.terminal-block-actions');
+  assert.equal(actions.querySelector('.terminal-block-fold').textContent, 'Unfold');
+  // Commands says which is folded, and offers to unfold it; a short output offers nothing.
+  fo.document.dispatchEvent(new fo.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  const foCommands = [...fo.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'Commands');
+  foCommands.click();
+  await wait(20);
+  const foRows = () => [...fo.document.querySelectorAll('.terminal-commands .terminal-dirs-row')];
+  assert.deepEqual(foRows().map((row) => [row.querySelector('.terminal-dirs-detail').textContent, [...row.querySelectorAll('button')].map((button) => button.textContent).join(',')]), [
+    ['Exit 0', 'Copy command,Copy output'],
+    ['Exit 0 \u00b7 folded', 'Copy command,Copy output,Unfold'],
+  ]);
+  foCommands.click();
+  await wait(20);
+  // The fold line unfolds it, and output that comes while the screen is written follows.
+  fo.parser.held = true;
+  foBlocks()[0].fold.decoration.render().click();
+  out('late\r\n');
+  fo.parser.release();
+  await wait(10);
+  assert.ok(screen().includes('line 10'), screen().join('|'));
+  assert.equal(screen().filter((line) => line.includes('late')).length, 1, 'the late output was lost or doubled: ' + screen().join('|'));
+  assert.equal(foBlocks()[0].fold, undefined);
+  // A full-screen program: nothing folds, and the note says why.
+  foTerm.buffer.active.type = 'alternate';
+  openMark(foBlocks()[0]);
+  choose('Fold output');
+  assert.match(fo.document.querySelector('.terminal-send-note').textContent, /cannot fold now/);
+  foTerm.buffer.active.type = 'normal';
+  // Output no longer kept, past 8 MiB, does not fold either.
+  foTerm.parses = false;
+  const big = 'x'.repeat(5 * 1024 * 1024);
+  out(big);
+  out(big);
+  foTerm.parses = true;
+  openMark(foBlocks()[0]);
+  choose('Fold output');
+  assert.match(fo.document.querySelector('.terminal-send-note').textContent, /cannot fold now/);
+  assert.ok(foPane().record.end - foPane().record.start <= 8 * 1024 * 1024 + 5 * 1024 * 1024);
+  assert.ok(foPane().record.start > 0, 'nothing was let go past 8 MiB');
   }
 
   // Blocks: OSC 133 marks make one block per command, with its command line and exit

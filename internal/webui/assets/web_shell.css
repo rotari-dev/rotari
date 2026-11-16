@@ -2208,3 +2208,12 @@ html.terminal-open .output-panel.terminal-launch {
   margin-left: auto;
   accent-color: var(--focus);
 }
+
+/* The line that stands for a folded output's middle unfolds it when clicked. */
+.terminal-fold {
+  cursor: pointer;
+  pointer-events: auto;
+}
+.terminal-fold:hover {
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+}

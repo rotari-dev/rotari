@@ -3230,6 +3230,7 @@ function shellWord(value) {
     // Replay brings the screen back, so what is here would appear twice, and its blocks.
     dropBlocks(pane);
     pane.blocksLive = false;
+    resetRecord(pane);
     term.reset();
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
     const current = new WebSocket(
@@ -3261,14 +3262,19 @@ function shellWord(value) {
       current.replayed = true;
       // After the replay, so that it lands at the end of what is on screen.
       const sending = Boolean(pane.pendingSend);
-      term.write(new Uint8Array(event.data), () => {
+      const bytes = new Uint8Array(event.data);
+      const at = recordBytes(pane, bytes);
+      const done = () => {
         if (replay && pane.socket === current) {
           pane.blocksLive = true;
           // A shell whose replay brought no marks needs no gutter.
           if (!pane.blocks.length) showBlockGutter(pane, false);
         }
         if (sending) deliverSend(pane);
-      });
+      };
+      // While the screen is written again, output waits, and follows it.
+      if (pane.rewriting) pane.rewriting.after.push(done);
+      else feed(pane, bytes, at, done);
     };
     current.onclose = (event) => {
       if (pane.socket !== current) return;
@@ -3720,6 +3726,7 @@ function shellWord(value) {
           if (serial !== pane.connectSerial) return;
           dropBlocks(pane);
           pane.blocksLive = false;
+          resetRecord(pane);
           pane.term.reset();
           showBlockGutter(pane, false);
         });
@@ -5881,6 +5888,7 @@ function shellWord(value) {
         return;
       }
       term.clear();
+      clearRecord(pane);
       send(pane, JSON.stringify({ type: "clear" }));
     };
     const barButton = (text, title, onclick) => {
@@ -6033,7 +6041,14 @@ function shellWord(value) {
   });
   const disposeBlock = (block) => {
     block.decoration?.dispose();
-    for (const place of [block.prompt, block.input, block.output, block.end])
+    block.fold?.decoration?.dispose();
+    for (const place of [
+      block.prompt,
+      block.input,
+      block.output,
+      block.end,
+      block.fold?.place,
+    ])
       place?.marker?.dispose();
   };
   // blockState is what a block's mark shows: nothing at a prompt with no command yet, or
@@ -6141,6 +6156,12 @@ function shellWord(value) {
           "Copy this command's output",
           () => copyBlockOutput(pane, block),
         ),
+        button(
+          "terminal-block-fold",
+          "Fold",
+          "Fold this command's output",
+          () => toggleFold(pane, block),
+        ),
       );
       element.append(actions);
     }
@@ -6149,6 +6170,13 @@ function shellWord(value) {
     actions.querySelector(".terminal-block-copy").hidden = !shown;
     actions.querySelector(".terminal-block-copy-command").hidden =
       !shown || !block.command();
+    const fold = actions.querySelector(".terminal-block-fold");
+    const isFolded = folded(pane, block);
+    fold.hidden = !shown || !(isFolded || block.foldable);
+    fold.textContent = isFolded ? "Unfold" : "Fold";
+    fold.title = isFolded
+      ? "Bring back this command's whole output"
+      : "Fold this command's output";
   };
   // copyBlockOutput copies a block's output, read only now, since a long one takes time to
   // put together, or says there is none.
@@ -6581,6 +6609,302 @@ function shellWord(value) {
   // The gutter, left of the text, holds the marks; a shell that sends none has none.
   const showBlockGutter = (pane, shown) =>
     pane.viewport.classList.toggle("terminal-viewport-blocks", shown);
+  // Folding (WEB-58). xterm.js cannot hide lines, so each pane keeps the raw bytes it has
+  // written to its terminal since its last reset, up to foldKeepLimit, the oldest going
+  // first, and folding a finished command's output writes them again with the middle of
+  // that output given way to a line saying how much was folded. Each chunk is scanned for
+  // OSC 133 marks before xterm.js parses it, so that readBlockMark, taking them in the
+  // same order, knows where each block's output starts and ends in those bytes.
+  const foldKeepLimit = 8 * 1024 * 1024;
+  // A folded output keeps its first and last foldKeptLines lines; one of foldMinLines or
+  // fewer is not offered to fold.
+  const foldKeptLines = 3;
+  const foldMinLines = 10;
+  const resetRecord = (pane) => {
+    pane.record = { chunks: [], start: 0, end: 0 };
+    pane.recordSerial = (pane.recordSerial || 0) + 1;
+    pane.markQueue = [];
+    pane.marksLost = false;
+    pane.scan = { state: 0, begin: 0, data: "" };
+    pane.folds = new Map();
+    pane.rewriting = null;
+  };
+  // recordBytes keeps a chunk and returns where it starts in the kept bytes.
+  const recordBytes = (pane, bytes) => {
+    const record = pane.record;
+    const at = record.end;
+    record.chunks.push({ at, bytes });
+    record.end += bytes.length;
+    while (
+      record.end - record.start > foldKeepLimit &&
+      record.chunks.length > 1
+    ) {
+      record.chunks.shift();
+      record.start = record.chunks[0].at;
+    }
+    return at;
+  };
+  // Clear leaves only the line the cursor is on, the prompt's: the bytes from the last
+  // prompt on are kept, so that writing them again brings back what Clear left.
+  const clearRecord = (pane) => {
+    const prompt = pane.blocks.at(-1)?.bytes?.prompt;
+    const record = pane.record;
+    const from =
+      prompt !== null && prompt !== undefined && prompt >= record.start
+        ? prompt
+        : record.end;
+    const kept = recordSlice(pane, from, record.end);
+    record.chunks = kept.length ? [{ at: from, bytes: kept }] : [];
+    record.start = from;
+    pane.folds.clear();
+  };
+  // recordSlice is the kept bytes from one place to another, or null when they are gone.
+  const recordSlice = (pane, from, to) => {
+    const record = pane.record;
+    if (from < record.start || to > record.end || to < from) return null;
+    const out = new Uint8Array(to - from);
+    for (const { at, bytes } of record.chunks) {
+      const lo = Math.max(from, at);
+      const hi = Math.min(to, at + bytes.length);
+      if (lo < hi) out.set(bytes.subarray(lo - at, hi - at), lo - from);
+    }
+    return out;
+  };
+  // scanMarks finds the OSC 133 marks in a chunk, as xterm.js will parse them: ESC ] 133;
+  // ... ended by BEL or ESC \ (an ESC alone ends it too), across chunks; each is queued
+  // with where it starts and where its end is.
+  const scanMarks = (pane, bytes, at) => {
+    const scan = pane.scan;
+    const finish = (after) => {
+      if (scan.data === "133" || scan.data.startsWith("133;"))
+        pane.markQueue.push({
+          kind: scan.data.slice(4).split(";")[0],
+          at: scan.begin,
+          after,
+        });
+    };
+    for (let i = 0; i < bytes.length; i++) {
+      const byte = bytes[i];
+      const where = at + i;
+      if (scan.state === 4) {
+        // After an ESC that ended an OSC: a backslash makes it ST, part of the mark.
+        scan.state = 0;
+        if (byte === 0x5c) {
+          const last = pane.markQueue.at(-1);
+          if (last && last.after === where) last.after = where + 1;
+          continue;
+        }
+        scan.state = 1;
+        scan.begin = where - 1;
+      }
+      if (scan.state === 0) {
+        if (byte === 0x1b) {
+          scan.state = 1;
+          scan.begin = where;
+        }
+      } else if (scan.state === 1) {
+        if (byte === 0x5d) {
+          scan.state = 2;
+          scan.data = "";
+        } else if (byte === 0x1b) scan.begin = where;
+        else scan.state = 0;
+      } else if (byte === 0x07) {
+        finish(where + 1);
+        scan.state = 0;
+      } else if (byte === 0x1b) {
+        finish(where);
+        scan.state = 4;
+      } else if (byte === 0x18 || byte === 0x1a) scan.state = 0;
+      else if (scan.data.length < 64) scan.data += String.fromCharCode(byte);
+    }
+  };
+  // feed scans a chunk of the kept bytes at its place and writes it to the terminal.
+  const feed = (pane, bytes, at, done) => {
+    if (!bytes) return;
+    scanMarks(pane, bytes, at);
+    pane.term.write(bytes, done);
+  };
+  // foldInfo says whether a block can fold, and where its kept and folded lines are: an
+  // ended command, out of the alternate screen, whose output is wholly kept and is longer
+  // than foldMinLines. Lines are counted by line feeds, as the program printed them.
+  const foldInfo = (pane, block) => {
+    const { prompt, outStart, outEnd } = block.bytes || {};
+    if (
+      !block.ended ||
+      prompt === null ||
+      outStart === null ||
+      outEnd === null ||
+      pane.marksLost ||
+      pane.term.buffer.active.type === "alternate"
+    )
+      return null;
+    const output = recordSlice(pane, outStart, outEnd);
+    if (!output) return null;
+    const feeds = [];
+    for (let i = 0; i < output.length; i++)
+      if (output[i] === 0x0a) feeds.push(i);
+    const lines =
+      feeds.length + (output.length && output.at(-1) !== 0x0a ? 1 : 0);
+    if (lines <= foldMinLines) return null;
+    // The kept head ends after its last line's feed; the kept tail starts after the feed
+    // before its first line.
+    const tailFeed =
+      output.at(-1) === 0x0a
+        ? feeds[feeds.length - 1 - foldKeptLines]
+        : feeds[feeds.length - foldKeptLines];
+    return {
+      prompt,
+      outStart,
+      outEnd,
+      headEnd: outStart + feeds[foldKeptLines - 1] + 1,
+      tailStart: outStart + tailFeed + 1,
+      hidden: lines - 2 * foldKeptLines,
+      lines,
+    };
+  };
+  // The line written in place of a folded output's middle: a mark the panel reads, then
+  // the words, dim, at the start of a line.
+  const foldLine = (fold) =>
+    new TextEncoder().encode(
+      "\r\x1b]133;rotari_fold\x07\x1b[0m\x1b[2m\u22ef " +
+        fold.hidden.toLocaleString("en-US") +
+        " lines folded \u2014 click to unfold\x1b[0m\r\n",
+    );
+  // rewrite writes a pane's kept bytes to its terminal again, each folded output's middle
+  // given way to its line, keeping the blocks' times, and scrolls to the prompt of the
+  // block at focus (a prompt's place in the bytes). Output that arrives meanwhile is kept
+  // and written after.
+  const rewrite = (pane, focus, then) => {
+    if (pane.rewriting) {
+      pane.rewriting.again = focus;
+      return;
+    }
+    const { term } = pane;
+    const serial = pane.recordSerial;
+    const rewriting = { after: [], again: undefined };
+    pane.rewriting = rewriting;
+    const times = new Map(
+      pane.blocks.map((block) => [
+        block.bytes?.prompt,
+        { startedAt: block.startedAt, endedAt: block.endedAt },
+      ]),
+    );
+    const live = pane.blocksLive;
+    term.write("", () => {
+      if (serial !== pane.recordSerial) return;
+      dropBlocks(pane);
+      pane.markQueue = [];
+      pane.marksLost = false;
+      pane.scan = { state: 0, begin: 0, data: "" };
+      pane.blocksLive = false;
+      term.reset();
+      const { start, end } = pane.record;
+      const folds = [...pane.folds.values()]
+        .filter((fold) => fold.outStart >= start && fold.outEnd <= end)
+        .sort((a, b) => a.outStart - b.outStart);
+      let at = start;
+      for (const fold of folds) {
+        feed(pane, recordSlice(pane, at, fold.headEnd), at);
+        pane.markQueue.push({
+          kind: "rotari_fold",
+          at: fold.headEnd,
+          after: fold.headEnd,
+        });
+        term.write(foldLine(fold));
+        at = fold.tailStart;
+      }
+      feed(pane, recordSlice(pane, at, end), at, () => {
+        if (serial !== pane.recordSerial) return;
+        // What came while it was written follows it.
+        if (pane.record.end > end)
+          feed(pane, recordSlice(pane, end, pane.record.end), end);
+        pane.blocksLive = live;
+        for (const block of pane.blocks) {
+          const kept = times.get(block.bytes?.prompt);
+          if (!kept) continue;
+          block.startedAt = kept.startedAt;
+          block.endedAt = kept.endedAt;
+          paintBlock(pane, block);
+        }
+        if (!pane.blocks.length) showBlockGutter(pane, false);
+        pane.rewriting = null;
+        for (const done of rewriting.after) done();
+        const target = pane.blocks.find(
+          (block) => block.bytes?.prompt === focus,
+        );
+        if (target && target.prompt.marker.line >= 0)
+          holdScroll(pane, target.prompt.marker.line);
+        if (target) then?.(target);
+        if (rewriting.again !== undefined) rewrite(pane, rewriting.again);
+      });
+    });
+  };
+  // foldBlock and unfoldBlock fold a block's output, or bring it back, by writing the
+  // screen again.
+  const foldBlock = (pane, block) => {
+    const fold = foldInfo(pane, block);
+    if (!fold) return false;
+    pane.folds.set(fold.prompt, fold);
+    rewrite(pane, fold.prompt);
+    return true;
+  };
+  const unfoldBlock = (pane, block, then) => {
+    const prompt = block.bytes?.prompt;
+    if (!pane.folds.has(prompt)) return false;
+    pane.folds.delete(prompt);
+    rewrite(pane, prompt, then);
+    return true;
+  };
+  // toggleFold folds or unfolds, or says why a block cannot fold now.
+  const toggleFold = (pane, block) => {
+    if (folded(pane, block)) unfoldBlock(pane, block);
+    else if (!foldBlock(pane, block))
+      showNote(
+        "This output cannot fold now: it is no longer all kept in this page, or a full-screen program is running.",
+        6000,
+      );
+  };
+  // bytesText is the text of kept output bytes, as copying the screen would give it:
+  // escape sequences left out, and a line written over after a carriage return read as
+  // what was written last.
+  const bytesText = (bytes) =>
+    new TextDecoder()
+      .decode(bytes)
+      .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?/g, "")
+      .replace(/\x1b\[[0-?]*[ -\/]*[@-~]/g, "")
+      .replace(/\x1b[@-_]/g, "")
+      .split("\n")
+      .map((line) => {
+        const parts = line.replace(/\r+$/, "").split("\r");
+        return parts.at(-1).trimEnd();
+      })
+      .join("\n")
+      .trimEnd();
+  const folded = (pane, block) =>
+    Boolean(block.fold) && pane.folds.has(block.bytes?.prompt);
+  // decorateFold makes the folded line a button that unfolds.
+  const decorateFold = (pane, block) => {
+    const { term } = pane;
+    block.fold.decoration?.dispose();
+    block.fold.decoration = term.registerDecoration({
+      marker: block.fold.place.marker,
+      x: 0,
+      width: term.cols,
+    });
+    block.fold.decoration?.onRender((element) => {
+      if (element.classList.contains("terminal-fold")) return;
+      element.classList.add("terminal-fold");
+      element.style.width = "100%";
+      element.setAttribute("role", "button");
+      element.title = "Unfold this command's output";
+      for (const type of ["mousedown", "mouseup"])
+        element.addEventListener(type, (event) => event.stopPropagation());
+      element.addEventListener("click", (event) => {
+        event.stopPropagation();
+        unfoldBlock(pane, block);
+      });
+    });
+  };
   // dropBlocks forgets a pane's blocks, as when its screen is reset for a replay.
   const dropBlocks = (pane) => {
     const blocks = pane.blocks || [];
@@ -6593,9 +6917,18 @@ function shellWord(value) {
   // output after the replay, as the replay keeps none.
   const readBlockMark = (pane, data) => {
     const { term } = pane;
+    const [kind, ...rest] = data.split(";");
+    // Where in the kept bytes this mark is, as scanned before xterm.js parsed it; a scan
+    // that saw another mark has lost its way, and no block folds until the next reset.
+    let mark = pane.markQueue.shift();
+    if (mark && mark.kind !== kind) {
+      pane.markQueue = [];
+      pane.marksLost = true;
+      mark = undefined;
+    }
+    if (pane.marksLost) mark = undefined;
     // Marks in the alternate screen, under vim or less, say nothing of the shell's.
     if (term.buffer.active.type === "alternate") return true;
-    const [kind, ...rest] = data.split(";");
     const blocks = pane.blocks;
     const last = blocks.at(-1);
     // rotari's zsh says where its cursor is in the line before each redraw.
@@ -6614,6 +6947,8 @@ function shellWord(value) {
       }
       const block = {
         prompt: blockPlace(term),
+        // Where its prompt, output, and end are in the kept bytes, for folding.
+        bytes: { prompt: mark?.at ?? null, outStart: null, outEnd: null },
         input: null,
         output: null,
         end: null,
@@ -6644,10 +6979,17 @@ function shellWord(value) {
       decorateBlock(pane, block);
     } else if (!last || last.ended) {
       // A mark of a block whose prompt is not here, or after its end, has nothing to add to.
+    } else if (kind === "rotari_fold") {
+      // The line the page wrote in place of a folded output's middle.
+      if (last.output) {
+        last.fold = { place: blockPlace(term), decoration: null };
+        decorateFold(pane, last);
+      }
     } else if (kind === "B" && !last.input && !last.output) {
       last.input = blockPlace(term);
     } else if (kind === "C" && !last.output) {
       last.output = blockPlace(term);
+      last.bytes.outStart = mark?.after ?? null;
       last.startedAt = now;
       // C may say the command line, percent-encoded, as kitty sends it and rotari's zsh
       // does; a line that does not decode is left to the screen's text.
@@ -6662,7 +7004,9 @@ function shellWord(value) {
       paintBlock(pane, last);
     } else if (kind === "D") {
       last.end = blockPlace(term);
+      last.bytes.outEnd = mark?.at ?? null;
       last.ended = true;
+      last.foldable = Boolean(foldInfo(pane, last));
       last.endedAt = last.startedAt === null ? null : now;
       const exit = rest[0] === undefined ? NaN : Number(rest[0]);
       last.exit = rest[0] !== "" && Number.isInteger(exit) ? exit : null;
@@ -6713,10 +7057,16 @@ function shellWord(value) {
       x: buffer.cursorX,
     };
   };
-  const blockOutput = (pane, block) =>
-    block.output
-      ? blockText(pane.term, block.output, blockOutputEnd(pane, block))
-      : "";
+  // A folded block's output is read from the kept bytes, not the folded screen.
+  const blockOutput = (pane, block) => {
+    if (!block.output) return "";
+    if (folded(pane, block)) {
+      const { outStart, outEnd } = block.bytes;
+      const bytes = recordSlice(pane, outStart, outEnd);
+      if (bytes) return bytesText(bytes);
+    }
+    return blockText(pane.term, block.output, blockOutputEnd(pane, block));
+  };
   // selectBlockOutput selects a block's output in the terminal, as dragging over it would.
   const selectBlockOutput = (pane, block) => {
     const { term } = pane;
@@ -6743,7 +7093,22 @@ function shellWord(value) {
         Boolean(command),
       ],
       ["Copy output", () => copyText(output, "the output"), Boolean(output)],
-      ["Select output", () => selectBlockOutput(pane, block), Boolean(output)],
+      [
+        "Select output",
+        () =>
+          folded(pane, block)
+            ? unfoldBlock(pane, block, (shown) =>
+                selectBlockOutput(pane, shown),
+              )
+            : selectBlockOutput(pane, block),
+        Boolean(output),
+      ],
+      // Only an output long enough to fold, or folded, is offered either.
+      ...(folded(pane, block)
+        ? [["Unfold output", () => unfoldBlock(pane, block), true]]
+        : block.foldable
+          ? [["Fold output", () => toggleFold(pane, block), true]]
+          : []),
       [
         oneLine
           ? "Type command again"
@@ -6831,10 +7196,15 @@ function shellWord(value) {
     row.block = block;
     const state = makeElement("span", "terminal-commands-state");
     state.dataset.state = blockState(block);
+    const isFolded = folded(pane, block);
     row.append(
       state,
       makeElement("span", "terminal-dirs-path", command || "(no command line)"),
-      makeElement("span", "terminal-dirs-detail", blockEnd(block)),
+      makeElement(
+        "span",
+        "terminal-dirs-detail",
+        blockEnd(block) + (isFolded ? " \u00b7 folded" : ""),
+      ),
     );
     row.title = blockTitle(block);
     row.onclick = (event) => {
@@ -6858,6 +7228,8 @@ function shellWord(value) {
     // In the order of the buttons on a block's prompt line.
     copy("Copy command", command, () => copyText(command, "the command"));
     copy("Copy output", block.output, () => copyBlockOutput(pane, block));
+    if (isFolded || block.foldable)
+      copy(isFolded ? "Unfold" : "Fold", true, () => toggleFold(pane, block));
     row.append(actions);
     return row;
   };
@@ -6887,6 +7259,7 @@ function shellWord(value) {
     pane.blocks = [];
     pane.place = null;
     pane.blocksLive = false;
+    resetRecord(pane);
     term.parser.registerOscHandler(blockMark, (data) =>
       readBlockMark(pane, data),
     );
