@@ -5264,11 +5264,13 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   bpTerm.scrolled?.();
   assert.equal(bpTerm.buffer.active.viewportY, 3, 'a late scroll event moved the view off false');
   // Or a scroll of the viewport alone, as when xterm.js's scroll bar catches up with where it
-  // was, which fires no onScroll.
+  // was, which fires no onScroll. xterm.js moves the view in its own listener on the scroll
+  // bar, during the event and after any listener capturing it above.
   const bpBar = bp.document.createElement('div');
   bpPane().viewport.append(bpBar);
-  bpTerm.buffer.active.viewportY = 8;
+  bpBar.addEventListener('scroll', () => { bpTerm.buffer.active.viewportY = 8; });
   bpBar.dispatchEvent(new bp.window.Event('scroll'));
+  await wait(0);
   assert.equal(bpTerm.buffer.active.viewportY, 3, 'a late scroll of the viewport moved the view off false');
   assert.equal(cmdBox(), null, 'choosing left Commands open');
   assert.ok(bpPane().blocks[1].decoration.render().classList.contains('terminal-block-flash'), 'the prompt gone to was not lit up');

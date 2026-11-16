@@ -7489,11 +7489,15 @@ function shellWord(value) {
     // A late scroll comes as xterm.js's onScroll, or, when its scroll bar catches up with
     // where it was, as only the viewport's own scroll event, which xterm.js reads without
     // firing onScroll: both bring the view back. The viewer's own scroll ends the hold first.
+    let held = true;
     const repin = () => {
-      if (term.buffer.active.viewportY !== line) term.scrollToLine(line);
+      if (held && term.buffer.active.viewportY !== line) term.scrollToLine(line);
     };
     const watch = term.onScroll(repin);
-    viewport.addEventListener("scroll", repin, true);
+    // xterm.js moves the view in its own listener on the scroll bar, which runs after this
+    // one, capturing above it; so look once the event is over.
+    const repinLater = () => setTimeout(repin, 0);
+    viewport.addEventListener("scroll", repinLater, true);
     // Half a second, and longer, up to three, while xterm.js's scroll bar has not caught up
     // with the line: on a slow host its late scroll events come after half a second.
     const settled = () => {
@@ -7513,9 +7517,10 @@ function shellWord(value) {
     };
     wait(500);
     release = () => {
+      held = false;
       clearTimeout(timer);
       watch.dispose();
-      viewport.removeEventListener("scroll", repin, true);
+      viewport.removeEventListener("scroll", repinLater, true);
       for (const kind of kinds)
         viewport.removeEventListener(kind, release, true);
     };

@@ -352,3 +352,19 @@
 - **Plan impact:** none.
 - **Validation:** `TestTerminalPanel` (a viewport scroll event alone during the hold is undone) passes; CI to confirm.
 - **Remaining:** CI on macOS.
+
+## 2026-11-17 01:41 +09:00 — CI (macOS): the hold looked before xterm.js moved the view
+
+- **Change:** `holdScroll` checks the view after a viewport `scroll` event is over (`setTimeout(…, 0)`), not while
+  capturing it, and does nothing once the hold has ended. `TestTerminalPanel` moves the view in a listener on the scroll
+  bar itself, as xterm.js does, and checks after the event.
+- **Reason:** macOS CI for `d3772989`, which includes `9075bb15`, again stopped at `the long command at the top` with
+  `viewportY` 42, `baseY` 58, and the prompt on line 9. xterm.js's `Viewport` moves the view in its own `scroll`
+  listener on `.xterm-viewport` (`_handleScroll`, with `suppressScrollEvent`, so no `onScroll`). `9075bb15`'s listener
+  captured the event on `.terminal-viewport`, above it, so it ran first, found the view still on 9, and left it; then
+  xterm.js moved it to 42. Its unit test set the view to 8 before dispatching the event, the reverse of that order,
+  and so passed; changed to xterm.js's order, it fails without this change.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalPanel` fails on the old `holdScroll` and passes with this one; the typecheck passes; the
+  browser step runs only in CI.
+- **Remaining:** CI on macOS.
