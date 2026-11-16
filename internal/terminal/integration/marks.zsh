@@ -19,6 +19,7 @@ __rotari_keep() {
 # __rotari_prompt runs last, unless a hook is added later, as some themes add theirs at the
 # first prompt.
 __rotari_prompt() {
+	__rotari_place
 	__rotari_dir
 	print -n "\e]133;D;${__rotari_status}\a\e]133;A${__rotari_goto_said}\a"
 	(( __rotari_line_init )) || [[ $PS1 == *'133;B'* ]] || PS1="$PS1"$'%{\e]133;B\a%}'
@@ -83,6 +84,40 @@ __rotari_dir() {
 	fi
 	print -n "\e]7;file://${HOST}${__rotari_dir_url}\a"
 }
+# __rotari_place takes the variables of the place the Web terminal moved this shell to,
+# from the file ROTARI_TERMINAL_PLACE names: a line "rotari-place N", then lines
+# "set ROTARI_NAME=VALUE" and "unset ROTARI_NAME". It takes each move once, by its N, kept
+# in ROTARI_TERMINAL_PLACE_APPLIED for shells started inside too, so that a value set by
+# hand afterwards is kept. Values are assigned, never evaluated, and it forks nothing.
+__rotari_place() {
+	emulate -L zsh
+	[[ -n ${ROTARI_TERMINAL_PLACE:-} && -r $ROTARI_TERMINAL_PLACE ]] || return 0
+	local head serial applied=${ROTARI_TERMINAL_PLACE_APPLIED:-0} line name
+	[[ $applied == <-> ]] || applied=0
+	{
+		IFS= read -r head || return 0
+		serial=${head#rotari-place }
+		[[ $serial == <-> ]] || return 0
+		# Compared as text of digits, so nothing inherited is evaluated as arithmetic.
+		(( ${#serial} > ${#applied} )) || [[ ${#serial} == ${#applied} && $serial > $applied ]] || return 0
+		while IFS= read -r line; do
+			case $line in
+			('set ROTARI_'?*=*)
+				line=${line#set }
+				name=${line%%=*}
+				[[ $name == *[^A-Z0-9_]* ]] && continue
+				export "$name=${line#*=}"
+				;;
+			('unset ROTARI_'?*)
+				name=${line#unset }
+				[[ $name == *[^A-Z0-9_]* ]] && continue
+				unset "$name"
+				;;
+			esac
+		done
+		export ROTARI_TERMINAL_PLACE_APPLIED=$serial
+	} <$ROTARI_TERMINAL_PLACE
+}
 # __rotari_goto puts the cursor where the Web terminal was clicked: the panel sends a key
 # sequence no terminal does, the line's character index, and ";". CURSOR stops at the
 # buffer's end, so a suggestion shown past it, as zsh-autosuggestions shows one, is not
@@ -137,4 +172,5 @@ if [[ -r ${ROTARI_SHELL_INTEGRATION:-}/marks.bash ]]; then
 	export PROMPT_COMMAND='__rotari_status=$?; [ -n "${__rotari_marks+x}" ] || { [ -r "$ROTARI_SHELL_INTEGRATION/marks.bash" ] && { __rotari_loading=1; . "$ROTARI_SHELL_INTEGRATION/marks.bash"; }; }'
 fi
 precmd_functions=(__rotari_keep $precmd_functions __rotari_prompt)
-preexec_functions+=(__rotari_preexec __rotari_zsh_inside)
+# A move made while the shell waited at its prompt is taken before the command typed next.
+preexec_functions+=(__rotari_preexec __rotari_zsh_inside __rotari_place)

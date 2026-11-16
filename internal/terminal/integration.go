@@ -216,6 +216,19 @@ func ownedPrivately(path string, dir bool) error {
 	return nil
 }
 
+// withIntegration says a shell starts with rotari's integration: bash or zsh, by its
+// program's name, given the integration's files.
+func withIntegration(options Options) bool {
+	if options.Integration == "" {
+		return false
+	}
+	switch filepath.Base(options.Shell) {
+	case "bash", "zsh":
+		return true
+	}
+	return false
+}
+
 // shellCommand is how a shell starts: its arguments and environment. With integration,
 // bash and zsh, by their program's name, start with rotari's files; any shell else, and
 // every shell without, starts as a login shell.

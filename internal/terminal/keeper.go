@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"cmp"
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -50,8 +52,19 @@ var (
 	ErrNoShell = errors.New("no such shell")
 	// ErrTooManyShells is returned by Start at the limit on all shells.
 	ErrTooManyShells = errors.New("too many shells are running")
-	// ErrTooManyInGroup is returned by Start at the limit on a group's shells.
+	// ErrTooManyInGroup is returned by Start and Move at the limit on a group's shells.
 	ErrTooManyInGroup = errors.New("too many shells are running in this group")
+	// ErrCannotMove is returned by Move for a shell that would not take its new place's
+	// variables: one started without rotari's integration, or a shell other than bash and zsh.
+	ErrCannotMove = errors.New("this shell was not started with rotari's shell integration, so it cannot take another project's variables")
+)
+
+// placeVariable names, in the environment of a shell that follows moves, the file Move
+// writes its new place's variables to, which rotari's prompt hook reads; placeApplied is
+// the last move the hook applied, inherited by shells started inside.
+const (
+	placeVariable = "ROTARI_TERMINAL_PLACE"
+	placeApplied  = "ROTARI_TERMINAL_PLACE_APPLIED"
 )
 
 // DetachReason says why an Attachment ended.
@@ -137,6 +150,9 @@ type ShellInfo struct {
 	// LastCommand is how its last command ended, read from the marks it prints, or nil
 	// before one has.
 	LastCommand *LastCommand
+	// FollowsMoves says Move can move it: it runs rotari's prompt hook, which takes the
+	// new place's variables.
+	FollowsMoves bool
 }
 
 // DirEntry is a directory that shells of a group have been in.
@@ -160,6 +176,9 @@ type Keeper struct {
 	// temporaryIntegration is the shell integration's directory when it is a temporary
 	// one, which Close removes.
 	temporaryIntegration string
+	// placeDir holds each moved shell's place file, private to the user, and is removed
+	// on Close; empty without the integration.
+	placeDir string
 
 	mu     sync.Mutex
 	closed bool
@@ -192,6 +211,10 @@ type keptShell struct {
 	dirSerial  int
 	dir        string
 	dirTimer   *time.Timer
+	// placeFile is where Move writes this shell's new place, empty for a shell that does
+	// not follow moves; placeSerial numbers those writes.
+	placeFile   string
+	placeSerial int
 }
 
 // NewKeeper returns a Keeper with no shells yet.
@@ -222,7 +245,18 @@ func NewKeeper(options KeeperOptions) (*Keeper, error) {
 		}
 		options.Shell.Integration = dir
 	}
-	return &Keeper{options: options, temporaryIntegration: temporary}, nil
+	keeper := &Keeper{options: options, temporaryIntegration: temporary}
+	if options.ShellIntegration {
+		dir, err := os.MkdirTemp("", "rotari-terminal-places-")
+		if err != nil {
+			if temporary != "" {
+				_ = os.RemoveAll(temporary)
+			}
+			return nil, fmt.Errorf("make the directory for moved shells' places: %w", err)
+		}
+		keeper.placeDir = dir
+	}
+	return keeper, nil
 }
 
 // Start starts a shell at the given size. A shell nobody attaches to falls under the
@@ -250,11 +284,18 @@ func (keeper *Keeper) Start(start StartOptions) (ShellInfo, error) {
 	if start.Dir != "" {
 		options.Dir = start.Dir
 	}
+	// A place file inherited from a shell the server was started in is that shell's.
 	options.Env = slices.DeleteFunc(slices.Clone(options.Env), func(entry string) bool {
 		name, _, _ := strings.Cut(entry, "=")
-		return slices.Contains(start.Unset, name)
+		return slices.Contains(start.Unset, name) || name == placeVariable || name == placeApplied
 	})
 	options.Env = append(options.Env, start.Env...)
+	id := strconv.Itoa(keeper.lastID + 1)
+	placeFile := ""
+	if keeper.placeDir != "" && withIntegration(options) {
+		placeFile = filepath.Join(keeper.placeDir, id)
+		options.Env = append(options.Env, placeVariable+"="+placeFile)
+	}
 	session, err := Start(options)
 	if err != nil {
 		return ShellInfo{}, err
@@ -272,10 +313,11 @@ func (keeper *Keeper) Start(start StartOptions) (ShellInfo, error) {
 		number++
 	}
 	shell := &keptShell{
-		info:     ShellInfo{ID: strconv.Itoa(keeper.lastID), Number: number, Group: start.Group, Dir: options.Dir, StartedAt: now, ActiveAt: now},
-		session:  session,
-		ring:     outputRing{limit: keeper.options.RingSize},
-		finished: make(chan struct{}),
+		info:      ShellInfo{ID: id, Number: number, Group: start.Group, Dir: options.Dir, StartedAt: now, ActiveAt: now, FollowsMoves: placeFile != ""},
+		session:   session,
+		ring:      outputRing{limit: keeper.options.RingSize},
+		finished:  make(chan struct{}),
+		placeFile: placeFile,
 	}
 	// Where the shell starts counts at once, since a line typed before its first prompt
 	// settles would move it first. The kernel names a directory without its symbolic
@@ -587,6 +629,11 @@ func (keeper *Keeper) finish(shell *keptShell) {
 	}
 	keeper.log("terminal: shell ended: " + shell.session.Result().String())
 	keeper.shells = slices.DeleteFunc(keeper.shells, func(other *keptShell) bool { return other == shell })
+	if shell.placeSerial > 0 {
+		if err := os.Remove(shell.placeFile); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			keeper.log("terminal: cannot remove a moved shell's place: " + err.Error())
+		}
+	}
 	if shell.attached != nil {
 		shell.attached.result = shell.session.Result()
 		shell.detach(ShellExited)
@@ -740,6 +787,87 @@ func (keeper *Keeper) Rename(id, name string) (ShellInfo, error) {
 	return shell.info, nil
 }
 
+// Move puts a running shell in another group, after that group's shells, with the lowest
+// number free there and its name kept, and gives the shell the variables set (NAME=VALUE)
+// and unset (NAME) of its new place, all ROTARI_ variables, which rotari's prompt hook
+// takes at the shell's next prompt; what is already running keeps its own. Moving to the
+// shell's own group changes nothing. Directories the shell goes to from then on are its new
+// group's; those it went to stay its old group's. It returns ErrNoShell, ErrCannotMove for
+// a shell that does not follow moves, ErrTooManyInGroup at the new group's limit, and an
+// error for a variable that is not a ROTARI_ one or a value holding a line break or NUL.
+func (keeper *Keeper) Move(id, group string, set, unset []string) (ShellInfo, error) {
+	for _, entry := range set {
+		name, value, ok := strings.Cut(entry, "=")
+		if !ok || !placeName(name) {
+			return ShellInfo{}, fmt.Errorf("a moved shell's variable must be ROTARI_NAME=VALUE, not %q", entry)
+		}
+		if strings.ContainsAny(value, "\n\r\x00") {
+			return ShellInfo{}, fmt.Errorf("the value of %s holds a line break or NUL, which a shell's prompt hook cannot read", name)
+		}
+	}
+	for _, name := range unset {
+		if !placeName(name) {
+			return ShellInfo{}, fmt.Errorf("a moved shell's variable must be a ROTARI_ name, not %q", name)
+		}
+	}
+	keeper.mu.Lock()
+	defer keeper.mu.Unlock()
+	if keeper.closed {
+		return ShellInfo{}, ErrKeeperClosed
+	}
+	shell := keeper.find(id)
+	if shell == nil {
+		return ShellInfo{}, ErrNoShell
+	}
+	if shell.info.Group == group {
+		return shell.info, nil
+	}
+	if shell.placeFile == "" {
+		return ShellInfo{}, ErrCannotMove
+	}
+	used := make(map[int]bool)
+	for _, other := range keeper.shells {
+		if other.info.Group == group {
+			used[other.info.Number] = true
+		}
+	}
+	if len(used) >= keeper.options.GroupLimit {
+		return ShellInfo{}, ErrTooManyInGroup
+	}
+	var content strings.Builder
+	fmt.Fprintf(&content, "rotari-place %d\n", shell.placeSerial+1)
+	for _, entry := range set {
+		content.WriteString("set " + entry + "\n")
+	}
+	for _, name := range unset {
+		content.WriteString("unset " + name + "\n")
+	}
+	if err := replaceFile(shell.placeFile, []byte(content.String())); err != nil {
+		return ShellInfo{}, fmt.Errorf("write the moved shell's place: %w", err)
+	}
+	shell.placeSerial++
+	number := 1
+	for used[number] {
+		number++
+	}
+	shell.info.Group, shell.info.Number = group, number
+	// At the end of its new group.
+	keeper.shells = slices.DeleteFunc(keeper.shells, func(other *keptShell) bool { return other == shell })
+	keeper.shells = append(keeper.shells, shell)
+	slices.SortStableFunc(keeper.shells, func(a, b *keptShell) int { return cmp.Compare(a.info.Group, b.info.Group) })
+	keeper.log("terminal: shell moved")
+	return shell.info, nil
+}
+
+// placeName says name is one a moved shell's place may set: ROTARI_ and capitals, digits,
+// or underscores, as the prompt hook accepts.
+func placeName(name string) bool {
+	rest, ok := strings.CutPrefix(name, "ROTARI_")
+	return ok && rest != "" && !strings.ContainsFunc(rest, func(r rune) bool {
+		return (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_'
+	})
+}
+
 // KeepAlive says someone is still there, attached or not, and restarts the idle limit.
 func (keeper *Keeper) KeepAlive() {
 	keeper.mu.Lock()
@@ -799,6 +927,11 @@ func (keeper *Keeper) Close() {
 	if dir := keeper.temporaryIntegration; dir != "" {
 		if err := os.RemoveAll(dir); err != nil {
 			keeper.log("cannot remove the shell integration's files: " + err.Error())
+		}
+	}
+	if dir := keeper.placeDir; dir != "" {
+		if err := os.RemoveAll(dir); err != nil {
+			keeper.log("cannot remove moved shells' places: " + err.Error())
 		}
 	}
 }

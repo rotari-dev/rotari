@@ -41,6 +41,7 @@ __rotari_prompt() {
 	__rotari_at_prompt=1
 	# Unlike fc -l -0, history 1 includes the newest entry on bash 3.2.
 	__rotari_history=$(HISTTIMEFORMAT= builtin history 1 2>/dev/null)
+	__rotari_place
 	__rotari_dir
 	printf '\033]133;D;%s\007\033]133;A\007' "$__rotari_status"
 	case $PS1 in
@@ -99,6 +100,39 @@ __rotari_dir() {
 		__rotari_dir_said=$PWD
 	fi
 	printf '\033]7;file://%s%s\007' "${HOSTNAME:-}" "$__rotari_dir_url"
+}
+# __rotari_place takes the variables of the place the Web terminal moved this shell to,
+# from the file ROTARI_TERMINAL_PLACE names: a line "rotari-place N", then lines
+# "set ROTARI_NAME=VALUE" and "unset ROTARI_NAME". It takes each move once, by its N, kept
+# in ROTARI_TERMINAL_PLACE_APPLIED for shells started inside too, so that a value set by
+# hand afterwards is kept. Values are assigned, never evaluated, and it forks nothing.
+__rotari_place() {
+	[ -n "${ROTARI_TERMINAL_PLACE:-}" ] && [ -r "$ROTARI_TERMINAL_PLACE" ] || return 0
+	local head serial applied line name
+	applied=${ROTARI_TERMINAL_PLACE_APPLIED:-0}
+	case $applied in '' | *[!0-9]*) applied=0 ;; esac
+	{
+		IFS= read -r head || return 0
+		serial=${head#rotari-place }
+		case $serial in '' | *[!0-9]*) return 0 ;; esac
+		[ "$serial" -gt "$applied" ] || return 0
+		while IFS= read -r line; do
+			case $line in
+			'set ROTARI_'?*=*)
+				line=${line#set }
+				name=${line%%=*}
+				case $name in *[!A-Z0-9_]*) continue ;; esac
+				export "$name=${line#*=}"
+				;;
+			'unset ROTARI_'?*)
+				name=${line#unset }
+				case $name in *[!A-Z0-9_]*) continue ;; esac
+				unset "$name"
+				;;
+			esac
+		done
+		export ROTARI_TERMINAL_PLACE_APPLIED="$serial"
+	} <"$ROTARI_TERMINAL_PLACE"
 }
 
 # PROMPT_COMMAND is made again from what the user's files left, rotari's pieces taken out
@@ -172,10 +206,15 @@ if [ -z "$__rotari_old_bash" ]; then
 		fi
 		;;
 	esac
-elif [ -z "$(trap -p DEBUG)" ]; then
-	# Before 4.4, the DEBUG trap prints C before the first command after a prompt. A line
-	# with no command reaches the loader first, which prints nothing. A DEBUG trap of the
-	# user's is left alone, and its commands then get no C.
+fi
+# The DEBUG trap runs before the first command after a prompt: before 4.4 it prints C, and
+# in a shell the Web terminal can move, it takes a move made while the shell waited at its
+# prompt, so that the command typed next already has the new place, since PS0 runs in a
+# subshell that could not. A line with no command reaches the loader first, which does
+# neither. A DEBUG trap of the user's is left alone: its commands then get no C, and a move
+# waits for the next prompt.
+__rotari_debug_c=$__rotari_old_bash
+if { [ -n "$__rotari_debug_c" ] || [ -n "${ROTARI_TERMINAL_PLACE:-}" ]; } && [ -z "$(trap -p DEBUG)" ]; then
 	__rotari_at_prompt=
 	__rotari_debug() {
 		case $BASH_COMMAND in
@@ -183,10 +222,13 @@ elif [ -z "$(trap -p DEBUG)" ]; then
 		*)
 			if [ -n "$__rotari_at_prompt" ]; then
 				__rotari_at_prompt=
-				__rotari_c
+				[ -z "$__rotari_debug_c" ] || __rotari_c
+				__rotari_place
 			fi
 			;;
 		esac
+		# With extdebug, a trap that fails skips the command.
+		return 0
 	}
 	trap '__rotari_debug' DEBUG
 fi
