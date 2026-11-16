@@ -4473,38 +4473,41 @@ function shellWord(value) {
       .some((form) => new RegExp("^" + form.source + "$").test(text)) &&
     text.includes("/") &&
     !text.startsWith("/");
-  // readDirMark keeps the directory a shell says at its prompt (OSC 7, file://HOST/PATH
-  // with the path percent-encoded), for the block that prompt starts. One that does not
-  // decode to an absolute path is kept as unknown, so that later output is not read
-  // against an older directory.
-  const readDirMark = (pane, data) => {
-    const found = /^file:\/\/([^/]*)(\/.*)?$/.exec(data);
-    let dir = null;
-    if (found?.[2]) {
-      try {
-        const bytes = [];
-        const raw = found[2];
-        for (let i = 0; i < raw.length; i++) {
-          if (
-            raw[i] === "%" &&
-            /^[0-9A-Fa-f]{2}$/.test(raw.slice(i + 1, i + 3))
-          ) {
-            bytes.push(parseInt(raw.slice(i + 1, i + 3), 16));
-            i += 2;
-          } else if (raw.charCodeAt(i) < 128) bytes.push(raw.charCodeAt(i));
-          else throw new Error("not percent-encoded");
-        }
-        dir = new TextDecoder("utf-8", { fatal: true }).decode(
-          new Uint8Array(bytes),
-        );
-      } catch {
-        dir = null;
+  // fileURL reads file://HOST/PATH, with the path percent-encoded, as shells say their
+  // directory (OSC 7) and programs link a file (OSC 8): the host and the path, or null
+  // when the path does not decode to an absolute one in UTF-8.
+  const fileURL = (data) => {
+    const found = /^file:\/\/([^/]*)(\/.*)$/i.exec(data);
+    if (!found) return null;
+    try {
+      const bytes = [];
+      const raw = found[2];
+      for (let i = 0; i < raw.length; i++) {
+        if (
+          raw[i] === "%" &&
+          /^[0-9A-Fa-f]{2}$/.test(raw.slice(i + 1, i + 3))
+        ) {
+          bytes.push(parseInt(raw.slice(i + 1, i + 3), 16));
+          i += 2;
+        } else if (raw.charCodeAt(i) < 128) bytes.push(raw.charCodeAt(i));
+        else return null;
       }
+      const path = new TextDecoder("utf-8", { fatal: true }).decode(
+        new Uint8Array(bytes),
+      );
+      return path.startsWith("/") ? { host: found[1], path } : null;
+    } catch {
+      return null;
     }
-    pane.place =
-      dir && dir.startsWith("/")
-        ? { dir, host: found[1] }
-        : { dir: "", host: "", unknown: true };
+  };
+  // readDirMark keeps the directory a shell says at its prompt (OSC 7), for the block
+  // that prompt starts. One that does not decode is kept as unknown, so that later
+  // output is not read against an older directory.
+  const readDirMark = (pane, data) => {
+    const found = fileURL(data);
+    pane.place = found
+      ? { dir: found.path, host: found.host }
+      : { dir: "", host: "", unknown: true };
     return true;
   };
   // joinedLine is a line of the screen with the lines it wraps onto, and the cell of each
@@ -4551,6 +4554,83 @@ function shellWord(value) {
       window.open(link.link, "_blank", "noopener");
     else goToPage(link.link);
   };
+  // openWebAddress opens a web address from a shell's output in a new tab, which gets no
+  // hold on this page, once asked: any program may print one, and a link's text (OSC 8)
+  // may hide where it goes.
+  const openWebAddress = (uri) => {
+    if (confirm("Open this address in a new tab?\n\n" + uri))
+      window.open(uri, "_blank", "noopener");
+  };
+  // addressLink says what a link a program printed with OSC 8 opens: a web address, a
+  // file: path the server finds on this host (a "dir" or "file" link, as a printed path
+  // is), or nothing, with a note saying why.
+  const addressLink = async (pane, uri) => {
+    const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):/.exec(uri)?.[1].toLowerCase();
+    if (scheme === "http" || scheme === "https")
+      return { kind: "address", uri, web: true };
+    if (scheme !== "file")
+      return {
+        kind: "address",
+        uri,
+        note:
+          (scheme ? "A " + scheme + ": link" : "This link") +
+          " does not open here; right-click to copy its address.",
+      };
+    const file = fileURL(uri);
+    if (!file)
+      return {
+        kind: "address",
+        uri,
+        note: "The path in " + uri + " could not be read.",
+      };
+    const id = pane.shown;
+    const answers =
+      id === null
+        ? null
+        : await askLinks(id, [file.path], { dir: "/", host: file.host });
+    const found = answers?.[0];
+    if (found?.kind === "dir" || found?.kind === "file")
+      return { ...found, uri };
+    return {
+      kind: "address",
+      uri,
+      note: answers
+        ? file.path +
+          (file.host ? " on " + file.host : "") +
+          " is not a file or folder on this computer."
+        : "Could not check " + file.path + " on the server.",
+    };
+  };
+  const addressTitle = (link) =>
+    link.web
+      ? "Open " + link.uri + " in a new tab; right-click for more"
+      : link.note || linkTitle(link) || link.uri;
+  // osc8Links handles the links programs print with OSC 8, which xterm.js finds and
+  // draws itself, for a pane.
+  const osc8Links = (pane) => ({
+    allowNonHttpProtocols: true,
+    activate: async (event, uri) => {
+      const link = await addressLink(pane, uri);
+      if (link.web) openWebAddress(uri);
+      else if (link.kind === "address") showNote(link.note, 6000);
+      else followOutputLink(link, event);
+    },
+    // The title says the address at once, and what it opens once the server has said.
+    hover: (_, uri) => {
+      const asked = { kind: "address", uri };
+      pane.hoveredLink = asked;
+      pane.viewport.title = uri;
+      addressLink(pane, uri).then((link) => {
+        if (pane.hoveredLink !== asked) return;
+        pane.hoveredLink = link;
+        pane.viewport.title = addressTitle(link);
+      });
+    },
+    leave: (_, uri) => {
+      if (pane.hoveredLink?.uri === uri) pane.hoveredLink = null;
+      pane.viewport.removeAttribute("title");
+    },
+  });
   // outputLinkProvider gives xterm.js the links on a line of a pane, as the pointer
   // reaches it.
   const outputLinkProvider = (pane) => ({
@@ -6175,6 +6255,22 @@ function shellWord(value) {
       openPanelMenu(event, pathChoices(link.path, link.kind === "dir", true));
       return;
     }
+    // Any other link a program printed (OSC 8), with its address.
+    if (link?.kind === "address") {
+      openPanelMenu(event, [
+        [
+          "Open link",
+          () => osc8Links(pane).activate(event, link.uri),
+          Boolean(link.web),
+        ],
+        [
+          "Copy link address",
+          () => copyText(link.uri, "the link address"),
+          true,
+        ],
+      ]);
+      return;
+    }
     const selection = term.hasSelection() ? term.getSelection() : "";
     const cut = selection ? cutPlace(pane) : null;
     const choices = [
@@ -6590,16 +6686,14 @@ function shellWord(value) {
       theme: theme(),
       // Blocks' marks are decorations, which xterm.js 5.5 offers only as a proposed API.
       allowProposedApi: true,
+      linkHandler: osc8Links(pane),
     });
     const fit = new window.FitAddon.FitAddon();
     pane.term = term;
     pane.fit = fit;
     term.loadAddon(fit);
-    // A link is only text a program printed, so the new tab gets no hold on this page.
     term.loadAddon(
-      new window.WebLinksAddon.WebLinksAddon((_, uri) =>
-        window.open(uri, "_blank", "noopener"),
-      ),
+      new window.WebLinksAddon.WebLinksAddon((_, uri) => openWebAddress(uri)),
     );
     term.registerLinkProvider(outputLinkProvider(pane));
     pane.blocks = [];

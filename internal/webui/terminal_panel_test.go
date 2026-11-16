@@ -377,11 +377,17 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   sockets[0].onopen();
   assert.match(document.querySelector('.terminal-status').textContent, /Waiting for the shell/);
 
-  // A link opens in a new tab that gets no hold on this page.
+  // A web address opens in a new tab that gets no hold on this page, once asked.
   const opened = [];
+  const webAsked = [];
   window.open = (...args) => opened.push(args);
+  window.confirm = (text) => { webAsked.push(text); return false; };
+  terminals[0].addons.find((addon) => addon.handler).handler({}, 'https://example.test/a');
+  assert.deepEqual(opened, [], 'a web address opened without asking');
+  window.confirm = (text) => { webAsked.push(text); return true; };
   terminals[0].addons.find((addon) => addon.handler).handler({}, 'https://example.test/a');
   assert.deepEqual(opened, [['https://example.test/a', '_blank', 'noopener']]);
+  assert.deepEqual(webAsked, ['Open this address in a new tab?\n\nhttps://example.test/a', 'Open this address in a new tab?\n\nhttps://example.test/a']);
 
   // Output, input, and resize.
   sockets[0].onmessage({ data: new TextEncoder().encode('hello').buffer });
@@ -4254,6 +4260,88 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const plainLinks = await new Promise((resolve) => plainTerm.linkProviders[0].provideLinks(2, resolve));
   assert.deepEqual(Array.from(plainLinks || [], (link) => link.text), ['src/x.csv']);
   assert.deepEqual(JSON.parse(JSON.stringify(plainPage.server.linkBodies.at(-1))), { candidates: ['src/x.csv'] });
+  }
+
+  // Links a program prints with OSC 8, which xterm.js finds itself: a web address opens a
+  // tab once asked; a file: path of this host opens as a printed path does, and anything
+  // else opens nothing and says why; hovering says the address, and a right click offers
+  // the Explorer's menu for a path, else to open or copy the address.
+  {
+  const o8 = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  o8.sockets.at(-1).onopen?.();
+  const o8Term = o8.terminals.at(-1);
+  const handler = o8Term.options.linkHandler;
+  assert.ok(handler, 'the pane handles no OSC 8 links');
+  assert.equal(handler.allowNonHttpProtocols, true, 'xterm.js would drop file: links');
+  o8.server.links = { '/w/p1/out/x.csv': { kind: 'file', path: '/w/p1/out/x.csv' }, '/w/p1/out': { kind: 'dir', path: '/w/p1/out' } };
+  const o8Opened = [];
+  const o8Asked = [];
+  o8.window.open = (...args) => { o8Opened.push(args); return { location: {}, close() {} }; };
+  o8.window.confirm = (text) => { o8Asked.push(text); return o8.server.yes; };
+  const note = () => o8.document.querySelector('.terminal-send-note')?.textContent;
+  // A web address asks first.
+  await handler.activate({}, 'https://example.test/b');
+  assert.deepEqual(o8Opened, [], 'opened when refused');
+  o8.server.yes = true;
+  await handler.activate({}, 'https://example.test/b');
+  assert.deepEqual(JSON.parse(JSON.stringify(o8Opened)), [['https://example.test/b', '_blank', 'noopener']]);
+  o8Opened.length = 0;
+  assert.equal(o8Asked.length, 2);
+  assert.match(o8Asked[0], /https:\/\/example\.test\/b/);
+  // A file: link is asked about as an absolute path with its host.
+  await handler.activate({}, 'file://myhost/w/p1/out/x.csv');
+  await wait(30);
+  assert.deepEqual(JSON.parse(JSON.stringify(o8.server.linkBodies.at(-1))), { candidates: ['/w/p1/out/x.csv'], dir: '/', host: 'myhost' });
+  assert.ok(o8.requests.includes('POST /api/tableview-sources {"path":"/w/p1/out/x.csv"}'), 'a file: file did not open in the Table viewer');
+  await handler.activate({}, 'file:///w/p1/%6Fut');
+  await wait(30);
+  assert.match(o8.requests.findLast((request) => request.startsWith('POST /_terminal/shells')), /dir=%2Fw%2Fp1%2Fout$/, 'a file: directory did not open a tab there');
+  assert.equal(o8Asked.length, 2, 'a path asked before opening');
+  // What does not open says why.
+  o8Opened.length = 0;
+  await handler.activate({}, 'file://elsewhere/w/p1/gone');
+  assert.equal(note(), '/w/p1/gone on elsewhere is not a file or folder on this computer.');
+  await handler.activate({}, 'file:///w/%FF');
+  assert.equal(note(), 'The path in file:///w/%FF could not be read.');
+  await handler.activate({}, 'javascript:alert(1)');
+  assert.equal(note(), 'A javascript: link does not open here; right-click to copy its address.');
+  assert.deepEqual(o8Opened, [], 'what does not open opened a window');
+  // Hovering says the address, then what it opens.
+  const o8Viewport = o8.document.querySelector('.terminal-viewport');
+  handler.hover({}, 'file:///w/p1/out/x.csv');
+  assert.equal(o8Viewport.title, 'file:///w/p1/out/x.csv');
+  await wait(30);
+  assert.equal(o8Viewport.title, 'Open /w/p1/out/x.csv in the Table viewer; right-click for more');
+  const o8Menu = () => [...o8.document.querySelectorAll('.terminal-tab-menu button')].map((item) => [item.textContent, !item.disabled]);
+  const o8Right = () => o8Viewport.dispatchEvent(new o8.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+  const escape = () => o8.document.dispatchEvent(new o8.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  o8Right();
+  assert.equal(o8Menu()[2][0], 'Show in the Explorer', 'a file: path\'s menu is not the Explorer\'s');
+  escape();
+  handler.leave({}, 'file:///w/p1/out/x.csv');
+  assert.equal(o8Viewport.hasAttribute('title'), false);
+  handler.hover({}, 'https://example.test/c');
+  await wait(10);
+  assert.equal(o8Viewport.title, 'Open https://example.test/c in a new tab; right-click for more');
+  o8Right();
+  assert.deepEqual(o8Menu(), [['Open link', true], ['Copy link address', true]]);
+  const copied = [];
+  Object.defineProperty(o8.window.navigator, 'clipboard', { configurable: true, value: { writeText: async (value) => copied.push(value) } });
+  [...o8.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Copy link address').click();
+  await wait(10);
+  assert.deepEqual(copied, ['https://example.test/c']);
+  handler.leave({}, 'https://example.test/c');
+  handler.hover({}, 'mailto:a@example.test');
+  await wait(10);
+  assert.equal(o8Viewport.title, 'A mailto: link does not open here; right-click to copy its address.');
+  o8Right();
+  assert.deepEqual(o8Menu(), [['Open link', false], ['Copy link address', true]]);
+  escape();
+  handler.leave({}, 'mailto:a@example.test');
+  o8Right();
+  assert.deepEqual(o8Menu().slice(0, 2).map(([label]) => label), ['Cut', 'Copy'], 'off a link, the terminal\'s menu');
+  escape();
   }
 
   // Blocks: OSC 133 marks make one block per command, with its command line and exit
