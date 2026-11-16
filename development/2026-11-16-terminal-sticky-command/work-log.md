@@ -18,3 +18,17 @@
   alternate screen; a click going to the prompt and hiding it; the menu's item turning it off (stored) and on. The
   older right-click menu lists gain the item at their end. `tsc` and prettier clean.
 - **Remaining:** phase 2 (WEB-59, docs, and the browser test).
+
+## 2026-11-16 23:03 +09:00 — Contracts and docs
+
+- **Change:** WEB-59 in `contracts/05-web-assets-and-static-export.md` and its row in `contracts/README.md`; WEB-51's
+  paragraph and row add the menu's last item. `TestTerminalStickyCommandInBrowser`
+  (`conformance/05-web/terminal_sticky_browser_test.go`): bash prints `seq 1001 1200`, the view is put 100 lines
+  above the bottom, the line says `$ seq 1001 1200`, and a click on it brings the prompt to the top and hides it.
+  docs/WEB.md: a paragraph after folding.
+- **Reason:** plan phase 2.
+- **Plan impact:** none.
+- **Validation:** `go test ./conformance -run 'TestContractStatus|TestConformanceLayout'` passes and `go vet
+  ./conformance/05-web` is clean; the browser test skips here (no Chrome) and runs in CI; its script passes `node
+  --check`. `scripts/check.sh` was not run (npm is broken here, and the full run is too heavy for the shared machine).
+- **Remaining:** CI's run of `TestTerminalStickyCommandInBrowser`.

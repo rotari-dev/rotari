@@ -1594,7 +1594,8 @@ text; **Select all**; while a command line is being typed at the prompt (found a
 cursor to text...**, which asks for text and moves the cursor to its next place in the line after the cursor, then
 from the line's start, or says it is not there, **Move the cursor to the start**, and **Move the cursor to the end**
 (past its text, or the cursor if further), each moving it as WEB-50's click does; and, on a command's
-prompt or output (WEB-48), that command's **Copy command** and **Copy output**. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
+prompt or output (WEB-48), that command's **Copy command** and **Copy output**; and last, **Keep the command at the
+top**, checked while the sticky line (WEB-59) is on. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
 [`TestTerminalPanelInBrowser`](../conformance/05-web/terminal_panel_browser_test.go).
 
 **WEB-50** With `rotari web --allow-terminal`, a click in the command line being typed at a shell's prompt moves the
@@ -1654,6 +1655,17 @@ reads the file, a line `rotari-place N` then `set ROTARI_NAME=VALUE` and `unset 
 `ROTARI_TERMINAL_PLACE_APPLIED`, which it then exports, sets or unsets those variables, only `ROTARI_` names, assigning
 values without evaluating them; a value set by hand afterwards stays. Covered by `TestMovedShellTakesItsPlaceVariables`
 and `TestShellsDoNotInheritAPlaceFile`.
+
+**WEB-59** With `rotari web --allow-terminal`, while the top line in a pane's view is a command's output (WEB-48: at
+or after the line where its `C` was, before the next prompt) and that command's prompt is above the view, a line over
+the pane's first row, in the terminal's font, says the command: its mark's dot and colour, then `$ ` and the first line
+of its command line, `…` after a command of several lines, cut at the pane's width; its title is the mark's, the whole
+command and how it ended. It shows for a running command too and follows its end; it is not shown with the prompt in
+view, at a prompt with no output, in the alternate screen, or for a shell that marks nothing. Clicking it goes to the
+command's prompt as choosing it in **Commands** does, and passes nothing to the shell. **Keep the command at the top**,
+the last item of the pane's right-click menu (WEB-51), turns it off and on for every pane, remembered by the browser.
+Implemented in [web_shell.js](../internal/webui/assets/web_shell.js); covered by `TestTerminalPanel` and
+[`TestTerminalStickyCommandInBrowser`](../conformance/05-web/terminal_sticky_browser_test.go).
 
 **WEB-58** With `rotari web --allow-terminal`, a finished command's output (WEB-48: a block whose `D` has come) of
 more than 10 lines, counted by line feeds, can be folded, unless the terminal is in the alternate screen or the output

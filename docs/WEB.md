@@ -408,7 +408,12 @@ line, or **Unfold**, to bring the output back. Copying a folded output copies al
 tab shows the shell, coming back after switching tabs or following a link; other tabs and browsers see it unfolded.
 The page writes the screen again from the output it has received to fold, so an output must still be in the last
 8 MiB the page has seen, and nothing folds while a full-screen program such as `vim` runs. A setting a folded output
-itself left changed in the terminal, such as a color it never reset, is gone while it is folded. Blocks are kept
+itself left changed in the terminal, such as a color it never reset, is gone while it is folded.
+
+When you scroll up into a command's output and its prompt goes off the top, a line at the top of the pane keeps
+showing that command, with its dot, so you know what printed what you see; click it to go back to its prompt. It
+covers the pane's first row while it shows. Turn it off, for every pane, with **Keep the command at the top** at
+the end of the pane's right-click menu. Blocks are kept
 only in the page, from the output it shows, so they come back after following a link for as much output as is shown
 again. A shell that sends no marks looks as it always did.
 

@@ -1,7 +1,8 @@
 # Plan: The command's line kept at the top of the Web terminal while its output scrolls
 
 Created: 2026-11-16
-Status: Accepted by the user on 2026-11-16 ("go"), with the open question as proposed. See [work-log.md](work-log.md).
+Status: Accepted by the user on 2026-11-16 ("go"), with the open question as proposed; both phases are done. See
+[work-log.md](work-log.md).
 
 ## Goal
 
