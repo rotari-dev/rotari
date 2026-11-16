@@ -1569,8 +1569,9 @@ then clears the selection; **Copy**, of the terminal's selection, off without on
 clipboard and gives it to the terminal as Ctrl+V does (bracketed when the program asked, with no Enter of its own),
 or, when the browser does not let the page read it, says to use Ctrl+V (Cmd+V on a Mac), and says when it holds no
 text; **Select all**; while a command line is being typed at the prompt (found as WEB-50 finds it), **Move the
-cursor here**, on only when the right click is in that line, **Move the cursor to the start**, and **Move the cursor
-to the end** (past its text, or the cursor if further), each moving it as WEB-50's click does; and, on a command's
+cursor to text...**, which asks for text and moves the cursor to its next place in the line after the cursor, then
+from the line's start, or says it is not there, **Move the cursor to the start**, and **Move the cursor to the end**
+(past its text, or the cursor if further), each moving it as WEB-50's click does; and, on a command's
 prompt or output (WEB-48), that command's **Copy command** and **Copy output**. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
 [`TestTerminalPanelInBrowser`](../conformance/05-web/terminal_panel_browser_test.go).
 

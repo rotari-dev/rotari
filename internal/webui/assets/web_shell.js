@@ -6019,6 +6019,48 @@ function shellWord(value) {
     const key = prefix + (steps > 0 ? "C" : "D");
     send(pane, new TextEncoder().encode(key.repeat(Math.abs(steps))));
   };
+  // lineChars are the characters from one place in the buffer to another, later one, as
+  // charsFrom counts them: a wide character once, and a row that ends without wrapping as a
+  // line break.
+  const lineChars = (buffer, from, to) => {
+    const chars = [];
+    for (let y = from.y; y <= to.y; y++) {
+      const line = buffer.getLine(y);
+      if (!line) break;
+      const start = y === from.y ? from.x : 0;
+      const end = y === to.y ? to.x : rowEnd(line);
+      for (let x = start; x < end; x++) {
+        const cell = line.getCell(x);
+        if (cell?.getWidth() !== 0) chars.push(cell?.getChars() || " ");
+      }
+      if (y < to.y && !buffer.getLine(y + 1)?.isWrapped) chars.push("\n");
+    }
+    return chars;
+  };
+  // moveToText asks for some text and moves the cursor to where it next is in the command
+  // line, after the cursor and then from the start, or says that it is not there.
+  const moveToText = (pane, place, end) => {
+    const wanted = prompt("Move the cursor to the text:", "");
+    pane.term.focus();
+    if (!wanted) return;
+    const buffer = pane.term.buffer.active;
+    const chars = lineChars(buffer, place.start, end);
+    const needle = Array.from(wanted);
+    const at = (index) =>
+      needle.every((char, offset) => chars[index + offset] === char);
+    const cursor = charsFrom(buffer, place.start, place.cursor);
+    let found = -1;
+    for (let step = 1; step <= chars.length && found < 0; step++) {
+      const index = (cursor + step) % chars.length;
+      if (at(index)) found = index;
+    }
+    if (found < 0 && at(cursor)) found = cursor;
+    if (found < 0) {
+      showNote('"' + wanted + '" is not in the command line.', 4000);
+      return;
+    }
+    moveToIndex(pane, place, found);
+  };
   // cutPlace is where the selection lies in the command line typed at the prompt, as its
   // first and past-last character indexes, or null when it is not wholly inside it.
   const cutPlace = (pane) => {
@@ -6137,14 +6179,8 @@ function shellWord(value) {
           line.last === line.cursor.y ? line.cursor.x : 0,
         ),
       };
-      const here = cell ? clickTarget(pane, cell.col, cell.row) : null;
       choices.push(
-        [
-          "Move the cursor here",
-          () =>
-            moveToIndex(pane, here, charsFrom(buffer, here.start, here.target)),
-          Boolean(here),
-        ],
+        ["Move the cursor to text...", () => moveToText(pane, line, end), true],
         [
           "Move the cursor to the start",
           () => moveToIndex(pane, line, 0),

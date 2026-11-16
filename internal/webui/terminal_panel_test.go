@@ -4633,9 +4633,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   // On a command's output, the menu has that command's copies too; not on a prompt's line
   // with no command yet.
   const onRow = (row) => ({ clientX: 100, clientY: 100 + row * 10 + 5 });
-  // The cursor's moves while a command line is typed come after Select all, here only on
-  // the command line.
-  assert.deepEqual(rightClick(onRow(1)).items.slice(4), [['Move the cursor here', false], ['Move the cursor to the start', true], ['Move the cursor to the end', true], ['Copy command', true], ['Copy output', true]]);
+  // The cursor's moves while a command line is typed come after Select all.
+  assert.deepEqual(rightClick(onRow(1)).items.slice(4), [['Move the cursor to text...', true], ['Move the cursor to the start', true], ['Move the cursor to the end', true], ['Copy command', true], ['Copy output', true]]);
   rcCopied.length = 0;
   rightClick(onRow(1));
   await rcChoose('Copy output');
@@ -4643,10 +4642,22 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   await rcChoose('Copy command');
   assert.deepEqual(rcCopied, ['built', 'make']);
   assert.deepEqual(rightClick(onRow(3)).items.length, 7, 'copies of a prompt with no command yet');
-  // "Move the cursor here" on "$ echo abc", at its b, index 6 of the line; the start and
-  // the end, here told as indexes, since the shell takes them.
-  assert.deepEqual(rightClick(onRow(3)).items[4], ['Move the cursor here', true]);
-  assert.equal(await sentBy('Move the cursor here', onRow(3)), '\x1b[9998~6;');
+  // "Move the cursor to text..." in "$ echo abc" (the line "echo abc"): the next c after
+  // the cursor, from the start again past the end, and a note for text that is not there;
+  // the start and the end. Told as indexes, since the shell takes them.
+  let rcAsked = 'c';
+  rc.window.prompt = () => rcAsked;
+  assert.equal(await sentBy('Move the cursor to text...', onRow(3)), '\x1b[9998~1;', 'from the end, the first c');
+  Object.assign(rcTerm.buffer.active, { cursorX: 4 });
+  assert.equal(await sentBy('Move the cursor to text...', onRow(3)), '\x1b[9998~7;', 'after the cursor, the next c');
+  rcAsked = 'ab';
+  assert.equal(await sentBy('Move the cursor to text...', onRow(3)), '\x1b[9998~5;');
+  rcAsked = 'zz';
+  assert.equal(await sentBy('Move the cursor to text...', onRow(3)), '');
+  assert.equal(rcNote(), '"zz" is not in the command line.');
+  rcAsked = null;
+  assert.equal(await sentBy('Move the cursor to text...', onRow(3)), '', 'a cancelled question moved the cursor');
+  Object.assign(rcTerm.buffer.active, { cursorX: 10 });
   assert.equal(await sentBy('Move the cursor to the start', onRow(3)), '\x1b[9998~0;');
   Object.assign(rcTerm.buffer.active, { cursorX: 4 });
   assert.equal(await sentBy('Move the cursor to the end', onRow(3)), '\x1b[9998~8;');

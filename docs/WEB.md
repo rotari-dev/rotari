@@ -383,7 +383,8 @@ line. Click in the command line you are typing to move the cursor there, as in a
 puts it at the exact character, and other shells get the arrow keys, so in a zsh not started that way a click past the
 typed text may take a zsh-autosuggestions suggestion, as the right arrow would. Alt+click keeps xterm.js's own
 cursor move. Right-click for **Cut**, **Copy**, **Paste**, and **Select all**; while you type a command line, for
-**Move the cursor here**, **to the start**, and **to the end**; and on a command's output for its
+**Move the cursor to text...** (to where what you type next appears in the line), **to the start**, and **to the
+end**; and on a command's output for its
 **Copy command** and **Copy output**. Paths in the command line you are typing are not links, so that a click there
 moves the cursor and a drag selects; Cut works on a selection inside the command line you are typing, and removes
 nothing if the copy fails. Paste asks the browser to read the clipboard, which it may ask you to allow; Ctrl+V (Cmd+V
