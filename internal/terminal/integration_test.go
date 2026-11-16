@@ -766,3 +766,35 @@ func TestLastingIntegration(t *testing.T) {
 		t.Errorf("a linked directory: %v", err)
 	}
 }
+
+// bash draws its prompt again, with the B that rotari's marks put in PS1, after Ctrl+L and
+// after a list of completions, so that the Web terminal finds where the command line starts
+// there.
+func TestBashSaysBAgainWhereItDrawsThePromptAgain(t *testing.T) {
+	home := t.TempDir()
+	writeFiles(t, home, map[string]string{".bash_profile": "PS1='$ '\n", "d/aa1": "", "d/aa2": "", "d/ab3": ""})
+	shell := integrated(t, "bash", home)
+	eventually(t, "the first marked prompt", func() (bool, string) {
+		text := shell.text()
+		return strings.Contains(text, "\x1b]133;B\a"), text
+	})
+	again := func(what, keys string) {
+		t.Helper()
+		time.Sleep(200 * time.Millisecond)
+		shell.mu.Lock()
+		shell.output.Reset()
+		shell.mu.Unlock()
+		if _, err := shell.Write([]byte(keys)); err != nil {
+			t.Fatal(err)
+		}
+		eventually(t, "B after "+what, func() (bool, string) {
+			text := shell.text()
+			return strings.Contains(text, "\x1b]133;B\a"), text
+		})
+	}
+	if _, err := shell.Write([]byte("echo ab")); err != nil {
+		t.Fatal(err)
+	}
+	again("Ctrl+L", "\x0c")
+	again("a list of completions", "\x15ls d/a\t\t")
+}

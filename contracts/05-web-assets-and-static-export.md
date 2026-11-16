@@ -1604,14 +1604,17 @@ of each other, that leave no selection, with no link under the pointer and no mo
 program, in a pane whose last block (WEB-48) has `B` and neither `C` nor an end, outside the alternate screen, with
 the view at the bottom, on a row from the line's start to the cursor's or one wrapped on from it, and not before the
 start. The line starts where a shell that says where its cursor is in the line (`rotari_cursor=N`, WEB-49) puts it, N
-characters back from the cursor; otherwise at `B`, unless the rows from `B` to the cursor are not one wrapped line, as
-after the line editor drew the prompt again elsewhere (Ctrl+L, a list of completions), when no click moves the cursor.
+characters back from the cursor; otherwise at the block's last `B` before its `C`, since a `B` that comes again, as
+bash's in its prompt when it draws the prompt again after Ctrl+L or a list of completions, moves the start there; when
+the rows from that `B` to the cursor are not one wrapped line, as after a redraw that says neither, no click moves the
+cursor.
 Its target is counted in characters from the start: the second cell of a wide character is the character's, a row ending without
 wrapping is one character, and a click past a row's text goes to its end, or the cursor's place if further. The panel
 then sends, as keystrokes, the line's character index after `ESC [ 9998 ~` and before `;` to a shell whose `A` said
 `rotari_goto=1` (WEB-49), and otherwise the left or right arrow keys for the difference, as `ESC [` or, in
 application cursor mode, `ESC O`; nothing when the cursor is already there, and nothing else in any case. Alt+click
-stays xterm.js's. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
+stays xterm.js's. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel`,
+`TestBashSaysBAgainWhereItDrawsThePromptAgain`, and a step of
 [`TestTerminalPanelInBrowser`](../conformance/05-web/terminal_panel_browser_test.go).
 
 **WEB-49** With `rotari web --allow-terminal` and `--terminal-shell-integration`, on by default, a shell whose program

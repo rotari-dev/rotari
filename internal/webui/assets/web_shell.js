@@ -7089,7 +7089,10 @@ function shellWord(value) {
         last.fold = { place: blockPlace(term), decoration: null };
         decorateFold(pane, last);
       }
-    } else if (kind === "B" && !last.input && !last.output) {
+    } else if (kind === "B" && !last.output) {
+      // bash says B again where it draws the prompt again, after Ctrl+L or a list of
+      // completions: the command line starts there now.
+      last.input?.marker?.dispose();
       last.input = blockPlace(term);
     } else if (kind === "C" && !last.output) {
       last.output = blockPlace(term);

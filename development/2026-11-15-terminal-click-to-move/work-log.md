@@ -73,3 +73,18 @@
   checks `rotari_cursor=7` after `echo ab` and Ctrl+L; the integration tests pass twice, and so does
   `TestTerminalShellIntegration`. Bash has no hook for this, so after Ctrl+L or a completion list a click there does
   nothing until the next prompt.
+
+## 2026-11-16 23:37 +09:00 — bash's B again after Ctrl+L and a list of completions
+
+- **Change:** `readBlockMark` takes a `B` that comes again before the block's `C` as where its command line starts
+  now, rather than keeping the first.
+- **Reason:** the user chose this from the remaining terminal candidates. A real bash 5.1 with rotari's marks was found
+  to print its whole prompt again, with the `\[\e]133;B\a\]` the marks put in PS1, after Ctrl+L
+  (`ESC[H ESC[2J $ ESC]133;B BEL echo ab`) and after a list of completions (`… aa1  aa2  ab3 CRLF $ ESC]133;B BEL ls d/a`);
+  the panel kept the first `B`, left on the old row, so a click there did nothing. bash needs no hook of its own.
+- **Plan impact:** WEB-50's line start is the block's last `B` before `C`; a redraw that says neither still makes no
+  click move the cursor.
+- **Validation:** `TestTerminalPanel` (a list of completions and the prompt drawn again: no move before the second
+  `B`, Left by arrow keys after it, nothing on the row the prompt left) and `TestBashSaysBAgainWhereItDrawsThePromptAgain`
+  (a real bash printing `B` again after Ctrl+L and after Tab Tab) pass; the contract checks pass.
+- **Remaining:** none.

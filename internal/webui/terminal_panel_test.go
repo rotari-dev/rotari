@@ -4980,6 +4980,17 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   cmTerm.osc(133, 'rotari_cursor=11', 13, 7);
   assert.equal(click(9, 7), '\x1b[9998~7;', 'a click counted from the cursor');
   assert.equal(click(1, 7), '', 'a click on the prompt drawn again');
+  // bash says B again on the prompt it draws again, as after a list of completions (or
+  // Ctrl+L): the line starts there, and a click moves by arrow keys from the cursor.
+  cmTerm.lines.splice(8, cmTerm.lines.length, '$ ls d/a', 'aa1  aa2  ab3', '$ ls d/a', '');
+  cmTerm.osc(133, 'C', 0, 8); cmTerm.osc(133, 'D;0', 0, 8);
+  cmTerm.osc(133, 'A', 0, 8); cmTerm.osc(133, 'B', 2, 8);
+  Object.assign(cmTerm.buffer.active, { cursorX: 8, cursorY: 10 });
+  assert.equal(click(5, 10), '', 'a click before bash said B again');
+  cmTerm.osc(133, 'B', 2, 10);
+  Object.assign(cmTerm.buffer.active, { cursorX: 8, cursorY: 10 });
+  assert.equal(click(5, 10), left(3), 'a click on the prompt bash drew again');
+  assert.equal(click(5, 8), '', 'a click on the row the prompt left');
   }
 
   // The right-click menu: the panel's in place of the browser's, with Copy, Paste, and Select
