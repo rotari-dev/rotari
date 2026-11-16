@@ -22,12 +22,18 @@ var unshareArgs = []string{"unshare", "--user", "--map-root-user", "--pid", "--f
 // anything, and that the job still reads as running there (COORD-1).
 func TestControlFromAnotherPIDNamespace(t *testing.T) {
 	covers(t, "COORD-1")
+	// CI sets ROTARI_REQUIRE_PID_NAMESPACE_TESTS where it allows user namespaces, so that
+	// this case cannot pass there by skipping.
+	skip := t.Skipf
+	if os.Getenv("ROTARI_REQUIRE_PID_NAMESPACE_TESTS") != "" {
+		skip = t.Fatalf
+	}
 	if out, err := exec.Command(unshareArgs[0], append(unshareArgs[1:], "true")...).CombinedOutput(); err != nil {
-		t.Skipf("cannot create a PID namespace here (%v: %s); COORD-1's namespace case was verified by hand, see the shared-rule-violations work log", err, bytes.TrimSpace(out))
+		skip("cannot create a PID namespace here (%v: %s); COORD-1's namespace case was verified by hand, see the shared-rule-violations work log", err, bytes.TrimSpace(out))
 	}
 	here, err := os.Readlink("/proc/self/ns/pid")
 	if err != nil {
-		t.Skipf("PID namespace unavailable: %v", err)
+		skip("PID namespace unavailable: %v", err)
 	}
 	e := support.NewEnv(t)
 	run := e.StartRun("live", 1, false)

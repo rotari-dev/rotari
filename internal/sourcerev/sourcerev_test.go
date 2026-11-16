@@ -96,6 +96,9 @@ func TestReadOutsideARepository(t *testing.T) {
 // change ID.
 func TestReadJJ(t *testing.T) {
 	if _, err := exec.LookPath("jj"); err != nil {
+		if os.Getenv("ROTARI_REQUIRE_JJ_TESTS") != "" {
+			t.Fatal("jj is not installed, and ROTARI_REQUIRE_JJ_TESTS is set")
+		}
 		t.Skip("jj is not installed")
 	}
 	t.Setenv("JJ_CONFIG", filepath.Join(t.TempDir(), "none.toml"))

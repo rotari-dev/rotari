@@ -48,6 +48,34 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install fish
 
+      # jj, pinned and checked, for the tests of jj sources (RUN-15), which
+      # ROTARI_REQUIRE_JJ_TESTS keeps from skipping.
+      - name: Install jj
+        env:
+          JJ_VERSION: "0.45.1"
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            target=aarch64-apple-darwin
+            sum=51ba42e3d0682616f6eb015045bfe45289b396f03511f9897f645ce8e9272743
+          else
+            target=x86_64-unknown-linux-musl
+            sum=f35438350b5d61963aac5dd74ede510b31d6b9690769d1a6268cf058cc825f72
+          fi
+          archive="$RUNNER_TEMP/jj.tar.gz"
+          curl -fsSL -o "$archive" "https://github.com/jj-vcs/jj/releases/download/v$JJ_VERSION/jj-v$JJ_VERSION-$target.tar.gz"
+          echo "$sum  $archive" | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/jj"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/jj" ./jj
+          echo "$RUNNER_TEMP/jj" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/jj/jj" --version
+
+      # Ubuntu's AppArmor forbids unprivileged user namespaces, which the PID
+      # namespace test of COORD-1 needs; ROTARI_REQUIRE_PID_NAMESPACE_TESTS
+      # keeps it from skipping.
+      - name: Allow unprivileged user namespaces
+        if: runner.os == 'Linux'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       # Chrome is installed as an app bundle, not on PATH, on macOS runners.
       - name: Point browser tests at Chrome (macOS)
         if: runner.os == 'macOS'
@@ -69,6 +97,8 @@ jobs:
         if: runner.os == 'Linux'
         env:
           ROTARI_REQUIRE_BROWSER_TESTS: "1"
+          ROTARI_REQUIRE_JJ_TESTS: "1"
+          ROTARI_REQUIRE_PID_NAMESPACE_TESTS: "1"
         run: gotestsum --format pkgname-and-test-fails -- -timeout 15m -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./...
 
       # The macOS leg collects no coverage, so its one run carries the race
@@ -77,6 +107,7 @@ jobs:
         if: runner.os == 'macOS'
         env:
           ROTARI_REQUIRE_BROWSER_TESTS: "1"
+          ROTARI_REQUIRE_JJ_TESTS: "1"
         run: gotestsum --format pkgname-and-test-fails -- -race -timeout 30m ./...
 
       - name: Upload coverage to Codecov

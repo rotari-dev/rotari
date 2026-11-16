@@ -174,6 +174,9 @@ func TestRunRecordsUncommittedGitChanges(t *testing.T) {
 func TestRunRecordsAJJWorkingCopy(t *testing.T) {
 	covers(t, "RUN-15")
 	if _, err := exec.LookPath("jj"); err != nil {
+		if os.Getenv("ROTARI_REQUIRE_JJ_TESTS") != "" {
+			t.Fatal("jj is not installed, and ROTARI_REQUIRE_JJ_TESTS is set")
+		}
 		t.Skip("jj is not installed")
 	}
 	e := support.NewEnv(t).WithVar("JJ_USER", "t").WithVar("JJ_EMAIL", "t@example.invalid")
