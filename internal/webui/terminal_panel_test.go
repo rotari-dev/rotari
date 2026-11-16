@@ -4745,7 +4745,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(origin, 'http://127.0.0.1:9');
   assert.equal(answer.type, 'rotari-transcript');
   const { transcript } = answer;
-  assert.deepEqual(transcript.shell, { name: 'Shell 1', project: 'p1', basedir: '/b' });
+  assert.deepEqual(transcript.shell, { id: '1', dir: '/w/p1', name: 'Shell 1', project: 'p1', basedir: '/b' });
   assert.equal(transcript.partial, false);
   const text = (card) => card.runs.map((run) => run.t).join('');
   assert.deepEqual(transcript.cards.map((card) => [card.command, card.state, card.exit, card.dir, text(card)]), [
@@ -4768,6 +4768,16 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   ask(page);
   assert.deepEqual(page.posted[0][0], { type: 'rotari-transcript', transcript: null, reason: 'The terminal pane it came from shows another shell now.' });
   tr.document.querySelector('.terminal-pane').terminalPane.shown = '1';
+  // A file the page saved is shown in the Explorer, asked by that page only.
+  const show = (source, path) => {
+    const event = new tr.window.MessageEvent('message', { data: { type: 'rotari-transcript-show', path }, origin: 'http://127.0.0.1:9' });
+    Object.defineProperty(event, 'source', { value: source });
+    tr.window.dispatchEvent(event);
+  };
+  show({}, '/w/elsewhere/x.md');
+  show(page, '/w/p1/out/notes.md');
+  await wait(30);
+  assert.equal(tr.document.querySelector('.terminal-explorer-where')?.textContent, '/w/p1/out');
   }
 
   // Blocks: OSC 133 marks make one block per command, with its command line and exit

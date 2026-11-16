@@ -62,6 +62,11 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const downloads = [];
   const copied = [];
   const opener = { closed: false, postMessage(message, origin) { asked.push([JSON.parse(JSON.stringify(message)), origin]); } };
+  // The server: the shell's preview, and uploads, the first to a taken name refused.
+  const requests = [];
+  const taken = new Set(['/w/p1/build-box-20261116-102030.sh']);
+  let confirmed = true;
+  const confirms = [];
   const dom = new JSDOM(html, {
     runScripts: 'dangerously', url, virtualConsole: new VirtualConsole(),
     beforeParse(window) {
@@ -71,6 +76,21 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       window.URL.revokeObjectURL = () => {};
       window.HTMLAnchorElement.prototype.click = function () { downloads.at(-1).name = this.download; };
       Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => copied.push(text) } });
+      window.confirm = (text) => { confirms.push(text); return confirmed; };
+      window.fetch = async (address, init = {}) => {
+        const body = init.body ? new TextDecoder().decode(init.body) : '';
+        requests.push([init.method || 'GET', address, init.headers?.['Content-Type'] || '', body]);
+        const answer = (status, value) => ({ ok: status < 300, status, json: async () => value, text: async () => (typeof value === 'string' ? value : JSON.stringify(value)) });
+        if (address === '/_terminal/shells/7/preview') return answer(200, { cwd: '/w/p1', processes: [] });
+        const upload = /^\/_terminal\/files\/upload\?dir=([^&]*)&name=([^&]*)(&replace=1)?$/.exec(address);
+        if (upload) {
+          const path = decodeURIComponent(upload[1]) + '/' + decodeURIComponent(upload[2]);
+          if (taken.has(path) && !upload[3]) return answer(409, path + ' already exists');
+          taken.add(path);
+          return answer(200, { path });
+        }
+        return answer(404, 'no such route');
+      };
     },
   });
   const { window } = dom;
@@ -93,7 +113,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   for (let i = 1; i <= 40; i++) numbered.push({ t: 'line ' + i, s: {} }, { t: '\n', s: {} });
   numbered.pop();
   const transcript = {
-    shell: { name: 'build box', project: 'p1', basedir: '/b' },
+    shell: { id: '7', dir: '/w/start', name: 'build box', project: 'p1', basedir: '/b' },
     takenAt: '2026-11-16T10:20:30.000Z',
     partial: false,
     cards: [
@@ -156,9 +176,18 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   filter.value = '';
   filter.dispatchEvent(new window.Event('input'));
   const tool = (label) => [...document.querySelectorAll('.transcript-tools button')].find((button) => button.textContent === label);
+  // A format is chosen once, remembered, and saved by Download or on the server.
+  const choose = (kind) => {
+    const radio = document.querySelector('.transcript-format input[value="' + kind + '"]');
+    radio.checked = true;
+    radio.dispatchEvent(new window.Event('change'));
+  };
+  assert.deepEqual([...document.querySelectorAll('.transcript-format input')].map((radio) => [radio.value, radio.checked]), [['md', true], ['html', false], ['sh', false]]);
   // The shell script: every command checked, cd where the directory changes, comments for
   // a failure and one still running, no output.
-  tool('Save shell script').click();
+  choose('sh');
+  assert.equal(window.localStorage.getItem('rotari-transcript-format'), 'sh');
+  tool('Download').click();
   assert.equal(downloads.at(-1).name, 'build-box-20261116-102030.sh');
   assert.equal(downloads.at(-1).content, [
     '#!/usr/bin/env bash',
@@ -191,7 +220,8 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     box.checked = true;
     box.dispatchEvent(new window.Event('change'));
   }
-  tool('Save Markdown').click();
+  choose('md');
+  tool('Download').click();
   assert.equal(downloads.at(-1).name, 'build-box-20261116-102030.md');
   assert.equal(downloads.at(-1).content, [
     '# Transcript of build box',
@@ -217,7 +247,8 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     '',
   ].join('\n'));
   // HTML: one file, styles inline, output escaped and coloured, no script.
-  tool('Save HTML').click();
+  choose('html');
+  tool('Download').click();
   const saved = downloads.at(-1).content;
   assert.equal(downloads.at(-1).name, 'build-box-20261116-102030.html');
   assert.ok(saved.startsWith('<!doctype html>'));
@@ -226,14 +257,59 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   assert.ok(!saved.includes('<script'), 'the saved page has a script');
   assert.ok(!saved.includes('seq 40'), 'an unchecked card was saved');
   // Nothing checked: nothing saved, and it says so.
+  // Save on the server: the shell's directory now and the name, the name taken asked
+  // about and replaced when the viewer says so, kept when not; then shown in the Explorer.
+  tool('Check all').click();
+  choose('sh');
+  const saveBox = document.querySelector('.transcript-save');
+  const pathField = saveBox.querySelector('input[type="text"]');
+  tool('Save on the server\u2026').click();
+  await wait(10);
+  assert.equal(saveBox.hidden, false);
+  assert.equal(pathField.value, '/w/p1/build-box-20261116-102030.sh');
+  const script = downloads.find((file) => file.name.endsWith('.sh')).content;
+  saveBox.querySelector('button[type="submit"]').click();
+  await wait(10);
+  assert.deepEqual(confirms, ['/w/p1/build-box-20261116-102030.sh exists. Replace it?']);
+  assert.deepEqual(requests.filter(([method]) => method === 'POST').map(([method, address, type, body]) => [address, type, body === script]), [
+    ['/_terminal/files/upload?dir=%2Fw%2Fp1&name=build-box-20261116-102030.sh', 'application/octet-stream', true],
+    ['/_terminal/files/upload?dir=%2Fw%2Fp1&name=build-box-20261116-102030.sh&replace=1', 'application/octet-stream', true],
+  ]);
+  assert.equal(saveBox.hidden, true);
+  assert.match(status(), /^Saved 7 cards to \/w\/p1\/build-box-20261116-102030\.sh\. Show in the Explorer$/);
+  document.querySelector('.transcript-status button').click();
+  assert.deepEqual(asked.at(-1), [{ type: 'rotari-transcript-show', path: '/w/p1/build-box-20261116-102030.sh' }, 'http://127.0.0.1:9']);
+  // Not replaced when the viewer says no, and a path that is not absolute is refused.
+  confirmed = false;
+  tool('Save on the server\u2026').click();
+  await wait(10);
+  saveBox.querySelector('button[type="submit"]').click();
+  await wait(10);
+  assert.equal(saveBox.querySelector('.transcript-save-note').textContent, 'Not saved: /w/p1/build-box-20261116-102030.sh exists, and was kept.');
+  pathField.value = 'notes.sh';
+  saveBox.querySelector('button[type="submit"]').click();
+  await wait(10);
+  assert.match(saveBox.querySelector('.transcript-save-note').textContent, /absolute path/);
+  saveBox.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(saveBox.hidden, true);
+  // Where the shell is now cannot be told: where it started, and why.
+  transcript.shell.id = '8';
+  deliver({ type: 'rotari-transcript', transcript });
+  await wait(10);
+  tool('Save on the server\u2026').click();
+  await wait(10);
+  assert.equal(pathField.value, '/w/start/build-box-20261116-102030.sh');
+  assert.match(saveBox.querySelector('.transcript-save-note').textContent, /^Where the shell is now could not be told \(no such route\); this is where it started\.$/);
+  saveBox.querySelector('button:not([type="submit"])').click();
   tool('Check none').click();
   const before = downloads.length;
-  tool('Save Markdown').click();
+  tool('Download').click();
   assert.equal(downloads.length, before);
   assert.match(status(), /Check at least one card/);
   // Refresh asks again.
+  const asks = asked.filter(([message]) => message.type === 'rotari-transcript-ask').length;
   tool('Refresh').click();
-  assert.equal(asked.length, 2);
+  assert.equal(asked.filter(([message]) => message.type === 'rotari-transcript-ask').length, asks + 1);
   // The page's timers, such as the one that frees a download's URL, are not waited for.
   process.exit(0);
 })().catch((error) => { console.error(error); process.exit(1); });

@@ -153,3 +153,44 @@ body {
   color: var(--muted);
   font-style: italic;
 }
+.transcript-format {
+  display: inline-flex;
+  gap: 10px;
+  font-size: 13px;
+}
+.transcript-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.transcript-save[hidden] {
+  display: none;
+}
+.transcript-save label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 20em;
+  font-size: 13px;
+}
+.transcript-save input[type="text"] {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-sunken);
+  color: var(--text);
+  font: 13px var(--font-mono);
+}
+.transcript-save-note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.transcript-save-note:empty {
+  display: none;
+}

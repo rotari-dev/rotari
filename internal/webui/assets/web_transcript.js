@@ -154,20 +154,51 @@
   const checkNone = button("Check none", "Uncheck every card shown", () =>
     checkShown(false),
   );
-  const saveMarkdown = button(
-    "Save Markdown",
-    "Save the cards shown and checked as a Markdown file",
-    () => save("md"),
+  // The format, chosen once and remembered by the browser, then where to save it.
+  const formatKey = "rotari-transcript-format";
+  const formats = [
+    ["md", "Markdown", "The cards as Markdown, each output in a fence"],
+    ["html", "HTML", "The cards as one HTML file, colours kept, no script"],
+    [
+      "sh",
+      "Shell script",
+      "The commands alone as a bash script, without their output",
+    ],
+  ];
+  let format = "md";
+  try {
+    const stored = localStorage.getItem(formatKey);
+    if (formats.some(([kind]) => kind === stored)) format = stored;
+  } catch {}
+  const formatGroup = element("span", "transcript-format");
+  formatGroup.setAttribute("role", "radiogroup");
+  formatGroup.setAttribute("aria-label", "Format to save");
+  for (const [kind, label, hint] of formats) {
+    const choice = element("label");
+    choice.title = hint;
+    const radio = element("input");
+    radio.type = "radio";
+    radio.name = "transcript-format";
+    radio.value = kind;
+    radio.checked = kind === format;
+    radio.onchange = () => {
+      format = kind;
+      try {
+        localStorage.setItem(formatKey, kind);
+      } catch {}
+    };
+    choice.append(radio, " " + label);
+    formatGroup.append(choice);
+  }
+  const download = button(
+    "Download",
+    "Download the cards shown and checked in the format chosen",
+    () => save(format),
   );
-  const saveHTML = button(
-    "Save HTML",
-    "Save the cards shown and checked as one HTML file, colours kept",
-    () => save("html"),
-  );
-  const saveScript = button(
-    "Save shell script",
-    "Save the commands of the cards shown and checked as a bash script, without their output",
-    () => save("sh"),
+  const saveOnServer = button(
+    "Save on the server\u2026",
+    "Write the cards shown and checked, in the format chosen, to a file on the server, where the shell is",
+    () => openSaveDialog(format),
   );
   const refresh = button(
     "Refresh",
@@ -179,17 +210,33 @@
     failedLabel,
     checkAll,
     checkNone,
-    saveMarkdown,
-    saveHTML,
-    saveScript,
+    formatGroup,
+    download,
+    saveOnServer,
     refresh,
   );
+  // Save on the server: a path, the shell's directory now with the file's name, to edit.
+  const saveBox = element("form", "transcript-save");
+  saveBox.hidden = true;
+  const pathLabel = element("label", "", "Save to ");
+  const pathField = element("input");
+  pathField.type = "text";
+  pathField.spellcheck = false;
+  pathField.setAttribute("aria-label", "Path to save to, on the server");
+  pathLabel.append(pathField);
+  const saveHere = element("button", "", "Save");
+  saveHere.type = "submit";
+  const cancelSave = button("Cancel", "Close without saving", () =>
+    closeSaveDialog(),
+  );
+  const saveNote = element("p", "transcript-save-note");
+  saveBox.append(pathLabel, saveHere, cancelSave, saveNote);
   const status = element("p", "transcript-status");
   status.setAttribute("role", "status");
   const list = element("main", "transcript-cards");
-  head.append(title, about, privacy, tools);
+  head.append(title, about, privacy, tools, saveBox);
   document.body.append(head, status, list);
-  const savers = [checkAll, checkNone, saveMarkdown, saveHTML, saveScript];
+  const savers = [checkAll, checkNone, download, saveOnServer];
   const say = (text) => {
     status.textContent = text;
     status.hidden = !text;
@@ -517,11 +564,12 @@
   };
   const fileStamp = (iso) =>
     iso.replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "-");
-  const save = (kind) => {
+  // made is the file of the cards shown and checked in a format, or null, said why.
+  const made = (kind) => {
     const cards = chosen();
     if (!transcript || !cards.length) {
       say("Check at least one card shown to save.");
-      return;
+      return null;
     }
     const [content, type] =
       kind === "md"
@@ -529,13 +577,24 @@
         : kind === "html"
           ? [html(cards), "text/html;charset=utf-8"]
           : [script(cards), "text/x-shellscript;charset=utf-8"];
-    const name =
+    const base =
       transcript.shell.name
         .replace(/[^A-Za-z0-9._-]+/g, "-")
         .replace(/^-+|-+$/g, "") || "shell";
+    return {
+      cards,
+      content,
+      type,
+      name: base + "-" + fileStamp(transcript.takenAt) + "." + kind,
+    };
+  };
+  const save = (kind) => {
+    const file = made(kind);
+    if (!file) return;
+    const { cards, content, type } = file;
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([content], { type }));
-    link.download = name + "-" + fileStamp(transcript.takenAt) + "." + kind;
+    link.download = file.name;
     document.body.append(link);
     link.click();
     link.remove();
@@ -547,6 +606,128 @@
         link.download +
         ".",
     );
+  };
+
+  // openSaveDialog offers the shell's directory now, as its preview says, with the file's
+  // name; when that cannot be told, where the shell started, and why.
+  let saving = null;
+  const openSaveDialog = async (kind) => {
+    const file = made(kind);
+    if (!file) return;
+    saving = file;
+    saveBox.hidden = false;
+    saveNote.replaceChildren();
+    pathField.value = "";
+    pathField.disabled = true;
+    saveHere.disabled = true;
+    let dir = "";
+    let why = "";
+    try {
+      const response = await fetch(
+        "/_terminal/shells/" +
+          encodeURIComponent(transcript.shell.id) +
+          "/preview",
+      );
+      if (response.ok) {
+        const preview = await response.json();
+        dir = preview.cwd || "";
+        why = preview.cwd_error || "";
+      } else
+        why = (await response.text()).trim() || "status " + response.status;
+    } catch {
+      why = "the server did not answer";
+    }
+    if (saving !== file) return;
+    if (!dir) {
+      dir = transcript.shell.dir || "";
+      saveNote.textContent =
+        "Where the shell is now could not be told (" +
+        why +
+        ")" +
+        (dir ? "; this is where it started." : ".");
+    }
+    pathField.value = (dir.replace(/\/+$/, "") || "") + "/" + file.name;
+    pathField.disabled = false;
+    saveHere.disabled = false;
+    pathField.focus();
+    // The name, ready to change.
+    const slash = pathField.value.lastIndexOf("/") + 1;
+    pathField.setSelectionRange?.(slash, pathField.value.lastIndexOf("."));
+  };
+  const closeSaveDialog = () => {
+    saving = null;
+    saveBox.hidden = true;
+  };
+  saveBox.onkeydown = (event) => {
+    if (event.key === "Escape") closeSaveDialog();
+  };
+  // upload writes the file at path, replacing one there only when asked to.
+  const upload = (path, content, replace) => {
+    const slash = path.lastIndexOf("/");
+    return fetch(
+      "/_terminal/files/upload?dir=" +
+        encodeURIComponent(path.slice(0, slash) || "/") +
+        "&name=" +
+        encodeURIComponent(path.slice(slash + 1)) +
+        (replace ? "&replace=1" : ""),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: new TextEncoder().encode(content),
+      },
+    );
+  };
+  saveBox.onsubmit = async (event) => {
+    event.preventDefault();
+    const file = saving;
+    if (!file) return;
+    const path = pathField.value.trim();
+    if (!path.startsWith("/") || path.endsWith("/")) {
+      saveNote.textContent =
+        "Give an absolute path to a file, such as /home/you/notes.md.";
+      return;
+    }
+    saveHere.disabled = true;
+    let response;
+    try {
+      response = await upload(path, file.content, false);
+      // A file there is replaced only once the viewer says so.
+      if (response.status === 409 && confirm(path + " exists. Replace it?"))
+        response = await upload(path, file.content, true);
+    } catch {}
+    saveHere.disabled = false;
+    if (!response) {
+      saveNote.textContent = "Not saved: the server did not answer.";
+      return;
+    }
+    if (!response.ok) {
+      saveNote.textContent =
+        response.status === 409
+          ? "Not saved: " + path + " exists, and was kept."
+          : "Not saved: " +
+            ((await response.text()).trim() || "status " + response.status);
+      return;
+    }
+    const saved = (await response.json()).path || path;
+    closeSaveDialog();
+    say(
+      "Saved " +
+        file.cards.length +
+        (file.cards.length === 1 ? " card to " : " cards to ") +
+        saved +
+        ".",
+    );
+    const showIt = button(
+      "Show in the Explorer",
+      "Show its folder in the Explorer of the terminal that opened this page",
+      () =>
+        window.opener?.postMessage(
+          { type: "rotari-transcript-show", path: saved },
+          location.origin,
+        ),
+    );
+    showIt.disabled = !window.opener || window.opener.closed;
+    status.append(" ", showIt);
   };
 
   // Asking the tab that opened this page.

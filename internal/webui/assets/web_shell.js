@@ -6997,6 +6997,19 @@ function shellWord(value) {
   window.addEventListener("message", (event) => {
     if (
       event.origin !== location.origin ||
+      event.data?.type !== "rotari-transcript-show" ||
+      typeof event.data.path !== "string" ||
+      !event.data.path.startsWith("/") ||
+      !transcriptPages.has(event.source)
+    )
+      return;
+    // A file a transcript page saved, its folder shown in the Explorer.
+    setOpen(true);
+    showDirInExplorer(parentOf(event.data.path));
+  });
+  window.addEventListener("message", (event) => {
+    if (
+      event.origin !== location.origin ||
       event.data?.type !== "rotari-transcript-ask"
     )
       return;
@@ -7069,6 +7082,9 @@ function shellWord(value) {
     });
     return {
       shell: {
+        // For the page to ask where the shell is now, and where it started.
+        id: pane.shown,
+        dir: shell?.dir || "",
         name: shell ? shell.name || "Shell " + shell.number : "Shell",
         project: shell ? projectName(shell) : "",
         basedir: shell?.basedir || "",
