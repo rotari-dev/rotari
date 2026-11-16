@@ -182,6 +182,27 @@ func TestWebDetachReportsAFailedStart(t *testing.T) {
 	}
 }
 
+// TestWebDetachRemovesItsRecordOnSIGTERM checks that SIGTERM sent as soon as --detach
+// returns shuts the server down as WEB-40 says, removing its record, rather than
+// killing it before it handles the signal.
+func TestWebDetachRemovesItsRecordOnSIGTERM(t *testing.T) {
+	covers(t, "WEB-40")
+	e := support.NewEnv(t)
+	record, _ := detachedFiles(t, e)
+	for range 3 {
+		server, _ := startDetached(t, e)
+		stopDetached(t, e, server.pid, syscall.SIGTERM)
+		for deadline := time.Now().Add(10 * time.Second); syscall.Kill(server.pid, 0) == nil; time.Sleep(10 * time.Millisecond) {
+			if time.Now().After(deadline) {
+				t.Fatalf("PID %d did not stop after SIGTERM", server.pid)
+			}
+		}
+		if _, err := os.Stat(record); !os.IsNotExist(err) {
+			t.Fatalf("SIGTERM right after --detach left the record %s: %v", record, err)
+		}
+	}
+}
+
 // TestWebDetachStartsAgainAfterACrash checks that a detached server killed
 // without a chance to clean up does not count as running.
 func TestWebDetachStartsAgainAfterACrash(t *testing.T) {

@@ -363,6 +363,10 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 		printErrorf("web server failed: %v", err)
 		return 1
 	}
+	// Taken before a detached server reports that it listens, so that SIGINT or SIGTERM
+	// sent as soon as --detach returns shuts it down, removing its record, rather than
+	// killing it.
+	interrupted := interruptSignal()
 	if flags.detached != nil {
 		if err := flags.detached.listening(flags, baseDir, listener.Addr(), options.Shutdown); err != nil {
 			_ = listener.Close()
@@ -397,7 +401,7 @@ func serveWeb(flags webCommandFlags, baseDir string, options webui.Options) int 
 	}
 	go func() {
 		select {
-		case <-interruptSignal():
+		case <-interrupted:
 		case <-shutdownRequested:
 		}
 		// Stop launches before the listener, so none starts meanwhile.

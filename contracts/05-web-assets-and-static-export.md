@@ -1956,7 +1956,8 @@ holds the host's lease, `--detach` reports it (`already running since ...`, with
 when the options given differ from its own, fails naming them and the PID. Liveness is the server's `flock` lease, so
 a server killed without cleaning up does not count and its record is removed when found; only the current host's
 files count, and a lease that cannot be probed is an error, never "not running". SIGTERM shuts it down as WEB-34 says
-and removes its record. Its shells see neither the token nor the mark of the detached process. A `rotari web` without
+and removes its record, even when sent as soon as `--detach` returns, since the server handles it before it reports
+that it listens. Its shells see neither the token nor the mark of the detached process. A `rotari web` without
 `--detach` is unchanged and not counted, and says on stderr which detached server runs on the host. The log keeps
 about 1 MiB and one rotated `.log.1`, rotated when a server starts and, while it runs, copied and truncated in place,
 never relying on `rotari gc`. `rotari web --shutdown` (command line only, taking no other option but `--yes` and
