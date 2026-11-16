@@ -6130,47 +6130,62 @@ function shellWord(value) {
     // over the block; Copy command only when the block has a command line.
     let actions = element.querySelector(".terminal-block-actions");
     if (!actions) {
-      actions = document.createElement("span");
-      actions.className = "terminal-block-actions";
-      // The buttons are the block's, not a place in the text to select or click.
-      for (const type of ["mousedown", "mouseup"])
-        actions.addEventListener(type, (event) => event.stopPropagation());
-      const button = (className, label, title, run) => {
-        const made = document.createElement("button");
-        made.type = "button";
-        made.className = className;
-        made.textContent = label;
-        made.title = title;
-        made.addEventListener("click", (event) => {
-          event.stopPropagation();
-          run();
-        });
-        return made;
-      };
-      // Fold first, so that Copy output stays at the line's right end.
-      actions.append(
-        button(
-          "terminal-block-fold",
-          "Fold",
-          "Fold this command's output",
-          () => toggleFold(pane, block),
-        ),
-        button(
-          "terminal-block-copy-command",
-          "Copy command",
-          "Copy this command's line",
-          () => copyText(block.command(), "the command"),
-        ),
-        button(
-          "terminal-block-copy",
-          "Copy output",
-          "Copy this command's output",
-          () => copyBlockOutput(pane, block),
-        ),
-      );
+      actions = blockActions(pane, () => block);
       element.append(actions);
     }
-    const shown = Boolean(block.output) && pane.hovered === block;
+    fillActions(
+      actions,
+      pane,
+      block,
+      Boolean(block.output) && pane.hovered === block,
+    );
+    if (pane.stickyBlock === block) updateSticky(pane);
+  };
+  // blockActions makes the buttons of the block that of() gives: Fold, Copy command, and
+  // Copy output, Fold first so that Copy output stays at the right end.
+  const blockActions = (pane, of) => {
+    const actions = document.createElement("span");
+    actions.className = "terminal-block-actions";
+    // The buttons are the block's, not a place in the text to select or click.
+    for (const type of ["mousedown", "mouseup"])
+      actions.addEventListener(type, (event) => event.stopPropagation());
+    const button = (className, label, title, run) => {
+      const made = document.createElement("button");
+      made.type = "button";
+      made.className = className;
+      made.textContent = label;
+      made.title = title;
+      made.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const block = of();
+        if (block) run(block);
+      });
+      return made;
+    };
+    actions.append(
+      button(
+        "terminal-block-fold",
+        "Fold",
+        "Fold this command's output",
+        (block) => toggleFold(pane, block),
+      ),
+      button(
+        "terminal-block-copy-command",
+        "Copy command",
+        "Copy this command's line",
+        (block) => copyText(block.command(), "the command"),
+      ),
+      button(
+        "terminal-block-copy",
+        "Copy output",
+        "Copy this command's output",
+        (block) => copyBlockOutput(pane, block),
+      ),
+    );
+    return actions;
+  };
+  // fillActions shows a block's buttons, or hides them.
+  const fillActions = (actions, pane, block, shown) => {
     actions.hidden = !shown;
     actions.querySelector(".terminal-block-copy").hidden = !shown;
     actions.querySelector(".terminal-block-copy-command").hidden =
@@ -6182,7 +6197,36 @@ function shellWord(value) {
     fold.title = isFolded
       ? "Bring back this command's whole output"
       : "Fold this command's output";
-    if (pane.stickyBlock === block) updateSticky(pane);
+  };
+  // updateFloat shows the hovered block's buttons at the pane's top right when its prompt's
+  // line, where they would be, is above the view, so that a command's output can be folded
+  // or copied from anywhere in it.
+  const updateFloat = (pane) => {
+    const { term, viewport } = pane;
+    if (!term || !viewport) return;
+    const block = pane.hovered;
+    const buffer = term.buffer.active;
+    const prompt = block?.prompt.marker.line ?? -1;
+    const shows =
+      Boolean(block?.output) &&
+      buffer.type !== "alternate" &&
+      prompt >= 0 &&
+      prompt < buffer.viewportY;
+    let float = pane.float;
+    if (!shows) {
+      if (float) float.hidden = true;
+      return;
+    }
+    if (!float) {
+      float = blockActions(pane, () => pane.hovered);
+      float.classList.add("terminal-block-float");
+      viewport.append(float);
+      pane.float = float;
+    }
+    fillActions(float, pane, block, true);
+    const screen = term.element?.querySelector(".xterm-screen");
+    const row = screen && term.rows ? screen.clientHeight / term.rows : 0;
+    float.style.height = row ? row + "px" : "";
   };
   // copyBlockOutput copies a block's output, read only now, since a long one takes time to
   // put together, or says there is none.
@@ -6590,11 +6634,15 @@ function shellWord(value) {
       if (row >= 0 && row < term.rows)
         block = blockAt(pane, term.buffer.active.viewportY + row);
     }
-    if (block === pane.hovered) return;
+    if (block === pane.hovered) {
+      updateFloat(pane);
+      return;
+    }
     const before = pane.hovered;
     pane.hovered = block;
     if (before) paintBlock(pane, before);
     if (block) paintBlock(pane, block);
+    updateFloat(pane);
   };
   // decorateBlock (re)makes a block's decoration: on its prompt's line, and on the scroll
   // bar once it has failed, which xterm.js takes only when a decoration is made.
@@ -6967,6 +7015,7 @@ function shellWord(value) {
     pane.hovered = null;
     blocks.forEach(disposeBlock);
     updateSticky(pane);
+    updateFloat(pane);
   };
   // readBlockMark adds one mark to the pane's blocks. A block's times come only from
   // output after the replay, as the replay keeps none.
@@ -7067,8 +7116,9 @@ function shellWord(value) {
       last.exit = rest[0] !== "" && Number.isInteger(exit) ? exit : null;
       if (blockState(last) === "failed") decorateBlock(pane, last);
       else paintBlock(pane, last);
-      // The sticky line shows its end, whether its decoration is drawn or not.
+      // The sticky line and the buttons show its end, whether its decoration is drawn or not.
       if (pane.stickyBlock === last) updateSticky(pane);
+      if (pane.hovered === last) updateFloat(pane);
     }
     return true;
   };
@@ -7431,7 +7481,10 @@ function shellWord(value) {
         Uint8Array.from(data, (character) => character.charCodeAt(0)),
       ),
     );
-    term.onScroll(() => updateSticky(pane));
+    term.onScroll(() => {
+      updateSticky(pane);
+      updateFloat(pane);
+    });
     term.onResize(({ rows, cols }) => {
       updateSticky(pane);
       if (dragging) pane.heldResize = { rows, cols };

@@ -4670,6 +4670,30 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   item().click();
   assert.deepEqual(JSON.parse(JSON.stringify(at(20))), ['$ seq 30', 'ok']);
   escape();
+  // Pointing at a command's output while its prompt is above the view shows its buttons at
+  // the pane's top right, where Fold folds it; with the prompt in view, they are on its line.
+  const skScreen = sk.document.createElement('div');
+  skScreen.className = 'xterm-screen';
+  skScreen.getBoundingClientRect = () => ({ top: 100, left: 20, width: 800, height: 240, bottom: 340, right: 820 });
+  skTerm.element = sk.document.createElement('div');
+  skTerm.element.append(skScreen);
+  const hover = (row) => skViewport.dispatchEvent(new sk.window.MouseEvent('mousemove', { clientX: 300, clientY: 100 + row * 10 + 5, bubbles: true }));
+  const float = () => sk.document.querySelector('.terminal-block-float');
+  const floatButtons = () => [...float().querySelectorAll('button')].filter((button) => !button.hidden).map((button) => button.textContent);
+  // The viewer's own scroll ends the hold that going to the prompt left.
+  skViewport.dispatchEvent(new sk.window.Event('wheel'));
+  at(20);
+  hover(2);
+  assert.ok(float() && !float().hidden, 'no buttons at the top right');
+  assert.equal(float().parentElement, skViewport);
+  assert.deepEqual(floatButtons(), ['Fold', 'Copy command', 'Copy output']);
+  float().querySelector('.terminal-block-fold').click();
+  await wait(10);
+  assert.ok(skTerm.lines.some((line) => line.includes('24 lines folded')), skTerm.lines.join('|'));
+  assert.equal(float().hidden, true, 'the buttons stayed for a block written again');
+  at(0);
+  hover(1);
+  assert.equal(float().hidden, true, 'buttons at the top right with the prompt in view');
   }
 
   // Blocks: OSC 133 marks make one block per command, with its command line and exit

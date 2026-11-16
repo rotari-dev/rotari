@@ -71,3 +71,18 @@
 - **Validation:** `TestTerminalPanel` (the fold test's commands now print OSC 7 before D, as rotari's bash does, and
   fold to 14 lines; Commands' row reads Unfold, Copy command, Copy output) passes; CI to confirm the browser tests.
 - **Remaining:** CI.
+
+## 2026-11-16 23:20 +09:00 — The buttons at the top right when the prompt is above the view
+
+- **Change:** `web_shell.js`: the prompt line's buttons come from `blockActions` and `fillActions`, shared with
+  `updateFloat`, which shows the hovered block's Fold, Copy command, and Copy output at the pane's top right
+  (`.terminal-block-float`, in the viewport, over the sticky line) while that block's prompt line is above the view,
+  outside the alternate screen; it is updated on every pointer move over the pane, on scroll, on a block's end, and
+  when blocks are dropped. CSS: the Fold button now has the copy buttons' look, which it lacked.
+- **Reason:** the user found Copy and Fold unreachable while a long output's prompt is scrolled off, since they show on
+  the prompt's line, and asked for them at the top right instead.
+- **Plan impact:** WEB-48 and docs/WEB.md say where the buttons go when the prompt's line is above the view.
+- **Validation:** `TestTerminalPanel`: pointing into `seq 30`'s output with its prompt above shows the three buttons
+  at the top right, Fold there folds it (and the buttons go with the blocks written again), and with the prompt in
+  view none show at the top right; the contract checks pass.
+- **Remaining:** CI's browser tests.

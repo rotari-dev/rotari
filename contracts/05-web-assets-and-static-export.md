@@ -1706,7 +1706,8 @@ seconds, and a row's **Copy command** and **Copy output**, in that order as on t
 far for one running; none printed says so). While the pointer is over a command's prompt or output, outside the
 alternate screen, **Copy command** (when the block has a command line) and **Copy output** buttons show at the right
 end of its prompt's line, Copy output last, when that line is in view, and copy the same way; a press on either starts
-no selection. The panel takes no key from the shell for blocks. Clicking a mark focuses its pane and offers **Copy command**, **Copy output**, **Select
+no selection. When the prompt's line is above the view, the same buttons, with WEB-58's **Fold** first, show at the
+pane's top right instead, over the sticky line (WEB-59) when it shows. The panel takes no key from the shell for blocks. Clicking a mark focuses its pane and offers **Copy command**, **Copy output**, **Select
 output** (the terminal's selection), and **Type command again**, which types a one-line command line without Enter
 under WEB-45's rule (only after the shell's preview shows nothing running at its prompt, saying why otherwise) and is
 off for a command of more than one line. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel`

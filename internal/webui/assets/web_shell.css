@@ -1812,7 +1812,8 @@ html.terminal-open .output-panel.terminal-launch {
   pointer-events: auto;
 }
 .terminal-block-copy,
-.terminal-block-copy-command {
+.terminal-block-copy-command,
+.terminal-block-fold {
   box-sizing: border-box;
   height: 100%;
   padding: 0 6px;
@@ -1826,8 +1827,17 @@ html.terminal-open .output-panel.terminal-launch {
 }
 .terminal-block-actions[hidden],
 .terminal-block-copy[hidden],
-.terminal-block-copy-command[hidden] {
+.terminal-block-copy-command[hidden],
+.terminal-block-fold[hidden] {
   display: none;
+}
+/* The hovered command's buttons, at the pane's top right while its prompt is above the
+   view; over the sticky line's right end when that shows. */
+.terminal-block-actions.terminal-block-float {
+  z-index: 7;
+  top: 4px;
+  right: 8px;
+  height: 1.2em;
 }
 /* A prompt gone to from Commands is lit up for a moment. */
 .terminal-block-flash::after {
