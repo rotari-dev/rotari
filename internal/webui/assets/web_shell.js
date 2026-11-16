@@ -3269,6 +3269,7 @@ function shellWord(value) {
           pane.blocksLive = true;
           // A shell whose replay brought no marks needs no gutter.
           if (!pane.blocks.length) showBlockGutter(pane, false);
+          refold(pane);
         }
         if (sending) deliverSend(pane);
       };
@@ -6845,12 +6846,50 @@ function shellWord(value) {
     const fold = foldInfo(pane, block);
     if (!fold) return false;
     pane.folds.set(fold.prompt, fold);
+    foldMemory(pane).add(foldHash(pane, block, fold));
     rewrite(pane, fold.prompt);
     return true;
   };
+  // A pane remembers its shells' folds, for as long as the page lasts, by each folded
+  // block's command line and output, so that a replay after a reconnect, a tab switch, or a
+  // link followed is folded again where the same command and output come back.
+  const foldMemory = (pane) => {
+    let memory = pane.foldMemory.get(pane.shown);
+    if (!memory) pane.foldMemory.set(pane.shown, (memory = new Set()));
+    return memory;
+  };
+  // foldHash is FNV-1a over a block's command line and output bytes.
+  const foldHash = (pane, block, fold) => {
+    let hash = 0x811c9dc5;
+    const add = (byte) => {
+      hash ^= byte;
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    };
+    for (const byte of new TextEncoder().encode(block.command())) add(byte);
+    add(0);
+    for (const byte of recordSlice(pane, fold.outStart, fold.outEnd) || [])
+      add(byte);
+    return hash.toString(16) + ":" + (fold.outEnd - fold.outStart);
+  };
+  // refold folds again, after a replay, the blocks this page had folded in the shell.
+  const refold = (pane) => {
+    const memory = pane.foldMemory.get(pane.shown);
+    if (!memory?.size) return;
+    let any = false;
+    for (const block of pane.blocks) {
+      const fold = foldInfo(pane, block);
+      if (fold && memory.has(foldHash(pane, block, fold))) {
+        pane.folds.set(fold.prompt, fold);
+        any = true;
+      }
+    }
+    if (any) rewrite(pane);
+  };
   const unfoldBlock = (pane, block, then) => {
     const prompt = block.bytes?.prompt;
-    if (!pane.folds.has(prompt)) return false;
+    const fold = pane.folds.get(prompt);
+    if (!fold) return false;
+    foldMemory(pane).delete(foldHash(pane, block, fold));
     pane.folds.delete(prompt);
     rewrite(pane, prompt, then);
     return true;
@@ -7259,6 +7298,7 @@ function shellWord(value) {
     pane.blocks = [];
     pane.place = null;
     pane.blocksLive = false;
+    pane.foldMemory = new Map();
     resetRecord(pane);
     term.parser.registerOscHandler(blockMark, (data) =>
       readBlockMark(pane, data),

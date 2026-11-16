@@ -4553,6 +4553,55 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.ok(foPane().record.start > 0, 'nothing was let go past 8 MiB');
   }
 
+  // Folds last while the page shows the shell: a tab switch replays it, and the same
+  // command and output are folded again; another shell's are not.
+  {
+  const rf = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const rfTerm = rf.terminals.at(-1);
+  rfTerm.parses = true;
+  rfTerm.lines = [''];
+  const ran = (command, output) => '\x1b]133;A\x07$ \x1b]133;B\x07' + command + '\r\n\x1b]133;C\x07' + output + '\x1b]133;D;0\x07';
+  const numbered = (n) => Array.from({ length: n }, (_, i) => 'line ' + (i + 1) + '\r\n').join('');
+  const history = ran('seq 20', numbered(20)) + '\x1b]133;A\x07$ \x1b]133;B\x07';
+  const replay = (text) => {
+    const socket = rf.sockets.at(-1);
+    socket.onopen?.();
+    socket.onmessage({ data: new TextEncoder().encode(text).buffer });
+  };
+  replay(history);
+  await wait(10);
+  const rfPane = () => rf.document.querySelector('.terminal-pane').terminalPane;
+  rfPane().blocks[0].decoration.render().querySelector('.terminal-block-mark').click();
+  [...rf.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Fold output').click();
+  await wait(10);
+  const folded = () => rfTerm.lines.some((line) => line.includes('lines folded'));
+  assert.ok(folded(), rfTerm.lines.join('|'));
+  const tab = (n) => [...[...rf.document.querySelectorAll('.terminal-tabs .terminal-tab')][n].children].find((part) => !part.classList.contains('terminal-tab-close'));
+  tab(1).click();
+  await wait(20);
+  replay(history);
+  await wait(10);
+  assert.ok(!folded(), 'another shell came back folded');
+  tab(0).click();
+  await wait(20);
+  replay(history + 'more\r\n');
+  await wait(10);
+  assert.ok(folded(), 'the shell came back unfolded: ' + rfTerm.lines.join('|'));
+  assert.ok(rfTerm.lines.some((line) => line.startsWith('$ more')), 'what followed the folded block was lost');
+  // Unfolding forgets it.
+  rfPane().blocks[0].fold.decoration.render().click();
+  await wait(10);
+  tab(1).click();
+  await wait(20);
+  replay(history);
+  tab(0).click();
+  await wait(20);
+  replay(history);
+  await wait(10);
+  assert.ok(!folded(), 'an unfolded block came back folded');
+  }
+
   // Blocks: OSC 133 marks make one block per command, with its command line and exit
   // code; times only for what comes after the replay; nothing in the alternate screen;
   // gone with their lines, and with the screen on a replay.

@@ -27,3 +27,16 @@
   write is held and late output following once; the alternate screen and output past 8 MiB refused with the note;
   the older block menu test unchanged. `tsc` and prettier clean.
 - **Remaining:** phases 3 (lasting across reconnects) and 4 (contracts and docs).
+
+## 2026-11-16 22:41 +09:00 — Lasting across reconnects
+
+- **Change:** `web_shell.js`: each pane keeps `foldMemory`, per shell ID for the page's life, of folded blocks'
+  `foldHash` (FNV-1a over the command line and the output bytes, with the output's length); folding adds, unfolding
+  removes. When a connection's replay has been written, `refold` folds every block whose hash is remembered and
+  writes the screen again once.
+- **Reason:** plan phase 3.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalPanel`: a block folded, a switch to another shell with the same output (not folded),
+  back to the first with more output after the block (folded again, the rest kept), then unfolded and switched away
+  and back (not folded) passes; `tsc` and prettier clean.
+- **Remaining:** phase 4 (contracts and docs).
