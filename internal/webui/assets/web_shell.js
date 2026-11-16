@@ -6589,6 +6589,11 @@ function shellWord(value) {
         ["Copy output", () => copyBlockOutput(pane, block), true],
       );
     }
+    choices.push([
+      "Open transcript",
+      () => openTranscript(pane),
+      pane.shown !== null && pane.record.end > pane.record.start,
+    ]);
     // The sticky line's switch, for every pane, last.
     choices.push([
       "Keep the command at the top",
@@ -6966,6 +6971,227 @@ function shellWord(value) {
         6000,
       );
   };
+  // Transcripts (WEB-60): a pane's commands on a page of their own, /_terminal/transcript,
+  // which asks the tab that opened it for them by postMessage, so that the output never
+  // goes through the server. The panel answers only the pages it opened, with the pane's
+  // shell as it is when asked; Refresh on the page asks again.
+  const transcriptPath = "/_terminal/transcript";
+  const transcriptPages = new Map();
+  const openTranscript = (pane, from = null) => {
+    const page = window.open(transcriptPath, "_blank");
+    if (!page) {
+      showNote("The browser blocked opening the transcript.", 6000);
+      return;
+    }
+    transcriptPages.set(page, {
+      pane,
+      shell: pane.shown,
+      from: from?.bytes?.prompt ?? null,
+    });
+  };
+  window.addEventListener("message", (event) => {
+    if (
+      event.origin !== location.origin ||
+      event.data?.type !== "rotari-transcript-ask"
+    )
+      return;
+    for (const page of [...transcriptPages.keys()])
+      if (page.closed) transcriptPages.delete(page);
+    const asked = transcriptPages.get(event.source);
+    if (!asked) return;
+    const { pane, shell, from } = asked;
+    let transcript = null;
+    let reason = "";
+    if (!panes.includes(pane) || !pane.term)
+      reason = "The terminal pane it came from has closed.";
+    else if (pane.shown !== shell)
+      reason = "The terminal pane it came from shows another shell now.";
+    else transcript = transcriptOf(pane, from);
+    event.source.postMessage(
+      { type: "rotari-transcript", transcript, reason },
+      location.origin,
+    );
+  });
+  // transcriptOf is a pane's transcript: its shell, when it was taken, and one card per
+  // command whose output is all in the kept bytes, from the block whose prompt is at from
+  // in the bytes, or from the start with any output before the first prompt as a card of
+  // its own; a shell that marks nothing has its kept output as one card.
+  const transcriptOf = (pane, from = null) => {
+    const record = pane.record;
+    const shell = shells.find((item) => item.id === pane.shown);
+    const blocks = pane.blocks.filter(
+      (block) =>
+        block.bytes?.prompt !== null &&
+        block.bytes?.prompt !== undefined &&
+        block.bytes.prompt >= record.start,
+    );
+    const cards = [];
+    const card = (fields, start, end) => {
+      const bytes = recordSlice(pane, start, end);
+      return { ...fields, runs: bytes ? sgrRuns(bytes) : [] };
+    };
+    const at =
+      from === null ? 0 : blocks.findIndex((b) => b.bytes.prompt === from);
+    if (from === null) {
+      const until = blocks.length ? blocks[0].bytes.prompt : record.end;
+      if (until > record.start) {
+        const before = card(
+          { command: null, state: "output" },
+          record.start,
+          until,
+        );
+        if (before.runs.some((run) => run.t.trim())) cards.push(before);
+      }
+    }
+    blocks.slice(Math.max(at, 0)).forEach((block, index, rest) => {
+      const { outStart, outEnd } = block.bytes;
+      if (!block.output || outStart === null) return;
+      const end = outEnd ?? rest[index + 1]?.bytes.prompt ?? record.end;
+      cards.push(
+        card(
+          {
+            command: block.command(),
+            state: blockState(block),
+            exit: block.exit,
+            dir: block.place?.dir || null,
+            startedAt: block.startedAt,
+            endedAt: block.endedAt,
+          },
+          outStart,
+          end,
+        ),
+      );
+    });
+    return {
+      shell: {
+        name: shell ? shell.name || "Shell " + shell.number : "Shell",
+        project: shell ? projectName(shell) : "",
+        basedir: shell?.basedir || "",
+      },
+      takenAt: new Date().toISOString(),
+      // Output before what the page keeps is not in it.
+      partial: record.start > 0,
+      cards,
+    };
+  };
+  // sgrRuns turns output bytes into runs of text with their style, as the terminal showed
+  // them: SGR colours (16, 256, and true colour) and bold, dim, italic, underline, and
+  // inverse kept as { t, s: { fg, bg, b, d, i, u, v } }, line breaks as runs of "\n", other
+  // escape sequences and control characters left out, and a line written over after a
+  // carriage return read as what was written last.
+  const sgrRuns = (bytes) => {
+    const text = new TextDecoder().decode(bytes);
+    let style = {};
+    const runs = [];
+    let line = [];
+    const push = (t) => {
+      const last = line.at(-1);
+      if (last && JSON.stringify(last.s) === JSON.stringify(style)) last.t += t;
+      else line.push({ t, s: { ...style } });
+    };
+    for (let i = 0; i < text.length;) {
+      const c = text[i];
+      if (c === "\x1b") {
+        const next = text[i + 1];
+        if (next === "[") {
+          const csi = /^\x1b\[([0-?]*)([ -/]*)([@-~])/.exec(
+            text.slice(i, i + 64),
+          );
+          if (csi) {
+            if (csi[3] === "m" && !csi[2]) style = applySgr(style, csi[1]);
+            i += csi[0].length;
+          } else i += 2;
+        } else if (next === "]") {
+          const bel = text.indexOf("\x07", i);
+          const st = text.indexOf("\x1b\\", i + 2);
+          const end =
+            bel >= 0 && (st < 0 || bel < st)
+              ? bel + 1
+              : st >= 0
+                ? st + 2
+                : text.length;
+          i = end;
+        } else i += 2;
+      } else if (c === "\r") {
+        // CR LF, or a CR at the end, ends a line; a CR before more text writes over it.
+        if (text[i + 1] !== "\n" && i + 1 < text.length) line = [];
+        i++;
+      } else if (c === "\n") {
+        runs.push(...line, { t: "\n", s: {} });
+        line = [];
+        i++;
+      } else if ((c < " " && c !== "\t") || c === "\x7f") {
+        i++;
+      } else {
+        let j = i;
+        while (j < text.length) {
+          const d = text[j];
+          if (
+            d === "\x1b" ||
+            d === "\r" ||
+            d === "\n" ||
+            d === "\x7f" ||
+            (d < " " && d !== "\t")
+          )
+            break;
+          j++;
+        }
+        push(text.slice(i, j));
+        i = j;
+      }
+    }
+    runs.push(...line);
+    while (runs.length && runs.at(-1).t === "\n") runs.pop();
+    return runs;
+  };
+  // applySgr is a style after SGR parameters.
+  const applySgr = (style, params) => {
+    const codes =
+      params === ""
+        ? [0]
+        : params.split(";").map((part) => Number(part.split(":")[0]) || 0);
+    let s = { ...style };
+    for (let k = 0; k < codes.length; k++) {
+      const n = codes[k];
+      if (n === 0) s = {};
+      else if (n === 1) s.b = 1;
+      else if (n === 2) s.d = 1;
+      else if (n === 3) s.i = 1;
+      else if (n === 4) s.u = 1;
+      else if (n === 7) s.v = 1;
+      else if (n === 22) {
+        delete s.b;
+        delete s.d;
+      } else if (n === 23) delete s.i;
+      else if (n === 24) delete s.u;
+      else if (n === 27) delete s.v;
+      else if (n >= 30 && n <= 37) s.fg = n - 30;
+      else if (n >= 90 && n <= 97) s.fg = n - 82;
+      else if (n === 39) delete s.fg;
+      else if (n >= 40 && n <= 47) s.bg = n - 40;
+      else if (n >= 100 && n <= 107) s.bg = n - 92;
+      else if (n === 49) delete s.bg;
+      else if (n === 38 || n === 48) {
+        const key = n === 38 ? "fg" : "bg";
+        if (codes[k + 1] === 5) {
+          s[key] = Math.max(0, Math.min(255, codes[k + 2] || 0));
+          k += 2;
+        } else if (codes[k + 1] === 2) {
+          s[key] =
+            "#" +
+            [codes[k + 2], codes[k + 3], codes[k + 4]]
+              .map((v) =>
+                Math.max(0, Math.min(255, v || 0))
+                  .toString(16)
+                  .padStart(2, "0"),
+              )
+              .join("");
+          k += 4;
+        }
+      }
+    }
+    return s;
+  };
   // bytesText is the text of kept output bytes, as copying the screen would give it:
   // escape sequences left out, and a line written over after a carriage return read as
   // what was written last.
@@ -7226,6 +7452,7 @@ function shellWord(value) {
         () => typeAtPrompt(pane.shown, command, "the command"),
         Boolean(command) && oneLine,
       ],
+      ["Open transcript from here", () => openTranscript(pane, block), true],
     ]);
   };
   // holdScroll scrolls a pane to line and keeps it there for a moment. xterm.js follows

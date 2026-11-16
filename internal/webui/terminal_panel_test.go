@@ -4708,6 +4708,68 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(float().hidden, true, 'buttons at the top right with the prompt in view');
   }
 
+  // Transcripts: Open transcript opens /_terminal/transcript, and the panel answers that
+  // page, and only that page, with the pane's cards: output before the first prompt, each
+  // command with its exit, directory, and output in styled runs (colours, bold, 256 and
+  // true colour; cursor moves left out; a line written over read as written last), a
+  // running one so far; from a block's menu, from that block on.
+  {
+  const tr = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const trSocket = tr.sockets.at(-1);
+  trSocket.onopen?.();
+  const trTerm = tr.terminals.at(-1);
+  trTerm.parses = true;
+  trTerm.lines = [''];
+  const out = (text) => trSocket.onmessage({ data: new TextEncoder().encode(text).buffer });
+  const ran = (command, output, end) => '\x1b]7;file://h/w/p1\x07\x1b]133;A\x07$ \x1b]133;B\x07' + command + '\r\n\x1b]133;C;cmdline_url=' + encodeURIComponent(command) + '\x07' + output + (end === undefined ? '' : '\x1b]133;D;' + end + '\x07');
+  out('Welcome\r\n' + ran('make', '\x1b[1;32mok\x1b[0m done\r\n\x1b[38;5;208mwarm\x1b[38;2;1;2;3m rgb\x1b[0m\r\n', 0) + ran('false', 'bad\x1b[2K\r50%\r100%\r\n', 1) + ran('sleep 9', 'zz\r\n'));
+  await wait(10);
+  const opened = [];
+  const page = { closed: false, posted: [], postMessage(message, origin) { this.posted.push([JSON.parse(JSON.stringify(message)), origin]); } };
+  tr.window.open = (...args) => { opened.push(args); return page; };
+  const trViewport = tr.document.querySelector('.terminal-viewport');
+  trViewport.dispatchEvent(new tr.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+  [...tr.document.querySelectorAll('.terminal-tab-menu button')].find((button) => button.textContent === 'Open transcript').click();
+  assert.deepEqual(opened, [['/_terminal/transcript', '_blank']]);
+  const ask = (source, origin = 'http://127.0.0.1:9') => {
+    const event = new tr.window.MessageEvent('message', { data: { type: 'rotari-transcript-ask' }, origin });
+    Object.defineProperty(event, 'source', { value: source });
+    tr.window.dispatchEvent(event);
+  };
+  ask(page, 'http://elsewhere.test');
+  ask({ postMessage() { assert.fail('answered a page it did not open'); } });
+  assert.equal(page.posted.length, 0, 'answered another origin');
+  ask(page);
+  const [[answer, origin]] = page.posted;
+  assert.equal(origin, 'http://127.0.0.1:9');
+  assert.equal(answer.type, 'rotari-transcript');
+  const { transcript } = answer;
+  assert.deepEqual(transcript.shell, { name: 'Shell 1', project: 'p1', basedir: '/b' });
+  assert.equal(transcript.partial, false);
+  const text = (card) => card.runs.map((run) => run.t).join('');
+  assert.deepEqual(transcript.cards.map((card) => [card.command, card.state, card.exit, card.dir, text(card)]), [
+    [null, 'output', undefined, undefined, 'Welcome'],
+    ['make', 'ok', 0, '/w/p1', 'ok done\nwarm rgb'],
+    ['false', 'failed', 1, '/w/p1', 'bad\n100%'.replace('bad\n', '')],
+    ['sleep 9', 'running', null, '/w/p1', 'zz'],
+  ]);
+  assert.deepEqual(transcript.cards[1].runs.slice(0, 2), [{ t: 'ok', s: { b: 1, fg: 2 } }, { t: ' done', s: {} }]);
+  assert.deepEqual(transcript.cards[1].runs.slice(3), [{ t: 'warm', s: { fg: 208 } }, { t: ' rgb', s: { fg: '#010203' } }]);
+  // From a block's menu, from that block on.
+  page.posted.length = 0;
+  tr.document.querySelector('.terminal-pane').terminalPane.blocks[1].decoration.render().querySelector('.terminal-block-mark').click();
+  [...tr.document.querySelectorAll('.terminal-tab-menu button')].find((button) => button.textContent === 'Open transcript from here').click();
+  ask(page);
+  assert.deepEqual(page.posted[0][0].transcript.cards.map((card) => card.command), ['false', 'sleep 9']);
+  // A pane that shows another shell now says so.
+  tr.document.querySelector('.terminal-pane').terminalPane.shown = '9';
+  page.posted.length = 0;
+  ask(page);
+  assert.deepEqual(page.posted[0][0], { type: 'rotari-transcript', transcript: null, reason: 'The terminal pane it came from shows another shell now.' });
+  tr.document.querySelector('.terminal-pane').terminalPane.shown = '1';
+  }
+
   // Blocks: OSC 133 marks make one block per command, with its command line and exit
   // code; times only for what comes after the replay; nothing in the alternate screen;
   // gone with their lines, and with the screen on a replay.
@@ -5020,7 +5082,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     await wait(20);
   };
   const rcNote = () => rc.document.querySelector('.terminal-send-note')?.textContent;
-  assert.deepEqual(rightClick(), { prevented: true, items: [['Cut', false], ['Copy', false], ['Paste', true], ['Select all', true], ['Keep the command at the top', true]] });
+  assert.deepEqual(rightClick(), { prevented: true, items: [['Cut', false], ['Copy', false], ['Paste', true], ['Select all', true], ['Open transcript', true], ['Keep the command at the top', true]] });
   // Copy copies the selection.
   rcTerm.selected = 'ls -l';
   assert.deepEqual(rightClick().items.slice(0, 2), [['Cut', false], ['Copy', true]], 'Cut of output that is no command line');
@@ -5102,15 +5164,15 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   // with no command yet.
   const onRow = (row) => ({ clientX: 100, clientY: 100 + row * 10 + 5 });
   // The cursor's moves while a command line is typed come after Select all.
-  assert.deepEqual(rightClick(onRow(1)).items.slice(4), [['Move the cursor to text...', true], ['Move the cursor to the start', true], ['Move the cursor to the end', true], ['Copy command', true], ['Copy output', true], ['Keep the command at the top', true]]);
+  assert.deepEqual(rightClick(onRow(1)).items.slice(4), [['Move the cursor to text...', true], ['Move the cursor to the start', true], ['Move the cursor to the end', true], ['Copy command', true], ['Copy output', true], ['Open transcript', true], ['Keep the command at the top', true]]);
   rcCopied.length = 0;
   rightClick(onRow(1));
   await rcChoose('Copy output');
   rightClick(onRow(0));
   await rcChoose('Copy command');
   assert.deepEqual(rcCopied, ['built', 'make']);
-  // The four, the cursor's three moves, and the sticky line's switch.
-  assert.deepEqual(rightClick(onRow(3)).items.length, 8, 'copies of a prompt with no command yet');
+  // The four, the cursor's three moves, Open transcript, and the sticky line's switch.
+  assert.deepEqual(rightClick(onRow(3)).items.length, 9, 'copies of a prompt with no command yet');
   // "Move the cursor to text..." in "$ echo abc" (the line "echo abc"): the next c after
   // the cursor, from the start again past the end, and a note for text that is not there;
   // the start and the end. Told as indexes, since the shell takes them.
@@ -5283,7 +5345,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     await wait(20);
   };
   assert.deepEqual(menu(0).map((item) => [item.textContent, item.disabled]), [
-    ['Copy command', false], ['Copy output', false], ['Select output', false], ['Type command again', false]]);
+    ['Copy command', false], ['Copy output', false], ['Select output', false], ['Type command again', false], ['Open transcript from here', false]]);
   await choose(0, 'Copy output');
   await choose(0, 'Copy command');
   await choose(2, 'Copy output');
@@ -5294,8 +5356,9 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   await choose(0, 'Select output');
   assert.deepEqual(bpTerm.selection, { column: 0, row: 1, length: 2 * 80 }, 'Select output took other lines');
   // A command on lines of its own would be typed with its continuation prompts.
-  assert.deepEqual(menu(2).at(-1).textContent, 'Type command again (only a one-line command)');
-  assert.equal(menu(2).at(-1).disabled, true);
+  const typeAgain = (n) => menu(n).find((item) => item.textContent.startsWith('Type command again'));
+  assert.deepEqual(typeAgain(2).textContent, 'Type command again (only a one-line command)');
+  assert.equal(typeAgain(2).disabled, true);
   // Typing again asks what runs first, and never presses Enter.
   await choose(1, 'Type command again');
   assert.ok(bp.requests.includes('GET /_terminal/shells/1/preview'), 'it typed without asking what runs');
