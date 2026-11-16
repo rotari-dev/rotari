@@ -380,7 +380,12 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
         onData(callback) { this.data = callback; }
         onBinary() {}
         onResize(callback) { this.resize = callback; }
-        onScroll(callback) { this.scrolled = callback; return { dispose: () => { if (this.scrolled === callback) this.scrolled = null; } }; }
+        // Every listener hears a scroll; a test calls scrolled to make one.
+        onScroll(callback) {
+          (this.scrollers ||= []).push(callback);
+          this.scrolled = () => [...this.scrollers].forEach((listener) => listener());
+          return { dispose: () => { this.scrollers = this.scrollers.filter((listener) => listener !== callback); } };
+        }
       };
       window.FitAddon = { FitAddon: class { fit() { fits.push(1); } } };
       window.WebLinksAddon = { WebLinksAddon: class { constructor(handler) { this.handler = handler; } } };
@@ -4477,7 +4482,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   foTerm.parses = true;
   foTerm.lines = [''];
   const out = (text) => foSocket.onmessage({ data: new TextEncoder().encode(text).buffer });
-  const ran = (command, output, exit = 0) => '\x1b]133;A\x07$ \x1b]133;B\x07' + command + '\r\n\x1b]133;C;cmdline_url=' + encodeURIComponent(command) + '\x07' + output + '\x1b]133;D;' + exit + '\x07';
+  // As rotari's bash prints them: the directory (OSC 7) after the output, before D.
+  const ran = (command, output, exit = 0) => '\x1b]133;A\x07$ \x1b]133;B\x07' + command + '\r\n\x1b]133;C;cmdline_url=' + encodeURIComponent(command) + '\x07' + output + '\x1b]7;file://host/w\x07\x1b]133;D;' + exit + '\x07';
   const numbered = (n) => Array.from({ length: n }, (_, i) => 'line ' + (i + 1) + '\r\n').join('');
   out(ran('seq 20', numbered(20)) + ran('echo hi', 'hi\r\n') + '\x1b]133;A\x07$ \x1b]133;B\x07');
   await wait(10);
@@ -4521,7 +4527,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const foRows = () => [...fo.document.querySelectorAll('.terminal-commands .terminal-dirs-row')];
   assert.deepEqual(foRows().map((row) => [row.querySelector('.terminal-dirs-detail').textContent, [...row.querySelectorAll('button')].map((button) => button.textContent).join(',')]), [
     ['Exit 0', 'Copy command,Copy output'],
-    ['Exit 0 \u00b7 folded', 'Copy command,Copy output,Unfold'],
+    ['Exit 0 \u00b7 folded', 'Unfold,Copy command,Copy output'],
   ]);
   foCommands.click();
   await wait(20);
@@ -4600,6 +4606,70 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   replay(history);
   await wait(10);
   assert.ok(!folded(), 'an unfolded block came back folded');
+  }
+
+  // The sticky line: while the top line in view is a command's output and its prompt is
+  // above, a line over the first row says the command, with its mark, its first line only;
+  // none at a prompt, at a prompt without output, or in the alternate screen; it follows a
+  // running command's end, a click goes to the prompt, and the pane's menu turns it off.
+  {
+  const sk = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const skSocket = sk.sockets.at(-1);
+  skSocket.onopen?.();
+  const skTerm = sk.terminals.at(-1);
+  skTerm.parses = true;
+  skTerm.lines = [''];
+  const out = (text) => skSocket.onmessage({ data: new TextEncoder().encode(text).buffer });
+  const started = (command, output) => '\x1b]133;A\x07$ \x1b]133;B\x07' + command.split('\n').join('\r\n> ') + '\r\n\x1b]133;C;cmdline_url=' + encodeURIComponent(command) + '\x07' + output;
+  const numbered = (n) => Array.from({ length: n }, (_, i) => 'line ' + (i + 1) + '\r\n').join('');
+  // seq 30 on lines 0–30, echo hi on 31–32, a two-line command on 33–34 with output 35–46,
+  // and sleep, running, from 47.
+  out(started('seq 30', numbered(30)) + '\x1b]133;D;0\x07' + started('echo hi', 'hi\r\n') + '\x1b]133;D;0\x07' + started('for i in 1\ndo echo $i; done', numbered(12)) + '\x1b]133;D;0\x07' + started('sleep 9', numbered(5)));
+  await wait(10);
+  const sticky = () => sk.document.querySelector('.terminal-sticky');
+  const at = (line) => {
+    skTerm.buffer.active.viewportY = line;
+    skTerm.scrolled();
+    const shown = sticky() && !sticky().hidden;
+    return shown ? [sticky().querySelector('.terminal-sticky-command').textContent, sticky().querySelector('.terminal-sticky-mark').dataset.state] : null;
+  };
+  assert.equal(at(0), null, 'shown with the prompt in view');
+  assert.deepEqual(JSON.parse(JSON.stringify(at(1))), ['$ seq 30', 'ok']);
+  assert.deepEqual(JSON.parse(JSON.stringify(at(20))), ['$ seq 30', 'ok']);
+  assert.equal(at(31), null, 'shown at the next prompt');
+  assert.deepEqual(JSON.parse(JSON.stringify(at(32))), ['$ echo hi', 'ok']);
+  assert.deepEqual(JSON.parse(JSON.stringify(at(40))), ['$ for i in 1 …', 'ok'], 'a command of two lines');
+  assert.match(sticky().title, /^for i in 1\ndo echo \$i; done\nExit 0/);
+  assert.deepEqual(JSON.parse(JSON.stringify(at(50))), ['$ sleep 9', 'running']);
+  // The running command ends: the line's mark follows.
+  out('\x1b]133;D;1\x07\x1b]133;A\x07$ \x1b]133;B\x07');
+  await wait(10);
+  assert.equal(sticky().querySelector('.terminal-sticky-mark').dataset.state, 'failed');
+  assert.equal(at(53), null, 'shown at a prompt without output');
+  skTerm.buffer.active.type = 'alternate';
+  assert.equal(at(20), null, 'shown in the alternate screen');
+  skTerm.buffer.active.type = 'normal';
+  // A click goes to the prompt, and the line goes.
+  at(20);
+  sticky().click();
+  assert.equal(skTerm.buffer.active.viewportY, 0);
+  assert.equal(sticky().hidden, true);
+  // The pane's menu turns it off, for the browser, and on again.
+  const skViewport = sk.document.querySelector('.terminal-viewport');
+  const item = () => [...sk.document.querySelectorAll('.terminal-tab-menu button')].find((button) => button.textContent === 'Keep the command at the top');
+  const rightClick = () => skViewport.dispatchEvent(new sk.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+  const escape = () => sk.document.dispatchEvent(new sk.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  rightClick();
+  assert.equal(item().getAttribute('aria-checked'), 'true');
+  item().click();
+  assert.equal(sk.window.localStorage.getItem('rotari-terminal-sticky'), '0');
+  assert.equal(at(20), null, 'shown when turned off');
+  rightClick();
+  assert.equal(item().getAttribute('aria-checked'), 'false');
+  item().click();
+  assert.deepEqual(JSON.parse(JSON.stringify(at(20))), ['$ seq 30', 'ok']);
+  escape();
   }
 
   // Blocks: OSC 133 marks make one block per command, with its command line and exit
@@ -4903,7 +4973,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     await wait(20);
   };
   const rcNote = () => rc.document.querySelector('.terminal-send-note')?.textContent;
-  assert.deepEqual(rightClick(), { prevented: true, items: [['Cut', false], ['Copy', false], ['Paste', true], ['Select all', true]] });
+  assert.deepEqual(rightClick(), { prevented: true, items: [['Cut', false], ['Copy', false], ['Paste', true], ['Select all', true], ['Keep the command at the top', true]] });
   // Copy copies the selection.
   rcTerm.selected = 'ls -l';
   assert.deepEqual(rightClick().items.slice(0, 2), [['Cut', false], ['Copy', true]], 'Cut of output that is no command line');
@@ -4985,14 +5055,15 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   // with no command yet.
   const onRow = (row) => ({ clientX: 100, clientY: 100 + row * 10 + 5 });
   // The cursor's moves while a command line is typed come after Select all.
-  assert.deepEqual(rightClick(onRow(1)).items.slice(4), [['Move the cursor to text...', true], ['Move the cursor to the start', true], ['Move the cursor to the end', true], ['Copy command', true], ['Copy output', true]]);
+  assert.deepEqual(rightClick(onRow(1)).items.slice(4), [['Move the cursor to text...', true], ['Move the cursor to the start', true], ['Move the cursor to the end', true], ['Copy command', true], ['Copy output', true], ['Keep the command at the top', true]]);
   rcCopied.length = 0;
   rightClick(onRow(1));
   await rcChoose('Copy output');
   rightClick(onRow(0));
   await rcChoose('Copy command');
   assert.deepEqual(rcCopied, ['built', 'make']);
-  assert.deepEqual(rightClick(onRow(3)).items.length, 7, 'copies of a prompt with no command yet');
+  // The four, the cursor's three moves, and the sticky line's switch.
+  assert.deepEqual(rightClick(onRow(3)).items.length, 8, 'copies of a prompt with no command yet');
   // "Move the cursor to text..." in "$ echo abc" (the line "echo abc"): the next c after
   // the cursor, from the start again past the end, and a note for text that is not there;
   // the start and the end. Told as indexes, since the shell takes them.

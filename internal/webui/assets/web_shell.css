@@ -1707,10 +1707,50 @@ html.terminal-open .output-panel.terminal-launch {
   cursor: row-resize;
 }
 .terminal-viewport {
+  position: relative;
   flex: 1;
   min-height: 0;
   padding: 4px 0 0 6px;
   background: var(--terminal-background);
+}
+/* The line over the first row that keeps a scrolled command's line in sight; its mark sits
+   in the gutter, as the prompt's does. */
+.terminal-sticky {
+  position: absolute;
+  z-index: 6;
+  top: 4px;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  padding-left: 16px;
+  overflow: hidden;
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--terminal-bright-black) 60%, transparent);
+  background: var(--terminal-background);
+  color: var(--terminal-foreground);
+  white-space: pre;
+  cursor: pointer;
+}
+.terminal-sticky[hidden] {
+  display: none;
+}
+.terminal-sticky:hover {
+  background: color-mix(
+    in oklab,
+    var(--terminal-foreground) 8%,
+    var(--terminal-background)
+  );
+}
+.terminal-sticky-mark {
+  position: absolute;
+  left: 4px;
+}
+.terminal-sticky-command {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* Blocks: a shell that marks its commands gets a gutter left of the text, where each
    prompt's mark says how its command ended, and a line between commands. */

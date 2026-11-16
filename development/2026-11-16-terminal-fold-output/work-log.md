@@ -54,3 +54,20 @@
   ./conformance/05-web` is clean; the browser test skips here (no Chrome) and runs in CI; its script passes `node
   --check`. `scripts/check.sh` was not run (npm is broken here, and the full run is too heavy for the shared machine).
 - **Remaining:** CI's run of `TestTerminalFoldInBrowser`.
+
+## 2026-11-16 23:02 +09:00 — CI: the line count, the Fold button's place, and a held scroll
+
+- **Change:** `foldInfo` counts what follows the last line feed as a line only when it holds text; the Fold button
+  goes first among the prompt line's buttons, and first on a Commands row, so that Copy output stays at the right end
+  (WEB-48). `holdScroll` (a command chosen in Commands, or folded) holds for half a second and then until xterm.js's
+  scroll bar agrees with the line, up to three seconds.
+- **Reason:** CI: `TestTerminalFoldInBrowser` showed "35 lines folded" with two kept lines after: bash and zsh started
+  by rotari print OSC 7 after the output and before D, which counted as a 41st line. `TestTerminalPanelInBrowser`
+  found Copy output 58 px from the right, the Fold button of the long command beside it. On macOS,
+  `TestTerminalPanelInBrowser` found the view at line 42 rather than the long command's prompt at 9 after choosing it
+  from Commands on a reloaded page: a late scroll event of the scroll bar after the half-second hold, it seems, as the
+  earlier step of that test already waits for.
+- **Plan impact:** none.
+- **Validation:** `TestTerminalPanel` (the fold test's commands now print OSC 7 before D, as rotari's bash does, and
+  fold to 14 lines; Commands' row reads Unfold, Copy command, Copy output) passes; CI to confirm the browser tests.
+- **Remaining:** CI.

@@ -377,6 +377,8 @@ function shellWord(value) {
   }
   const maximizedKey = "rotari-terminal-maximized";
   const fontSizeKey = "rotari-terminal-font-size";
+  // "0" turns off the line that keeps a command at the top of its scrolled output.
+  const stickyKey = "rotari-terminal-sticky";
   const defaultFontSize = 13;
   const minFontSize = 8;
   const maxFontSize = 32;
@@ -3270,6 +3272,7 @@ function shellWord(value) {
           // A shell whose replay brought no marks needs no gutter.
           if (!pane.blocks.length) showBlockGutter(pane, false);
           refold(pane);
+          updateSticky(pane);
         }
         if (sending) deliverSend(pane);
       };
@@ -6144,7 +6147,14 @@ function shellWord(value) {
         });
         return made;
       };
+      // Fold first, so that Copy output stays at the line's right end.
       actions.append(
+        button(
+          "terminal-block-fold",
+          "Fold",
+          "Fold this command's output",
+          () => toggleFold(pane, block),
+        ),
         button(
           "terminal-block-copy-command",
           "Copy command",
@@ -6156,12 +6166,6 @@ function shellWord(value) {
           "Copy output",
           "Copy this command's output",
           () => copyBlockOutput(pane, block),
-        ),
-        button(
-          "terminal-block-fold",
-          "Fold",
-          "Fold this command's output",
-          () => toggleFold(pane, block),
         ),
       );
       element.append(actions);
@@ -6178,6 +6182,7 @@ function shellWord(value) {
     fold.title = isFolded
       ? "Bring back this command's whole output"
       : "Fold this command's output";
+    if (pane.stickyBlock === block) updateSticky(pane);
   };
   // copyBlockOutput copies a block's output, read only now, since a long one takes time to
   // put together, or says there is none.
@@ -6540,6 +6545,13 @@ function shellWord(value) {
         ["Copy output", () => copyBlockOutput(pane, block), true],
       );
     }
+    // The sticky line's switch, for every pane, last.
+    choices.push([
+      "Keep the command at the top",
+      () => setSticky(!stickyOn),
+      true,
+      stickyOn,
+    ]);
     openPanelMenu(event, choices);
   };
   // pasteClipboard pastes what the clipboard holds, as Ctrl+V would: bracketed when the
@@ -6744,15 +6756,17 @@ function shellWord(value) {
     const feeds = [];
     for (let i = 0; i < output.length; i++)
       if (output[i] === 0x0a) feeds.push(i);
-    const lines =
-      feeds.length + (output.length && output.at(-1) !== 0x0a ? 1 : 0);
+    // What follows the last line feed is a line only when it holds text: bash and zsh
+    // started by rotari say their directory (OSC 7) there, before D.
+    const trailing = output.subarray((feeds.at(-1) ?? -1) + 1);
+    const endsLine = !trailing.length || !bytesText(trailing).trim();
+    const lines = feeds.length + (endsLine ? 0 : 1);
     if (lines <= foldMinLines) return null;
     // The kept head ends after its last line's feed; the kept tail starts after the feed
     // before its first line.
-    const tailFeed =
-      output.at(-1) === 0x0a
-        ? feeds[feeds.length - 1 - foldKeptLines]
-        : feeds[feeds.length - foldKeptLines];
+    const tailFeed = endsLine
+      ? feeds[feeds.length - 1 - foldKeptLines]
+      : feeds[feeds.length - foldKeptLines];
     return {
       prompt,
       outStart,
@@ -6836,6 +6850,7 @@ function shellWord(value) {
         if (target && target.prompt.marker.line >= 0)
           holdScroll(pane, target.prompt.marker.line);
         if (target) then?.(target);
+        updateSticky(pane);
         if (rewriting.again !== undefined) rewrite(pane, rewriting.again);
       });
     });
@@ -6951,6 +6966,7 @@ function shellWord(value) {
     pane.place = null;
     pane.hovered = null;
     blocks.forEach(disposeBlock);
+    updateSticky(pane);
   };
   // readBlockMark adds one mark to the pane's blocks. A block's times come only from
   // output after the replay, as the replay keeps none.
@@ -7051,6 +7067,8 @@ function shellWord(value) {
       last.exit = rest[0] !== "" && Number.isInteger(exit) ? exit : null;
       if (blockState(last) === "failed") decorateBlock(pane, last);
       else paintBlock(pane, last);
+      // The sticky line shows its end, whether its decoration is drawn or not.
+      if (pane.stickyBlock === last) updateSticky(pane);
     }
     return true;
   };
@@ -7170,7 +7188,24 @@ function shellWord(value) {
     const watch = term.onScroll(() => {
       if (term.buffer.active.viewportY !== line) term.scrollToLine(line);
     });
-    const timer = setTimeout(() => release(), 500);
+    // Half a second, and longer, up to three, while xterm.js's scroll bar has not caught up
+    // with the line: on a slow host its late scroll events come after half a second.
+    const settled = () => {
+      const bar = term.element?.querySelector(".xterm-viewport");
+      const buffer = term.buffer.active;
+      if (!bar || !buffer.length || !bar.scrollHeight) return true;
+      const row = bar.scrollHeight / buffer.length;
+      return Math.abs(bar.scrollTop - buffer.viewportY * row) < row;
+    };
+    const began = Date.now();
+    let timer = null;
+    const wait = (delay) => {
+      timer = setTimeout(() => {
+        if (settled() || Date.now() - began >= 3000) release();
+        else wait(100);
+      }, delay);
+    };
+    wait(500);
     release = () => {
       clearTimeout(timer);
       watch.dispose();
@@ -7179,12 +7214,85 @@ function shellWord(value) {
     };
     for (const kind of kinds) viewport.addEventListener(kind, release, true);
   };
+  // The sticky line (WEB-59): while the top line in view is a command's output and its
+  // prompt is above the view, a line over the pane's first row says which command it is,
+  // with its mark; clicking it goes to the prompt. One switch, remembered by the browser,
+  // turns it off for every pane.
+  let stickyOn = true;
+  try {
+    stickyOn = localStorage.getItem(stickyKey) !== "0";
+  } catch {}
+  const updateSticky = (pane) => {
+    const { term, viewport } = pane;
+    if (!term || !viewport) return;
+    const buffer = term.buffer.active;
+    const top = buffer.viewportY;
+    const block =
+      stickyOn && buffer.type !== "alternate" && pane.blocks?.length
+        ? blockAt(pane, top)
+        : null;
+    const shows =
+      block &&
+      block.output &&
+      block.prompt.marker.line >= 0 &&
+      block.prompt.marker.line < top &&
+      block.output.marker.line >= 0 &&
+      block.output.marker.line <= top;
+    let sticky = pane.sticky;
+    if (!shows) {
+      if (sticky) sticky.hidden = true;
+      pane.stickyBlock = null;
+      return;
+    }
+    if (!sticky) {
+      sticky = document.createElement("div");
+      sticky.className = "terminal-sticky";
+      sticky.setAttribute("role", "button");
+      sticky.append(
+        makeElement("span", "terminal-commands-state terminal-sticky-mark"),
+        makeElement("span", "terminal-sticky-command"),
+      );
+      // The line is the panel's, not text to select or a click for the shell.
+      for (const type of ["mousedown", "mouseup"])
+        sticky.addEventListener(type, (event) => event.stopPropagation());
+      sticky.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (pane.stickyBlock) goToBlock(pane, pane.stickyBlock);
+      });
+      viewport.append(sticky);
+      pane.sticky = sticky;
+    }
+    pane.stickyBlock = block;
+    sticky.hidden = false;
+    const command = block.command();
+    const first = command.split("\n")[0];
+    sticky.querySelector(".terminal-sticky-command").textContent =
+      "$ " + first + (command.includes("\n") ? " \u2026" : "");
+    sticky.querySelector(".terminal-sticky-mark").dataset.state =
+      blockState(block);
+    sticky.title = blockTitle(block) + "\nClick to go to its prompt.";
+    // The terminal's own font, a row high.
+    const screen = term.element?.querySelector(".xterm-screen");
+    const row = screen && term.rows ? screen.clientHeight / term.rows : 0;
+    sticky.style.fontFamily = term.options.fontFamily || "";
+    sticky.style.fontSize = (term.options.fontSize || 14) + "px";
+    sticky.style.height = row ? row + "px" : "";
+    sticky.style.lineHeight = row ? row + "px" : "";
+  };
+  const setSticky = (on) => {
+    stickyOn = on;
+    try {
+      localStorage.setItem(stickyKey, on ? "1" : "0");
+    } catch {}
+    for (const pane of panes) updateSticky(pane);
+  };
   // goToBlock scrolls a pane to a block's prompt, and lights the prompt up for a moment.
   const goToBlock = (pane, block) => {
     closeDropdown();
     const line = block.prompt.marker.line;
     if (line < 0) return;
     holdScroll(pane, line);
+    updateSticky(pane);
     clearTimeout(block.flashTimer);
     block.flash = true;
     paintBlock(pane, block);
@@ -7265,10 +7373,10 @@ function shellWord(value) {
       actions.append(button);
     };
     // In the order of the buttons on a block's prompt line.
-    copy("Copy command", command, () => copyText(command, "the command"));
-    copy("Copy output", block.output, () => copyBlockOutput(pane, block));
     if (isFolded || block.foldable)
       copy(isFolded ? "Unfold" : "Fold", true, () => toggleFold(pane, block));
+    copy("Copy command", command, () => copyText(command, "the command"));
+    copy("Copy output", block.output, () => copyBlockOutput(pane, block));
     row.append(actions);
     return row;
   };
@@ -7323,7 +7431,9 @@ function shellWord(value) {
         Uint8Array.from(data, (character) => character.charCodeAt(0)),
       ),
     );
+    term.onScroll(() => updateSticky(pane));
     term.onResize(({ rows, cols }) => {
+      updateSticky(pane);
       if (dragging) pane.heldResize = { rows, cols };
       else send(pane, JSON.stringify({ type: "resize", rows, cols }));
     });
