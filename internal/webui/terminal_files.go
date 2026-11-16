@@ -320,9 +320,9 @@ func serveTerminalDownload(writer http.ResponseWriter, request *http.Request) {
 	}
 }
 
-// serveTerminalUpload writes the body as the new file ?name= in ?dir=, never replacing
-// anything. It needs the file as application/octet-stream, which a form from another
-// site cannot send.
+// serveTerminalUpload writes the body as the new file ?name= in ?dir=, replacing nothing,
+// or with ?replace=1 replacing a regular file of that name. It needs the file as
+// application/octet-stream, which a form from another site cannot send.
 func serveTerminalUpload(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
 		writer.Header().Set("Allow", http.MethodPost)
@@ -339,6 +339,16 @@ func serveTerminalUpload(writer http.ResponseWriter, request *http.Request) {
 		http.Error(writer, err.Error(), http.StatusBadRequest)
 		return
 	}
-	path, err := fileops.WriteNew(dir, query.Get("name"), request.Body)
+	write := fileops.WriteNew
+	switch query.Get("replace") {
+	case "", "0":
+	case "1":
+		// Only a regular file is replaced; a transcript saved again over its last copy asks first.
+		write = fileops.Replace
+	default:
+		http.Error(writer, "replace is 1 or 0", http.StatusBadRequest)
+		return
+	}
+	path, err := write(dir, query.Get("name"), request.Body)
 	writeFileChange(writer, path, err)
 }

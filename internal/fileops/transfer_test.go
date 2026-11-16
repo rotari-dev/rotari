@@ -68,6 +68,45 @@ func TestWriteNew(t *testing.T) {
 	}
 }
 
+// Replace replaces a regular file, keeping its permissions, writes a new one, and refuses a
+// folder or a symbolic link, leaving what was there.
+func TestReplace(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(path, []byte("old"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Replace(dir, "notes.md", strings.NewReader("new")); err != nil || got != path || read(t, path) != "new" {
+		t.Fatalf("replacing: %q %v, %q", got, err, read(t, path))
+	}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o640 {
+		t.Errorf("the replaced file's mode: %v %v", info, err)
+	}
+	if got, err := Replace(dir, "fresh.md", strings.NewReader("x")); err != nil || read(t, got) != "x" {
+		t.Errorf("a new file: %q %v", got, err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "folder"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(path, filepath.Join(dir, "link")); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"folder", "link"} {
+		if _, err := Replace(dir, name, strings.NewReader("x")); !errors.Is(err, ErrNotRegular) {
+			t.Errorf("replacing %s: %v", name, err)
+		}
+	}
+	if read(t, path) != "new" {
+		t.Error("a refused replace changed the file the link names")
+	}
+	if _, err := Replace(dir, "notes.md", &failingReader{}); err == nil || read(t, path) != "new" {
+		t.Errorf("a broken write: %v, left %q", err, read(t, path))
+	}
+	if names := leftIn(t, dir); strings.Join(names, ",") != "folder,fresh.md,link,notes.md" {
+		t.Errorf("left %v", names)
+	}
+}
+
 func zipEntries(t *testing.T, archive []byte) map[string]string {
 	t.Helper()
 	reader, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))

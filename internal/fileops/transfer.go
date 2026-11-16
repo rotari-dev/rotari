@@ -18,13 +18,37 @@ import (
 // to name without replacing, so a failure partway leaves no file under name, and the
 // temporary file is removed.
 func WriteNew(dir, name string, content io.Reader) (string, error) {
+	return writeFile(dir, name, content, false)
+}
+
+// ErrNotRegular is returned by Replace for a name that is not a regular file, such as a
+// folder or a symbolic link, which it does not replace.
+var ErrNotRegular = errors.New("not a regular file")
+
+// Replace writes content as the file name in dir, replacing a regular file of that name,
+// whose permissions it keeps, or writing a new one, and returns its path. As WriteNew,
+// content goes into a temporary file in dir first, renamed to name only when written
+// whole, so a failure partway leaves what was there. Anything else under name, a folder
+// or a symbolic link among them, is refused with ErrNotRegular.
+func Replace(dir, name string, content io.Reader) (string, error) {
+	return writeFile(dir, name, content, true)
+}
+
+func writeFile(dir, name string, content io.Reader, replace bool) (string, error) {
 	if err := CheckName(name); err != nil {
 		return "", err
 	}
 	path := filepath.Join(filepath.Clean(dir), name)
-	if _, err := os.Lstat(path); err == nil {
+	var kept fs.FileMode
+	existing, err := os.Lstat(path)
+	switch {
+	case err == nil && !replace:
 		return "", &fs.PathError{Op: "write", Path: path, Err: fs.ErrExist}
-	} else if !errors.Is(err, fs.ErrNotExist) {
+	case err == nil && !existing.Mode().IsRegular():
+		return "", &fs.PathError{Op: "replace", Path: path, Err: ErrNotRegular}
+	case err == nil:
+		kept = existing.Mode().Perm()
+	case !errors.Is(err, fs.ErrNotExist):
 		return "", err
 	}
 	temporary, file, err := createTemporary(filepath.Dir(path))
@@ -35,7 +59,13 @@ func WriteNew(dir, name string, content io.Reader) (string, error) {
 	if closeErr := file.Close(); err == nil {
 		err = closeErr
 	}
-	if err == nil {
+	switch {
+	case err != nil:
+	case kept != 0:
+		if err = os.Chmod(temporary, kept); err == nil {
+			err = os.Rename(temporary, path)
+		}
+	default:
 		err = renameNoReplace(temporary, path)
 	}
 	if err != nil {

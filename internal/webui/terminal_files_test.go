@@ -402,6 +402,19 @@ func TestTerminalFilesDownloadAndUpload(t *testing.T) {
 	if content, err := os.ReadFile(at("results/new é.txt")); err != nil || string(content) != "hello" {
 		t.Errorf("a refused upload changed the file: %q %v", content, err)
 	}
+	// replace=1 replaces a file, and only a file; another value is refused.
+	if status, body := upload("dir="+url.QueryEscape(at("results"))+"&name=new%20%C3%A9.txt&replace=1", "application/octet-stream", "again"); status != http.StatusOK || !strings.Contains(body, at("results/new é.txt")) {
+		t.Errorf("replacing: %d %s", status, body)
+	}
+	if content, err := os.ReadFile(at("results/new é.txt")); err != nil || string(content) != "again" {
+		t.Errorf("replaced %q %v", content, err)
+	}
+	if status, body := upload("dir="+url.QueryEscape(at(""))+"&name=results&replace=1", "application/octet-stream", "x"); status != http.StatusUnprocessableEntity || !strings.Contains(body, "not a regular file") {
+		t.Errorf("replacing a folder: %d %s", status, body)
+	}
+	if status, body := upload("dir="+url.QueryEscape(at("results"))+"&name=x&replace=yes", "application/octet-stream", "x"); status != http.StatusBadRequest {
+		t.Errorf("replace=yes: %d %s", status, body)
+	}
 	if response, _ := terminalTransfer(t, server, http.MethodGet, terminalFilesPath+"/upload?dir=/&name=x", "", ""); response.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("GET upload: %d", response.StatusCode)
 	}
