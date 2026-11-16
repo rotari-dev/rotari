@@ -125,9 +125,10 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await page.evaluate('[...document.querySelectorAll(".terminal-bar button")].find((item) => item.getAttribute("aria-label") === "Recent directories").click()');
   const dirRows = '[...document.querySelectorAll(".terminal-dirs-row .terminal-dirs-path")].map((item) => item.textContent)';
   await until('the recent directories', dirRows + '[0]?.endsWith("/dir two") && ' + dirRows + '[1]?.endsWith("/dir one")');
-  await page.evaluate('document.querySelectorAll(".terminal-dirs-row")[1].click()');
-  await until('cd typed', 'document.querySelector(".terminal-dirs") === null');
-  await sleep(300);
+  // The panel asks the server whether anything runs at the prompt before it types cd, so
+  // cd is typed only once it says so; typing before that would run first.
+  await page.evaluate('document.querySelector(".terminal-send-note")?.replaceChildren(); document.querySelectorAll(".terminal-dirs-row")[1].click()');
+  await until('cd typed', 'document.querySelector(".terminal-dirs") === null && (document.querySelector(".terminal-send-note")?.textContent || "").startsWith("Sent")');
   await typeLine(' && echo "at-$(basename "$(pwd -P)" | tr " " _)"');
   await until('the chosen directory', screenHas('at-dir_one'));
 

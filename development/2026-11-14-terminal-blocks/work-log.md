@@ -398,3 +398,13 @@
   connects, within the same moment on a fast host.
 - **Plan impact:** none.
 - **Validation:** both scripts pass `node --check`; they run only in CI.
+
+## 2026-11-17 08:09 +09:00 — CI (macOS): typing after a chosen directory before its cd
+
+- **Change:** the browser step that chooses a recent directory waits for the panel's `Sent…` note, which comes once cd is
+  typed, instead of the dropdown closing and 300 ms, before typing the rest of the line.
+- **Reason:** macOS CI for `deb03cf3` passed the replay and scrollback steps and stopped at `the chosen directory`: the
+  shell ran ` && echo "at-…"` alone, a syntax error, and only then got `cd '…/dir one'`. `typeCd` asks the server for the
+  shell's preview (WEB-45) before typing, and on the loaded runner that answer came after the step's 300 ms.
+- **Plan impact:** none.
+- **Validation:** the script passes `node --check`; it runs only in CI.
