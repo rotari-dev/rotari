@@ -72,6 +72,19 @@ function statusPill(status, text = status) {
     '<span class="' + statusPillClass(status) + '">' + esc(text) + "</span>"
   );
 }
+// heartbeatWarningPill marks a running run whose coordinator, on another
+// host, has stopped writing its heartbeat (runview.HeartbeatWarning). It
+// proves nothing about the run, which the title says.
+function heartbeatWarningPill(run) {
+  if (!run.heartbeat_warning) {
+    return "";
+  }
+  return (
+    ' <span class="status-pill tone-warn heartbeat-warning" title="The run may have stopped, or its host may be unreachable or suspended; check on that host before recovering it.">' +
+    esc(run.heartbeat_warning) +
+    "</span>"
+  );
+}
 // Row actions. A table renderer emits its actions cell itself, last in the
 // row (first only in the queue table, beside its editors); its buttons carry
 // their arguments in data- attributes and call one of these handlers.
@@ -1677,6 +1690,7 @@ function projectRunsHTML(q) {
           r.lifecycle || r.status,
           (r.lifecycle || r.status) + (r.running ? " ..." : ""),
         ) +
+        heartbeatWarningPill(r) +
         "</td><td>" +
         esc(r.client_label || clientStatusLabel(r.client_status)) +
         "</td><td>" +
@@ -1790,7 +1804,10 @@ function renderRun(q, runID) {
         copyIconForValue(run.run_id, "run ID"),
     ),
     fact("Status", esc(run.status)),
-    fact("Lifecycle", esc(run.lifecycle || "unknown")),
+    fact(
+      "Lifecycle",
+      esc(run.lifecycle || "unknown") + heartbeatWarningPill(run),
+    ),
     fact(
       "Client",
       esc(run.client_label || clientStatusLabel(run.client_status)),

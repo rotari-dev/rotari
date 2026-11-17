@@ -26,9 +26,11 @@ type Run struct {
 	RunName string
 	// Lifecycle is runview.RunLifecycleLabel: running, interrupted,
 	// incomplete, finished, or failed.
-	Lifecycle    string
-	ClientStatus model.RunClientStatus
-	ClientLabel  string
+	Lifecycle string
+	// HeartbeatWarning is runview.HeartbeatWarning for a running run.
+	HeartbeatWarning string
+	ClientStatus     model.RunClientStatus
+	ClientLabel      string
 	// ExitCode is nil until the run has a summary.
 	ExitCode *int
 	// StartedAt and FinishedAt are as recorded (RFC 3339), empty when
@@ -187,6 +189,9 @@ func readRun(paths state.ProjectPaths, projectName string, entry os.DirEntry, in
 	}
 	phase := project.PhaseFrom(inspection, runID, run.ExitCode != nil)
 	run.Lifecycle = runview.LifecycleLabel(phase, summary)
+	if run.Lifecycle == "running" {
+		run.HeartbeatWarning = runview.HeartbeatWarning(paths, runID, time.Now())
+	}
 	run.ClientStatus, err = runview.ClientStatusIn(paths, runID, phase)
 	if err != nil {
 		run.ClientStatus = model.RunClientStatus{State: "unknown"}

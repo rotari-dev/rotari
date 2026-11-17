@@ -274,15 +274,12 @@ func TestWebOnFreshBasedirDoesNotWarnAboutInterruptedRuns(t *testing.T) {
 	}
 }
 
-// A run's coordinator writes a heartbeat naming itself as its lock does. A
-// run whose lock names another host cannot be checked from here: rotari web
-// does not call it interrupted, and does not call it unresponsive while its
-// heartbeat has stopped for less than five minutes. The five-minute report
-// itself is covered with an injected clock by runwatch's
-// TestWatcherReportsARemoteRunWhoseHeartbeatStopped.
-func TestWebWaitsForAStoppedRemoteHeartbeat(t *testing.T) {
-	covers(t, "NOT-6")
-	e := support.NewEnv(t)
+// startRemoteRun starts a run whose coordinator writes a heartbeat naming
+// itself as its lock does, then makes the lock name another host and stops
+// the coordinator, so its heartbeat stops and nothing here can see that it is
+// gone. It returns the run's ID.
+func startRemoteRun(t *testing.T, e *support.Env) string {
+	t.Helper()
 	jobID := support.AddedJobID(t, e.MustRotari("add", "-p", "p", "--", "sleep", "30"))
 	client := e.Command("run", "-p", "p", "--quiet")
 	if err := client.Start(); err != nil {
@@ -314,9 +311,6 @@ func TestWebWaitsForAStoppedRemoteHeartbeat(t *testing.T) {
 	if beat.Seq < 1 || beat.At == "" || beat.Host != lock["host"] || float64(beat.PID) != lock["pid"] {
 		t.Fatalf("heartbeat %+v does not name the lock's coordinator %v", beat, lock)
 	}
-
-	// Make the lock name another host, then stop its coordinator, so its
-	// heartbeat stops and nothing here can see that it is gone.
 	lock["host"] = "elsewhere.invalid"
 	data, err = json.Marshal(lock)
 	if err != nil {
@@ -328,6 +322,19 @@ func TestWebWaitsForAStoppedRemoteHeartbeat(t *testing.T) {
 	if err := syscall.Kill(beat.PID, syscall.SIGKILL); err != nil {
 		t.Fatal(err)
 	}
+	return runID
+}
+
+// A run's coordinator writes a heartbeat naming itself as its lock does. A
+// run whose lock names another host cannot be checked from here: rotari web
+// does not call it interrupted, and does not call it unresponsive while its
+// heartbeat has stopped for less than five minutes. The five-minute report
+// itself is covered with an injected clock by runwatch's
+// TestWatcherReportsARemoteRunWhoseHeartbeatStopped.
+func TestWebWaitsForAStoppedRemoteHeartbeat(t *testing.T) {
+	covers(t, "NOT-6")
+	e := support.NewEnv(t)
+	startRemoteRun(t, e)
 	base := e.StartWeb()
 	id := currentBasedirID(t, e, base)
 	// The first pass starts before the server listens; give it time to end.
@@ -337,4 +344,74 @@ func TestWebWaitsForAStoppedRemoteHeartbeat(t *testing.T) {
 			t.Fatalf("remote run reported at once: %+v", entry)
 		}
 	}
+	// A heartbeat that stopped only seconds ago is not marked anywhere.
+	if out := e.MustRotari("show", "-p", "p").Stdout; strings.Contains(out, "no heartbeat") {
+		t.Fatalf("show marks a recent heartbeat:\n%s", out)
+	}
+}
+
+// A running run whose lock names another host and whose heartbeat's own time
+// is more than six minutes old (five, plus a minute for clock skew) is
+// marked, with its lifecycle still running, by show, runs, their JSON, and the
+// Web project and run APIs.
+func TestStaleRemoteHeartbeatIsShownBesideRunning(t *testing.T) {
+	covers(t, "NOT-7")
+	e := support.NewEnv(t)
+	runID := startRemoteRun(t, e)
+	old := time.Now().Add(-10 * time.Minute).UTC().Format(time.RFC3339Nano)
+	beat := `{"seq":9,"at":"` + old + `","host":"login2.invalid","pid":1}`
+	if err := os.WriteFile(filepath.Join(e.Base, "projects", "p", "runs", runID, "heartbeat.json"), []byte(beat), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	const warning = "no heartbeat from login2.invalid for 10m"
+	if out := e.MustRotari("show", "-p", "p").Stdout; !strings.Contains(out, "running ("+warning+")") {
+		t.Fatalf("show does not mark the run:\n%s", out)
+	}
+	if out := e.MustRotari("runs").Stdout; !strings.Contains(out, "running ("+warning+")") {
+		t.Fatalf("runs does not mark the run:\n%s", out)
+	}
+	type marked struct {
+		Lifecycle        string `json:"lifecycle"`
+		HeartbeatWarning string `json:"heartbeat_warning"`
+	}
+	check := func(name, body string, value marked) {
+		t.Helper()
+		if value.Lifecycle != "running" || value.HeartbeatWarning != warning {
+			t.Fatalf("%s = %+v, want lifecycle running and %q:\n%s", name, value, warning, body)
+		}
+	}
+	var shown marked
+	out := e.MustRotari("show", "-p", "p", "--run-id", runID, "--json").Stdout
+	if err := json.Unmarshal([]byte(out), &shown); err != nil {
+		t.Fatal(err)
+	}
+	check("show --json", out, shown)
+	var runs []struct {
+		marked
+		RunID string `json:"run_id"`
+	}
+	out = e.MustRotari("runs", "--json").Stdout
+	if err := json.Unmarshal([]byte(out), &runs); err != nil || len(runs) != 1 || runs[0].RunID != runID {
+		t.Fatalf("runs --json: %v\n%s", err, out)
+	}
+	check("runs --json", out, runs[0].marked)
+
+	base := e.StartWeb()
+	response := e.HTTPGet(base + "/api/run?project_name=p&run_id=" + runID)
+	var run marked
+	if response.Status != 200 || json.Unmarshal([]byte(response.Body), &run) != nil {
+		t.Fatalf("GET /api/run = %d: %s", response.Status, response.Body)
+	}
+	check("/api/run", response.Body, run)
+	response = e.HTTPGet(base + "/api/project?project_name=p")
+	var project struct {
+		Runs []struct {
+			marked
+			RunID string `json:"run_id"`
+		} `json:"runs"`
+	}
+	if response.Status != 200 || json.Unmarshal([]byte(response.Body), &project) != nil || len(project.Runs) != 1 {
+		t.Fatalf("GET /api/project = %d: %s", response.Status, response.Body)
+	}
+	check("/api/project", response.Body, project.Runs[0].marked)
 }

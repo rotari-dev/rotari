@@ -126,4 +126,6 @@ has such a setup.
 
 ## Status
 
-Decisions made; phase 1 in progress.
+Phases 1–4 done on 2026-11-17; see [work-log.md](work-log.md). The display
+(phase 3) became NOT-7, separate from the notification (NOT-6). A real
+two-host check has not been done.

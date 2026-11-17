@@ -16,6 +16,15 @@ const HeartbeatFileName = "heartbeat.json"
 // HeartbeatInterval is how often a coordinator rewrites its heartbeat.
 const HeartbeatInterval = 30 * time.Second
 
+// HeartbeatStaleAfter is how long a heartbeat may go unchanged before its
+// run is called unresponsive: ten missed beats.
+const HeartbeatStaleAfter = 10 * HeartbeatInterval
+
+// HeartbeatClockMargin is added to HeartbeatStaleAfter by a reader that
+// compares a beat's own time with its clock, which another host's clock need
+// not agree with.
+const HeartbeatClockMargin = time.Minute
+
 // Heartbeat is one beat of a run's coordinator. Seq changes with every beat
 // a coordinator writes; it starts again at 1 when another coordinator takes
 // the run over, so a reader compares it for change, not order. At is the

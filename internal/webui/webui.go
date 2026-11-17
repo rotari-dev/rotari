@@ -1647,7 +1647,11 @@ func (s site) loadWebRunSummary(paths stateinternal.ProjectPaths, runID string, 
 	if clientErr != nil {
 		clientStatus = model.RunClientStatus{State: "unknown"}
 	}
-	return webprojection.Run{RunSummary: summary, Lifecycle: lifecycle, ClientStatus: clientStatus, ClientLabel: runview.ClientStatusLabel(clientStatus), Running: runID == project.RunningRunID}, nil
+	heartbeatWarning := ""
+	if lifecycle == "running" {
+		heartbeatWarning = runview.HeartbeatWarning(paths, runID, time.Now())
+	}
+	return webprojection.Run{RunSummary: summary, Lifecycle: lifecycle, HeartbeatWarning: heartbeatWarning, ClientStatus: clientStatus, ClientLabel: runview.ClientStatusLabel(clientStatus), Running: runID == project.RunningRunID}, nil
 }
 
 func (s site) loadWebRunDetail(baseDir, projectName, runID string) (webprojection.Run, error) {

@@ -512,17 +512,19 @@ func hasMultipleProjects(baseDir string) (bool, error) {
 }
 
 type showJSON struct {
-	BaseDir   string                    `json:"base_dir"`
-	Project   string                    `json:"project_name"`
-	RunID     string                    `json:"run_id"`
-	RunDir    string                    `json:"run_dir"`
-	Summary   *model.RunSummary         `json:"summary,omitempty"`
-	Lifecycle string                    `json:"lifecycle,omitempty"`
-	Client    *model.RunClientStatus    `json:"client_status,omitempty"`
-	Jobs      []showJSONJob             `json:"jobs,omitempty"`
-	Failures  []runlineage.FailureGroup `json:"failures,omitempty"`
-	Commands  model.Queue               `json:"commands"`
-	NextQueue *model.Queue              `json:"next_queue,omitempty"`
+	BaseDir   string            `json:"base_dir"`
+	Project   string            `json:"project_name"`
+	RunID     string            `json:"run_id"`
+	RunDir    string            `json:"run_dir"`
+	Summary   *model.RunSummary `json:"summary,omitempty"`
+	Lifecycle string            `json:"lifecycle,omitempty"`
+	// HeartbeatWarning is runview.HeartbeatWarning for a running run.
+	HeartbeatWarning string                    `json:"heartbeat_warning,omitempty"`
+	Client           *model.RunClientStatus    `json:"client_status,omitempty"`
+	Jobs             []showJSONJob             `json:"jobs,omitempty"`
+	Failures         []runlineage.FailureGroup `json:"failures,omitempty"`
+	Commands         model.Queue               `json:"commands"`
+	NextQueue        *model.Queue              `json:"next_queue,omitempty"`
 }
 
 type showJobCounts struct {
@@ -597,6 +599,9 @@ func scopedJobIDs(commands []model.QueuedCommand, scope model.CommandSelector, f
 func showRunJSON(paths state.ProjectPaths, runID, selection string) int {
 	result := showJSON{BaseDir: paths.BaseDir, Project: paths.ProjectName, RunID: runID, RunDir: filepath.Join(paths.RunsDir, runID)}
 	result.Lifecycle, _ = runview.RunLifecycleLabel(paths, runID)
+	if result.Lifecycle == "running" {
+		result.HeartbeatWarning = runview.HeartbeatWarning(paths, runID, time.Now())
+	}
 	clientStatus, _ := runview.ClientStatus(paths, runID)
 	if clientStatus.State == "" {
 		clientStatus.State = "unknown"
@@ -925,7 +930,7 @@ func showRun(paths state.ProjectPaths, runID string, filter showJobFilter, wide 
 	if clientErr != nil {
 		clientStatus = model.RunClientStatus{State: "unknown"}
 	}
-	fmt.Printf("%s %s\n%s %s\n", cyan("Lifecycle:"), colorRunLifecycle(lifecycle), cyan("Client:"), colorClientStatus(runview.ClientStatusLabel(clientStatus)))
+	fmt.Printf("%s %s\n%s %s\n", cyan("Lifecycle:"), runLifecycleText(paths, runID, lifecycle), cyan("Client:"), colorClientStatus(runview.ClientStatusLabel(clientStatus)))
 	if startedBy, err := state.LoadRunStartedBy(jsonStore(), runDir); err != nil {
 		fmt.Printf("%s unreadable (%v)\n", cyan("Started by:"), err)
 	} else if startedBy != nil {
@@ -1582,7 +1587,7 @@ func showJobAttempt(writer io.Writer, paths state.ProjectPaths, runID, jobID, at
 	if clientErr != nil {
 		clientStatus = model.RunClientStatus{State: "unknown"}
 	}
-	fmt.Fprintf(writer, "%s %s\n%s %s\n", cyan("Lifecycle:"), colorRunLifecycle(lifecycle), cyan("Client:"), colorClientStatus(runview.ClientStatusLabel(clientStatus)))
+	fmt.Fprintf(writer, "%s %s\n%s %s\n", cyan("Lifecycle:"), runLifecycleText(paths, runID, lifecycle), cyan("Client:"), colorClientStatus(runview.ClientStatusLabel(clientStatus)))
 	selectedAttemptID := attemptID
 	if selectedAttemptID == "" {
 		selectedAttemptID = latestAttemptID
@@ -1779,6 +1784,20 @@ func exitCodeStatusText(exitCode int, text string) string {
 		return green(text)
 	}
 	return red(text)
+}
+
+// runLifecycleText is a run's colored lifecycle, followed for a running run
+// by runview.HeartbeatWarning when its remote coordinator's heartbeat looks
+// stopped.
+func runLifecycleText(paths state.ProjectPaths, runID, lifecycle string) string {
+	text := colorRunLifecycle(lifecycle)
+	if lifecycle != "running" {
+		return text
+	}
+	if warning := runview.HeartbeatWarning(paths, runID, time.Now()); warning != "" {
+		text += " " + yellow("("+warning+")")
+	}
+	return text
 }
 
 func colorRunLifecycle(status string) string {

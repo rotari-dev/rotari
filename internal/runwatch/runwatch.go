@@ -25,9 +25,8 @@ import (
 const Interval = 30 * time.Second
 
 // UnresponsiveAfter is how long a remote run's heartbeat must stay unchanged,
-// by the watcher's own clock, before the run is reported unresponsive: ten
-// missed beats.
-const UnresponsiveAfter = 10 * state.HeartbeatInterval
+// by the watcher's own clock, before the run is reported unresponsive.
+const UnresponsiveAfter = state.HeartbeatStaleAfter
 
 // Watcher finds runs that stopped without finishing and records them for
 // the Web inbox. A local run whose coordinator is dead is interrupted. An

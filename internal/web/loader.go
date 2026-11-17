@@ -91,10 +91,14 @@ func LoadQueueState(loader QueueLoader) (QueueState, error) {
 			}
 		}
 		lifecycle := summary.Status
+		heartbeatWarning := ""
 		clientStatus := model.RunClientStatus{State: "unknown"}
 		if loader.Paths.ProjectDir != "" {
 			if resolved, statusErr := runview.RunLifecycleLabel(loader.Paths, runID); statusErr == nil {
 				lifecycle = resolved
+			}
+			if lifecycle == "running" {
+				heartbeatWarning = runview.HeartbeatWarning(loader.Paths, runID, time.Now())
 			}
 			if resolved, statusErr := runview.ClientStatus(loader.Paths, runID); statusErr == nil {
 				clientStatus = resolved
@@ -102,7 +106,7 @@ func LoadQueueState(loader QueueLoader) (QueueState, error) {
 		}
 		state.Runs = append(state.Runs, Run{
 			RunSummary: summary, LineageSummary: buildLineageSummary(summary, jobs), Jobs: jobs,
-			Lifecycle: lifecycle, ClientStatus: clientStatus,
+			Lifecycle: lifecycle, HeartbeatWarning: heartbeatWarning, ClientStatus: clientStatus,
 			ClientLabel: runview.ClientStatusLabel(clientStatus),
 			CWD:         context.CWD, Context: context, Timeline: buildTimeline(summary, jobs, context.LoadSamples), Lanes: BuildJobLanes(summary.FinishedAt, timelineInputs(jobs)), Running: runID == state.RunningRunID,
 			Sources: sources, SourceLabels: sourceLabels(sources), Notes: notes,

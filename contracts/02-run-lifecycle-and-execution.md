@@ -1376,6 +1376,21 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   `TestWebWaitsForAStoppedRemoteHeartbeat` (the heartbeat a run writes, and
   no report within 5 minutes) and, with an injected clock, by runwatch's
   `TestWatcherReportsARemoteRunWhoseHeartbeatStopped`.
+- **NOT-7** A running run whose lock names another host or PID namespace,
+  and whose heartbeat's own time is at least 6 minutes (NOT-6's 5, plus a
+  minute for clock skew) before the reader's clock, is marked where its
+  lifecycle is shown: `show` and `runs` print `running (no heartbeat from
+  HOST for Nm)`, their `--json` and the Web `/api/project` and `/api/run`
+  keep `lifecycle` `running` and add `heartbeat_warning` with the same text,
+  and the Web run list and run page show it as a warning beside the
+  lifecycle. A heartbeat that cannot be read or whose time does not parse is
+  marked `heartbeat unreadable: ...`. A local run, a run without a heartbeat,
+  and a run that beat recently are not marked. The mark is computed when the
+  view is read, needs no `rotari web`, and, like NOT-6, proves nothing and
+  changes nothing. The rule is `runview.HeartbeatWarning` in
+  [heartbeat.go](../internal/runview/heartbeat.go), used by every view;
+  covered by `TestStaleRemoteHeartbeatIsShownBesideRunning` and runview's
+  `TestHeartbeatWarningOnlyForAStaleRemoteRun`.
 - Failure diagnosis is local and rule-based. It evaluates a failed job's
   recorded scheduler error and configured log against a fixed set of documented
   signatures after case, ANSI-escape, and whitespace normalization. It makes no

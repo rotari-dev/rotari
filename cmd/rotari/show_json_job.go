@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rotari-dev/rotari/internal/jobfilter"
 	"github.com/rotari-dev/rotari/internal/jobstatus"
@@ -55,16 +56,21 @@ func showRunJobJSON(paths state.ProjectPaths, runID, jobID, attemptID, selection
 		return 1
 	}
 	output := struct {
-		BaseDir      string                `json:"base_dir"`
-		Project      string                `json:"project_name"`
-		RunID        string                `json:"run_id"`
-		JobID        string                `json:"job_id"`
-		AttemptID    string                `json:"attempt_id,omitempty"`
-		Lifecycle    string                `json:"lifecycle"`
-		ClientStatus model.RunClientStatus `json:"client_status"`
-		Jobs         []showJSONJob         `json:"jobs"`
+		BaseDir   string `json:"base_dir"`
+		Project   string `json:"project_name"`
+		RunID     string `json:"run_id"`
+		JobID     string `json:"job_id"`
+		AttemptID string `json:"attempt_id,omitempty"`
+		Lifecycle string `json:"lifecycle"`
+		// HeartbeatWarning is runview.HeartbeatWarning for a running run.
+		HeartbeatWarning string                `json:"heartbeat_warning,omitempty"`
+		ClientStatus     model.RunClientStatus `json:"client_status"`
+		Jobs             []showJSONJob         `json:"jobs"`
 	}{BaseDir: paths.BaseDir, Project: paths.ProjectName, RunID: runID, JobID: jobID, AttemptID: attemptID}
 	output.Lifecycle, _ = runview.RunLifecycleLabel(paths, runID)
+	if output.Lifecycle == "running" {
+		output.HeartbeatWarning = runview.HeartbeatWarning(paths, runID, time.Now())
+	}
 	output.ClientStatus, _ = runview.ClientStatus(paths, runID)
 	if output.ClientStatus.State == "" {
 		output.ClientStatus.State = "unknown"

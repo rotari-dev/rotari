@@ -93,7 +93,10 @@ This does not prove the run stopped: the host may be unreachable or
 suspended, or the shared file system may be stalled. Check on that host
 before you run `rotari unlock`, which still treats the run as one it cannot
 verify. A `rotari web` that has just started waits 5 minutes before it can
-report a run. Runs started by a rotari without heartbeats are never reported.
+report a run. Runs started by a rotari without heartbeats are never reported. Without
+`rotari web`, `show`, `runs`, and the Web UI mark such a run as `running (no
+heartbeat from HOST for 12m)` once its heartbeat's own time is 6 minutes old;
+the extra minute allows for clocks that differ between hosts.
 
 Interrupted and unresponsive runs are selected by `run_failure` and are
 never sent to the Webhook. Recovering a run with `rotari unlock` reports

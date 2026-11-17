@@ -74,6 +74,9 @@ func newRunListRow(run runlist.Run) runListRow {
 		Name: firstNonEmpty(run.RunName, "-"), Status: run.Lifecycle, Client: run.ClientLabel,
 		ExitCode: "-", StartedAt: displayRunTime(run.StartedAt), Finished: displayRunTime(run.FinishedAt),
 	}
+	if run.HeartbeatWarning != "" {
+		row.Status += " (" + run.HeartbeatWarning + ")"
+	}
 	if run.ExitCode != nil {
 		row.ExitCode = strconv.Itoa(*run.ExitCode)
 	}
@@ -149,16 +152,18 @@ func filterRunsByLifecycle(runs []runlist.Run, options runLifecycleOptions) []ru
 
 // runListJSON is one run of `runs --json`, named like `show --json`.
 type runListJSON struct {
-	BaseDir      string                `json:"base_dir"`
-	Project      string                `json:"project_name"`
-	RunID        string                `json:"run_id"`
-	RunName      string                `json:"run_name,omitempty"`
-	Lifecycle    string                `json:"lifecycle"`
-	ClientStatus model.RunClientStatus `json:"client_status"`
-	ClientLabel  string                `json:"client_label"`
-	ExitCode     *int                  `json:"exit_code"`
-	StartedAt    string                `json:"started_at,omitempty"`
-	FinishedAt   string                `json:"finished_at,omitempty"`
+	BaseDir   string `json:"base_dir"`
+	Project   string `json:"project_name"`
+	RunID     string `json:"run_id"`
+	RunName   string `json:"run_name,omitempty"`
+	Lifecycle string `json:"lifecycle"`
+	// HeartbeatWarning is runview.HeartbeatWarning for a running run.
+	HeartbeatWarning string                `json:"heartbeat_warning,omitempty"`
+	ClientStatus     model.RunClientStatus `json:"client_status"`
+	ClientLabel      string                `json:"client_label"`
+	ExitCode         *int                  `json:"exit_code"`
+	StartedAt        string                `json:"started_at,omitempty"`
+	FinishedAt       string                `json:"finished_at,omitempty"`
 	// Where the run ran, which code it ran, and its own notes.
 	CWD       string   `json:"cwd,omitempty"`
 	Host      string   `json:"host,omitempty"`
@@ -262,7 +267,7 @@ func printRunRowsJSON(runs []runlist.Run) int {
 		}
 		rows = append(rows, runListJSON{
 			BaseDir: run.BaseDir, Project: run.Project, RunID: run.RunID, RunName: run.RunName,
-			Lifecycle: run.Lifecycle, ClientStatus: run.ClientStatus, ClientLabel: run.ClientLabel,
+			Lifecycle: run.Lifecycle, HeartbeatWarning: run.HeartbeatWarning, ClientStatus: run.ClientStatus, ClientLabel: run.ClientLabel,
 			ExitCode: run.ExitCode, StartedAt: run.StartedAt, FinishedAt: run.FinishedAt,
 			CWD: details.WorkingDirectory, Host: details.Host, Sources: details.Sources, NoteCount: details.NoteCount,
 			StartedBy: details.StartedBy,

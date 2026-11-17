@@ -20,10 +20,12 @@ type Run struct {
 	LineageSummary runlineage.RunSummary `json:"lineage_summary,omitempty"`
 	Jobs           []Job                 `json:"jobs"`
 	Lifecycle      string                `json:"lifecycle,omitempty"`
-	ClientStatus   model.RunClientStatus `json:"client_status"`
-	ClientLabel    string                `json:"client_label,omitempty"`
-	CWD            string                `json:"cwd,omitempty"`
-	Context        model.RunContext      `json:"context,omitempty"`
+	// HeartbeatWarning is runview.HeartbeatWarning for a running run.
+	HeartbeatWarning string                `json:"heartbeat_warning,omitempty"`
+	ClientStatus     model.RunClientStatus `json:"client_status"`
+	ClientLabel      string                `json:"client_label,omitempty"`
+	CWD              string                `json:"cwd,omitempty"`
+	Context          model.RunContext      `json:"context,omitempty"`
 	// Sources is the code the run's executed jobs ran from, and SourceLabels
 	// each as model.SourceLabel describes it for `show`.
 	Sources      []model.SourceRevision `json:"sources,omitempty"`
