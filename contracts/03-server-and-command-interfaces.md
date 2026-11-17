@@ -553,7 +553,10 @@ does not promise to detect a lost remote client.
   whether they exist, the bounded Web event history from the master directory,
   configuration files, `ROTARI_*` variables, `info` and `check --deep`,
   the end of `server.log`, and, for a run (`--run-id`, the run of an attempt
-  ID given with `--job-id`, or the latest run), the state files of every
+  ID given with `--job-id`, or else the run `show` would show: the active
+  run, then an interrupted run, then the latest run, found without removing
+  a stale lock, which is itself evidence), the run's state files including
+  `cancels.jsonl` (CAN-9) and `heartbeat.json`, the state files of every
   attempt of its jobs that did not succeed or that `--job-id` names, the
   last 64 KiB of their output, their `scheduler_events.jsonl`, and the
   scheduler's queue and accounting queries run now. It prints a Markdown
@@ -571,7 +574,8 @@ does not promise to detect a lost remote client.
   is matched only where an absolute path or a drive letter of its own can
   start, not inside a word, a longer path, or a URL.
   Implemented in [`internal/bugreport`](../internal/bugreport/); covered by
-  `TestBugReportNeverIncludesSecrets` and `TestBugReportRedactsOnlyPaths` in
+  `TestBugReportNeverIncludesSecrets`, `TestBugReportRedactsOnlyPaths`, and
+  `TestBugReportCollectsTheActiveRunAndItsCancels` in
   [`conformance/03-interfaces/bug_report_test.go`](../conformance/03-interfaces/bug_report_test.go).
 
 - CLI colors are semantic presentation, not machine-readable output. They are

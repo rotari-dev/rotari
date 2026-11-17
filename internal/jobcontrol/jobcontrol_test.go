@@ -100,9 +100,9 @@ func TestCancelJobsCancelsOwnedAndMarksUnsubmittedJobs(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeJobJSON(t, filepath.Join(runDir, "submitted"), "slurm")
-	message, err := controller.CancelJobs(runDir, "demo", testRunID, []string{"submitted", "waiting"})
+	message, err := controller.cancelJobs(runDir, "demo", testRunID, []string{"submitted", "waiting"}, &cancelRecorder{})
 	if err != nil || !strings.Contains(message, "Jobs: 2") {
-		t.Fatalf("CancelJobs() = %q, %v", message, err)
+		t.Fatalf("cancelJobs() = %q, %v", message, err)
 	}
 	if len(slurm.cancelled) != 1 || slurm.cancelled[0] != "submitted" {
 		t.Fatalf("cancelled = %#v, want the submitted job", slurm.cancelled)
@@ -115,7 +115,7 @@ func TestCancelJobsCancelsOwnedAndMarksUnsubmittedJobs(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(runDir, "waiting", "cancelled")); err != nil {
 		t.Fatalf("unsubmitted job was not marked cancelled: %v", err)
 	}
-	if _, err := controller.CancelJobs(runDir, "demo", testRunID, []string{"unknown"}); err == nil || err.Error() != `job "unknown" is not found` {
+	if _, err := controller.cancelJobs(runDir, "demo", testRunID, []string{"unknown"}, &cancelRecorder{}); err == nil || err.Error() != `job "unknown" is not found` {
 		t.Fatalf("unknown job error = %v", err)
 	}
 }

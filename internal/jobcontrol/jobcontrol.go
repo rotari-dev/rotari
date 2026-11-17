@@ -165,12 +165,76 @@ func (controller Controller) applyControlTargets(prepared []controlTarget, opera
 	return controlled, nil
 }
 
+// CancelSource names who asked for a cancel, as a run's cancels.jsonl
+// records it.
+type CancelSource string
+
+// Cancel sources.
+const (
+	// CancelFromCLI is rotari cancel.
+	CancelFromCLI CancelSource = "cli"
+	// CancelFromWait is Ctrl-C in wait or in an attached run.
+	CancelFromWait CancelSource = "wait"
+	// CancelFromDisconnect is a supervisor acting on a client that
+	// disconnected with the cancel disconnect action.
+	CancelFromDisconnect CancelSource = "disconnect"
+	// CancelFromWeb is the Web UI's Cancel job or Cancel run.
+	CancelFromWeb CancelSource = "web"
+	// CancelFromMCP is the MCP control_jobs tool.
+	CancelFromMCP CancelSource = "mcp"
+)
+
+// cancelRecorder collects one cancel request's model.CancelRecord and writes
+// it to the run's cancels.jsonl once: before waiting for the jobs to stop,
+// so a wait that hangs still leaves it, or when the request ends. A request
+// refused before its run is known has no run directory and no record.
+type cancelRecorder struct {
+	record  model.CancelRecord
+	runDir  string
+	written bool
+	// failed is why the record could not be written.
+	failed error
+}
+
+func (recorder *cancelRecorder) write(requestErr error) {
+	if recorder.written || recorder.runDir == "" {
+		return
+	}
+	recorder.written = true
+	recorder.record.At = time.Now().UTC().Format(time.RFC3339Nano)
+	recorder.record.PID = os.Getpid()
+	recorder.record.Host, _ = os.Hostname()
+	recorder.record.PIDNamespace = state.PIDNamespace()
+	if requestErr != nil {
+		recorder.record.Error = requestErr.Error()
+	}
+	recorder.failed = state.AppendCancelRecord(recorder.runDir, recorder.record)
+}
+
 // Cancel cancels the selected running jobs of project in baseDir, or its
 // whole run when jobIDs is empty. A non-empty runID must be the project's active run, and an
 // array job's ID selects its unfinished tasks. A whole-run cancel marks the
 // queue as cancelling and cancels each unfinished job directly, whichever
 // process calls it. With wait, it returns once the run lock is released.
-func (controller Controller) Cancel(baseDir, project, runID string, jobIDs []string, wait bool) (string, error) {
+//
+// Each request, refused or not, is recorded in the run's cancels.jsonl with
+// source, what it targeted, what it did to each job, and its error. A record
+// that cannot be written is reported: as a warning in the message of a
+// request that succeeded, and in the error of one that failed.
+func (controller Controller) Cancel(baseDir, project, runID string, jobIDs []string, wait bool, source CancelSource) (string, error) {
+	recorder := &cancelRecorder{record: model.CancelRecord{Source: string(source), RunWide: len(jobIDs) == 0, Requested: append([]string(nil), jobIDs...)}}
+	message, err := controller.cancel(baseDir, project, runID, jobIDs, wait, recorder)
+	recorder.write(err)
+	if recorder.failed != nil {
+		if err != nil {
+			return message, fmt.Errorf("%w; the cancel request was not recorded: %v", err, recorder.failed)
+		}
+		message += fmt.Sprintf("\n  Warning: the cancel request was not recorded: %v", recorder.failed)
+	}
+	return message, err
+}
+
+func (controller Controller) cancel(baseDir, project, runID string, jobIDs []string, wait bool, recorder *cancelRecorder) (string, error) {
 	paths, err := state.ResolveProjectPaths(baseDir, project)
 	if err != nil {
 		return "", err
@@ -183,6 +247,7 @@ func (controller Controller) Cancel(baseDir, project, runID string, jobIDs []str
 	if err != nil {
 		return "", err
 	}
+	recorder.runDir = runDir
 	jobIDs, err = controller.normalizeRunningAttemptIDs(runDir, lock.RunID, jobIDs)
 	if err != nil {
 		return "", err
@@ -192,10 +257,11 @@ func (controller Controller) Cancel(baseDir, project, runID string, jobIDs []str
 		return "", err
 	}
 	if len(jobIDs) > 0 {
-		message, err := controller.CancelJobs(runDir, project, lock.RunID, jobIDs)
+		message, err := controller.cancelJobs(runDir, project, lock.RunID, jobIDs, recorder)
 		if err != nil || !wait {
 			return message, err
 		}
+		recorder.write(nil)
 		return controller.finishJobCancelMessage(message, paths, runDir, lock.RunID, jobIDs)
 	}
 	if host, mismatch := runnerHostMismatch(lock); mismatch {
@@ -233,16 +299,37 @@ func (controller Controller) Cancel(baseDir, project, runID string, jobIDs []str
 		}
 		targets = append(targets, job.ID)
 	}
-	message, err := controller.CancelJobs(runDir, project, lock.RunID, targets)
+	message, err := controller.cancelJobs(runDir, project, lock.RunID, targets, recorder)
 	if err != nil {
 		return "", err
+	}
+	if wait {
+		recorder.write(nil)
 	}
 	return finishCancelMessage(message, paths, lock.RunID, wait)
 }
 
-// CancelJobs cancels jobIDs in runDir through their owning executors. A job
-// that was never submitted is marked cancelled so the run skips it.
-func (controller Controller) CancelJobs(runDir, project, runID string, jobIDs []string) (string, error) {
+// CancelJobs cancels jobIDs in runDir, as Cancel does for those jobs, and
+// records the request in runDir's cancels.jsonl with source. It does not
+// check that runDir holds the project's active run; Cancel does.
+func (controller Controller) CancelJobs(runDir, project, runID string, jobIDs []string, source CancelSource) (string, error) {
+	recorder := &cancelRecorder{runDir: runDir, record: model.CancelRecord{Source: string(source), Requested: append([]string(nil), jobIDs...)}}
+	message, err := controller.cancelJobs(runDir, project, runID, jobIDs, recorder)
+	recorder.write(err)
+	if recorder.failed != nil {
+		if err != nil {
+			return message, fmt.Errorf("%w; the cancel request was not recorded: %v", err, recorder.failed)
+		}
+		message += fmt.Sprintf("\n  Warning: the cancel request was not recorded: %v", recorder.failed)
+	}
+	return message, err
+}
+
+// cancelJobs cancels jobIDs in runDir through their owning executors. A job
+// that was never submitted is marked cancelled so the run skips it. What it
+// does to each job is added to recorder's targets, including the job it
+// stopped at with its error.
+func (controller Controller) cancelJobs(runDir, project, runID string, jobIDs []string, recorder *cancelRecorder) (string, error) {
 	requested := make(map[string]bool, len(jobIDs))
 	for _, jobID := range jobIDs {
 		requested[jobID] = true
@@ -257,46 +344,73 @@ func (controller Controller) CancelJobs(runDir, project, runID string, jobIDs []
 	}
 	carried := carriedJobs(runDir)
 	cancelled := 0
-	for jobID := range requested {
-		if !state.IsValidPathElement(jobID) {
-			return "", fmt.Errorf("invalid job ID %q", jobID)
-		}
-		if result, ok := carried[jobID]; ok {
-			return "", fmt.Errorf("job %q does not run in run %s; it carries its result from attempt %s", jobID, runID, result.AttemptID)
-		}
-		jobDir, err := state.LatestAttemptJobDir(runDir, jobID)
+	for _, jobID := range sortedKeys(requested) {
+		action, err := controller.cancelJob(runDir, runID, jobID, knownJobs, carried)
+		target := model.CancelTarget{JobID: jobID, Action: action}
 		if err != nil {
-			return "", err
+			target.Error = err.Error()
 		}
-		if submitted, err := controller.cancelSubmitted(runDir, jobDir, jobID); err != nil {
-			return "", err
-		} else if submitted {
-			cancelled++
-			continue
-		}
-		// Job has no executor yet (Submit was never called): record the
-		// cancellation so the scheduler skips it once it would be submitted.
-		if !knownJobs[jobID] {
-			return "", fmt.Errorf("job %q is not found", jobID)
-		}
-		// codeql[go/path-injection]: jobDir comes from validated job path helpers.
-		if err := os.MkdirAll(jobDir, state.DirectoryMode()); err != nil { // NOSONAR: jobDir comes from validated job path helpers.
-			return "", fmt.Errorf("prepare cancellation for job %s: %w", jobID, err)
-		}
-		if err := executor.RecordCancellation(jobDir); err != nil {
-			return "", fmt.Errorf("record cancellation for job %s: %w", jobID, err)
-		}
-		// The run checks for this record once it has submitted a job, so
-		// a job it submitted before the record was written is cancelled here.
-		if jobDir, err = state.LatestAttemptJobDir(runDir, jobID); err != nil {
-			return "", err
-		}
-		if _, err := controller.cancelSubmitted(runDir, jobDir, jobID); err != nil {
+		recorder.record.Targets = append(recorder.record.Targets, target)
+		if err != nil {
 			return "", err
 		}
 		cancelled++
 	}
 	return fmt.Sprintf("Cancel requested\n  Project: %s\n  Run: %s\n  Jobs: %d", project, runID, cancelled), nil
+}
+
+// cancelJob cancels one job and returns what it did: a model.CancelBy*
+// action, with the action it had taken when it failed.
+func (controller Controller) cancelJob(runDir, runID, jobID string, knownJobs map[string]bool, carried map[string]model.JobResult) (string, error) {
+	if !state.IsValidPathElement(jobID) {
+		return "", fmt.Errorf("invalid job ID %q", jobID)
+	}
+	if result, ok := carried[jobID]; ok {
+		return "", fmt.Errorf("job %q does not run in run %s; it carries its result from attempt %s", jobID, runID, result.AttemptID)
+	}
+	jobDir, err := state.LatestAttemptJobDir(runDir, jobID)
+	if err != nil {
+		return "", err
+	}
+	if submitted, err := controller.cancelSubmitted(runDir, jobDir, jobID); err != nil {
+		return "", err
+	} else if submitted {
+		return model.CancelByExecutor, nil
+	}
+	// Job has no executor yet (Submit was never called): record the
+	// cancellation so the scheduler skips it once it would be submitted.
+	if !knownJobs[jobID] {
+		return "", fmt.Errorf("job %q is not found", jobID)
+	}
+	// codeql[go/path-injection]: jobDir comes from validated job path helpers.
+	if err := os.MkdirAll(jobDir, state.DirectoryMode()); err != nil { // NOSONAR: jobDir comes from validated job path helpers.
+		return "", fmt.Errorf("prepare cancellation for job %s: %w", jobID, err)
+	}
+	if err := executor.RecordCancellation(jobDir); err != nil {
+		return "", fmt.Errorf("record cancellation for job %s: %w", jobID, err)
+	}
+	// The run checks for this record once it has submitted a job, so
+	// a job it submitted before the record was written is cancelled here.
+	if jobDir, err = state.LatestAttemptJobDir(runDir, jobID); err != nil {
+		return model.CancelByMarker, err
+	}
+	submitted, err := controller.cancelSubmitted(runDir, jobDir, jobID)
+	if err != nil {
+		return model.CancelByMarker, err
+	}
+	if submitted {
+		return model.CancelByMarkerAndExecutor, nil
+	}
+	return model.CancelByMarker, nil
+}
+
+func sortedKeys(set map[string]bool) []string {
+	keys := make([]string, 0, len(set))
+	for key := range set {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // cancelSubmitted cancels jobID through the executor that owns jobDir. It

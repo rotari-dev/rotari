@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/rotari-dev/rotari/internal/executor"
+	"github.com/rotari-dev/rotari/internal/jobcontrol"
 	"github.com/rotari-dev/rotari/internal/jobstatus"
 	"github.com/rotari-dev/rotari/internal/model"
 	runcontract "github.com/rotari-dev/rotari/internal/run"
@@ -2672,7 +2673,7 @@ func TestCancelJobsCancelsSelectedLocalJob(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	message, err := jobController().CancelJobs(runDir, "default", "run-1", []string{"job-1"})
+	message, err := jobController().CancelJobs(runDir, "default", "run-1", []string{"job-1"}, jobcontrol.CancelFromCLI)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2771,7 +2772,7 @@ func TestControlQueueJobsReportsHostMismatchForLocalJob(t *testing.T) {
 	if !strings.Contains(err.Error(), "other-host") {
 		t.Fatalf("error = %q, want it to mention the recorded host", err)
 	}
-	if _, err := jobController().CancelJobs(runDir, "default", "run-1", []string{"job-1"}); err == nil {
+	if _, err := jobController().CancelJobs(runDir, "default", "run-1", []string{"job-1"}, jobcontrol.CancelFromCLI); err == nil {
 		t.Fatal("cancel across hosts unexpectedly succeeded")
 	} else if !strings.Contains(err.Error(), "other-host") {
 		t.Fatalf("error = %q, want it to mention the recorded host", err)
@@ -2793,7 +2794,7 @@ func TestCancelQueueRejectsWholeRunFromWrongHost(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(paths.RunsDir, "run-1"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	_, err = jobController().Cancel(baseDir, "default", "", nil, false)
+	_, err = jobController().Cancel(baseDir, "default", "", nil, false, jobcontrol.CancelFromCLI)
 	if err == nil {
 		t.Fatal("cancel of a whole run on another host unexpectedly succeeded")
 	}
@@ -3101,7 +3102,7 @@ func TestServerSyncRunDisconnectCancelsRunningJob(t *testing.T) {
 	if !state.ProcessAlive(pid) {
 		t.Fatalf("job process %d was controlled by closing the startup pipe", pid)
 	}
-	if _, err := jobController().Cancel(baseDir, "default", accepted.RunID, nil, false); err != nil {
+	if _, err := jobController().Cancel(baseDir, "default", accepted.RunID, nil, false, jobcontrol.CancelFromCLI); err != nil {
 		t.Fatalf("cancel accepted run for test cleanup: %v", err)
 	}
 

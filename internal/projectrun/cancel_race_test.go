@@ -119,7 +119,7 @@ func TestCancelReachingJobDuringSubmissionStopsIt(t *testing.T) {
 				controller := jobcontrol.Controller{Store: runner.Store, Executors: runner.Executors}
 				var cancelErr error
 				fake.cancel = func() {
-					_, cancelErr = controller.Cancel(paths.BaseDir, paths.ProjectName, "run-1", test.jobIDs, false)
+					_, cancelErr = controller.Cancel(paths.BaseDir, paths.ProjectName, "run-1", test.jobIDs, false, jobcontrol.CancelFromCLI)
 				}
 				if err := state.WriteJSON(paths.QueueFile, model.Queue{Commands: []model.QueuedCommand{command}}); err != nil {
 					t.Fatal(err)

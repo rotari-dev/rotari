@@ -218,7 +218,7 @@ func TestControlReportsJobsSignalledBeforeSchedulerFailure(t *testing.T) {
 
 func TestCancelWholeRunCancelsUnfinishedJobs(t *testing.T) {
 	fixture := newActiveRunFixture(t)
-	message, err := fixture.controller.Cancel(fixture.baseDir, "demo", testRunID, nil, false)
+	message, err := fixture.controller.Cancel(fixture.baseDir, "demo", testRunID, nil, false, CancelFromCLI)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestCancelWholeRunCancelsUnfinishedJobs(t *testing.T) {
 
 func TestCancelArrayCancelsItsUnfinishedTasks(t *testing.T) {
 	fixture := newActiveRunFixture(t)
-	message, err := fixture.controller.Cancel(fixture.baseDir, "demo", "", []string{"grid"}, false)
+	message, err := fixture.controller.Cancel(fixture.baseDir, "demo", "", []string{"grid"}, false, CancelFromCLI)
 	if err != nil || !strings.Contains(message, "Jobs: 2") {
 		t.Fatalf("Cancel(grid) = %q, %v", message, err)
 	}
@@ -269,7 +269,7 @@ func TestCancelRefusesRunOfAnotherHost(t *testing.T) {
 	if err := state.WriteJSON(fixture.paths.LockFile, model.LockInfo{PID: os.Getpid(), RunID: testRunID, Host: host + "-other"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fixture.controller.Cancel(fixture.baseDir, "demo", "", nil, false); err == nil || !strings.Contains(err.Error(), "run cancel from that host") {
+	if _, err := fixture.controller.Cancel(fixture.baseDir, "demo", "", nil, false, CancelFromCLI); err == nil || !strings.Contains(err.Error(), "run cancel from that host") {
 		t.Fatalf("Cancel(remote run) error = %v", err)
 	}
 	if meta, err := state.LoadMeta(fixture.paths.MetaFile); err != nil || meta.Phase != "running" {
@@ -302,7 +302,7 @@ func TestActiveLockRejectsMalformedLock(t *testing.T) {
 	if err := os.WriteFile(fixture.paths.LockFile, []byte("{"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fixture.controller.Cancel(fixture.baseDir, "demo", "", nil, false); err == nil || !strings.Contains(err.Error(), "invalid running lock") {
+	if _, err := fixture.controller.Cancel(fixture.baseDir, "demo", "", nil, false, CancelFromCLI); err == nil || !strings.Contains(err.Error(), "invalid running lock") {
 		t.Fatalf("Cancel(malformed lock) error = %v", err)
 	}
 }

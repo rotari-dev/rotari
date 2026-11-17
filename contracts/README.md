@@ -194,6 +194,7 @@ the IDs, this table, and those calls disagree.
 | CAN-6 | A job cancelled before it starts never starts, on every submission path | conformance | `TestCancelledPendingJobNeverStarts` |
 | CAN-7 | The async start message ends its line, and its wait and cancel hints work as printed for that run | conformance | `TestAsyncStartHintsWork` |
 | CAN-8 | A whole-run cancel records the run as `cancelled` with exit code 1 in every view; cancelling selected jobs leaves it `failed` | conformance | `TestWholeRunCancelRecordsCancelledRun` |
+| CAN-9 | Every cancel request after its run is known, from any source, is recorded in the run's `cancels.jsonl` with its source, targets, what it did to each job, and its error, before any wait | conformance | `TestBugReportCollectsTheActiveRunAndItsCancels` |
 | LOG-1 | Attempts use the selected internal merge or separate log mode, independently of external destinations | conformance | `TestJobStreamsPersistSeparately` |
 | LOG-2 | Repeatable `--output`/`--error` sinks; absent `--error`, stderr follows `--output`; independent of internal log mode | conformance | `TestExternalLogDestinations` |
 | LOG-3 | Destination parents are created on the execution host; setup errors fail before the command starts | conformance | `TestExternalLogDestinations` |
@@ -253,7 +254,7 @@ the IDs, this table, and those calls disagree.
 | CLI-23 | `show` and `jobs --wide` report each job's elapsed time, and for a running job how long ago it last wrote output | conformance | `TestShowReportsElapsedAndQuietTime` |
 | CLI-24 | `show --logs` lists a run's jobs in definition order and only its jobs, and `--tail N` prints the last N lines of each log | conformance | `TestShowLogsTailInDefinitionOrder` |
 | CLI-25 | `add` and a command-replacing `change` warn about arguments such as `$LR` that no shell will expand, but not about `sh -c` scripts | conformance | `TestAddWarnsAboutUnexpandedVariables` |
-| CLI-26 | `bug-report` prints a Markdown summary or writes a new `.tar.gz` of executable, registered-basedir, Web, environment, and run evidence, and secrets appear in neither, with or without `--no-redact`, and path redaction replaces only paths | conformance | `TestBugReportNeverIncludesSecrets`, `TestBugReportRedactsOnlyPaths` |
+| CLI-26 | `bug-report` prints a Markdown summary or writes a new `.tar.gz` of executable, registered-basedir, Web, environment, and run evidence, and secrets appear in neither, with or without `--no-redact`, path redaction replaces only paths, and without `--run-id` it collects the run `show` would show | conformance | `TestBugReportNeverIncludesSecrets`, `TestBugReportRedactsOnlyPaths`, `TestBugReportCollectsTheActiveRunAndItsCancels` |
 | MCP-1 | MCP tools that change a project preview first and apply only at the previewed revision | conformance | `TestMCPWritesApplyOnlyAtThePreviewedRevision`, `TestRunPreviewListsTheTasksOfAWholeArray` |
 | MCP-2 | `rotari_export_run` is a redacted view that the MCP import tools refuse | conformance | `TestMCPExportIsARedactedViewThatImportRefuses` |
 | MCP-3 | `rotari_run_summary` and `rotari_wait_run` report the run's state as `wait` decides it, from right after the start, and tool errors name no state directory | conformance | `TestMCPWritesApplyOnlyAtThePreviewedRevision`, `TestMCPWaitReturnsOnTheFirstFinalFailure` |

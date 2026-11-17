@@ -154,7 +154,7 @@ func cmdCancel(args []string) int {
 		printError(err)
 		return 1
 	}
-	message, err := jobController().Cancel(target.BaseDir, target.ProjectName, target.RunID, target.JobIDs, *wait)
+	message, err := jobController().Cancel(target.BaseDir, target.ProjectName, target.RunID, target.JobIDs, *wait, jobcontrol.CancelFromCLI)
 	if err != nil {
 		printError(err)
 		return 1

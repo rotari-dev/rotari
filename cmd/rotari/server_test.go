@@ -14,6 +14,7 @@ import (
 	"testing/iotest"
 	"time"
 
+	"github.com/rotari-dev/rotari/internal/jobcontrol"
 	"github.com/rotari-dev/rotari/internal/model"
 	serverinternal "github.com/rotari-dev/rotari/internal/server"
 	"github.com/rotari-dev/rotari/internal/state"
@@ -320,14 +321,14 @@ func TestCmdServerShutdownFailsWithoutRunningServer(t *testing.T) {
 }
 
 func TestCancelJobsRejectsJobTraversal(t *testing.T) {
-	if _, err := jobController().CancelJobs(t.TempDir(), "default", "run-1", []string{"../outside"}); err == nil {
+	if _, err := jobController().CancelJobs(t.TempDir(), "default", "run-1", []string{"../outside"}, jobcontrol.CancelFromCLI); err == nil {
 		t.Fatal("cancelJobs accepted unsafe job ID")
 	}
 }
 
 func TestCancelJobsRejectsAbsoluteAndNestedJobIDs(t *testing.T) {
 	for _, jobID := range []string{"/tmp/outside", "nested/job", "job/..", "job/.", "job/with/slash"} {
-		if _, err := jobController().CancelJobs(t.TempDir(), "default", "run-1", []string{jobID}); err == nil {
+		if _, err := jobController().CancelJobs(t.TempDir(), "default", "run-1", []string{jobID}, jobcontrol.CancelFromCLI); err == nil {
 			t.Fatalf("cancelJobs accepted unsafe job ID %q", jobID)
 		}
 	}
@@ -343,7 +344,7 @@ func TestCancelQueueJobsRejectsUnsafeRunIDFromLock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := jobController().Cancel(baseDir, "default", "", nil, false); err == nil {
+	if _, err := jobController().Cancel(baseDir, "default", "", nil, false, jobcontrol.CancelFromCLI); err == nil {
 		t.Fatal("Cancel accepted unsafe run ID from lock")
 	}
 }
@@ -387,7 +388,7 @@ func TestCancelJobsCancelsSelectedLSFJob(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	message, err := jobController().CancelJobs(runDir, "default", "run-1", []string{"job-1"})
+	message, err := jobController().CancelJobs(runDir, "default", "run-1", []string{"job-1"}, jobcontrol.CancelFromCLI)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -427,7 +428,7 @@ func TestCancelJobsCancelsSelectedPBSJob(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	message, err := jobController().CancelJobs(runDir, "default", "run-1", []string{"job-1"})
+	message, err := jobController().CancelJobs(runDir, "default", "run-1", []string{"job-1"}, jobcontrol.CancelFromCLI)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -467,7 +468,7 @@ func TestCancelJobsCancelsSelectedSlurmJob(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	message, err := jobController().CancelJobs(runDir, "default", "run-1", []string{"job-1"})
+	message, err := jobController().CancelJobs(runDir, "default", "run-1", []string{"job-1"}, jobcontrol.CancelFromCLI)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -534,7 +535,7 @@ func TestCancelQueueCancelsRunningSlurmJobMidRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := jobController().Cancel(baseDir, "default", "", nil, false); err != nil {
+	if _, err := jobController().Cancel(baseDir, "default", "", nil, false, jobcontrol.CancelFromCLI); err != nil {
 		t.Fatal(err)
 	}
 
@@ -688,7 +689,7 @@ func TestCancelJobsReportsMissingScancelBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := jobController().CancelJobs(runDir, "default", "run-1", []string{"job-1"})
+	_, err := jobController().CancelJobs(runDir, "default", "run-1", []string{"job-1"}, jobcontrol.CancelFromCLI)
 	if err == nil {
 		t.Fatal("cancel without scancel on PATH unexpectedly succeeded")
 	}

@@ -239,3 +239,60 @@ func TestBugReportRedactsOnlyPaths(t *testing.T) {
 	}
 	t.Fatal("the bundle has no progress.jsonl")
 }
+
+// TestBugReportCollectsTheActiveRunAndItsCancels cancels one job of an active
+// run, after an earlier run finished, and checks that the run's cancels.jsonl
+// records the request and that bug-report without --run-id collects the
+// active run, as show would show it, with that file.
+func TestBugReportCollectsTheActiveRunAndItsCancels(t *testing.T) {
+	covers(t, "CLI-26", "CAN-9")
+	e := support.NewEnv(t)
+	e.MustRotari("add", "-p", "busy", "--", "true")
+	if run := e.RotariRun("run", "-p", "busy", "--quiet"); run.Code != 0 {
+		t.Fatalf("first run: %s", run)
+	}
+	active := e.StartRun("busy", 2, true)
+	cancelled := active.Jobs[0]
+	e.MustRotari("cancel", "-p", "busy", cancelled)
+
+	data := mustReadFile(t, filepath.Join(e.Base, "projects", "busy", "runs", active.RunID, "cancels.jsonl"))
+	var record struct {
+		Source    string   `json:"source"`
+		RunWide   bool     `json:"run_wide"`
+		Requested []string `json:"requested"`
+		Targets   []struct {
+			JobID  string `json:"job_id"`
+			Action string `json:"action"`
+		} `json:"targets"`
+		Error string `json:"error"`
+	}
+	if lines := strings.Split(strings.TrimSpace(string(data)), "\n"); len(lines) != 1 || json.Unmarshal([]byte(lines[0]), &record) != nil {
+		t.Fatalf("cancels.jsonl = %s, want one record", data)
+	}
+	if record.Source != "cli" || record.RunWide || !slices.Equal(record.Requested, []string{cancelled}) ||
+		len(record.Targets) != 1 || record.Targets[0].JobID != cancelled || record.Targets[0].Action != "executor" || record.Error != "" {
+		t.Fatalf("cancel record = %+v, want the cli cancel of %s through its executor", record, cancelled)
+	}
+
+	bundle := filepath.Join(e.Root, "busy.tar.gz")
+	e.MustRotari("bug-report", "-p", "busy", "--output", bundle)
+	files := readBugReportBundle(t, bundle)
+	summary := ""
+	for name, content := range files {
+		if strings.HasSuffix(name, "/README.md") || name == "README.md" {
+			summary = content
+		}
+	}
+	if !strings.Contains(summary, "## Run "+active.RunID) {
+		t.Fatalf("summary does not collect the active run %s (files %v):\n%s", active.RunID, bundleNames(files), summary)
+	}
+	for name, content := range files {
+		if strings.HasSuffix(name, "cancels.jsonl") {
+			if !strings.Contains(content, cancelled) {
+				t.Fatalf("bundled %s = %s, want the cancel of %s", name, content, cancelled)
+			}
+			return
+		}
+	}
+	t.Fatalf("the bundle has no cancels.jsonl: %v", bundleNames(files))
+}

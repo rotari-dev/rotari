@@ -47,6 +47,14 @@ func Inspect(paths state.ProjectPaths) (Inspection, error) {
 	return inspection, err
 }
 
+// InspectWithoutCleanup classifies a project as Inspect does but changes
+// nothing: a stale local lock is reported (Lock is LockStale), not removed.
+// It is for readers that collect evidence, such as bug-report, where the
+// stale lock is itself evidence.
+func InspectWithoutCleanup(paths state.ProjectPaths) (Inspection, error) {
+	return inspect(paths)
+}
+
 func inspect(paths state.ProjectPaths) (Inspection, error) {
 	lockState, lock, err := state.InspectLock(paths.LockFile)
 	if err != nil {

@@ -38,6 +38,7 @@ that has started:
         ├── sources.json       # git or jj revision the executed jobs ran from
         ├── notes.jsonl        # notes on the run and its jobs, appended only
         ├── heartbeat.json     # rewritten every 30 s by the run's coordinator while it is active
+        ├── cancels.jsonl      # each cancel request: who asked, which jobs, what happened, appended only
         ├── stale_lock_removed.json  # which command removed the lock of a run whose coordinator looked dead
         ├── summary.json       # run result
         └── <job-id>/

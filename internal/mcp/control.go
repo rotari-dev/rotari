@@ -74,7 +74,7 @@ func (tools writeTools) controlJobs(input ControlJobsInput, operation string) (C
 	controller := tools.controller()
 	var message string
 	if operation == "cancel" {
-		message, err = controller.Cancel(location.BaseDir, location.ProjectName, location.RunID, input.JobIDs, false)
+		message, err = controller.Cancel(location.BaseDir, location.ProjectName, location.RunID, input.JobIDs, false, jobcontrol.CancelFromMCP)
 	} else {
 		message, err = controller.Control(location.BaseDir, location.ProjectName, location.RunID, input.JobIDs, operation)
 	}

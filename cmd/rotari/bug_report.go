@@ -11,6 +11,7 @@ import (
 
 	"github.com/rotari-dev/rotari/internal/basedirregistry"
 	"github.com/rotari-dev/rotari/internal/bugreport"
+	"github.com/rotari-dev/rotari/internal/project"
 	"github.com/rotari-dev/rotari/internal/state"
 	"github.com/rotari-dev/rotari/internal/weblog"
 )
@@ -98,8 +99,9 @@ func cmdBugReport(args []string) int {
 }
 
 // locateBugReport selects the basedir, project, and run. Without --run-id
-// or --job-id, a project without runs, or no project at all, still gives a
-// report of the environment.
+// or --job-id, it collects the run show would show: the active run, then an
+// interrupted run, then the latest run. A project without runs, or no
+// project at all, still gives a report of the environment.
 func locateBugReport(options *bugreport.Options, baseDirOption, projectOption, runID string) error {
 	baseDir, _, err := state.ResolveBaseDir(baseDirOption)
 	if err != nil {
@@ -107,6 +109,20 @@ func locateBugReport(options *bugreport.Options, baseDirOption, projectOption, r
 	}
 	options.BaseDir = baseDir
 	selector := runID
+	if selector == "" && len(options.JobIDs) == 0 {
+		if projectName, projectErr := state.ResolveProjectName(baseDir, projectOption); projectErr == nil {
+			if paths, pathErr := state.ResolveProjectPaths(baseDir, projectName); pathErr == nil {
+				// Without cleanup: a stale lock is evidence to collect.
+				inspection, inspectErr := project.InspectWithoutCleanup(paths)
+				if inspectErr != nil {
+					return fmt.Errorf("failed to check project state: %w", inspectErr)
+				}
+				if inspection.State == project.Running || inspection.State == project.Interrupted {
+					selector = inspection.RunID
+				}
+			}
+		}
+	}
 	if selector == "" {
 		selector = "latest"
 	}

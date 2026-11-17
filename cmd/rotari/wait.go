@@ -18,6 +18,7 @@ import (
 
 	"github.com/rotari-dev/rotari/internal/attachment"
 	"github.com/rotari-dev/rotari/internal/executor"
+	"github.com/rotari-dev/rotari/internal/jobcontrol"
 	"github.com/rotari-dev/rotari/internal/model"
 	"github.com/rotari-dev/rotari/internal/project"
 	"github.com/rotari-dev/rotari/internal/resolve"
@@ -377,7 +378,7 @@ func cancelWaitTarget(target resolve.Run, output *waitOutput) {
 	if phase != project.RunPhaseRunning {
 		return
 	}
-	if _, err := jobController().Cancel(target.BaseDir, target.ProjectName, target.RunID, nil, false); err != nil {
+	if _, err := jobController().Cancel(target.BaseDir, target.ProjectName, target.RunID, nil, false, jobcontrol.CancelFromWait); err != nil {
 		// A run can finish between phase inspection and cancellation.
 		phase, phaseErr := project.RunPhaseOf(paths, target.RunID)
 		if phaseErr == nil && phase == project.RunPhaseRunning {

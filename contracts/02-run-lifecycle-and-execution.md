@@ -1061,6 +1061,25 @@ the request, on the host that owns the run.
   `cancelling` phase in
   [internal/projectrun/execute.go](../internal/projectrun/execute.go); covered
   by `TestWholeRunCancelRecordsCancelledRun`.
+- **CAN-9** Every cancel request for a run, whole-run or of selected jobs,
+  from `cancel` (`cli`), Ctrl-C in `wait` or an attached `run` (`wait`), a
+  disconnect policy (`disconnect`), the Web UI (`web`), or MCP (`mcp`), is
+  appended as one JSON line to the run's `cancels.jsonl`: when it was
+  handled (nanoseconds), its source, the handling process's PID, host, and
+  PID namespace, whether it was whole-run and the IDs it requested, and for
+  each job it acted on, in job ID order, `executor` (cancelled through its
+  executor), `marker` (marked cancelled before it was submitted), or
+  `marker+executor` (submitted meanwhile, so also cancelled), with the
+  error of the job it stopped at. A request that fails after its run is
+  known, such as one refused for another host, is recorded with its error;
+  one refused before, such as one for a project with no active run, has no
+  run and no record. A request that waits records itself before waiting,
+  so a wait that hangs still leaves it. A record that cannot be written is
+  a warning after a successful request and part of a failed one's error.
+  It holds no command lines or environment. `bug-report` bundles it
+  (CLI-26). Implemented by `jobcontrol.Controller.Cancel` and `CancelJobs`;
+  covered by `TestBugReportCollectsTheActiveRunAndItsCancels` and
+  jobcontrol's `TestCancelRecordsEachRequest`.
 
 Whole-run and job cancel go through `jobcontrol.Controller`
 ([internal/jobcontrol/jobcontrol.go](../internal/jobcontrol/jobcontrol.go)).

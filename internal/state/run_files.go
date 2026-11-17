@@ -182,6 +182,28 @@ func AttemptSource(runDir, attemptDir string) (model.SourceRevision, bool) {
 // file that changes after a run finishes, and only by appending.
 const RunNotesFileName = "notes.jsonl"
 
+// CancelsFileName is the run-directory file that records each cancel request
+// of the run, one JSON line each, appended only.
+const CancelsFileName = "cancels.jsonl"
+
+// AppendCancelRecord appends record to runDir's cancels.jsonl.
+func AppendCancelRecord(runDir string, record model.CancelRecord) error {
+	data, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	// codeql[go/path-injection]: runDir is a validated run directory and the file name is fixed.
+	file, err := os.OpenFile(filepath.Join(runDir, CancelsFileName), os.O_WRONLY|os.O_APPEND|os.O_CREATE, FileMode())
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(append(data, '\n')); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
+}
+
 // AppendRunNote adds a note to the run in runDir. Each note is written with
 // one append, so notes added at the same time do not interleave.
 func AppendRunNote(runDir string, note model.RunNote) error {

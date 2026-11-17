@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rotari-dev/rotari/internal/config"
+	"github.com/rotari-dev/rotari/internal/jobcontrol"
 	"github.com/rotari-dev/rotari/internal/joblist"
 	"github.com/rotari-dev/rotari/internal/jobstatus"
 	"github.com/rotari-dev/rotari/internal/model"
@@ -1018,7 +1019,7 @@ func (s site) baseHandler() http.Handler {
 			writeWebError(writer, err)
 			return
 		}
-		message, err := s.Controller.Cancel(baseDir, cancel.QueueName, cancel.RunID, jobIDs, false)
+		message, err := s.Controller.Cancel(baseDir, cancel.QueueName, cancel.RunID, jobIDs, false, jobcontrol.CancelFromWeb)
 		if err != nil {
 			writeWebError(writer, err)
 			return
@@ -1102,7 +1103,7 @@ func (s site) baseHandler() http.Handler {
 			writeWebError(writer, fmt.Errorf("project_name and run_id are required"))
 			return
 		}
-		message, err := s.Controller.Cancel(baseDir, cancel.QueueName, cancel.RunID, nil, false)
+		message, err := s.Controller.Cancel(baseDir, cancel.QueueName, cancel.RunID, nil, false, jobcontrol.CancelFromWeb)
 		if err != nil {
 			writeWebError(writer, err)
 			return

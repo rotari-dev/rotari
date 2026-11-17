@@ -10,6 +10,7 @@ import (
 
 	"github.com/rotari-dev/rotari/internal/attachment"
 	"github.com/rotari-dev/rotari/internal/executor"
+	"github.com/rotari-dev/rotari/internal/jobcontrol"
 	"github.com/rotari-dev/rotari/internal/model"
 	"github.com/rotari-dev/rotari/internal/project"
 	"github.com/rotari-dev/rotari/internal/projectrun"
@@ -69,7 +70,7 @@ func (ops Operations) runWithAttachmentMonitor(paths state.ProjectPaths, runID s
 					handled := true
 					if client.Disconnect == server.DisconnectActionCancel {
 						status.State, status.Reason = model.RunClientCancelling, model.RunClientReasonCancel
-						if _, cancelErr := ops.Controller.Cancel(paths.BaseDir, paths.ProjectName, runID, nil, false); cancelErr != nil {
+						if _, cancelErr := ops.Controller.Cancel(paths.BaseDir, paths.ProjectName, runID, nil, false, jobcontrol.CancelFromDisconnect); cancelErr != nil {
 							phase, phaseErr := project.RunPhaseOf(paths, runID)
 							handled = phaseErr == nil && phase != project.RunPhaseRunning
 							if !handled {
