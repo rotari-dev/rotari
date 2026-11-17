@@ -37,6 +37,7 @@ that has started:
         ├── context.json       # execution context and config snapshot paths
         ├── sources.json       # git or jj revision the executed jobs ran from
         ├── notes.jsonl        # notes on the run and its jobs, appended only
+        ├── heartbeat.json     # rewritten every 30 s by the run's coordinator while it is active
         ├── stale_lock_removed.json  # which command removed the lock of a run whose coordinator looked dead
         ├── summary.json       # run result
         └── <job-id>/

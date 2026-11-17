@@ -17,6 +17,7 @@ var runStateFiles = []string{
 	"summary.json", "commands.json", "context.json", state.RunClientStatusFileName,
 	state.CarriedResultsFileName, state.RunSourcesFileName, state.ProgressFileName,
 	state.LoadSamplesFileName, state.RunNotesFileName, state.StaleLockRemovalFileName,
+	state.HeartbeatFileName,
 }
 
 var attemptStateFiles = []string{

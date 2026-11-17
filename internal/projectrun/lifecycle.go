@@ -168,8 +168,11 @@ func queueForStart(paths state.ProjectPaths, start Start) (model.Queue, bool, er
 }
 
 // Run executes a run that Begin recorded and then finishes it. It samples
-// load while the jobs run.
+// load while the jobs run, and writes the run's heartbeat until the run is
+// finished.
 func (runner Runner) Run(paths state.ProjectPaths, options Options, observer Observer) (int, error) {
+	stopHeartbeat := runner.startHeartbeat(paths, options.RunID, state.HeartbeatInterval)
+	defer stopHeartbeat()
 	stopSampling := runner.startLoadSampling(paths, options.RunID)
 	exitCode, err := runner.Execute(paths, options, observer)
 	stopSampling()
