@@ -33,8 +33,13 @@ const (
 )
 
 var (
-	reportUnixPathPattern    = regexp.MustCompile(`(?:/home|/data|/tmp|/work|/mnt|/scratch|/opt|/var)/(?:[A-Za-z0-9._~-]+/)*[A-Za-z0-9._~-]*`)
-	reportWindowsPathPattern = regexp.MustCompile(`[A-Za-z]:\\(?:[^\\\r\n ]+\\)*[^\\\r\n ]+`)
+	// The path patterns match only where an absolute path can start: not
+	// inside a word, a longer path, or a URL, as in metadata/data or
+	// https://host/data, and a drive letter only as a letter of its own, so
+	// the escape \n after "running:" in JSON text is not a drive path. Group 1
+	// is the character before the path, which a replacement keeps.
+	reportUnixPathPattern    = regexp.MustCompile(`(^|[^A-Za-z0-9._~/-])(?:/home|/data|/tmp|/work|/mnt|/scratch|/opt|/var)/(?:[A-Za-z0-9._~-]+/)*[A-Za-z0-9._~-]*`)
+	reportWindowsPathPattern = regexp.MustCompile(`(^|[^A-Za-z0-9_])[A-Za-z]:\\(?:[^\\\r\n ]+\\)*[^\\\r\n ]+`)
 	reportFQDNPattern        = regexp.MustCompile(`\b[A-Za-z0-9][A-Za-z0-9.-]*\.(?:com|org|net|edu|gov|io|jp|local)\b`)
 )
 
@@ -222,8 +227,8 @@ func redactAIReport(report string, paths state.ProjectPaths, run webprojection.R
 // hostname, the generic part of a report's redaction. It does not know the
 // run's own paths and hostname, so it can miss some; see Build.
 func RedactPatterns(text string) string {
-	text = reportUnixPathPattern.ReplaceAllString(text, redactedPathPlaceholder)
-	text = reportWindowsPathPattern.ReplaceAllString(text, redactedPathPlaceholder)
+	text = reportUnixPathPattern.ReplaceAllString(text, "${1}"+redactedPathPlaceholder)
+	text = reportWindowsPathPattern.ReplaceAllString(text, "${1}"+redactedPathPlaceholder)
 	return reportFQDNPattern.ReplaceAllString(text, "[REDACTED_HOST]")
 }
 

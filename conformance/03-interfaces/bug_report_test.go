@@ -3,11 +3,13 @@ package interfaces
 import (
 	"archive/tar"
 	"compress/gzip"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -189,4 +191,51 @@ func bundleNames(files map[string]string) []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// TestBugReportRedactsOnlyPaths runs a failing job and checks that its run's
+// progress messages, which hold no paths, come through the bundle's path
+// redaction unchanged: an escaped newline after "running:" or "Show:" in
+// JSON is not a Windows drive path.
+func TestBugReportRedactsOnlyPaths(t *testing.T) {
+	covers(t, "CLI-26")
+	e := support.NewEnv(t)
+	e.MustRotari("add", "-p", "paths", "--job-name", "bad", "--", "sh", "-c", "echo failing; exit 3")
+	if run := e.RotariRun("run", "-p", "paths", "--quiet"); run.Code != 1 {
+		t.Fatalf("run of a failing job: %s", run)
+	}
+	messages := func(data string) []string {
+		var found []string
+		for _, line := range strings.Split(strings.TrimSpace(data), "\n") {
+			var event struct {
+				Message string `json:"message"`
+			}
+			if err := json.Unmarshal([]byte(line), &event); err != nil {
+				t.Fatalf("progress line %q: %v", line, err)
+			}
+			if event.Message != "" {
+				found = append(found, event.Message)
+			}
+		}
+		return found
+	}
+	recorded, err := filepath.Glob(filepath.Join(e.Base, "projects", "paths", "runs", "*", "progress.jsonl"))
+	if err != nil || len(recorded) != 1 {
+		t.Fatalf("progress.jsonl: %q, %v", recorded, err)
+	}
+	want := messages(string(mustReadFile(t, recorded[0])))
+	if len(want) == 0 || !strings.Contains(strings.Join(want, "\n"), "Show") {
+		t.Fatalf("recorded progress messages = %q, want ones with Show:", want)
+	}
+	bundle := filepath.Join(e.Root, "paths.tar.gz")
+	e.MustRotari("bug-report", "-p", "paths", "--output", bundle)
+	for name, data := range readBugReportBundle(t, bundle) {
+		if strings.HasSuffix(name, "progress.jsonl") {
+			if got := messages(data); !slices.Equal(got, want) {
+				t.Fatalf("bundled progress messages = %q, want %q", got, want)
+			}
+			return
+		}
+	}
+	t.Fatal("the bundle has no progress.jsonl")
 }

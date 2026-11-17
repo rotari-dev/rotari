@@ -81,6 +81,32 @@ type collector struct {
 	notes   []string
 	// known maps paths and hostnames to their placeholders for Redact.
 	known map[string]string
+	// fences are the summary's fenced copies of JSON and JSON Lines files,
+	// which Collect fills in at its markers once it knows how to redact them.
+	fences []fence
+}
+
+// fence is a fenced copy of a file's data in the summary: its last lines, or
+// all of it when lines is 0. name says how the data is encoded, as a bundle
+// file's name does.
+type fence struct {
+	name  string
+	data  []byte
+	lines int
+}
+
+// fenceMarker stands in the summary for collector.fences[index]. Redaction
+// of the summary's text leaves it alone.
+func fenceMarker(index int) string {
+	return fmt.Sprintf("\x00fence %d\x00", index)
+}
+
+// writeFileFence adds a fenced copy of data, encoded as name says, to builder
+// at a marker, so that Collect fills it in redacted as the file is: by its
+// decoded strings rather than its encoded text.
+func (collector *collector) writeFileFence(builder *strings.Builder, name string, data []byte, lines int) {
+	builder.WriteString(fenceMarker(len(collector.fences)))
+	collector.fences = append(collector.fences, fence{name: name, data: data, lines: lines})
 }
 
 // Collect gathers a bug report. It fails only for a selection that cannot
@@ -157,12 +183,22 @@ func (collector *collector) finish() Bundle {
 		summary += "\n"
 	}
 	bundle := Bundle{Summary: summary, Files: collector.files}
+	redactor := pathRedactor{}
 	if collector.options.Redact {
-		redactor := newPathRedactor(collector.known)
+		redactor = newPathRedactor(collector.known)
 		bundle.Summary = redactor.apply(bundle.Summary)
 		for index := range bundle.Files {
-			bundle.Files[index].Data = []byte(redactor.apply(string(bundle.Files[index].Data)))
+			bundle.Files[index].Data = redactor.applyFile(bundle.Files[index].Name, bundle.Files[index].Data)
 		}
+	}
+	for index, fenced := range collector.fences {
+		text := string(redactor.applyFile(fenced.name, fenced.data))
+		if fenced.lines > 0 {
+			text = lastLines(text, fenced.lines)
+		}
+		var block strings.Builder
+		writeFence(&block, text)
+		bundle.Summary = strings.Replace(bundle.Summary, fenceMarker(index), block.String(), 1)
 	}
 	return bundle
 }

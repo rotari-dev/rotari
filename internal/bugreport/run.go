@@ -196,7 +196,7 @@ func (collector *collector) job(store state.Store, runDir, prefix string, job we
 		fmt.Fprintf(builder, "Latest attempt: `%s`\n\n", label)
 		if events, ok := files[state.SchedulerEventsFileName]; ok {
 			builder.WriteString("Scheduler query outcomes:\n\n")
-			writeFence(builder, lastLines(string(events), 30))
+			collector.writeFileFence(builder, state.SchedulerEventsFileName, events, 30)
 		}
 		if *probes > 0 && collector.probe(store, dirPrefix, dir) {
 			*probes--

@@ -233,3 +233,25 @@ func TestReportLogExcerptFallsBackToTheTail(t *testing.T) {
 		t.Errorf("empty log excerpt = %q", output)
 	}
 }
+
+// RedactPatterns replaces absolute paths, and not text that merely contains a
+// path-like part: a JSON escape after a word and a colon, or /data inside a
+// longer path or a URL.
+func TestRedactPatternsReplacesOnlyPaths(t *testing.T) {
+	for _, test := range []struct{ in, want string }{
+		{`Job running:\n  ID: x`, `Job running:\n  ID: x`},
+		{`Show:\n  rotari show`, `Show:\n  rotari show`},
+		{`see metadata/data/file and relative/tmp/x`, `see metadata/data/file and relative/tmp/x`},
+		{`https://example.org/data/file`, `https://[REDACTED_HOST]/data/file`},
+		{`/data/run/out.log`, `[REDACTED_PATH]`},
+		{`cwd=/home/alice/proj (/tmp/x)`, `cwd=[REDACTED_PATH] ([REDACTED_PATH])`},
+		{`PATH=/opt/bin:/var/lib/x`, `PATH=[REDACTED_PATH]:[REDACTED_PATH]`},
+		{"opened C:\\Users\\bob\\in.csv", `opened [REDACTED_PATH]`},
+		{"D:\\data", `[REDACTED_PATH]`},
+		{"step A:\\done", "step [REDACTED_PATH]"},
+	} {
+		if got := RedactPatterns(test.in); got != test.want {
+			t.Errorf("RedactPatterns(%q) = %q, want %q", test.in, got, test.want)
+		}
+	}
+}

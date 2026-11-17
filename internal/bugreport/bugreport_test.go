@@ -3,9 +3,11 @@ package bugreport
 import (
 	"archive/tar"
 	"compress/gzip"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -341,5 +343,62 @@ func TestWriteTarGz(t *testing.T) {
 	}
 	if _, err := os.Stat(escaping); !os.IsNotExist(err) {
 		t.Fatalf("a failed bundle was left behind: %v", err)
+	}
+}
+
+// Path redaction replaces paths and nothing else: a JSON escape such as \n
+// after a word ending in a letter and a colon is not a Windows drive path,
+// and a Windows path inside JSON, where its backslashes are escaped, is
+// still redacted, as one in plain output is.
+func TestCollectRedactsOnlyPaths(t *testing.T) {
+	fixture := newRunFixture(t)
+	t.Setenv("PATH", t.TempDir())
+	writeFixtureFile(t, filepath.Join(fixture.runDir, state.ProgressFileName),
+		`{"at":"2026-10-14T09:00:00Z","message":"Job running:\n  ID: bad\nShow:\n  rotari show"}`+"\n"+
+			`{"at":"2026-10-14T09:00:01Z","message":"cwd C:\\Users\\alice\\proj"}`+"\n")
+	outputs, err := filepath.Glob(filepath.Join(fixture.runDir, "bad", "attempts", "*", "output"))
+	if err != nil || len(outputs) != 1 {
+		t.Fatalf("bad output: %q, %v", outputs, err)
+	}
+	writeFixtureFile(t, outputs[0], "Traceback: boom\nopened D:\\data\\bob\\input.csv\nStep A: done\n")
+	bundle := collectFixture(t, fixture, func(options *Options) {
+		options.Facts = append(options.Facts, File{Name: "windows.json", Data: []byte(`{"cwd":"E:\\work\\carol","label":"Phase:\nB"}`)})
+	})
+
+	progress, ok := bundleFile(bundle, state.ProgressFileName)
+	if !ok {
+		t.Fatal("progress.jsonl was not collected")
+	}
+	var messages []string
+	for _, line := range strings.Split(strings.TrimSpace(string(progress.Data)), "\n") {
+		var event struct {
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("progress line %q: %v", line, err)
+		}
+		messages = append(messages, event.Message)
+	}
+	if want := []string{"Job running:\n  ID: bad\nShow:\n  rotari show", "cwd [REDACTED_PATH]"}; !slices.Equal(messages, want) {
+		t.Fatalf("progress messages = %q, want %q", messages, want)
+	}
+	output, ok := bundleFile(bundle, "/output")
+	if !ok || !strings.Contains(string(output.Data), "opened [REDACTED_PATH]\nStep A: done") {
+		t.Fatalf("output = %q, want the Windows path redacted and the rest kept", output.Data)
+	}
+	fact, ok := bundleFile(bundle, "windows.json")
+	var values map[string]string
+	if !ok || json.Unmarshal(fact.Data, &values) != nil || values["cwd"] != "[REDACTED_PATH]" || values["label"] != "Phase:\nB" {
+		t.Fatalf("windows.json = %s, want its path redacted and its label kept", fact.Data)
+	}
+	for _, text := range []string{"alice", "bob", "carol", "runnin[", "Sho["} {
+		if strings.Contains(bundle.Summary, text) {
+			t.Fatalf("summary contains %q", text)
+		}
+		for _, file := range bundle.Files {
+			if strings.Contains(string(file.Data), text) {
+				t.Fatalf("%s contains %q:\n%s", file.Name, text, file.Data)
+			}
+		}
 	}
 }

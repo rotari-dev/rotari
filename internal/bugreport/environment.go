@@ -104,7 +104,7 @@ func (collector *collector) webEvidence() {
 			data = sanitizeWebEvents(data, collector.options.Redact)
 			collector.addFile("web-events.jsonl", data)
 			fmt.Fprintf(builder, "Last %d lines from the Web event log:\n\n", summaryLogLines)
-			writeFence(builder, lastLines(string(data), summaryLogLines))
+			collector.writeFileFence(builder, "web-events.jsonl", data, summaryLogLines)
 		}
 	}
 
@@ -290,7 +290,7 @@ func (collector *collector) facts() {
 		}
 		collector.addFile(fact.Name, data)
 		fmt.Fprintf(builder, "### `%s`\n\n", fact.Name)
-		writeFence(builder, string(data))
+		collector.writeFileFence(builder, fact.Name, data, 0)
 	}
 }
 

@@ -174,6 +174,77 @@ func (redactor pathRedactor) apply(text string) string {
 	return report.RedactPatterns(redactor.replacer.Replace(text))
 }
 
+// applyFile redacts one bundle file. JSON, JSON Lines, and TOML files are
+// redacted in their decoded strings, keys included, and encoded again as they
+// were collected: in their encoded text, escapes such as \n look like part
+// of a path, and a Windows path's backslashes are doubled so it looks like
+// none. A file that does not decode as its name says is redacted as text.
+func (redactor pathRedactor) applyFile(name string, data []byte) []byte {
+	if redactor.replacer == nil {
+		return data
+	}
+	switch {
+	case strings.HasSuffix(name, ".jsonl"):
+		var builder strings.Builder
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			builder.Write(redactor.applyJSON([]byte(line), ""))
+		}
+		return []byte(builder.String())
+	case strings.HasSuffix(name, ".json"):
+		return redactor.applyJSON(data, "  ")
+	case strings.HasSuffix(name, ".toml"):
+		values, err := config.Parse(name, data)
+		if err != nil {
+			break
+		}
+		redactedValues, _ := redactor.applyValue(map[string]any(values)).(map[string]any)
+		if encoded, err := config.Marshal(redactedValues); err == nil {
+			return encoded
+		}
+	}
+	return []byte(redactor.apply(string(data)))
+}
+
+// applyJSON redacts one JSON document's strings and encodes it with indent,
+// or redacts it as text when it is not JSON.
+func (redactor pathRedactor) applyJSON(data []byte, indent string) []byte {
+	var value any
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	decoder.UseNumber()
+	if decoder.Decode(&value) != nil {
+		return []byte(redactor.apply(string(data)) + "\n")
+	}
+	encoded, err := encodeJSON(redactor.applyValue(value), indent)
+	if err != nil {
+		return []byte(redactor.apply(string(data)) + "\n")
+	}
+	return encoded
+}
+
+// applyValue redacts every string in a decoded value, map keys included.
+func (redactor pathRedactor) applyValue(value any) any {
+	switch typed := value.(type) {
+	case string:
+		return redactor.apply(typed)
+	case map[string]any:
+		result := make(map[string]any, len(typed))
+		for key, item := range typed {
+			result[redactor.apply(key)] = redactor.applyValue(item)
+		}
+		return result
+	case []any:
+		result := make([]any, len(typed))
+		for index, item := range typed {
+			result[index] = redactor.applyValue(item)
+		}
+		return result
+	}
+	return value
+}
+
 func sortedByLengthDescending(known map[string]string) []string {
 	values := make([]string, 0, len(known))
 	for value := range known {

@@ -564,8 +564,14 @@ does not promise to detect a lost remote client.
   environment values other than rotari's own `ROTARI_*` ones are replaced
   with `[REDACTED]`. `--no-redact` only keeps paths and hostnames. Job output
   and command lines are not scanned for secrets, and the summary says so.
+  Path redaction replaces paths and nothing else: JSON, JSON Lines, and TOML
+  files, and the summary's copies of JSON files, are redacted in their
+  decoded strings, so an escape such as `\n` is never read as part of a
+  path and a Windows path's escaped backslashes do not hide it; other text
+  is matched only where an absolute path or a drive letter of its own can
+  start, not inside a word, a longer path, or a URL.
   Implemented in [`internal/bugreport`](../internal/bugreport/); covered by
-  `TestBugReportNeverIncludesSecrets` in
+  `TestBugReportNeverIncludesSecrets` and `TestBugReportRedactsOnlyPaths` in
   [`conformance/03-interfaces/bug_report_test.go`](../conformance/03-interfaces/bug_report_test.go).
 
 - CLI colors are semantic presentation, not machine-readable output. They are
