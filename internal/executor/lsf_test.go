@@ -197,6 +197,22 @@ Summary of time in seconds spent in various states by  Thu Oct 15 07:17:02
   1        0        0        0        0        0        1
 `
 
+const lsfHistoryRunning = `
+Job <6>, User <rotari>, Project <default>, Command <sleep 300; exit 3>
+Thu Oct 15 07:17:01: Submitted from host <lsfhost>, to Queue <normal>, CWD </>;
+Thu Oct 15 07:17:02: Dispatched 1 Task(s) on Host(s) <lsfhost>, Allocated 1 Slot
+                     (s) on Host(s) <lsfhost>, Effective RES_REQ <select[type
+                     == any] order[r15s:pg] >;
+Thu Oct 15 07:17:02: Starting (Pid 123);
+Thu Oct 15 07:17:02: Running with execution home </home/rotari>, Execution CWD <
+                     />, Execution Pid <123>;
+
+
+Summary of time in seconds spent in various states by  Thu Oct 15 07:19:04
+  PEND     PSUSP    RUN      USUSP    SSUSP    UNKWN    TOTAL
+  1        0        122      0        0        0        123
+`
+
 const lsfHistoryExited = `
 Job <3>, User <rotari>, Project <default>, Command <echo DONE; exit 3>
 Thu Oct 15 07:17:01: Submitted from host <lsfhost>, to Queue <normal>, CWD </>;
@@ -255,6 +271,7 @@ func TestLSFAccountingReadsOnlyTheJobResult(t *testing.T) {
 		{name: "pending job missing from bjobs", bjobs: notFound, bjobsErr: true, bhist: lsfHistoryPending},
 		{name: "bjobs pending", bjobs: "PEND -\n", bhist: lsfHistoryPending, state: "pending"},
 		{name: "bjobs running", bjobs: "RUN -\n", bhist: lsfHistoryPending, state: "running"},
+		{name: "running job missing from bjobs", bjobs: notFound, bjobsErr: true, bhist: lsfHistoryRunning},
 		{name: "bjobs done", bjobs: "DONE -\n", code: 0, ok: true},
 		{name: "bjobs exit", bjobs: "EXIT 3\n", code: 3, ok: true},
 		{name: "bjobs exit without code", bjobs: "EXIT -\n", code: 1, ok: true},
