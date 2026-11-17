@@ -2,8 +2,11 @@ package diagnose
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/rotari-dev/rotari/internal/model"
 )
 
 func TestDiagnoseDefaultNormalizesAndMatchesKnownErrors(t *testing.T) {
@@ -419,5 +422,36 @@ func TestResolveAndMatchRuleSelectors(t *testing.T) {
 	}
 	if !MatchesRuleSelectors([]string{strings.ToLower("memory exhausted")}, Job{ExitCode: &exitCode, Log: "CUDA out of memory"}) {
 		t.Fatal("diagnosis name substring did not match")
+	}
+}
+
+// Rules declare only failure kinds, and exactly the memory rules, host and GPU,
+// declare oom; a diagnosis carries its rule's kinds.
+func TestRuleKindsAreFailureKindsAndOOMIsMemory(t *testing.T) {
+	wantOOM := []string{"CUDA/GPU memory exhausted", "Host memory exhausted", "LSF memory limit exceeded", "Python memory error", "Runtime memory exhausted", "Slurm memory limit exceeded"}
+	var gotOOM []string
+	for _, rule := range DefaultRules() {
+		for _, kind := range rule.Kinds {
+			if !slices.Contains(model.FailureKindValues(), kind) || kind == model.FailureKindError {
+				t.Errorf("rule %q declares kind %q, which is not a failure kind it can add", rule.Name, kind)
+			}
+			if kind == model.FailureKindOOM {
+				gotOOM = append(gotOOM, rule.Name)
+			}
+		}
+	}
+	slices.Sort(gotOOM)
+	if !slices.Equal(gotOOM, wantOOM) {
+		t.Fatalf("oom rules = %q, want %q", gotOOM, wantOOM)
+	}
+	diagnoses := Diagnose("", "Traceback (most recent call last):\nMemoryError\n", DefaultRules())
+	if len(diagnoses) == 0 || diagnoses[0].Name != "Python memory error" || !slices.Equal(diagnoses[0].Kinds, []string{model.FailureKindOOM}) {
+		t.Fatalf("diagnoses = %+v, want Python memory error of kind oom first", diagnoses)
+	}
+	diagnoses[0].Kinds[0] = "changed"
+	for _, rule := range DefaultRules() {
+		if rule.Name == "Python memory error" && rule.Kinds[0] != model.FailureKindOOM {
+			t.Fatal("changing a diagnosis's kinds changed its rule")
+		}
 	}
 }

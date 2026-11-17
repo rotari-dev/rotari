@@ -30,28 +30,41 @@ func FailureKindValues() []string {
 	return append([]string(nil), failureKinds...)
 }
 
-// FailureKinds returns the kinds a failed result falls into, error when no
-// other applies, and none for a success.
+// FailureKinds returns the kinds a failed result falls into, in
+// FailureKindValues order: those its recorded error and exit code show, and
+// those its saved diagnoses' rules imply, such as oom for a memory rule that
+// matched only the log; error when no other applies; none for a success.
 func FailureKinds(result JobResult) []string {
 	if result.ExitCode == 0 {
 		return nil
 	}
-	kinds := make([]string, 0, 3)
+	found := map[string]bool{}
 	text := strings.ToLower(strings.TrimSpace(result.Error))
 	if result.ExitCode == TimeoutExitCode || strings.Contains(text, "timed out") || strings.Contains(text, "timeout") {
-		kinds = append(kinds, FailureKindTimeout)
+		found[FailureKindTimeout] = true
 	}
 	if IsCancelledError(result.Error) {
-		kinds = append(kinds, FailureKindCancelled)
+		found[FailureKindCancelled] = true
 	}
 	if strings.HasPrefix(text, "blocked") {
-		kinds = append(kinds, FailureKindBlocked)
+		found[FailureKindBlocked] = true
 	}
 	if strings.Contains(text, "out of memory") || strings.Contains(text, "out_of_memory") || oomWord.MatchString(text) || strings.Contains(text, "memory limit") {
-		kinds = append(kinds, FailureKindOOM)
+		found[FailureKindOOM] = true
 	}
 	if result.ExitCode > 128 {
-		kinds = append(kinds, FailureKindSignal)
+		found[FailureKindSignal] = true
+	}
+	for _, diagnosis := range result.Diagnoses {
+		for _, kind := range diagnosis.Kinds {
+			found[kind] = true
+		}
+	}
+	kinds := make([]string, 0, len(found)+1)
+	for _, kind := range failureKinds {
+		if found[kind] && kind != FailureKindError {
+			kinds = append(kinds, kind)
+		}
 	}
 	if len(kinds) == 0 {
 		kinds = append(kinds, FailureKindError)

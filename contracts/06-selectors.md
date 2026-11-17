@@ -241,7 +241,7 @@ and specifying both dimensions narrows by both. Annotations such as
   short forms, such as `--running`, select the same state. State filters
   combine with OR, and result and state filters combine with AND.
 - `--filter-exit-code N` matches jobs whose resolved exit code equals N; repeated values combine with OR.
-- `--filter-failure-kind KIND` matches jobs whose result falls into one of the failure kinds (`timeout`, `cancelled`, `blocked`, `oom`, `signal`, `error`); repeated values combine with OR.
+- `--filter-failure-kind KIND` matches jobs whose result falls into one of the failure kinds (`timeout`, `cancelled`, `blocked`, `oom`, `signal`, `error`); repeated values combine with OR. A result's kinds are those its recorded error and exit code show, plus those its saved diagnoses carry: the memory rules (`CUDA/GPU memory exhausted`, `Slurm memory limit exceeded`, `LSF memory limit exceeded`, `Host memory exhausted`, `Runtime memory exhausted`, `Python memory error`) save `kinds: ["oom"]` with their diagnosis, so a job whose only sign of running out of memory is its log is `oom`. A diagnosis saved before rules declared kinds adds none; `error` applies only when no other kind does. `model.FailureKinds` decides; `diagnose.Rule.Kinds` declares. Covered by `TestMemoryDiagnosesAreFailureKindOOM`.
 - `--filter-failure-cause CAUSE` matches failed jobs that failure summaries
   (CLI-4) group under CAUSE: a block, cancellation, or timeout rotari
   recorded, else the job's latest saved rule diagnosis, else its first other

@@ -22,6 +22,13 @@ job recovered from. The scheduler error is recorded after the job output and is
 therefore listed first. The generic `Python exception` diagnosis is added only
 when no more specific rule already matches the final exception line.
 
+The memory rules (`CUDA/GPU memory exhausted`, `Slurm memory limit exceeded`,
+`LSF memory limit exceeded`, `Host memory exhausted`, `Runtime memory
+exhausted`, and `Python memory error`) also give the job the failure kind
+`oom`, so `--filter-failure-kind oom` selects a job whose only sign of
+running out of memory is its log. The kind is saved with the diagnosis, so
+jobs diagnosed by an older rotari keep the kinds they had.
+
 When nothing in the error or output is recognized, an exit code with a
 conventional meaning gives the diagnosis instead, citing `exit code N` as its
 evidence: 127 for a missing command, and 129, 132, 134, 135, 136, 137, 139, and

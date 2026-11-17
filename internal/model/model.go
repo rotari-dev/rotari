@@ -590,6 +590,10 @@ type RuleDiagnosis struct {
 	Name       string `json:"name"`
 	Evidence   string `json:"evidence"`
 	Suggestion string `json:"suggestion"`
+	// Kinds are the failure kinds the diagnosing rule implies, such as
+	// FailureKindOOM for a memory rule; FailureKinds adds them. A diagnosis
+	// saved before rules declared kinds has none.
+	Kinds []string `json:"kinds,omitempty"`
 }
 
 // JobResult is one job's outcome in a run summary. A failed result carries

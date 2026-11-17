@@ -261,8 +261,10 @@ rotari retry --filter-failure-cause cuda-gpu-memory-exhausted --dry-run
 
 `--filter-failure-kind` and `--filter-diagnosis` match any of a job's
 failure kinds or current-rule diagnoses instead, so they can also select
-jobs of another group: a job grouped by its OOM diagnosis still has the
-failure kind `error`.
+jobs of another group: a job that the kernel killed for memory is grouped
+by its `Host memory exhausted` diagnosis but has the failure kinds `oom` and
+`signal`. A memory diagnosis, host or GPU, gives its job the failure kind
+`oom` even when only the log showed it.
 
 `--filter-host`, the `--filter-started-*` and `--filter-finished-*` options,
 `--filter-longer-than`, `--filter-shorter-than`, and `--filter-diagnosis`

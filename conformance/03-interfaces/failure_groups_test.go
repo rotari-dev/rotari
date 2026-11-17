@@ -164,6 +164,36 @@ func TestFailuresWithoutOutputAreDiagnosed(t *testing.T) {
 	}
 }
 
+// TestMemoryDiagnosesAreFailureKindOOM runs jobs whose only sign of running out
+// of memory is a line in their log, with an error that is just their exit
+// code. The memory rule that diagnoses each one gives it the failure kind oom,
+// host memory and GPU memory alike, so --filter-failure-kind oom selects them
+// in show and retry; a job with another error is not oom.
+func TestMemoryDiagnosesAreFailureKindOOM(t *testing.T) {
+	covers(t, "SEL-11")
+	e := support.NewEnv(t)
+	project := "memory"
+	e.MustRotari("add", "-p", project, "--job-name", "mem-python", "--", "sh", "-c", "echo 'Traceback (most recent call last):'; echo MemoryError; exit 1")
+	e.MustRotari("add", "-p", project, "--job-name", "mem-gpu", "--", "sh", "-c", "echo 'RuntimeError: CUDA out of memory. Tried to allocate 2.00 GiB'; exit 1")
+	e.MustRotari("add", "-p", project, "--job-name", "plain-failure", "--", "sh", "-c", "echo 'ValueError: bad input'; exit 3")
+	if result := e.RotariRun("run", "-p", project, "--quiet"); result.Code == 0 {
+		t.Fatalf("run with failing jobs should exit 1: %s", result)
+	}
+	want := []string{"mem-python", "mem-gpu"}
+	all := append(want, "plain-failure")
+	for _, args := range [][]string{
+		{"show", "-p", project, "--filter-failure-kind", "oom"},
+		{"retry", "-p", project, "--filter-failure-kind", "oom", "--dry-run"},
+	} {
+		out := e.MustRotari(args...).Stdout
+		for _, name := range all {
+			if listed := strings.Contains(out, name); listed != slices.Contains(want, name) {
+				t.Errorf("%v lists %s = %v, want jobs %v:\n%s", args, name, listed, want, out)
+			}
+		}
+	}
+}
+
 // TestSchedulerTimeLimitIsNotRotarisTimeout runs a job that fake Slurm commands
 // report as TIMEOUT, as sacct does for a job stopped at its --time. It has the
 // failure kind timeout, but rotari did not stop it, so its group does not advise

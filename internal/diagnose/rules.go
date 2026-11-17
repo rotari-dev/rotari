@@ -18,6 +18,9 @@ type Rule struct {
 	// in the error or log is recognized; see DiagnoseExitCode.
 	ExitCodes  []int
 	Suggestion string
+	// Kinds are the failure kinds (model.FailureKindValues) the failure this
+	// rule recognizes implies; its diagnoses carry them.
+	Kinds []string
 }
 
 // RuleID returns a stable selector ID derived from the public rule name; see
@@ -122,7 +125,7 @@ func Diagnose(errorText, log string, rules []Rule) []model.RuleDiagnosis {
 	explained := map[int]bool{}
 	for _, rule := range rules {
 		if line := lastMatchingLine(normalized, rule); line >= 0 {
-			matches = append(matches, ruleMatch{line: line, diagnosis: model.RuleDiagnosis{Name: rule.Name, Evidence: evidence[line], Suggestion: rule.Suggestion}})
+			matches = append(matches, ruleMatch{line: line, diagnosis: model.RuleDiagnosis{Name: rule.Name, Evidence: evidence[line], Suggestion: rule.Suggestion, Kinds: slices.Clone(rule.Kinds)}})
 			explained[line] = true
 		}
 	}
@@ -146,7 +149,7 @@ func Diagnose(errorText, log string, rules []Rule) []model.RuleDiagnosis {
 func DiagnoseExitCode(exitCode int, rules []Rule) []model.RuleDiagnosis {
 	for _, rule := range rules {
 		if slices.Contains(rule.ExitCodes, exitCode) {
-			return []model.RuleDiagnosis{{Name: rule.Name, Evidence: fmt.Sprintf("exit code %d", exitCode), Suggestion: rule.Suggestion}}
+			return []model.RuleDiagnosis{{Name: rule.Name, Evidence: fmt.Sprintf("exit code %d", exitCode), Suggestion: rule.Suggestion, Kinds: slices.Clone(rule.Kinds)}}
 		}
 	}
 	return nil
