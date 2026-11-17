@@ -613,7 +613,12 @@ func showRunJSON(paths state.ProjectPaths, runID, selection string) int {
 			selected = make(map[string]bool)
 			kept := make([]model.JobResult, 0, len(summary.Results))
 			for _, jobResult := range summary.Results {
-				if selectsShownJob(paths, runID, jobResult.ID, jobResult, true, selection, jobfilter.Filter{}) {
+				keep, err := selectsShownJob(paths, runID, jobResult.ID, jobResult, true, selection, jobfilter.Filter{})
+				if err != nil {
+					printErrorf("failed to select jobs: %v", err)
+					return 1
+				}
+				if keep {
 					kept = append(kept, jobResult)
 					selected[jobResult.ID] = true
 				}
@@ -636,7 +641,10 @@ func showRunJSON(paths state.ProjectPaths, runID, selection string) int {
 		printErrorf("failed to read job states: %v", err)
 		return 1
 	}
-	result.Jobs = filterRunJSONJobs(paths, runID, result.Jobs, selection)
+	if result.Jobs, err = filterRunJSONJobs(paths, runID, result.Jobs, selection); err != nil {
+		printErrorf("failed to select jobs: %v", err)
+		return 1
+	}
 	nextQueue, err := nextQueueForRun(paths, runID)
 	if err != nil {
 		printErrorf("failed to load next queue: %v", err)
@@ -676,7 +684,7 @@ func nextQueueForRun(paths state.ProjectPaths, runID string) (*model.Queue, erro
 
 // selectsShownJob reports whether a show view of runID keeps the job, given
 // its result. jobfilter.Filter.Selects decides; this only gathers the facts.
-func selectsShownJob(paths state.ProjectPaths, runID, jobID string, result model.JobResult, finished bool, selection string, filter jobfilter.Filter) bool {
+func selectsShownJob(paths state.ProjectPaths, runID, jobID string, result model.JobResult, finished bool, selection string, filter jobfilter.Filter) (bool, error) {
 	job := jobstatus.FilterJob(jsonStore(), paths.RunsDir, model.JobOrigin{RunID: runID, JobID: jobID}, jobID, result, finished, time.Now())
 	return filter.Selects(selection, job)
 }
@@ -993,6 +1001,7 @@ func showRun(paths state.ProjectPaths, runID string, filter showJobFilter, wide 
 		shown       bool
 		changeHint  bool
 		cells       []string
+		err         error
 	}
 	rows := make([]jobRow, len(jobIDs))
 	state.ReadEach(len(jobIDs), func(index int) {
@@ -1044,7 +1053,9 @@ func showRun(paths state.ProjectPaths, runID string, filter showJobFilter, wide 
 		origin := originByID[jobID]
 		carried := runlineage.IsCarried(origin, latestAttemptID, blocked, hasSummary)
 		row := jobRow{counted: true, countStatus: resolved.DisplayStatus(jobSpec)}
-		if !selectsShownJob(paths, runID, jobID, jobResult, statusOK, filter.selection, filter.filter) {
+		selected, err := selectsShownJob(paths, runID, jobID, jobResult, statusOK, filter.selection, filter.filter)
+		if err != nil || !selected {
+			row.err = err
 			rows[index] = row
 			return
 		}
@@ -1065,6 +1076,12 @@ func showRun(paths state.ProjectPaths, runID string, filter showJobFilter, wide 
 			model.FormatDisplayTimestamp(submittedAt), model.FormatDisplayTimestamp(finishedAt), elapsed, hosts, command}
 		rows[index] = row
 	})
+	for _, row := range rows {
+		if row.err != nil {
+			printErrorf("failed to select jobs: %v", row.err)
+			return 1
+		}
+	}
 	for index, row := range rows {
 		if !row.counted {
 			continue

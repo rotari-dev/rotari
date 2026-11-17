@@ -190,7 +190,7 @@ func (resolver *originResolver) job(id string, result model.JobResult, finished 
 // array by its tasks'.
 func (resolver *originResolver) selectsCommand(filter jobfilter.Filter, selection string, command model.QueuedCommand, result model.JobResult, finished bool) (bool, error) {
 	if command.Array == nil {
-		return filter.Selects(selection, resolver.job(command.ID, result, finished, command.Origin)), nil
+		return filter.Selects(selection, resolver.job(command.ID, result, finished, command.Origin))
 	}
 	tasks := make([]jobfilter.Job, 0)
 	for _, task := range model.ArrayTaskIDs(command.Array) {
@@ -202,7 +202,7 @@ func (resolver *originResolver) selectsCommand(filter jobfilter.Filter, selectio
 		}
 		tasks = append(tasks, resolver.job(id, taskResult, taskFinished, origin))
 	}
-	return filter.SelectsArray(selection, tasks), nil
+	return filter.SelectsArray(selection, tasks)
 }
 
 // jobResult returns the result of a job or task of command: the one its
@@ -276,9 +276,15 @@ func planByOrigin(queue model.Queue, selection string, jobIDs []string, inScope 
 					plan.Execute[id] = true
 					continue
 				}
-				if matchTasks && scoped && filter.Selects(selection, resolver.job(id, result, finished, origin)) {
-					plan.Execute[id] = true
-					continue
+				if matchTasks && scoped {
+					selected, err := filter.Selects(selection, resolver.job(id, result, finished, origin))
+					if err != nil {
+						return Plan{}, err
+					}
+					if selected {
+						plan.Execute[id] = true
+						continue
+					}
 				}
 				if finished {
 					result.ID = id

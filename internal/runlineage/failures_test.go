@@ -303,7 +303,11 @@ func TestFailureCauseFilterSelectsEachGroupExactly(t *testing.T) {
 			filter := jobfilter.Filter{FailureCauses: []string{value}}
 			var got []string
 			for _, job := range run.Jobs {
-				if filter.Selects("", jobfilter.Job{ID: job.Spec.ID, Result: job.Result, Finished: true}) {
+				selected, err := filter.Selects("", jobfilter.Job{ID: job.Spec.ID, Result: job.Result, Finished: true})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if selected {
 					got = append(got, job.Spec.ID)
 				}
 			}

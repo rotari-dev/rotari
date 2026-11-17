@@ -132,20 +132,24 @@ type Job struct {
 	Finished   bool
 	Attributes Attributes
 	// LoadAttributes, when set, reads Attributes instead. It is called only
-	// for a filter with host or time conditions.
-	LoadAttributes func() Attributes
+	// for a filter with host or time conditions. An attribute that was never
+	// recorded is left zero; one that was recorded but cannot be read is an
+	// error.
+	LoadAttributes func() (Attributes, error)
 	// Diagnosis reports whether the job's diagnosis matches any selector. It
-	// is called only for a filter with diagnosis conditions; nil never matches.
-	Diagnosis func(selectors []string) bool
+	// is called only for a filter with diagnosis conditions; nil never
+	// matches. A log that cannot be read is an error, and a missing one
+	// does not match.
+	Diagnosis func(selectors []string) (bool, error)
 }
 
 // ExecutionAttributes returns the job's Attributes, read through
 // LoadAttributes when it is set.
-func (job Job) ExecutionAttributes() Attributes {
+func (job Job) ExecutionAttributes() (Attributes, error) {
 	if job.LoadAttributes != nil {
 		return job.LoadAttributes()
 	}
-	return job.Attributes
+	return job.Attributes, nil
 }
 
 // hasAttributeConditions reports whether MatchesAttributes reads anything.
@@ -158,26 +162,46 @@ func (filter Filter) hasAttributeConditions() bool {
 // "failed,unfinished"; "" and "all" select every result. Definition
 // conditions are checked separately with MatchesCommand, because they apply
 // to a whole command.
-func (filter Filter) Selects(selection string, job Job) bool {
+//
+// The conditions are checked in order: the result selection, the result
+// conditions, the changed/new IDs, then the host and time conditions, then
+// the diagnosis. The job's attributes and log are read only when every
+// earlier condition holds, so a job already excluded is never read. An
+// error reading them is returned, never taken as a non-match.
+func (filter Filter) Selects(selection string, job Job) (bool, error) {
 	if selection != "" && selection != "all" && !model.ResultSelectionMatches(selection, job.Finished, job.Result.ExitCode) {
-		return false
+		return false, nil
 	}
 	if (len(filter.ExitCodes) > 0 || len(filter.FailureKinds) > 0 || len(filter.FailureCauses) > 0) && !filter.matchesResult(job.Result, job.Finished) {
-		return false
+		return false, nil
 	}
-	if !filter.MatchesDefinition(job.ID) || filter.hasAttributeConditions() && !filter.MatchesAttributes(job.ExecutionAttributes()) {
-		return false
+	if !filter.MatchesDefinition(job.ID) {
+		return false, nil
 	}
-	if len(filter.Diagnoses) > 0 && (job.Diagnosis == nil || !job.Diagnosis(filter.Diagnoses)) {
-		return false
+	if filter.hasAttributeConditions() {
+		attributes, err := job.ExecutionAttributes()
+		if err != nil {
+			return false, err
+		}
+		if !filter.MatchesAttributes(attributes) {
+			return false, nil
+		}
 	}
-	return true
+	if len(filter.Diagnoses) > 0 {
+		if job.Diagnosis == nil {
+			return false, nil
+		}
+		return job.Diagnosis(filter.Diagnoses)
+	}
+	return true, nil
 }
 
 // SelectsArray reports whether an array job decided as a whole is selected:
 // its aggregate result, finished when every task is and failed when any task
 // is, matches selection, and some task satisfies every per-job condition.
-func (filter Filter) SelectsArray(selection string, tasks []Job) bool {
+// Tasks are tried in order until one matches; an error reading a task tried
+// before then is returned.
+func (filter Filter) SelectsArray(selection string, tasks []Job) (bool, error) {
 	whole := Job{Finished: true}
 	for _, task := range tasks {
 		whole.Finished = whole.Finished && task.Finished
@@ -185,10 +209,17 @@ func (filter Filter) SelectsArray(selection string, tasks []Job) bool {
 			whole.Result.ExitCode = task.Result.ExitCode
 		}
 	}
-	if !(Filter{}).Selects(selection, whole) {
-		return false
+	// An empty filter reads nothing, so its Selects has no error.
+	if selected, _ := (Filter{}).Selects(selection, whole); !selected {
+		return false, nil
 	}
-	return slices.ContainsFunc(tasks, func(task Job) bool { return filter.Selects("", task) })
+	for _, task := range tasks {
+		selected, err := filter.Selects("", task)
+		if err != nil || selected {
+			return selected, err
+		}
+	}
+	return false, nil
 }
 
 // HasRunConditions reports whether the filter has a condition on a job's

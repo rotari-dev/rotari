@@ -181,6 +181,19 @@ func TestSelectJobsFiltersUnfinishedJobs(t *testing.T) {
 	if _, err := controller.selectJobs(runDir, Selection{Scope: model.CommandSelector{Stage: "fit", Matrix: "grid"}}, now); err == nil || err.Error() != "--stage cannot be combined with --matrix" {
 		t.Fatalf("stage and matrix scope error = %v", err)
 	}
+
+	// A status.json that cannot be decoded fails a host or time condition,
+	// naming it, and is not read without one.
+	damaged := filepath.Join(runDir, "train-b", "status.json")
+	if err := os.WriteFile(damaged, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := controller.selectJobs(runDir, Selection{Filter: jobfilter.Filter{Hosts: []string{"gpu-*"}}}, now); err == nil || !strings.Contains(err.Error(), damaged) || !strings.Contains(err.Error(), "job train-b") {
+		t.Fatalf("selectJobs() with a damaged status.json = %v, %v, want an error naming train-b and %s", got, err, damaged)
+	}
+	if got, err := controller.selectJobs(runDir, Selection{Filter: jobfilter.Filter{Command: `train\.py`}}, now); err != nil || strings.Join(got, ",") != "train-a,train-b" {
+		t.Fatalf("selectJobs() without a host or time condition = %v, %v, want train-a,train-b", got, err)
+	}
 }
 
 func TestControlRejectsUnsupportedOperationAndIdleProject(t *testing.T) {

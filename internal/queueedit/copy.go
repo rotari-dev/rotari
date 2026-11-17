@@ -194,11 +194,19 @@ func selectCommands(source Run, selection string, inScope func(model.QueuedComma
 		if selection != "job-id" {
 			switch {
 			case command.Array == nil:
-				include = filter.Selects(selection, source.job(command.ID))
+				var err error
+				if include, err = filter.Selects(selection, source.job(command.ID)); err != nil {
+					return nil, nil, err
+				}
 			case partialArray:
 				matchedTasks = make(map[string]bool)
 				for _, task := range model.ArrayTaskIDs(command.Array) {
-					if id := fmt.Sprintf("%s-%d", command.ID, task); filter.Selects(selection, source.job(id)) {
+					id := fmt.Sprintf("%s-%d", command.ID, task)
+					selected, err := filter.Selects(selection, source.job(id))
+					if err != nil {
+						return nil, nil, err
+					}
+					if selected {
 						matchedTasks[id] = true
 					}
 				}
@@ -208,7 +216,10 @@ func selectCommands(source Run, selection string, inScope func(model.QueuedComma
 				for _, task := range model.ArrayTaskIDs(command.Array) {
 					tasks = append(tasks, source.job(fmt.Sprintf("%s-%d", command.ID, task)))
 				}
-				include = filter.SelectsArray(selection, tasks)
+				var err error
+				if include, err = filter.SelectsArray(selection, tasks); err != nil {
+					return nil, nil, err
+				}
 			}
 			include = include && inScope(command)
 		}

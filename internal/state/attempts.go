@@ -2,7 +2,9 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -215,50 +217,85 @@ func ReadJobTimestamp(runDir, jobID, name string) string {
 	return ResolveAttemptTimestamp(jobDir, name)
 }
 
+// attemptTimestampSource is one place an attempt records a timestamp: a
+// file that holds only the timestamp, or a field of a JSON file.
+type attemptTimestampSource struct {
+	file, field string
+}
+
+// attemptTimestampSources lists where an attempt's submitted_at or
+// finished_at is recorded, in the order they are read: the timestamp file,
+// then the time job.json or status.json records.
+func attemptTimestampSources(name string) []attemptTimestampSource {
+	switch name {
+	case "submitted_at":
+		return []attemptTimestampSource{{file: "submitted_at"}, {file: "job.json", field: "submitted_at"}}
+	case "finished_at":
+		return []attemptTimestampSource{{file: "finished_at"}, {file: "status.json", field: "finished_at"}}
+	}
+	return nil
+}
+
+// read returns the timestamp source records in jobDir and the file read. A
+// timestamp file that was read ends the search even when empty; a JSON
+// field ends it only when set.
+func (source attemptTimestampSource) read(jobDir string) (value, path string, found bool, err error) {
+	path, err = ValidatedStateFile(jobDir, source.file)
+	if err != nil {
+		return "", "", false, err
+	}
+	// codeql[go/path-injection]: path is restricted by ValidatedStateFile to a fixed state file.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", path, false, err
+	}
+	if source.field == "" {
+		return strings.TrimSpace(string(data)), path, true, nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return "", path, false, fmt.Errorf("%s: %w: %v", path, ErrInvalidJSON, err)
+	}
+	raw, ok := fields[source.field]
+	if !ok {
+		return "", path, false, nil
+	}
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", path, false, fmt.Errorf("%s: %w: field %s: %v", path, ErrInvalidJSON, source.field, err)
+	}
+	return value, path, value != "", nil
+}
+
 // ResolveAttemptTimestamp reads an attempt's submitted_at or finished_at,
-// falling back to the times job.json and status.json record.
+// falling back to the times job.json and status.json record. A source that
+// cannot be read is skipped; LoadAttemptTimestamp reports it instead.
 func ResolveAttemptTimestamp(jobDir, name string) string {
-	if name != "submitted_at" && name != "finished_at" {
-		return ""
-	}
-	path, err := ValidatedStateFile(jobDir, name)
-	if err == nil {
-		// codeql[go/path-injection]: path is restricted by ValidatedStateFile to a fixed timestamp file.
-		if data, err := os.ReadFile(path); err == nil {
-			return strings.TrimSpace(string(data))
-		}
-	}
-	metadataPath, err := ValidatedStateFile(jobDir, "job.json")
-	if err == nil {
-		// codeql[go/path-injection]: metadataPath is restricted by ValidatedStateFile to job.json.
-		data, err := os.ReadFile(metadataPath)
-		if err == nil {
-			var metadata struct {
-				SubmittedAt string `json:"submitted_at"`
-			}
-			if err := json.Unmarshal(data, &metadata); err == nil && metadata.SubmittedAt != "" {
-				if name == "submitted_at" {
-					return metadata.SubmittedAt
-				}
-			}
-		}
-	}
-	statusPath, err := ValidatedStateFile(jobDir, "status.json")
-	if err == nil {
-		// codeql[go/path-injection]: statusPath is restricted by ValidatedStateFile to status.json.
-		data, err := os.ReadFile(statusPath)
-		if err == nil {
-			var status struct {
-				FinishedAt string `json:"finished_at"`
-			}
-			if err := json.Unmarshal(data, &status); err == nil && status.FinishedAt != "" {
-				if name == "finished_at" {
-					return status.FinishedAt
-				}
-			}
+	for _, source := range attemptTimestampSources(name) {
+		if value, _, found, err := source.read(jobDir); err == nil && found {
+			return value
 		}
 	}
 	return ""
+}
+
+// LoadAttemptTimestamp reads an attempt's submitted_at or finished_at from
+// the sources ResolveAttemptTimestamp reads, and returns it with the file it
+// came from. It returns "" when no source records it. A source that exists
+// but cannot be read or decoded is an error naming the file.
+func LoadAttemptTimestamp(jobDir, name string) (value, path string, err error) {
+	for _, source := range attemptTimestampSources(name) {
+		value, path, found, err := source.read(jobDir)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return "", path, err
+		}
+		if found {
+			return value, path, nil
+		}
+	}
+	return "", "", nil
 }
 
 func ReadAttemptTimestamp(jobDir, name string) string {

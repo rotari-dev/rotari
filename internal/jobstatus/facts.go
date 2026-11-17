@@ -1,7 +1,9 @@
 package jobstatus
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -22,63 +24,131 @@ const maxCarryDepth = 16
 // into origin's run is read from the run it was carried from. id is the job's
 // ID for definition conditions. Hosts recorded on result take precedence over
 // the attempt's, and times the carry records fill in ones the attempt lacks.
+//
+// A fact that was never recorded is left out; one recorded in a file that
+// cannot be read or decoded, including the carry that locates the attempt,
+// is an error naming the job and the file.
 func FilterJob(store state.Store, runsDir string, origin model.JobOrigin, id string, result model.JobResult, finished bool, now time.Time) jobfilter.Job {
 	// The attempt is located, and its files read, only for a filter that
 	// asks for them.
 	var located bool
 	var attemptDir string
 	var carries []model.JobOrigin
-	locate := func() string {
+	var locateErr error
+	locate := func() (string, error) {
 		if !located {
-			// Filters cannot report an error; an attempt whose carry
-			// cannot be read reads as not found, like its other files.
-			attemptDir, carries, _ = locateAttempt(runsDir, origin, 0)
+			attemptDir, carries, locateErr = locateAttempt(runsDir, origin, 0)
 			located = true
 		}
-		return attemptDir
+		return attemptDir, locateErr
+	}
+	fail := func(err error) error {
+		return fmt.Errorf("job %s of run %s: %w", id, origin.RunID, err)
 	}
 	return jobfilter.Job{
 		ID: id, Result: result, Finished: finished,
-		LoadAttributes: func() jobfilter.Attributes {
-			attributes := AttemptAttributes(store, locate(), now)
+		LoadAttributes: func() (jobfilter.Attributes, error) {
+			dir, err := locate()
+			if err != nil {
+				return jobfilter.Attributes{}, fail(err)
+			}
+			attributes, err := AttemptAttributes(store, dir, now)
+			if err != nil {
+				return jobfilter.Attributes{}, fail(err)
+			}
 			if len(result.Hosts) > 0 {
 				attributes.Hosts = result.Hosts
 			}
 			for _, carry := range append([]model.JobOrigin{origin}, carries...) {
 				if attributes.StartedAt.IsZero() {
-					attributes.StartedAt, _ = jobfilter.ParseTimestamp(carry.SubmittedAt)
+					if attributes.StartedAt, err = parseRecordedTime(carry.SubmittedAt); err != nil {
+						return jobfilter.Attributes{}, fail(fmt.Errorf("carry from run %s: submitted_at: %w", carry.RunID, err))
+					}
 				}
 				if attributes.FinishedAt.IsZero() {
-					attributes.FinishedAt, _ = jobfilter.ParseTimestamp(carry.FinishedAt)
+					if attributes.FinishedAt, err = parseRecordedTime(carry.FinishedAt); err != nil {
+						return jobfilter.Attributes{}, fail(fmt.Errorf("carry from run %s: finished_at: %w", carry.RunID, err))
+					}
 				}
 			}
-			return attributes
+			return attributes, nil
 		},
-		Diagnosis: func(selectors []string) bool {
-			log, err := ReadLog(locate())
-			return err == nil && diagnose.MatchesResultSelectors(selectors, result, log)
+		Diagnosis: func(selectors []string) (bool, error) {
+			if result.ExitCode == 0 {
+				// Only a failed job has a diagnosis; its log is not read.
+				return false, nil
+			}
+			dir, err := locate()
+			if err != nil {
+				return false, fail(err)
+			}
+			log, found, err := ReadLog(dir)
+			if err != nil {
+				return false, fail(err)
+			}
+			return found && diagnose.MatchesResultSelectors(selectors, result, log), nil
 		},
 	}
 }
 
 // AttemptAttributes reads the hosts and times an attempt directory records:
-// the wrapper's start, or the submission when it has not started.
-func AttemptAttributes(store state.Store, attemptDir string, now time.Time) jobfilter.Attributes {
+// the wrapper's start, or the submission when it has not started. A file
+// that does not exist records nothing; one that cannot be read or decoded is
+// an error naming it.
+func AttemptAttributes(store state.Store, attemptDir string, now time.Time) (jobfilter.Attributes, error) {
 	attributes := jobfilter.Attributes{Now: now}
 	if attemptDir == "" {
-		return attributes
+		return attributes, nil
 	}
-	if path, err := state.ValidatedStateFile(attemptDir, "status.json"); err == nil {
-		if status, ok := executor.LoadWrapperStatus(store, path); ok {
-			attributes.Hosts = status.Hosts
-			attributes.StartedAt, _ = jobfilter.ParseTimestamp(status.StartedAt)
+	path, err := state.ValidatedStateFile(attemptDir, "status.json")
+	if err != nil {
+		return attributes, err
+	}
+	var status executor.WrapperStatus
+	switch err := store.ReadJSON(path, &status); {
+	case errors.Is(err, fs.ErrNotExist):
+	case errors.Is(err, state.ErrInvalidJSON):
+		return attributes, fmt.Errorf("%s: %w", path, err)
+	case err != nil:
+		return attributes, err
+	default:
+		attributes.Hosts = status.Hosts
+		if attributes.StartedAt, err = parseRecordedTime(status.StartedAt); err != nil {
+			return attributes, fmt.Errorf("%s: started_at: %w", path, err)
 		}
 	}
 	if attributes.StartedAt.IsZero() {
-		attributes.StartedAt, _ = jobfilter.ParseTimestamp(state.ResolveAttemptTimestamp(attemptDir, "submitted_at"))
+		if attributes.StartedAt, err = loadAttemptTime(attemptDir, "submitted_at"); err != nil {
+			return attributes, err
+		}
 	}
-	attributes.FinishedAt, _ = jobfilter.ParseTimestamp(state.ResolveAttemptTimestamp(attemptDir, "finished_at"))
-	return attributes
+	if attributes.FinishedAt, err = loadAttemptTime(attemptDir, "finished_at"); err != nil {
+		return attributes, err
+	}
+	return attributes, nil
+}
+
+// loadAttemptTime reads one of an attempt's recorded times; zero when none
+// is recorded.
+func loadAttemptTime(attemptDir, name string) (time.Time, error) {
+	value, path, err := state.LoadAttemptTimestamp(attemptDir, name)
+	if err != nil {
+		return time.Time{}, err
+	}
+	parsed, err := parseRecordedTime(value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%s: %w", path, err)
+	}
+	return parsed, nil
+}
+
+// parseRecordedTime parses a time rotari recorded: zero for "", which
+// records nothing, and an error for anything else that does not parse.
+func parseRecordedTime(value string) (time.Time, error) {
+	if value == "" {
+		return time.Time{}, nil
+	}
+	return jobfilter.ParseTimestamp(value)
 }
 
 // ResultAttemptDir returns the directory of the attempt that produced the
@@ -91,18 +161,23 @@ func ResultAttemptDir(runsDir string, origin model.JobOrigin) (string, error) {
 }
 
 // ReadLog returns the log of an attempt for diagnosis: its merged output, or
-// else its stdout, or else its stderr.
-func ReadLog(attemptDir string) (string, error) {
+// else its stdout, or else its stderr. found is false when the attempt has
+// none of them; a log file that exists but cannot be read is an error.
+func ReadLog(attemptDir string) (log string, found bool, err error) {
 	if attemptDir == "" {
-		return "", os.ErrNotExist
+		return "", false, nil
 	}
 	for _, name := range []string{"output", state.StdoutFileName, state.StderrFileName} {
 		data, err := os.ReadFile(filepath.Join(attemptDir, name))
-		if err == nil {
-			return string(data), nil
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
 		}
+		if err != nil {
+			return "", false, err
+		}
+		return string(data), true, nil
 	}
-	return "", os.ErrNotExist
+	return "", false, nil
 }
 
 // locateAttempt returns the directory of the attempt origin names, following

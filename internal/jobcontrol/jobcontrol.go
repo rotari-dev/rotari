@@ -422,7 +422,19 @@ func (controller Controller) selectJobs(runDir string, selection Selection, now 
 			if len(selection.States) > 0 && !slices.Contains(selection.States, jobState) {
 				continue
 			}
-			if !selection.Filter.MatchesAttributes(controller.attributes(jobDir, now)) {
+			// Job control takes no result conditions: Selects reads the
+			// attempt's hosts and times only for a host or time condition.
+			selected, err := selection.Filter.Selects("", jobfilter.Job{ID: job.ID, LoadAttributes: func() (jobfilter.Attributes, error) {
+				attributes, err := jobstatus.AttemptAttributes(controller.Store, jobDir, now)
+				if err != nil {
+					return attributes, fmt.Errorf("job %s of run %s: %w", job.ID, filepath.Base(runDir), err)
+				}
+				return attributes, nil
+			}})
+			if err != nil {
+				return nil, err
+			}
+			if !selected {
 				continue
 			}
 			jobIDs = append(jobIDs, job.ID)
@@ -433,11 +445,6 @@ func (controller Controller) selectJobs(runDir string, selection Selection, now 
 	}
 	sort.Strings(jobIDs)
 	return jobIDs, nil
-}
-
-// attributes returns the hosts and start time of an unfinished attempt.
-func (controller Controller) attributes(jobDir string, now time.Time) jobfilter.Attributes {
-	return jobstatus.AttemptAttributes(controller.Store, jobDir, now)
 }
 
 // activeLock loads the lock of project's active run, which must be runID

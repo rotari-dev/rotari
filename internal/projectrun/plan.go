@@ -226,7 +226,11 @@ func (runner Runner) OmittedFailedOrUnfinished(paths state.ProjectPaths, queue m
 	sourceIDs := make(map[string]bool)
 	for _, job := range model.QueueToJobs(sourceQueue.Commands) {
 		result, finished := results[job.ID]
-		if (jobfilter.Filter{}).Selects(selection, jobfilter.Job{ID: job.ID, Result: result, Finished: finished}) {
+		selected, err := (jobfilter.Filter{}).Selects(selection, jobfilter.Job{ID: job.ID, Result: result, Finished: finished})
+		if err != nil {
+			return nil, err
+		}
+		if selected {
 			sourceIDs[job.ID] = true
 		}
 	}

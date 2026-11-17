@@ -274,6 +274,16 @@ and specifying both dimensions narrows by both. Annotations such as
 - For a job whose result was carried into the run, the host, time, and
   diagnosis conditions read the attempt that produced the result, in the run
   it was carried from.
+- A fact that was never recorded does not match a host, time, or diagnosis
+  condition: a missing `status.json`, timestamp, or log, or a deleted run.
+  A fact recorded in a file that cannot be read or decoded, including a
+  timestamp that does not parse and the source run's `commands.json` that
+  locates a carried job's attempt, fails the command with an error that
+  names the job, its run, and the file; it is never taken as a non-match.
+  The result selection, the result conditions, and `--filter-changed` /
+  `--filter-new` are checked first, and a job they exclude is not read, nor
+  is a successful job's log; an array decided as a whole reads its tasks in
+  order until one matches.
 - `--filter-longer-than` and `--filter-shorter-than` compare execution
   duration. The former is inclusive and the latter is exclusive. A running
   job uses the current time as its end; a missing timestamp does not match.
@@ -299,10 +309,13 @@ conditions for `run.PlanRerun` (whole commands and array tasks),
 whole from its tasks; `MatchesCommand` applies the definition
 conditions. `jobstatus.FilterJob` in
 [internal/jobstatus/facts.go](../internal/jobstatus/facts.go) reads the
-hosts, times, and log each job is judged by. The options are
+hosts, times, and log each job is judged by, and returns an error for one
+it cannot read. The options are
 `cliJobFilterOptions` in
 [cmd/rotari/job_filter_flags.go](../cmd/rotari/job_filter_flags.go).
-Covered by the filter rows of `TestSelectorTable`.
+Covered by the filter rows of `TestSelectorTable`, and, for facts that
+cannot be read, by `TestFiltersFailOnFactsTheyCannotRead` in
+[conformance/06-selectors/unreadable_facts_test.go](../conformance/06-selectors/unreadable_facts_test.go).
 
 ### Job control
 
@@ -345,6 +358,9 @@ active run, array tasks one by one, through `jobcontrol.Controller.Select`:
   of stage and matrix, and `--filter-state running|pending` (repeated, OR).
   A job is running once its executor owns it and pending before; a running
   job's duration ends now. `suspend` and `resume` accept only `running`.
+  As in SEL-11, a host or time recorded in a file that cannot be read fails
+  the command, naming the file, before any job is acted on; the attempt is
+  read only for a host or time condition, through `jobfilter.Filter.Selects`.
 - Job IDs, `--job-name`, and the filters exclude one another; a bare run ID
   may still name the run. With any of them, `cancel --wait` waits until each
   selected job has stopped (CAN-3).

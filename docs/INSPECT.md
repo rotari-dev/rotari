@@ -264,6 +264,15 @@ failure kinds or current-rule diagnoses instead, so they can also select
 jobs of another group: a job grouped by its OOM diagnosis still has the
 failure kind `error`.
 
+`--filter-host`, the `--filter-started-*` and `--filter-finished-*` options,
+`--filter-longer-than`, `--filter-shorter-than`, and `--filter-diagnosis`
+read each job's attempt files. A job that has no such record, such as a log
+that was never written, simply does not match. If a file exists but cannot
+be read or is damaged, the command fails and names the file rather than
+leaving the job out, so `run` and `retry` never decide what to run without
+it. Repair or remove the file, or add a result filter such as `--failed`
+that excludes the job first.
+
 The Web run page lists the same groups in its `Failure causes` section,
 above the job timeline: each cause's count, exit codes, example line, and
 suggestion, with its jobs, which scroll to their rows in the jobs table. A

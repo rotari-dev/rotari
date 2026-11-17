@@ -74,7 +74,10 @@ func showRunJobJSON(paths state.ProjectPaths, runID, jobID, attemptID, selection
 		printError(err)
 		return 1
 	}
-	output.Jobs = filterRunJSONJobs(paths, runID, output.Jobs, selection)
+	if output.Jobs, err = filterRunJSONJobs(paths, runID, output.Jobs, selection); err != nil {
+		printErrorf("failed to select jobs: %v", err)
+		return 1
+	}
 	if err := json.NewEncoder(os.Stdout).Encode(output); err != nil {
 		printErrorf("failed to write JSON: %v", err)
 		return 1
@@ -82,9 +85,9 @@ func showRunJobJSON(paths state.ProjectPaths, runID, jobID, attemptID, selection
 	return 0
 }
 
-func filterRunJSONJobs(paths state.ProjectPaths, runID string, jobs []showJSONJob, selection string) []showJSONJob {
+func filterRunJSONJobs(paths state.ProjectPaths, runID string, jobs []showJSONJob, selection string) ([]showJSONJob, error) {
 	if selection == "" {
-		return jobs
+		return jobs, nil
 	}
 	kept := make([]showJSONJob, 0, len(jobs))
 	for _, entry := range jobs {
@@ -92,11 +95,15 @@ func filterRunJSONJobs(paths state.ProjectPaths, runID string, jobs []showJSONJo
 		if entry.Result != nil {
 			result = *entry.Result
 		}
-		if selectsShownJob(paths, runID, entry.Job.ID, result, entry.Finished, selection, jobfilter.Filter{}) {
+		keep, err := selectsShownJob(paths, runID, entry.Job.ID, result, entry.Finished, selection, jobfilter.Filter{})
+		if err != nil {
+			return nil, err
+		}
+		if keep {
 			kept = append(kept, entry)
 		}
 	}
-	return kept
+	return kept, nil
 }
 
 func selectRunJSONJobs(queue model.Queue, jobID string) []model.JobSpec {

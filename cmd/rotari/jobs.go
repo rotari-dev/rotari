@@ -152,7 +152,9 @@ func filterJobs(rows []joblist.Row, resultSelection string, states jobsStateOpti
 			case model.StatusFailed, model.StatusCancelled, "blocked":
 				finished, result.ExitCode = true, 1
 			}
-			if !filter.Selects(resultSelection, jobfilter.Job{Result: result, Finished: finished}) {
+			// An empty filter on a job with no attributes or log to read
+			// has no error.
+			if selected, _ := filter.Selects(resultSelection, jobfilter.Job{Result: result, Finished: finished}); !selected {
 				continue
 			}
 		}
