@@ -79,13 +79,25 @@ nothing.
 A run whose process was killed cannot report it. While `rotari web` runs, it
 looks for such runs at startup and every 30 seconds, across its basedir and
 the registered basedirs, and records each one once as **rotari: run
-interrupted**, which the inbox and `rotari notifications` then show. It finds
-only runs whose coordinator ran on the same host (and PID namespace) as
-`rotari web`; a run on another host looks the same as a running one and is
-not reported. A run that stopped while no `rotari web` was running is found
-when one starts. Interrupted runs are selected by `run_failure` and are never
-sent to the Webhook. Recovering a run with `rotari unlock` reports nothing:
-whoever unlocks it already knows that it stopped.
+interrupted**, which the inbox and `rotari notifications` then show. It can
+prove this only for runs whose coordinator ran on the same host (and PID
+namespace) as `rotari web`. A run that stopped while no `rotari web` was
+running is found when one starts.
+
+A run whose coordinator is on another host, or in a container, cannot be
+checked from here. Instead, every run's coordinator rewrites `heartbeat.json`
+in its run directory every 30 seconds. If `rotari web` sees that a remote
+run's heartbeat has not changed for 5 minutes, by its own clock, it records
+**rotari: run unresponsive** once, naming the host that stopped writing.
+This does not prove the run stopped: the host may be unreachable or
+suspended, or the shared file system may be stalled. Check on that host
+before you run `rotari unlock`, which still treats the run as one it cannot
+verify. A `rotari web` that has just started waits 5 minutes before it can
+report a run. Runs started by a rotari without heartbeats are never reported.
+
+Interrupted and unresponsive runs are selected by `run_failure` and are
+never sent to the Webhook. Recovering a run with `rotari unlock` reports
+nothing: whoever unlocks it already knows that it stopped.
 
 ### Reading notifications from the command line
 

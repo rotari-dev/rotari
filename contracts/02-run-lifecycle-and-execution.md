@@ -1332,7 +1332,8 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   `run_failure` selects it, and the inbox titles it "rotari: run
   interrupted". It is recorded for the Web inbox and `rotari notifications`
   only, never sent to the Webhook. A run whose coordinator is on another host
-  or PID namespace counts as running and is not found; a run that stopped
+  or PID namespace counts as running and is not found here (NOT-6 reports it
+  by its heartbeat); a run that stopped
   while no server ran is found by the next server's first pass; a record that
   expired is recorded again if the run is still interrupted. A project
   without a directory, such as the `default` project of a basedir that has
@@ -1343,6 +1344,38 @@ Covered by [conformance/02-lifecycle/cancel_test.go](../conformance/02-lifecycle
   `notificationlog.Log.AppendOnce`; covered by
   `TestWebRecordsInterruptedRunsOnce` and
   `TestWebOnFreshBasedirDoesNotWarnAboutInterruptedRuns`.
+- **NOT-6** While a run is active, its coordinator rewrites `heartbeat.json`
+  in the run directory when the run starts and every 30 seconds until it
+  finishes: a sequence number that changes with every beat, the
+  coordinator's clock, and its host, PID, and PID namespace. The file is
+  replaced through a rename, so readers see whole beats; a failed write is
+  reported on the coordinator's log when writing starts to fail and when it
+  recovers, and never stops the run. During the passes of NOT-4, `rotari web`
+  reads the heartbeat of each active run whose lock names another host or
+  PID namespace, and remembers its sequence number and when, by the server's
+  own clock, it last saw it change, so clocks that differ between hosts do
+  not matter. A run whose sequence number has not changed for 5 minutes (ten
+  beats), as seen by that server, gets one `run.unresponsive` event in its
+  notification file unless the file already has one, recorded once across
+  servers as in NOT-4. The event carries the run's project, ID, name and
+  start time, `run_status` `unresponsive`, the heartbeat's host and time, and
+  `silent_seconds`; `[browser]` `run_failure` selects it, and the inbox
+  titles it "rotari: run unresponsive". Whatever fields are chosen, its body
+  says which host stopped writing for how long, that the run may still be
+  running, and to check on that host before `rotari unlock`. A stale heartbeat
+  proves nothing: the event never changes the run, its lock, or what
+  `unlock` requires (SAFE-16), and it is never sent to the Webhook. A
+  heartbeat that moves again, in either direction, starts the wait again; a
+  server that starts waits 5 minutes before it can report a run; a run
+  without `heartbeat.json`, started by a rotari that wrote none, is never
+  reported; a heartbeat that cannot be read or decoded is a pass warning
+  that names it. Implemented in
+  [heartbeat.go](../internal/projectrun/heartbeat.go),
+  [state/heartbeat.go](../internal/state/heartbeat.go), and
+  [runwatch](../internal/runwatch/runwatch.go); covered through the binary by
+  `TestWebWaitsForAStoppedRemoteHeartbeat` (the heartbeat a run writes, and
+  no report within 5 minutes) and, with an injected clock, by runwatch's
+  `TestWatcherReportsARemoteRunWhoseHeartbeatStopped`.
 - Failure diagnosis is local and rule-based. It evaluates a failed job's
   recorded scheduler error and configured log against a fixed set of documented
   signatures after case, ANSI-escape, and whitespace normalization. It makes no

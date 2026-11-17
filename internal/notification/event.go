@@ -14,6 +14,10 @@ const (
 	// RunInterrupted is a run whose process stopped before finishing it,
 	// found by rotari web; it is recorded for the Web inbox only.
 	RunInterrupted EventKind = "run.interrupted"
+	// RunUnresponsive is an active run whose coordinator, on another host or
+	// in another PID namespace, has stopped writing its heartbeat. Nothing
+	// proves that it stopped; it is recorded for the Web inbox only.
+	RunUnresponsive EventKind = "run.unresponsive"
 )
 
 type Event struct {
@@ -32,6 +36,13 @@ type Event struct {
 	Result            *model.JobResult `json:"result,omitempty"`
 	StartedAt         string           `json:"started_at,omitempty"`
 	FinishedAt        string           `json:"finished_at,omitempty"`
+	// Host and LastHeartbeatAt are where an unresponsive run's coordinator
+	// ran and the time its last heartbeat recorded, by that host's clock.
+	Host            string `json:"host,omitempty"`
+	LastHeartbeatAt string `json:"last_heartbeat_at,omitempty"`
+	// SilentSeconds is how long the heartbeat had not changed when the run
+	// was found unresponsive, by the clock of the process that found it.
+	SilentSeconds int64 `json:"silent_seconds,omitempty"`
 }
 
 type Batch struct {
@@ -80,8 +91,17 @@ func NewInterruptedRunEvent(project string, run model.RunSummary, occurredAt tim
 		RunStatus: "interrupted", StartedAt: run.StartedAt}
 }
 
+// NewUnresponsiveRunEvent reports run, which has its ID and, when they were
+// recorded, its name and start time, as unresponsive: its coordinator on host
+// last wrote a heartbeat at lastBeatAt, by its own clock, and the beat had
+// not changed for silent.
+func NewUnresponsiveRunEvent(project string, run model.RunSummary, host, lastBeatAt string, silent time.Duration, occurredAt time.Time) Event {
+	return Event{Kind: RunUnresponsive, OccurredAt: occurredAt.UTC().Format(time.RFC3339Nano), Project: project, RunID: run.RunID, RunName: run.RunName,
+		RunStatus: "unresponsive", StartedAt: run.StartedAt, Host: host, LastHeartbeatAt: lastBeatAt, SilentSeconds: int64(silent / time.Second)}
+}
+
 func (settings ChannelSettings) Includes(event Event) bool {
-	if event.Kind == RunInterrupted {
+	if event.Kind == RunInterrupted || event.Kind == RunUnresponsive {
 		return settings.RunFailure
 	}
 	if event.Kind == JobFinished {

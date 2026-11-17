@@ -43,6 +43,8 @@ func TestNewBrowserMessageAppliesSelection(t *testing.T) {
 		return NewRunEvent("demo", model.RunSummary{RunID: "run-1", ExitCode: exitCode}, now)
 	}
 	interrupted := NewInterruptedRunEvent("demo", model.RunSummary{RunID: "run-1", RunName: "nightly", StartedAt: "2026-01-02T03:00:00Z"}, now)
+	unresponsive := NewUnresponsiveRunEvent("demo", model.RunSummary{RunID: "run-1", RunName: "nightly"}, "login2", "2026-01-02T02:50:00Z", 12*time.Minute+20*time.Second, now)
+	explanation := "No heartbeat from login2 for 12m. The run may have stopped, or its host may be unreachable or suspended; check on login2 before running rotari unlock."
 	defaults := Defaults().Browser
 	for _, test := range []struct {
 		name     string
@@ -62,6 +64,11 @@ func TestNewBrowserMessageAppliesSelection(t *testing.T) {
 		{name: "an interrupted run", events: []Event{interrupted}, settings: func(s *ChannelSettings) { s.Fields = []string{"run_name", "run_status", "started_at", "exit_code"} },
 			title: "rotari: run interrupted", body: "run name: nightly\nrun status: interrupted\nstarted at: 2026-01-02T03:00:00Z"},
 		{name: "an interrupted run is a run failure", events: []Event{interrupted}, settings: func(s *ChannelSettings) { s.RunFailure = false; s.RunSuccess = true }},
+		{name: "an unresponsive run says what was seen whatever the fields", events: []Event{unresponsive}, settings: func(s *ChannelSettings) { s.Fields = []string{"run_name", "run_status"} },
+			title: "rotari: run unresponsive", body: "run name: nightly\nrun status: unresponsive\n" + explanation},
+		{name: "an unresponsive run with no fields", events: []Event{unresponsive}, settings: func(s *ChannelSettings) { s.Fields = nil },
+			title: "rotari: run unresponsive", body: explanation},
+		{name: "an unresponsive run is a run failure", events: []Event{unresponsive}, settings: func(s *ChannelSettings) { s.RunFailure = false; s.RunSuccess = true }},
 		{name: "a run without a selected completion", events: []Event{job("bad", 1), run(0)}, settings: func(s *ChannelSettings) { s.RunSuccess = false; s.Fields = nil },
 			title: "rotari: 1 job failed"},
 	} {

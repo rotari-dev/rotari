@@ -50,7 +50,7 @@ func NewBrowserMessage(events []Event, settings ChannelSettings) (BrowserMessage
 			continue
 		}
 		switch {
-		case event.Kind == RunFinished || event.Kind == RunInterrupted:
+		case event.Kind == RunFinished || event.Kind == RunInterrupted || event.Kind == RunUnresponsive:
 			run = &events[index]
 		case event.JobStatus == model.StatusSuccess:
 			if len(succeeded) < settings.MaxJobs {
@@ -74,6 +74,8 @@ func NewBrowserMessage(events []Event, settings ChannelSettings) (BrowserMessage
 		outcome := "succeeded"
 		if run.Kind == RunInterrupted {
 			outcome = "interrupted"
+		} else if run.Kind == RunUnresponsive {
+			outcome = "unresponsive"
 		} else if run.ExitCode != 0 {
 			outcome = "failed"
 		}
@@ -95,7 +97,13 @@ func NewBrowserMessage(events []Event, settings ChannelSettings) (BrowserMessage
 		}
 	}
 	if run != nil {
-		if lines := browserLines(*run, settings.Fields); len(lines) > 0 {
+		lines := browserLines(*run, settings.Fields)
+		if run.Kind == RunUnresponsive {
+			// Whatever fields are chosen, say what was seen and that it
+			// proves nothing.
+			lines = append(lines, UnresponsiveExplanation(*run))
+		}
+		if len(lines) > 0 {
 			sections = append(sections, strings.Join(lines, "\n"))
 		}
 	}
@@ -137,4 +145,19 @@ func browserLines(event Event, fields []string) []string {
 		}
 	}
 	return lines
+}
+
+// UnresponsiveExplanation says what a run.unresponsive event saw: which host
+// stopped writing the heartbeat and for how long, and that the run may still
+// be running, so it must be checked before it is unlocked.
+func UnresponsiveExplanation(event Event) string {
+	host := event.Host
+	if host == "" {
+		host = "an unknown host"
+	}
+	silent := fmt.Sprintf("%ds", event.SilentSeconds)
+	if event.SilentSeconds >= 60 {
+		silent = fmt.Sprintf("%dm", event.SilentSeconds/60)
+	}
+	return fmt.Sprintf("No heartbeat from %s for %s. The run may have stopped, or its host may be unreachable or suspended; check on %s before running rotari unlock.", host, silent, host)
 }

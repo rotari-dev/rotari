@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -265,10 +266,75 @@ func TestWebOnFreshBasedirDoesNotWarnAboutInterruptedRuns(t *testing.T) {
 	time.Sleep(time.Second)
 	_ = cmd.Process.Kill()
 	_ = cmd.Wait()
-	if strings.Contains(stderr.String(), "cannot record interrupted runs") {
+	if strings.Contains(stderr.String(), "cannot record interrupted or unresponsive runs") {
 		t.Fatalf("stderr:\n%s", stderr.String())
 	}
 	if _, err := os.Stat(filepath.Join(e.Base, "projects")); !os.IsNotExist(err) {
 		t.Fatalf("rotari web created %s/projects: %v", e.Base, err)
+	}
+}
+
+// A run's coordinator writes a heartbeat naming itself as its lock does. A
+// run whose lock names another host cannot be checked from here: rotari web
+// does not call it interrupted, and does not call it unresponsive while its
+// heartbeat has stopped for less than five minutes. The five-minute report
+// itself is covered with an injected clock by runwatch's
+// TestWatcherReportsARemoteRunWhoseHeartbeatStopped.
+func TestWebWaitsForAStoppedRemoteHeartbeat(t *testing.T) {
+	covers(t, "NOT-6")
+	e := support.NewEnv(t)
+	jobID := support.AddedJobID(t, e.MustRotari("add", "-p", "p", "--", "sleep", "30"))
+	client := e.Command("run", "-p", "p", "--quiet")
+	if err := client.Start(); err != nil {
+		t.Fatal(err)
+	}
+	// The client waits for the run to end, which a lock naming another host
+	// never seems to do from here.
+	t.Cleanup(func() { _ = client.Process.Kill(); _ = client.Wait() })
+	support.WaitUntil(t, 15*time.Second, func() (bool, string) {
+		return support.JobProcesses(t, e.Root, jobID) == 1, "the job did not start"
+	})
+	lockPath := filepath.Join(e.Base, "projects", "p", "running.lock")
+	var lock map[string]any
+	data, err := os.ReadFile(lockPath)
+	if err != nil || json.Unmarshal(data, &lock) != nil {
+		t.Fatalf("running.lock: %s, %v", data, err)
+	}
+	runID, _ := lock["run_id"].(string)
+	var beat struct {
+		Seq  uint64 `json:"seq"`
+		At   string `json:"at"`
+		Host string `json:"host"`
+		PID  int    `json:"pid"`
+	}
+	data, err = os.ReadFile(filepath.Join(e.Base, "projects", "p", "runs", runID, "heartbeat.json"))
+	if err != nil || json.Unmarshal(data, &beat) != nil {
+		t.Fatalf("heartbeat.json: %s, %v", data, err)
+	}
+	if beat.Seq < 1 || beat.At == "" || beat.Host != lock["host"] || float64(beat.PID) != lock["pid"] {
+		t.Fatalf("heartbeat %+v does not name the lock's coordinator %v", beat, lock)
+	}
+
+	// Make the lock name another host, then stop its coordinator, so its
+	// heartbeat stops and nothing here can see that it is gone.
+	lock["host"] = "elsewhere.invalid"
+	data, err = json.Marshal(lock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lockPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Kill(beat.PID, syscall.SIGKILL); err != nil {
+		t.Fatal(err)
+	}
+	base := e.StartWeb()
+	id := currentBasedirID(t, e, base)
+	// The first pass starts before the server listens; give it time to end.
+	time.Sleep(2 * time.Second)
+	for _, entry := range getInbox(t, e, base, id).Entries {
+		if strings.Contains(entry.Title, "interrupted") || strings.Contains(entry.Title, "unresponsive") {
+			t.Fatalf("remote run reported at once: %+v", entry)
+		}
 	}
 }

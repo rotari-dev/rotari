@@ -249,11 +249,13 @@ func generateStaticWeb(output string, options webui.Options) int {
 	return 0
 }
 
-// watchInterruptedRuns records the interrupted runs of baseDir and the
-// registered basedirs for the Web inbox now and every runwatch.Interval
+// watchInterruptedRuns records the interrupted and unresponsive runs of
+// baseDir and the registered basedirs for the Web inbox now and every
+// runwatch.Interval
 // while rotari web serves. A failure is warned about when it first appears
 // or changes, not on every pass.
 func watchInterruptedRuns(log notificationlog.Log, baseDir string, registered func() ([]string, error)) {
+	watcher := runwatch.NewWatcher()
 	lastProblem := ""
 	for {
 		baseDirs, err := registered()
@@ -264,14 +266,14 @@ func watchInterruptedRuns(log notificationlog.Log, baseDir string, registered fu
 			}
 		}
 		if err == nil {
-			_, err = runwatch.ReportInterrupted(log, baseDirs, time.Now())
+			_, err = watcher.Report(log, baseDirs, time.Now())
 		}
 		problem := ""
 		if err != nil {
 			problem = err.Error()
 		}
 		if problem != "" && problem != lastProblem {
-			printErrorf("WARNING: cannot record interrupted runs for the Web inbox: %v", err)
+			printErrorf("WARNING: cannot record interrupted or unresponsive runs for the Web inbox: %v", err)
 		}
 		lastProblem = problem
 		time.Sleep(runwatch.Interval)
