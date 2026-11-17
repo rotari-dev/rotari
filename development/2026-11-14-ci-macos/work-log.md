@@ -371,3 +371,14 @@ wheel event, it is not. The fake terminal gained `onScroll`. Against the old pag
 
 **Validation:** `node --check` and `tsc` clean; `TestTerminalPanel` passed. The browser test needs Chrome, which is
 not here; the next macOS run tells.
+
+## 2026-11-17 — The macOS leg is required
+
+The macOS race run's last failures were `TestTerminalPanelInBrowser`'s, fixed with the terminal work (its work log, and
+the Resolved item in `development/ISSUES.md`): `9f9d5588` and `df9b46aa` in the panel, `deb03cf3` and `e76822b0` in the
+test. The macOS leg then passed on `e76822b0`, `fc6f988e`, and the `v0.1.30` tag's run of `fc6f988e`, three in a row.
+
+**Change:** `.github/workflows/ci.yml` drops `continue-on-error` from the macOS leg (steps 4 and 5), so a macOS failure
+fails the Go CI workflow as a Linux one does. The same day `3bc78b08` also installed a pinned jj on both legs and
+required its tests (`ROTARI_REQUIRE_JJ_TESTS`). No user or contributor doc describes what CI covers, so none changed.
+Whether GitHub's branch protection lists the leg as a required check is a repository setting, outside this change.

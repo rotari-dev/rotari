@@ -1,7 +1,7 @@
 # Plan: Run the Go CI on macOS too
 
 Created: 2026-11-14
-Status: In progress (step 3, the macOS race run); see [work-log.md](work-log.md). Decided with the user on 2026-11-14.
+Status: Done on 2026-11-17 (the macOS leg fails the workflow like the Linux one); see [work-log.md](work-log.md). Decided with the user on 2026-11-14.
 
 ## Goal
 
