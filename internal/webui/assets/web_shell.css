@@ -1463,7 +1463,7 @@ html.terminal-open .output-panel.terminal-overview {
   text-align: right;
 }
 .terminal-overview-item .terminal-overview-top {
-  padding-right: 88px;
+  padding-right: 112px;
 }
 .terminal-overview-actions {
   position: absolute;
