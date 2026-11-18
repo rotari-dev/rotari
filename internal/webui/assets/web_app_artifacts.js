@@ -181,14 +181,16 @@ function renderArtifactListing() {
           "</button>"
         : esc(entry.display_path);
       return (
-        '<tr data-entry="' +
+        '<tr class="artifact-row artifact-type-' +
+        esc(entry.type) +
+        '" data-entry="' +
         esc(String(index)) +
         '"><td>' +
-        esc(entry.type) +
-        "</td><td>" +
-        path +
+        artifactTypeBadge(entry.type) +
         "</td><td>" +
         esc(entry.origin) +
+        "</td><td>" +
+        path +
         "</td>" +
         (actions
           ? artifactActionCells(index, "", open ? entry.type : "")
@@ -219,8 +221,8 @@ function renderArtifactListing() {
       ? '<p class="meta">Relative to ' + esc(listing.working_directory) + "</p>"
       : "") +
     hint +
-    '<table class="runs artifact-table"><thead><tr><th>Type</th><th>Path</th><th>Found in</th>' +
-    (actions ? "<th>Download</th><th>Launch</th>" : "") +
+    '<table class="runs artifact-table"><thead><tr><th>Type</th><th>Found in</th><th>Path</th>' +
+    (actions ? "<th>Launch</th><th>Download</th>" : "") +
     "</tr></thead><tbody>" +
     rows +
     "</tbody></table>" +
@@ -311,7 +313,17 @@ async function openArtifact(index, child, type) {
     artifactPreview().scrollIntoView({ block: "start", inline: "nearest" });
   }
 }
-// artifactActionCells are a row's Download and Launch cells: a file can be
+// artifactTypeBadge shows an entry type in a colour per type.
+function artifactTypeBadge(type) {
+  return (
+    '<span class="artifact-type artifact-type-' +
+    esc(type) +
+    '">' +
+    esc(type) +
+    "</span>"
+  );
+}
+// artifactActionCells are a row's Launch and Download cells: a file can be
 // downloaded, and a file or a directory launched on with a button per
 // command that accepts it. Other types, and rows that cannot be opened
 // (type ""), get empty cells.
@@ -319,9 +331,9 @@ function artifactActionCells(index, child, type) {
   const launchable = type === "file" || type === "directory";
   return (
     '<td class="artifact-action">' +
-    (type === "file" ? artifactDownloadLink(index, child) : "") +
-    '</td><td class="artifact-action">' +
     (launchable ? artifactLaunchButtons(index, child, type) : "") +
+    '</td><td class="artifact-action">' +
+    (type === "file" ? artifactDownloadLink(index, child) : "") +
     "</td>"
   );
 }
@@ -662,8 +674,10 @@ async function loadArtifactDirectory(index, child, offset) {
             esc(entry.name) +
             "</button>";
       return (
-        "<tr><td>" +
+        '<tr class="artifact-row artifact-type-' +
         esc(entry.type) +
+        '"><td>' +
+        artifactTypeBadge(entry.type) +
         "</td><td>" +
         open +
         "</td><td>" +
@@ -689,7 +703,7 @@ async function loadArtifactDirectory(index, child, offset) {
             : ""),
       ) +
       "</p>" +
-      '<table class="runs"><thead><tr><th>Type</th><th>Name</th><th>Size</th><th>Modified</th><th>Download</th><th>Launch</th></tr></thead><tbody>' +
+      '<table class="runs"><thead><tr><th>Type</th><th>Name</th><th>Size</th><th>Modified</th><th>Launch</th><th>Download</th></tr></thead><tbody>' +
       rows +
       "</tbody></table>" +
       (end < page.total

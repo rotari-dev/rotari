@@ -1755,6 +1755,36 @@ pre,
   min-height: 0;
   padding: 3px 8px;
 }
+.artifact-type {
+  --artifact-type-color: var(--s-off);
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: var(--artifact-type-color);
+  background: color-mix(in srgb, var(--artifact-type-color) 16%, transparent);
+  font-size: 0.85em;
+}
+.artifact-type-file {
+  --artifact-type-color: var(--c1);
+}
+.artifact-type-directory {
+  --artifact-type-color: var(--c3);
+}
+.artifact-type-symlink {
+  --artifact-type-color: var(--c5);
+}
+.artifact-type-other {
+  --artifact-type-color: var(--c4);
+}
+.artifact-type-missing {
+  --artifact-type-color: var(--c7);
+}
+tr.artifact-row > td {
+  background: color-mix(in srgb, var(--artifact-type-color) 10%, transparent);
+}
+tr.artifact-row > td:first-child {
+  box-shadow: inset 3px 0 0 var(--artifact-type-color);
+}
 .artifact-action {
   white-space: nowrap;
 }

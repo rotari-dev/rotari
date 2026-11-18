@@ -63,19 +63,19 @@ const settle = async (check) => {
   if (buttons.some(text => text.includes('secret.txt'))) fail('outside entry is openable');
   if (buttons.length !== 11) fail('buttons', buttons);
   const workingDirectoryRow = rows[0];
-  if (JSON.stringify([...workingDirectoryRow.children].slice(0, 3).map(cell => cell.textContent)) !== '["directory",".","working directory"]') fail('working directory row', workingDirectoryRow.textContent);
+  if (JSON.stringify([...workingDirectoryRow.children].slice(0, 3).map(cell => cell.textContent)) !== '["directory","working directory","."]') fail('working directory row', workingDirectoryRow.textContent);
   // Each row has Download for a file it can open and launch buttons for a
   // file or directory it can open; other rows have empty action cells.
   const listingHeaders = [...view.querySelectorAll('.artifact-table thead th')].map(cell => cell.textContent);
-  if (JSON.stringify(listingHeaders) !== '["Type","Path","Found in","Download","Launch"]') fail('listing headers', listingHeaders);
+  if (JSON.stringify(listingHeaders) !== '["Type","Found in","Path","Launch","Download"]') fail('listing headers', listingHeaders);
   const rowActions = (name) => {
-    const row = [...rows].find(row => row.children[1].textContent.endsWith(name));
+    const row = [...rows].find(row => row.children[2].textContent.endsWith(name));
     return [!!row.querySelector('.artifact-download'), !!row.querySelector('.artifact-launchers')];
   };
   for (const [name, want] of [['.', '[false,true]'], ['plot.png', '[true,true]'], ['many', '[false,true]'], ['secret.txt', '[false,false]'], ['gone.csv', '[false,false]']]) {
     if (JSON.stringify(rowActions(name)) !== want) fail('row actions of ' + name, rowActions(name));
   }
-  const plotDownload = [...rows].find(row => row.children[1].textContent === 'plot.png').querySelector('.artifact-download');
+  const plotDownload = [...rows].find(row => row.children[2].textContent === 'plot.png').querySelector('.artifact-download');
   if (!plotDownload.getAttribute('href').includes('download=1') || !plotDownload.hasAttribute('download')) fail('row download link', plotDownload.outerHTML);
 
   const preview = document.getElementById('artifact-preview');

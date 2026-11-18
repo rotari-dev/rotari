@@ -100,9 +100,9 @@ func TestWebLaunchInBrowser(t *testing.T) {
   // viewer for a table file; a command's button opens its confirmation as
   // a row below, and the same button closes it.
   await settle(() => ['data.csv', 'many'].every(name => launchers([...document.querySelectorAll('.artifact-table tbody tr')].find(row => row.children[1].textContent === name)).length === 4));
-  const listingRow = [...document.querySelectorAll('.artifact-table tbody tr')].find(row => row.children[1].textContent === 'data.csv');
+  const listingRow = [...document.querySelectorAll('.artifact-table tbody tr')].find(row => row.children[2].textContent === 'data.csv');
   if (JSON.stringify(launchers(listingRow)) !== '["Table viewer","Cat","Sleep","Viewer"]') fail('row buttons', launchers(listingRow));
-  const manyRow = [...document.querySelectorAll('.artifact-table tbody tr')].find(row => row.children[1].textContent === 'many');
+  const manyRow = [...document.querySelectorAll('.artifact-table tbody tr')].find(row => row.children[2].textContent === 'many');
   if (JSON.stringify(launchers(manyRow)) !== '["Table viewer","Count","Sleep","Viewer"]') fail('directory row buttons', launchers(manyRow));
   const catButton = () => [...listingRow.querySelectorAll('.artifact-launchers button')].find(button => button.textContent === 'Cat');
   catButton().click();
@@ -213,7 +213,7 @@ func TestWebLaunchWorkingDirectoryWithoutCandidatesInBrowser(t *testing.T) {
 	runLaunchBrowserScript(t, options, f, `
   await window.showArtifacts('default', runID, 'job-2', '');
   const rows = [...document.querySelectorAll('#artifact-view .artifact-table tbody tr')];
-  if (rows.length !== 1 || rows[0].children[1].textContent !== '.') fail('working directory row', document.getElementById('artifact-view').innerHTML);
+  if (rows.length !== 1 || rows[0].children[2].textContent !== '.') fail('working directory row', document.getElementById('artifact-view').innerHTML);
   await settle(() => launchers(rows[0]).length === 2);
   if (JSON.stringify(launchers(rows[0])) !== '["Table viewer","Count"]') fail('working directory buttons', launchers(rows[0]));
 `)
