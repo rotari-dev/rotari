@@ -138,3 +138,22 @@ jsdom test failed on both. The jsdom tests ran for real only with Node 22.20.
 which also fail on `9bd33582` (recorded in `ISSUES.md`).
 
 **Remaining:** Try the pages in a real browser; the two artifact tests.
+
+## Align two artifact tests with the listing's new order
+
+**Commits:** see the commit that adds this entry (`jj log`).
+
+**Change:** `TestWebArtifactPreviewInBrowser` now expects the directory
+columns Launch, Download, and `TestStaticExportWithArtifactContents` the
+working-directory row `directory`, `working directory`, `.`.
+
+**Reason:** CI failed these two after the artifact listing was reordered; they
+were missed then, and also failed before the sticky notes. Not a sticky-note
+change; fixed here to get CI green, and its `ISSUES.md` entry removed.
+
+**Plan impact:** None.
+
+**Validation:** Both pass with Node 22.20; the whole `internal/webui` package
+run below.
+
+**Remaining:** None.

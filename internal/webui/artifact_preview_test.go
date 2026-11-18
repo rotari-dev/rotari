@@ -124,7 +124,7 @@ const settle = async (check) => {
   let children = view.querySelectorAll('.artifact-preview tbody tr');
   if (children.length !== 200) fail('directory page', children.length);
   const childHeaders = [...view.querySelectorAll('.artifact-preview thead th')].map(cell => cell.textContent);
-  if (JSON.stringify(childHeaders) !== '["Type","Name","Size","Modified","Download","Launch"]') fail('directory headers', childHeaders);
+  if (JSON.stringify(childHeaders) !== '["Type","Name","Size","Modified","Launch","Download"]') fail('directory headers', childHeaders);
   // Directories come first; a directory child launches but does not download.
   const fileChild = [...children].find(row => row.children[0].textContent === 'file');
   const dirChild = [...children].find(row => row.children[0].textContent === 'directory');

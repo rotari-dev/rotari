@@ -60,7 +60,7 @@ setTimeout(async () => {
     const buttons = view().querySelectorAll('.artifact-table .artifact-open').length;
     if (buttons !== 10) fail('open buttons', buttons);
     const workingDirectoryRow = view().querySelector('.artifact-table tbody tr');
-    if (JSON.stringify([...workingDirectoryRow.children].slice(0, 3).map(cell => cell.textContent)) !== '["directory",".","working directory"]') fail('working directory row', workingDirectoryRow.textContent);
+    if (JSON.stringify([...workingDirectoryRow.children].slice(0, 3).map(cell => cell.textContent)) !== '["directory","working directory","."]') fail('working directory row', workingDirectoryRow.textContent);
     if (!workingDirectoryRow.querySelector('.artifact-open') || workingDirectoryRow.querySelector('.artifact-download') || !workingDirectoryRow.querySelector('.artifact-launchers')) fail('working directory actions', workingDirectoryRow.innerHTML);
 
     let scrolls = 0;
