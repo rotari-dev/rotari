@@ -313,12 +313,19 @@ async function openArtifact(index, child, type) {
     artifactPreview().scrollIntoView({ block: "start", inline: "nearest" });
   }
 }
+// categoryAttribute colours an element by a file's extension category, as
+// the Explorer does; "" for none.
+function categoryAttribute(category) {
+  return category ? ' data-category="' + esc(category) + '"' : "";
+}
 // artifactTypeBadge shows an entry type in a colour per type.
-function artifactTypeBadge(type) {
+function artifactTypeBadge(type, category) {
   return (
     '<span class="artifact-type artifact-type-' +
     esc(type) +
-    '">' +
+    '"' +
+    categoryAttribute(category) +
+    ">" +
     esc(type) +
     "</span>"
   );
@@ -665,6 +672,8 @@ async function loadArtifactDirectory(index, child, offset) {
     .map((entry) => {
       const path = child ? child + "/" + entry.name : entry.name;
       const type = entry.type === "symlink" ? "file" : entry.type;
+      const category =
+        type === "directory" ? "dir" : window.fileCategory(entry.name);
       const open =
         entry.type === "other"
           ? esc(entry.name)
@@ -676,8 +685,10 @@ async function loadArtifactDirectory(index, child, offset) {
       return (
         '<tr class="artifact-row artifact-type-' +
         esc(entry.type) +
-        '"><td>' +
-        artifactTypeBadge(entry.type) +
+        '"' +
+        categoryAttribute(category) +
+        "><td>" +
+        artifactTypeBadge(entry.type, category) +
         "</td><td>" +
         open +
         "</td><td>" +

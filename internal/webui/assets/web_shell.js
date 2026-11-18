@@ -4156,12 +4156,13 @@ function shellWord(value) {
       extensions.map((extension) => [extension, category]),
     ),
   );
-  const fileCategory = (name) => {
+  // window.fileCategory is shared with the application's artifact listings.
+  const fileCategory = (window.fileCategory = (name) => {
     const dot = name.lastIndexOf(".");
     return dot > 0
       ? fileCategoryByExtension.get(name.slice(dot + 1).toLowerCase()) || ""
       : "";
-  };
+  });
   const joinPath = (dir, name) => (dir === "/" ? "/" : dir + "/") + name;
   const parentOf = (path) => path.slice(0, path.lastIndexOf("/")) || "/";
   const baseName = (path) =>

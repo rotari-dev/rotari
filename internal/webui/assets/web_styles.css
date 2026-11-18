@@ -1779,6 +1779,10 @@ pre,
 .artifact-type-missing {
   --artifact-type-color: var(--c7);
 }
+.artifact-type[data-category],
+tr.artifact-row[data-category] {
+  --artifact-type-color: var(--category-color);
+}
 tr.artifact-row > td {
   background: color-mix(in srgb, var(--artifact-type-color) 10%, transparent);
 }
