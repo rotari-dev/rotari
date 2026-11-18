@@ -157,3 +157,26 @@ change; fixed here to get CI green, and its `ISSUES.md` entry removed.
 run below.
 
 **Remaining:** None.
+
+## Sonar quality gate: annotate the Explorer launch path checks
+
+**Commits:** see the commit that adds this entry (`jj log`).
+
+**Change:** `explorerLaunchStart` in `internal/webui/launches.go` now carries
+the `NOSONAR` reason that `listTerminalDir` already uses on its two
+filesystem calls (`EvalSymlinks` and `os.Stat` of the Explorer path).
+
+**Reason:** The Sonar quality gate failed on `new_security_rating` for two
+`gosecurity:S6549` findings on those lines, added by the Explorer launch
+commit, not by the sticky notes. The path is user input by design, checked by
+`checkTerminalDir` and the terminal's connection rules, so the findings are
+not exploitable; restructuring cannot satisfy a taint rule for a path the
+feature has to accept.
+
+**Plan impact:** None.
+
+**Validation:** `go build`, `go vet ./internal/webui`, and the Launch and
+Explorer tests pass. Whether the quality gate turns green is known only after
+the next SonarCloud run.
+
+**Remaining:** Check the gate after the push.

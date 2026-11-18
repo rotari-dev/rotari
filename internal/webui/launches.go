@@ -551,11 +551,11 @@ func (s site) explorerLaunchStart(command launcher.Command, request webLaunchReq
 	if err := checkTerminalDir(request.Path); err != nil {
 		return launcher.StartRequest{}, err
 	}
-	path, err := filepath.EvalSymlinks(filepath.Clean(request.Path))
+	path, err := filepath.EvalSymlinks(filepath.Clean(request.Path)) // NOSONAR: any path is allowed by design; only someone who passes the terminal's checks gets here, and they already have a shell.
 	if err != nil {
 		return launcher.StartRequest{}, err
 	}
-	info, err := os.Stat(path)
+	info, err := os.Stat(path) // NOSONAR: any path is allowed by design; only someone who passes the terminal's checks gets here, and they already have a shell.
 	if err != nil {
 		return launcher.StartRequest{}, err
 	}
