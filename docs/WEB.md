@@ -180,7 +180,8 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
   puts a coloured note on the page you are viewing, **Hide on this page** (or
   **Show**) hides or shows that page's notes in this browser without deleting
   them, and the list below shows every note, newest first, with its creation
-  time, first words, and page; choose one to go to that page, or its `×` to delete it. Drag a note by
+  time, first words, and page; choose one to go to that page, or its `×` to delete it. In the sidebar, pages with notes carry a coloured dot (hover for the first note),
+  and the project of a run with notes carries a faint one. Drag a note by
   its header, resize it by the corner grip, type in it, click the dot to change its colour, and `×` to
   delete it. Notes belong to a page, are kept in
   the state directory (so every browser sees them), and are separate from run

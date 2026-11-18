@@ -226,6 +226,13 @@ function initOrbitGame() {
       setTurnDirection(0);
   });
 }
+// Every drawing of the sidebar, including those that do not render the page,
+// keeps its sticky-note marks.
+const originalRenderSidebar = renderSidebar;
+renderSidebar = function (...args) {
+  originalRenderSidebar(...args);
+  markSidebarStickies();
+};
 const originalRender = render;
 render = function () {
   if (pageParts()[0] !== "search" && pageParts()[0] !== "activity")

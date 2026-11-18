@@ -2377,8 +2377,28 @@ html.terminal-open .output-panel.terminal-launch {
   box-sizing: border-box;
 }
 
-.settings-panel.stickies-panel {
+/* Its own classes, not the Settings menu's: web_shell.js closes the Settings
+   menu on a click outside the first .settings-menu of the page. */
+.stickies-menu {
+  position: relative;
+}
+.stickies-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: flex;
   width: 320px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+.stickies-panel[hidden] {
+  display: none;
 }
 .stickies-actions {
   display: flex;
@@ -2464,4 +2484,32 @@ html.terminal-open .output-panel.terminal-launch {
   opacity: 0.55;
   cursor: nwse-resize;
   touch-action: none;
+}
+.sticky-pin {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border: 1px solid var(--sticky-ink);
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.sticky-pin-yellow {
+  background: var(--sticky-yellow);
+}
+.sticky-pin-pink {
+  background: var(--sticky-pink);
+}
+.sticky-pin-green {
+  background: var(--sticky-green);
+}
+.sticky-pin-blue {
+  background: var(--sticky-blue);
+}
+.sticky-pin-orange {
+  background: var(--sticky-orange);
+}
+.sticky-pin-below {
+  opacity: 0.45;
+  background: transparent;
 }

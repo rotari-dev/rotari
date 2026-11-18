@@ -84,6 +84,13 @@ by both templates; `jobs_page_controls.js` gives that page the helpers
 page with `?launches=1`. The sticky styles moved to `web_shell.css`, which
 both pages load.
 
+Then: the sidebar marks pages that have notes (asked for after a discussion of
+options): a dot in the colour of the first note, titled with its first
+characters, on the page's link, and a faint dot on the links of its parent
+pages. Done in `markSidebarStickies` from the page keys of `GET
+/api/stickies`, redrawn after every sidebar draw; no per-row marks or counts
+for now.
+
 ## Status
 
 Implemented as planned (WEB-62). Not validated here: the Web UI script and

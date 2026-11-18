@@ -8,6 +8,66 @@ let stickyPage = "";
 let stickyNotes = [];
 let stickySaveTimer = 0;
 let stickyDragging = false;
+/** @type {Map<string, {text: string, color: string}[]>} */
+let stickyPages = new Map();
+function setStickyPages(entries) {
+  stickyPages = new Map(entries.map((entry) => [entry.page, entry.notes || []]));
+  markSidebarStickies();
+}
+function setStickyPageNotes(page, notes) {
+  if (notes.length) stickyPages.set(page, notes);
+  else stickyPages.delete(page);
+  markSidebarStickies();
+}
+/** The page key of a sidebar link, or null for a link into another basedir. */
+function stickySidebarKey(link) {
+  const parts = new URL(link.href, location.origin).pathname
+    .split("/")
+    .filter(Boolean);
+  if (parts[0] === "_basedir") {
+    if (parts[1] !== mountedBasedirID) return null;
+    parts.splice(0, 2);
+  }
+  return parts.join("/") || "/";
+}
+// Marks the sidebar links of pages that have notes with a dot in the colour
+// of the first note, and the links of their parents (a project whose run has
+// a note) with a faint one. The application page draws its sidebar again on
+// each refresh, so it calls this after every render.
+function markSidebarStickies() {
+  const sidebar = document.querySelector(".sidebar");
+  if (!sidebar) return;
+  const parents = new Set();
+  for (const [page, notes] of stickyPages) {
+    const parts = page.split("/");
+    if (notes.length && page !== "/")
+      for (let length = 1; length < parts.length; length++)
+        parents.add(parts.slice(0, length).join("/"));
+  }
+  for (const link of sidebar.querySelectorAll("a[href]")) {
+    link.querySelector(".sticky-pin")?.remove();
+    // The logo links to the home page, which has its own link below it.
+    if (link.classList.contains("sidebar-brand")) continue;
+    const key = stickySidebarKey(link);
+    const notes = key === null ? [] : stickyPages.get(key) || [];
+    if (!notes.length && !parents.has(key)) continue;
+    const pin = document.createElement("span");
+    if (notes.length) {
+      pin.className = "sticky-pin sticky-pin-" + notes[0].color;
+      pin.title =
+        stickySnippet(notes[0].text) +
+        (notes.length > 1 ? " (+" + (notes.length - 1) + " more)" : "");
+    } else {
+      pin.className = "sticky-pin sticky-pin-below";
+      pin.title = "Sticky notes on pages below";
+    }
+    link.appendChild(pin);
+  }
+}
+async function loadStickyPages() {
+  const data = await fetchWebJSON("/api/stickies");
+  if (data) setStickyPages(data.pages || []);
+}
 function stickyPageKey() {
   return pageParts().join("/") || "/";
 }
@@ -68,6 +128,7 @@ async function saveStickies(page, notes) {
     const message = response.ok ? "" : "Not saved: " + text.trim();
     if (page === stickyPage)
       for (const note of notes) stickyErrorOn(note.id, message);
+    if (!message) setStickyPageNotes(page, notes);
     return message;
   } catch (error) {
     const message = "Not saved: " + error;
@@ -224,6 +285,7 @@ async function loadStickies() {
   const data = await fetchWebJSON("/api/stickies?page=" + encodeURIComponent(page));
   if (page !== stickyPage || !data) return;
   stickyNotes = data.notes || [];
+  setStickyPageNotes(page, stickyNotes);
   renderStickies();
 }
 function addSticky() {
@@ -263,6 +325,7 @@ async function renderStickyList() {
   flushStickySave();
   const data = await fetchWebJSON("/api/stickies");
   list.textContent = "";
+  if (data) setStickyPages(data.pages || []);
   const entries = [];
   for (const entry of data?.pages || [])
     for (const note of entry.notes || [])
@@ -373,6 +436,8 @@ if (typeof rewriteStaticLinks !== "function") {
     if (event.key === "Escape") setStickiesMenuOpen(false);
   });
   window.addEventListener("pagehide", flushStickySave);
+  window.addEventListener("focus", loadStickyPages);
+  loadStickyPages();
   loadStickies();
   setInterval(loadStickies, 1000);
 }

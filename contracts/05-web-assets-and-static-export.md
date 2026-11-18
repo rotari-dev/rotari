@@ -1803,7 +1803,10 @@ every note, newest first, as its creation time, its first 24 characters, and its
 deletes it; a static export has none. The live Recent jobs page, which has no application script, has the same menu (its page
 key is `jobs`), the top bar's **Sign out** when a sign-in is required, and **Launches** when launching is available;
 that button opens the application page with `?launches=1`, which shows the Launches view and drops the parameter. Its
-static export has none of them.
+static export has none of them. In the sidebar of both pages, the link of a page that has notes carries a dot in the colour
+of its first note, with that note's first characters (and how many more there are) as its title, and the link of each
+parent page of such a page, as a project of a run, carries a faint dot; the marks follow every drawing of the sidebar and
+only links into the basedir the page belongs to get them.
 `rotari stickies` prints each page with its notes and their creation times (or `No sticky notes found.`), `--page` limits it to one page, and
 `--json` prints `{"basedir", "pages": [{"page", "notes"}]}`; it only reads. Implemented in `internal/stickies`, the
 handler in `internal/webui/webui.go`, `web_app_stickies.js`, and `cmd/rotari/stickies.go`; covered by

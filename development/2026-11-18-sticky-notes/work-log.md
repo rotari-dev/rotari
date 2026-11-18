@@ -86,3 +86,55 @@ and nothing was tried in a browser.
 
 **Remaining:** Try the page in a browser; the page's Launches count and the
 deep link have no jsdom test.
+
+## Sidebar marks for pages with notes
+
+**Commits:** see the CI fix entry below.
+
+**Change:** `markSidebarStickies` in `web_app_stickies.js` puts a dot on the
+sidebar links of pages with notes and a faint one on their parents, from the
+all-pages `GET /api/stickies`; `web_app_bootstrap.js` wraps `renderSidebar`
+so every drawing keeps the marks. Styles in `web_shell.css`. Contract WEB-62,
+`docs/WEB.md`, and the plan updated.
+
+**Reason:** The user asked how to see which pages have notes from the
+sidebar, then to try the dot, parent mark, and tooltip option.
+
+**Plan impact:** Count badges and a "pages with notes" filter were left out.
+
+**Validation:** Syntax check of the scripts and the colour-token, placeholder,
+and sticky tests pass; the jsdom failures are the same 78 as before. Not
+tried in a browser.
+
+**Remaining:** Try it in a browser, including a collapsed project and a
+basedir other than the current one.
+
+## Fix the Settings menu and tests that CI caught
+
+**Commits:** see the commit that adds this entry; its date, time, and ID are
+in `jj log` and are not repeated here.
+
+**Change:** The Stickies menu used the Settings menu's `settings-menu` and
+`settings-panel` classes, so `web_shell.js` (which closes Settings on a click
+outside the page's first `.settings-menu`) treated every Settings click as
+outside and the menu never opened. It now has its own `stickies-menu` and
+`stickies-panel` classes and styles. Updated the toolbar order in
+`TestWebHTMLRendersState`, made `TestJobsRangeBarInBrowser` ignore the top
+bar's launch and sticky fetches, and added
+`TestRecentJobsPageMarksStickiesAndKeepsSettingsMenuWorking`.
+
+**Reason:** CI failed `TestWebShellMenuAndDrawer`, `TestWebHTMLRendersState`,
+`TestJobsRangeBarInBrowser`, and `TestTerminalPanelInBrowser` (its Settings
+path buttons were hidden because the menu never opened).
+
+**Plan impact:** None. The earlier entries said the jsdom failures matched the
+parent commit; that comparison was meaningless, because with Node 12 every
+jsdom test failed on both. The jsdom tests ran for real only with Node 22.20.
+
+**Validation:** With Node 22.20, the new test fails with the old class
+(`Settings does not open beside Stickies`) and passes with the fix; `go vet`,
+`go test ./internal/... ./cmd/...`, and `go test ./conformance/...` pass except
+`TestWebArtifactPreviewInBrowser` and `TestStaticExportWithArtifactContents`,
+which also fail on `9bd33582` (recorded in `ISSUES.md`).
+
+**Remaining:** Try the pages in a real browser; the two artifact tests.
