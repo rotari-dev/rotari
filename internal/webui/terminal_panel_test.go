@@ -3743,7 +3743,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     row.dispatchEvent(new ex.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
     return [...ex.document.querySelectorAll('.terminal-tab-menu button')];
   };
-  assert.deepEqual(menuOf(exRow('train.yaml')).map((item) => [item.textContent, item.disabled]), [['Open in the Table viewer', false], ['Open in a new terminal tab', false], ['Send the path to the terminal', false], ['Download', false], ['Upload...', false], ['New File...', false], ['New Folder...', false], ['Cut', false], ['Copy', false], ['Paste', true], ['Rename...', false], ['Delete...', false], ['Copy the path', false], ['Copy the path from here', false]]);
+  assert.deepEqual(menuOf(exRow('train.yaml')).map((item) => [item.textContent, item.disabled]), [['Open in the Table viewer', false], ['Launch...', false], ['Open in a new terminal tab', false], ['Send the path to the terminal', false], ['Download', false], ['Upload...', false], ['New File...', false], ['New Folder...', false], ['Cut', false], ['Copy', false], ['Paste', true], ['Rename...', false], ['Delete...', false], ['Copy the path', false], ['Copy the path from here', false]]);
   menuOf(exRow('train.yaml'))[13].click();
   await wait(10);
   menuOf(exRow('train.yaml'))[12].click();
@@ -4220,7 +4220,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const lkMenu = () => [...lk.document.querySelectorAll('.terminal-tab-menu button')].map((item) => item.textContent);
   const rightClick = () => lkViewport.dispatchEvent(new lk.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
   rightClick();
-  assert.deepEqual(lkMenu(), ['Open in the Table viewer', 'Open in a new terminal tab', 'Show in the Explorer', 'Send the path to the terminal', 'Download', 'Upload...', 'New File...', 'New Folder...', 'Cut', 'Copy', 'Paste', 'Rename...', 'Delete...', 'Copy the path', 'Copy the path from here']);
+  assert.deepEqual(lkMenu(), ['Open in the Table viewer', 'Launch...', 'Open in a new terminal tab', 'Show in the Explorer', 'Send the path to the terminal', 'Download', 'Upload...', 'New File...', 'New Folder...', 'Cut', 'Copy', 'Paste', 'Rename...', 'Delete...', 'Copy the path', 'Copy the path from here']);
   [...lk.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Show in the Explorer').click();
   await wait(30);
   assert.equal(lk.document.querySelector('.terminal-explorer-where').textContent, '/w/p1/out');

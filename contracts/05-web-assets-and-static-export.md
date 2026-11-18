@@ -2026,6 +2026,15 @@ launch dialog in `web_shell.js`; covered by
 [`TestLaunchOnAShellsDirectory`](../conformance/05-web/launch_test.go), the unit
 test of that name, and `TestTerminalPanel`.
 
+A launch may instead name a file or directory the terminal's Explorer shows, with
+an absolute `path` (not together with `shell` or an artifact): the target is that
+path with symbolic links followed, launched as a file or directory under the
+command's own checks. It needs the terminal and the connection the terminal needs
+(HTTPS or direct localhost, else 403). **Launch...** in the Explorer's context menu,
+beside **Open in the Table viewer**, opens the dialog for it. Implemented by
+`explorerLaunchStart` in `internal/webui/launches.go`; covered by the unit test
+`TestLaunchOnAnExplorerPath`.
+
 **WEB-37** The Settings menu of a live application or Recent jobs page ends with
 which rotari serves it: the version `rotari version` prints, and the path of the
 running binary with buttons to copy it and, with the terminal, to send it to the

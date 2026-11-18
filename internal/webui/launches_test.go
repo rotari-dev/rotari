@@ -1292,3 +1292,67 @@ func TestLaunchOnAShellsDirectory(t *testing.T) {
 		t.Errorf("without the terminal: %d %s", got.Code, got.Body.String())
 	}
 }
+
+func serveSecureJSON(t *testing.T, handler http.Handler, method, target, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(method, target, strings.NewReader(body))
+	request.Header.Set("X-Forwarded-Proto", "https")
+	if method == http.MethodPost {
+		request.Header.Set("Origin", "http://example.com")
+	}
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	return recorder
+}
+
+// A launch may name a file or directory the terminal's Explorer shows by path, and needs the terminal.
+func TestLaunchOnAnExplorerPath(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "x.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	options := launchOptions(t, t.TempDir(),
+		launchCommand("Where", `pwd -P`, launcher.TargetDirectory),
+		launchCommand("Cat", `cat x`, launcher.TargetFile))
+	keeper, err := terminal.NewKeeper(terminal.KeeperOptions{
+		Shell:     terminal.Options{Shell: "/bin/sh", Dir: dir, Env: []string{"HOME=" + dir, "PATH=" + os.Getenv("PATH"), "PS1=$ "}},
+		IdleLimit: time.Hour, RingSize: 1 << 16, ShellLimit: 3, GroupLimit: 3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(keeper.Close)
+	options.Terminal = keeper
+	handler := Handler(options)
+
+	for name, test := range map[string]struct {
+		path, command string
+		kind          launcher.TargetKind
+	}{"a directory": {dir, "Where", launcher.TargetDirectory}, "a file": {file, "Cat", launcher.TargetFile}} {
+		preview := serveSecureJSON(t, handler, http.MethodGet, "/api/launch-preview?name="+test.command+"&path="+url.QueryEscape(test.path), "")
+		shown := decodeBody[webLaunchPreview](t, preview)
+		if preview.Code != http.StatusOK || shown.Target != test.path || shown.Kind != test.kind {
+			t.Errorf("%s: preview = %d %s", name, preview.Code, preview.Body.String())
+		}
+	}
+	for name, test := range map[string]struct{ body, want string }{
+		"a wrong kind":  {`{"path":"` + file + `","name":"Where"}`, "does not accept a file"},
+		"relative":      {`{"path":"x.txt","name":"Cat"}`, "not absolute"},
+		"missing":       {`{"path":"` + dir + `/none","name":"Cat"}`, "no such file"},
+		"with a shell":  {`{"path":"` + file + `","shell":"1","name":"Cat"}`, "not both"},
+		"with an entry": {`{"path":"` + file + `","name":"Cat","child":"sub"}`, "names only the path"},
+	} {
+		got := serveSecureJSON(t, handler, http.MethodPost, "/api/launch", test.body)
+		if got.Code != http.StatusBadRequest || !strings.Contains(got.Body.String(), test.want) {
+			t.Errorf("%s: %d %s, want 400 saying %q", name, got.Code, got.Body.String(), test.want)
+		}
+	}
+	options.Terminal = nil
+	if got := serveSecureJSON(t, Handler(options), http.MethodPost, "/api/launch", `{"path":"`+file+`","name":"Cat"}`); got.Code != http.StatusBadRequest || !strings.Contains(got.Body.String(), "--allow-terminal") {
+		t.Errorf("without the terminal: %d %s", got.Code, got.Body.String())
+	}
+}

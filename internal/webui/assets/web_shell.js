@@ -1830,7 +1830,7 @@ function shellWord(value) {
       return;
     }
   };
-  const startShellLaunch = async (serial, body, shell, name, newInstance) => {
+  const startShellLaunch = async (serial, body, subject, name, newInstance) => {
     body.replaceChildren(makeElement("p", "", "Starting..."));
     let response;
     try {
@@ -1838,7 +1838,7 @@ function shellWord(value) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          shell: shell.id,
+          ...subject,
           name,
           new_instance: newInstance,
         }),
@@ -1859,7 +1859,7 @@ function shellWord(value) {
           launchOpen(answer),
           showInLaunches(answer.id),
           textButton("Start another instance", () =>
-            startShellLaunch(serial, body, shell, name, true),
+            startShellLaunch(serial, body, subject, name, true),
           ),
         ),
       );
@@ -1874,13 +1874,13 @@ function shellWord(value) {
       launchButtons(showInLaunches(answer.id)),
     );
   };
-  const previewShellLaunch = async (serial, body, shell, name, back) => {
+  const previewShellLaunch = async (serial, body, subject, name, back) => {
     body.replaceChildren(makeElement("p", "", "Loading..."));
     let response;
     try {
       response = await serverFetch(
-        "/api/launch-preview?shell=" +
-          encodeURIComponent(shell.id) +
+        "/api/launch-preview?" +
+          new URLSearchParams(subject).toString() +
           "&name=" +
           encodeURIComponent(name),
       );
@@ -1902,9 +1902,11 @@ function shellWord(value) {
       ["Runs as", answer.user + "@" + answer.host],
       [
         "From",
-        (labels.project ? "project " + labels.project + ", " : "") +
-          "shell " +
-          labels.shell,
+        labels.shell
+          ? (labels.project ? "project " + labels.project + ", " : "") +
+            "shell " +
+            labels.shell
+          : "Explorer",
       ],
     ]) {
       details.append(
@@ -1922,7 +1924,7 @@ function shellWord(value) {
     );
     details.append(makeElement("dt", "", "Runs"), runs);
     const confirmButton = textButton("Launch", () =>
-      startShellLaunch(serial, body, shell, name, false),
+      startShellLaunch(serial, body, subject, name, false),
     );
     confirmButton.className = "terminal-launch-confirm";
     body.replaceChildren(
@@ -2089,7 +2091,13 @@ function shellWord(value) {
         const list = makeElement("div", "terminal-launch-commands");
         for (const command of commands) {
           const button = textButton(command.name, () =>
-            previewShellLaunch(serial, body, shell, command.name, listCommands),
+            previewShellLaunch(
+              serial,
+              body,
+              { shell: shell.id },
+              command.name,
+              listCommands,
+            ),
           );
           button.disabled = Boolean(command.unavailable);
           if (command.unavailable)
@@ -2117,6 +2125,100 @@ function shellWord(value) {
       body
         .querySelector("a.terminal-launch-viewer, button:not(:disabled)")
         ?.focus();
+    };
+    await listCommands();
+  };
+  // openPathLaunchDialog lists the registered commands that accept a file or folder the
+  // Explorer names, and launches one on it as a launch on a shell's directory does.
+  const openPathLaunchDialog = async (path, folder) => {
+    closeOverview();
+    closeLaunchDialog();
+    const serial = ++launchSerial;
+    launchDialog = makeElement("div", "output-modal terminal-launch-modal");
+    launchDialog.setAttribute("role", "dialog");
+    launchDialog.setAttribute("aria-modal", "true");
+    launchDialog.setAttribute("aria-labelledby", "terminal-launch-title");
+    const done = () => {
+      closeLaunchDialog();
+      focused.term?.focus();
+    };
+    launchDialog.onclick = (event) => {
+      if (event.target === launchDialog) done();
+    };
+    launchDialog.onkeydown = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      done();
+    };
+    const box = makeElement("div", "output-panel terminal-launch");
+    const head = makeElement("header");
+    const title = makeElement("strong", "", "Launch on " + path);
+    title.id = "terminal-launch-title";
+    const actions = makeElement("div", "modal-actions");
+    actions.append(textButton("Close", done));
+    head.append(title, actions);
+    const body = makeElement("div", "terminal-launch-body", "Listing the commands...");
+    box.append(head, body);
+    launchDialog.append(box);
+    document.body.append(launchDialog);
+    actions.firstElementChild.focus();
+    const subject = { path };
+    const listCommands = async () => {
+      body.replaceChildren(makeElement("p", "", "Listing the commands..."));
+      let listing;
+      try {
+        listing = await serverFetch(
+          "/api/launchers?kind=" +
+            (folder ? "directory" : "file") +
+            "&name=" +
+            encodeURIComponent(baseName(path) || "/"),
+        );
+      } catch {}
+      const answer = await answerOf(listing);
+      if (serial !== launchSerial) return;
+      if (!listing?.ok) {
+        launchProblem(body, answer.error, answer.hint);
+        return;
+      }
+      const commands = answer.available ? answer.commands || [] : [];
+      if (!commands.length) {
+        launchProblem(
+          body,
+          answer.available
+            ? (answer.unmatched || {})[folder ? "directory" : "file"] ||
+                "No registered command accepts a " +
+                  (folder ? "directory" : "file") +
+                  "."
+            : answer.reason,
+          answer.available ? undefined : answer.hint,
+        );
+        return;
+      }
+      const list = makeElement("div", "terminal-launch-commands");
+      for (const command of commands) {
+        const button = textButton(command.name, () =>
+          previewShellLaunch(serial, body, subject, command.name, listCommands),
+        );
+        button.disabled = Boolean(command.unavailable);
+        if (command.unavailable)
+          button.title = "Not installed: " + command.unavailable;
+        list.append(button);
+      }
+      body.replaceChildren(
+        makeElement(
+          "p",
+          "terminal-launch-intro",
+          "Run a registered command on this " +
+            (folder ? "directory" : "file") +
+            ", as you, on " +
+            (answer.user || "this user") +
+            "@" +
+            (answer.host || "this host") +
+            ":",
+        ),
+        list,
+      );
+      body.querySelector("button:not(:disabled)")?.focus();
     };
     await listCommands();
   };
@@ -4999,8 +5101,16 @@ function shellWord(value) {
           openInViewer(path);
         },
       );
-      for (const button of [send, view]) button.tabIndex = -1;
-      actions.append(send, view);
+      const launch = explorerIconButton(
+        "Launch...",
+        icons.launch,
+        (event) => {
+          event.stopPropagation();
+          openPathLaunchDialog(path, folder);
+        },
+      );
+      for (const button of [send, view, launch]) button.tabIndex = -1;
+      actions.append(send, view, launch);
       row.append(actions);
       row.draggable = true;
       row.ondragstart = (event) => {
@@ -5398,6 +5508,7 @@ function shellWord(value) {
   // output, which adds Show in the Explorer.
   const pathChoices = (path, folder, fromLink = false) => [
     ["Open in the Table viewer", () => openInViewer(path), true],
+    ["Launch...", () => openPathLaunchDialog(path, folder), true],
     // A file's folder, as editors open a terminal for a file.
     [
       "Open in a new terminal tab",
