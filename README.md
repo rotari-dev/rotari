@@ -277,6 +277,7 @@ Start the local web status UI separately from the job runner:
 rotari web
 rotari web --allow-exec
 rotari web --allow-terminal
+rotari web --allow-exec --allow-terminal   # recommended
 ```
 
 `--allow-exec` also lets the UI launch TensorBoard, Jupyter, and other
