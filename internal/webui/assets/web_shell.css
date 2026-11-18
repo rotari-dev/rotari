@@ -2142,6 +2142,27 @@ html.terminal-open .output-panel.terminal-launch {
   height: 14px;
   color: var(--muted);
 }
+.terminal-explorer-kind[data-category="dir"] {
+  color: var(--c3);
+}
+.terminal-explorer-kind[data-category="table"] {
+  color: var(--c1);
+}
+.terminal-explorer-kind[data-category="image"] {
+  color: var(--c7);
+}
+.terminal-explorer-kind[data-category="text"] {
+  color: var(--c4);
+}
+.terminal-explorer-kind[data-category="structured"] {
+  color: var(--c6);
+}
+.terminal-explorer-kind[data-category="code"] {
+  color: var(--c5);
+}
+.terminal-explorer-kind[data-category="archive"] {
+  color: var(--c2);
+}
 .terminal-explorer-chevron svg,
 .terminal-explorer-kind svg,
 .terminal-explorer-actions svg {

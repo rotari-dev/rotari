@@ -4142,6 +4142,26 @@ function shellWord(value) {
     newFile: ["M3.5 1.5h6l3 3v4", "M3.5 1.5v13h5", "M12 10.5v4", "M10 12.5h4"],
     newFolder: ["M8 12.5H1.5v-9h4.5l1.5 1.5h6.5v3", "M12 9.5v4", "M10 11.5h4"],
   };
+  // fileCategories group file extensions for the Explorer's icon colours.
+  const fileCategories = {
+    table: ["csv", "tsv", "parquet"],
+    image: ["png", "jpg", "jpeg", "gif", "svg", "webp"],
+    text: ["log", "txt", "md"],
+    structured: ["json", "yaml", "yml", "toml"],
+    code: ["py", "go", "js", "ts", "sh", "c", "h", "cpp", "rs"],
+    archive: ["zip", "gz", "tar", "tgz", "pt", "ckpt", "npy", "npz"],
+  };
+  const fileCategoryByExtension = new Map(
+    Object.entries(fileCategories).flatMap(([category, extensions]) =>
+      extensions.map((extension) => [extension, category]),
+    ),
+  );
+  const fileCategory = (name) => {
+    const dot = name.lastIndexOf(".");
+    return dot > 0
+      ? fileCategoryByExtension.get(name.slice(dot + 1).toLowerCase()) || ""
+      : "";
+  };
   const joinPath = (dir, name) => (dir === "/" ? "/" : dir + "/") + name;
   const parentOf = (path) => path.slice(0, path.lastIndexOf("/")) || "/";
   const baseName = (path) =>
@@ -5017,6 +5037,8 @@ function shellWord(value) {
     const icon = document.createElement("span");
     icon.className = "terminal-explorer-kind";
     drawIcon(icon, folder ? explorerIcons.folder : explorerIcons.file);
+    const category = folder ? "dir" : fileCategory(entry.name);
+    if (category) icon.dataset.category = category;
     const name = document.createElement("span");
     name.className = "terminal-explorer-name";
     drawName(name, entry.name);
