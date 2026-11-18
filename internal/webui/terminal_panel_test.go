@@ -3503,29 +3503,21 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     assert.notEqual(launching.document.querySelector('.terminal-tab-menu'), null, 'a second right click closed the tab menu');
   }
   launching.document.dispatchEvent(new launching.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  // The Web UI's own viewers need no launching: the shell's directory is pinned under a
-  // source, and the viewer opens it in a new tab, with why commands are not offered.
+  // The dialog lists commands only: the Table viewer has a button of its own in the bar, which
+  // pins the shell's directory under a source and opens it in a new tab.
   const tableViewer = { name: 'Table viewer', path: '/tableview/', targets: ['directory'] };
   launching.server.launchers = { available: false, reason: 'Launching is disabled on this server.', hint: 'Restart with rotari web --allow-exec.', viewers: [tableViewer] };
   launchBar.click();
   await wait(30);
-  assert.ok(launching.requests.includes('POST /api/tableview-sources {"shell":"1"}'), launching.requests.join(', '));
-  const viewerLink = () => launchBox().querySelector('.terminal-launch-viewer');
-  assert.deepEqual([viewerLink().textContent, viewerLink().getAttribute('href'), viewerLink().target, viewerLink().rel, viewerLink().title], ['Table viewer', '/tableview/?source=S%201', '_blank', 'noopener', 'Open /w/p1/logs in a new tab']);
-  assert.equal(launching.document.activeElement, viewerLink());
-  assert.deepEqual([...launchBox().querySelectorAll('.terminal-launch-intro, .terminal-launch-problem, .terminal-launch-hint')].map((item) => [item.className, item.textContent]), [['terminal-launch-intro', 'View /w/p1/logs in this server:'], ['terminal-launch-hint', 'Launching is disabled on this server.'], ['terminal-launch-hint', 'Restart with rotari web --allow-exec.']]);
-  viewerLink().click();
-  assert.equal(launchBox(), null, 'opening the viewer left the launch dialog');
-  // A refused source says why, and leaves the commands.
-  launching.server.tableviewSource = { error: 'shell 1 is not running' };
-  launching.server.launchers = { available: true, user: 'u', host: 'h', commands: [{ name: 'TensorBoard' }], viewers: [tableViewer] };
-  launchBar.click();
-  await wait(30);
-  assert.equal(viewerLink(), null);
-  assert.equal(launchBox().querySelector('.terminal-launch-problem').textContent, 'Cannot open a viewer here: shell 1 is not running');
-  assert.deepEqual([...launchBox().querySelectorAll('.terminal-launch-commands button')].map((item) => item.textContent), ['TensorBoard']);
+  assert.equal(launchBox().querySelector('.terminal-launch-viewer'), null);
+  assert.ok(!launching.requests.includes('POST /api/tableview-sources {"shell":"1"}'), launching.requests.join(', '));
+  assert.deepEqual([...launchBox().querySelectorAll('.terminal-launch-problem, .terminal-launch-hint')].map((item) => item.textContent), ['Launching is disabled on this server.', 'Restart with rotari web --allow-exec.']);
   launchBox().querySelector('header button').click();
-  delete launching.server.tableviewSource;
+  const viewerBar = [...launching.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'Table viewer');
+  assert.equal(viewerBar.disabled, false);
+  viewerBar.click();
+  await wait(30);
+  assert.ok(launching.requests.includes('POST /api/tableview-sources {"shell":"1"}'), launching.requests.join(', '));
   launching.server.launchers = { available: true, user: 'u', host: 'h', commands: [{ name: 'TensorBoard' }, { name: 'Jupyter Lab', unavailable: 'jupyter is not on PATH' }] };
   launching.server.launchPreview = { name: 'TensorBoard', command: 'tensorboard --logdir "$ROTARI_LAUNCHER_ARTIFACT"', shell: '/bin/sh', mode: 'service', target: '/w/p1/logs', kind: 'directory', cwd: '/w/p1/logs', host: 'h', user: 'u', labels: { project: 'p1', shell: '1' } };
   launching.server.launchAnswer = { id: 'L1', mode: 'service', state: 'starting' };
@@ -3744,14 +3736,14 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     return [...ex.document.querySelectorAll('.terminal-tab-menu button')];
   };
   assert.deepEqual(menuOf(exRow('train.yaml')).map((item) => [item.textContent, item.disabled]), [['Open in the Table viewer', false], ['Launch...', false], ['Open in a new terminal tab', false], ['Send the path to the terminal', false], ['Download', false], ['Upload...', false], ['New File...', false], ['New Folder...', false], ['Cut', false], ['Copy', false], ['Paste', true], ['Rename...', false], ['Delete...', false], ['Copy the path', false], ['Copy the path from here', false]]);
-  menuOf(exRow('train.yaml'))[13].click();
+  menuOf(exRow('train.yaml'))[14].click();
   await wait(10);
-  menuOf(exRow('train.yaml'))[12].click();
+  menuOf(exRow('train.yaml'))[13].click();
   await wait(10);
   assert.deepEqual(exCopied, ['conf/train.yaml', '/w/p1/conf/train.yaml']);
   // A new tab opens in a folder, or in a file's folder, as a shell of the page's project.
   const startsBefore = ex.server.shells.length;
-  menuOf(exRow('train.yaml'))[1].click();
+  menuOf(exRow('train.yaml'))[2].click();
   await wait(30);
   assert.ok(ex.requests.includes('POST /_terminal/shells?rows=24&cols=80&project=p1&dir=%2Fw%2Fp1%2Fconf'), ex.requests.join(', '));
   assert.equal(ex.server.shells.length, startsBefore + 1);
@@ -4455,7 +4447,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const o8Right = () => o8Viewport.dispatchEvent(new o8.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
   const escape = () => o8.document.dispatchEvent(new o8.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   o8Right();
-  assert.equal(o8Menu()[2][0], 'Show in the Explorer', 'a file: path\'s menu is not the Explorer\'s');
+  assert.equal(o8Menu()[3][0], 'Show in the Explorer', 'a file: path\'s menu is not the Explorer\'s');
   escape();
   handler.leave({}, 'file:///w/p1/out/x.csv');
   assert.equal(o8Viewport.hasAttribute('title'), false);

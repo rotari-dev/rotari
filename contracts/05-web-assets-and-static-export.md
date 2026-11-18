@@ -2003,9 +2003,9 @@ under that directory (`child` as for `rotari tableview`), takes no project, run,
 job, attempt, or entry beside `source` (400), and an id this server does not hold,
 because it was never issued, was dropped as the least recently used beyond the
 64 held, or was issued before a restart, is a 404 saying to open the viewer again.
-The terminal's launch dialog (WEB-38) lists the Web UI's viewers that accept a
-directory above the commands, as links that open in a new tab, and still lists
-them, saying why commands are not offered, without `--allow-exec`. Implemented in
+The terminal's bar and each All shells card have a **Table viewer** button of their own,
+beside **Launch here** (WEB-38), which opens the shell's directory in a new tab and
+works without `--allow-exec`; the launch dialog lists commands only. Implemented in
 `internal/webui/table_view_shell.go` and the launch dialog in `web_shell.js`;
 covered by [`TestTableViewerOnAShellsDirectory`](../conformance/05-web/launch_test.go),
 `TestTableViewOnAShellsDirectory`, `TestShellTableViewsDropTheLeastRecentlyUsed`,

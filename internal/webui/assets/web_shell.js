@@ -444,6 +444,7 @@ function shellWord(value) {
     sharedTabs,
     sharedAdd,
     launchButton,
+    viewerButton,
     dirsButton,
     commandsButton,
     splitRightButton,
@@ -2019,12 +2020,8 @@ function shellWord(value) {
         launchProblem(body, answer.error, answer.hint);
         return;
       }
-      // The Web UI's own viewers, such as the Table viewer, run no command, so they are
-      // offered without launching: the server pins the shell's directory under a source
-      // the viewer's page names, and the page opens in a new tab.
-      const viewers = answer.viewers || [];
       const commands = answer.available ? answer.commands || [] : [];
-      if (!viewers.length && !commands.length) {
+      if (!commands.length) {
         launchProblem(
           body,
           answer.available
@@ -2035,96 +2032,35 @@ function shellWord(value) {
         );
         return;
       }
-      const shown = [];
-      if (viewers.length) {
-        let pinned;
-        let pinnedAnswer;
-        try {
-          pinned = await serverFetch("/api/tableview-sources", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ shell: shell.id }),
-          });
-        } catch {}
-        pinnedAnswer = await answerOf(pinned);
-        if (serial !== launchSerial) return;
-        if (!pinned?.ok) {
-          shown.push(
-            makeElement(
-              "p",
-              "terminal-launch-problem",
-              "Cannot open a viewer here: " + pinnedAnswer.error,
-            ),
-          );
-        } else {
-          const list = makeElement(
-            "div",
-            "terminal-launch-commands terminal-launch-viewers",
-          );
-          for (const viewer of viewers) {
-            const link = makeElement(
-              "a",
-              "terminal-launch-viewer",
-              viewer.name,
-            );
-            link.href =
-              viewer.path +
-              "?source=" +
-              encodeURIComponent(pinnedAnswer.source);
-            link.target = "_blank";
-            link.rel = "noopener";
-            link.title = "Open " + pinnedAnswer.dir + " in a new tab";
-            link.onclick = () => done();
-            list.append(link);
-          }
-          shown.push(
-            makeElement(
-              "p",
-              "terminal-launch-intro",
-              "View " + pinnedAnswer.dir + " in this server:",
-            ),
-            list,
-          );
-        }
-      }
-      if (commands.length) {
-        const list = makeElement("div", "terminal-launch-commands");
-        for (const command of commands) {
-          const button = textButton(command.name, () =>
-            previewShellLaunch(
-              serial,
-              body,
-              { shell: shell.id },
-              command.name,
-              listCommands,
-            ),
-          );
-          button.disabled = Boolean(command.unavailable);
-          if (command.unavailable)
-            button.title = "Not installed: " + command.unavailable;
-          list.append(button);
-        }
-        shown.push(
-          makeElement(
-            "p",
-            "terminal-launch-intro",
-            "Run a registered command on this directory, as you, on " +
-              (answer.user || "this user") +
-              "@" +
-              (answer.host || "this host") +
-              ":",
+      const list = makeElement("div", "terminal-launch-commands");
+      for (const command of commands) {
+        const button = textButton(command.name, () =>
+          previewShellLaunch(
+            serial,
+            body,
+            { shell: shell.id },
+            command.name,
+            listCommands,
           ),
-          list,
         );
-      } else if (!answer.available && answer.reason) {
-        shown.push(makeElement("p", "terminal-launch-hint", answer.reason));
-        if (answer.hint)
-          shown.push(makeElement("p", "terminal-launch-hint", answer.hint));
+        button.disabled = Boolean(command.unavailable);
+        if (command.unavailable)
+          button.title = "Not installed: " + command.unavailable;
+        list.append(button);
       }
-      body.replaceChildren(...shown);
-      body
-        .querySelector("a.terminal-launch-viewer, button:not(:disabled)")
-        ?.focus();
+      body.replaceChildren(
+        makeElement(
+          "p",
+          "terminal-launch-intro",
+          "Run a registered command on this directory, as you, on " +
+            (answer.user || "this user") +
+            "@" +
+            (answer.host || "this host") +
+            ":",
+        ),
+        list,
+      );
+      body.querySelector("button:not(:disabled)")?.focus();
     };
     await listCommands();
   };
@@ -2157,7 +2093,11 @@ function shellWord(value) {
     const actions = makeElement("div", "modal-actions");
     actions.append(textButton("Close", done));
     head.append(title, actions);
-    const body = makeElement("div", "terminal-launch-body", "Listing the commands...");
+    const body = makeElement(
+      "div",
+      "terminal-launch-body",
+      "Listing the commands...",
+    );
     box.append(head, body);
     launchDialog.append(box);
     document.body.append(launchDialog);
@@ -2729,6 +2669,12 @@ function shellWord(value) {
       "Launch a registered command, such as TensorBoard, in the directory this shell is in now";
     drawIcon(launchHere, icons.launch);
     launchHere.onclick = () => openLaunchDialog(shell);
+    const viewHere = document.createElement("button");
+    viewHere.type = "button";
+    viewHere.setAttribute("aria-label", "Open " + label + " in the Table viewer");
+    viewHere.title = "Open the directory this shell is in now in the Table viewer";
+    drawIcon(viewHere, explorerIcons.open);
+    viewHere.onclick = () => openShellInViewer(shell);
     // Move to another project: a menu of where it can go, as dragging its card does.
     const moveTo = document.createElement("button");
     moveTo.type = "button";
@@ -2756,7 +2702,7 @@ function shellWord(value) {
     };
     const actions = document.createElement("span");
     actions.className = "terminal-overview-actions";
-    actions.append(launchHere, moveTo, rename, end);
+    actions.append(viewHere, launchHere, moveTo, rename, end);
     const item = document.createElement("div");
     item.className = "terminal-overview-item";
     item.append(card, run, tree, actions);
@@ -4003,6 +3949,7 @@ function shellWord(value) {
     splitRightButton.disabled = splitDownButton.disabled = !canSplit;
     closePaneButton.disabled = panes.length < 2;
     launchButton.disabled = focused.shown === null;
+    viewerButton.disabled = focused.shown === null;
     dirsButton.disabled = focused.shown === null;
     commandsButton.disabled = focused.shown === null;
   };
@@ -4354,7 +4301,12 @@ function shellWord(value) {
         renderExplorer();
       });
   };
-  const openInViewer = async (path) => {
+  const openShellInViewer = (shell) =>
+    openTableViewer({ shell: shell.id }, shellName(shell));
+  const openInViewer = (path) => openTableViewer({ path }, path);
+  // openTableViewer opens the Table viewer on what the request names, a path or a running
+  // shell, whose directory is pinned.
+  const openTableViewer = async (request, named) => {
     // A tab opened only after the answer would be a pop-up to the browser, so it opens now.
     const tab = window.open("about:blank", "_blank");
     if (tab) tab.opener = null;
@@ -4363,7 +4315,7 @@ function shellWord(value) {
       response = await serverFetch("/api/tableview-sources", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path }),
+        body: JSON.stringify(request),
       });
       answer = await answerOf(response);
     } catch {}
@@ -4371,7 +4323,7 @@ function shellWord(value) {
       tab?.close();
       showNote(
         "Cannot open " +
-          path +
+          named +
           " in the Table viewer: " +
           (answer?.error || "the server did not answer."),
         6000,
@@ -5101,14 +5053,10 @@ function shellWord(value) {
           openInViewer(path);
         },
       );
-      const launch = explorerIconButton(
-        "Launch...",
-        icons.launch,
-        (event) => {
-          event.stopPropagation();
-          openPathLaunchDialog(path, folder);
-        },
-      );
+      const launch = explorerIconButton("Launch...", icons.launch, (event) => {
+        event.stopPropagation();
+        openPathLaunchDialog(path, folder);
+      });
       for (const button of [send, view, launch]) button.tabIndex = -1;
       actions.append(send, view, launch);
       row.append(actions);
@@ -6061,6 +6009,15 @@ function shellWord(value) {
       },
       "Launch a registered command, such as TensorBoard, in the directory this pane's shell is in now",
     );
+    viewerButton = iconButton(
+      "Table viewer",
+      explorerIcons.open,
+      () => {
+        const shell = shells.find((item) => item.id === focused.shown);
+        if (shell) openShellInViewer(shell);
+      },
+      "Open the directory this pane's shell is in now in the Table viewer, in a new tab",
+    );
     dirsButton = iconButton(
       "Recent directories",
       icons.recentDirs,
@@ -6116,6 +6073,7 @@ function shellWord(value) {
       add,
       sharedPart,
       overviewButton,
+      viewerButton,
       launchButton,
       dirsButton,
       commandsButton,
