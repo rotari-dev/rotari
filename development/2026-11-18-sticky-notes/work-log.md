@@ -4,8 +4,8 @@ See [plan.md](plan.md) for current scope and status.
 
 ## Sticky notes on Web UI pages, listed by the CLI
 
-**Commits:** not committed yet; add the Git date, time, and short ID of each
-commit here once they exist.
+**Commits:** 2026-11-18 18:25:26 `aaec2a17` (one commit for all the entries
+below, which were made before anything was committed).
 
 **Change:** New `internal/stickies` (`<basedir>/stickies.json`, `Load`, `Save`,
 `Pages`, limits) with an archtest rule and an `ARCHITECTURE.md` row. Web API
@@ -40,7 +40,7 @@ current Node; add a jsdom test for the Stickies menu.
 
 ## Menu list, delete, per-page hide, and resize
 
-**Commits:** not committed yet; add them here once they exist.
+**Commits:** 2026-11-18 18:25:26 `aaec2a17`, as above.
 
 **Change:** One **Stickies** menu replaced two top-bar buttons: **+ New
 sticky**, **Hide / Show on this page** (per page, per browser), and a list of
@@ -63,7 +63,7 @@ a browser.
 
 ## Top-bar controls on the Recent jobs page
 
-**Commits:** not committed yet; add them here once they exist.
+**Commits:** 2026-11-18 18:25:26 `aaec2a17`, as above.
 
 **Change:** `jobs_template.html` now has Sign out, the Stickies menu (one
 shared `stickiesMenuHTML`), and a Launches button, live page only.
