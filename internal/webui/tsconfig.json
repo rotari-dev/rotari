@@ -21,6 +21,7 @@
     "assets/web_app_notifications.js",
     "assets/web_app_search.js",
     "assets/web_app_activity.js",
+    "assets/web_app_stickies.js",
     "assets/web_app_bootstrap.js"
   ]
 }

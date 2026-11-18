@@ -50,6 +50,11 @@ var boundaryRules = []boundaryRule{
 		allowed: []string{"internal/model", "internal/state"},
 	},
 	{
+		pkg:     "internal/stickies",
+		reason:  "stickies keeps Web UI sticky notes in the basedir and holds no run, job, or HTTP rules",
+		allowed: []string{"internal/state"},
+	},
+	{
 		pkg:       "internal/jobfilter",
 		reason:    "jobfilter evaluates job filters from facts its callers supply, without file access",
 		allowed:   []string{"internal/model"},

@@ -29,6 +29,7 @@ import (
 	"github.com/rotari-dev/rotari/internal/runview"
 	serverinternal "github.com/rotari-dev/rotari/internal/server"
 	stateinternal "github.com/rotari-dev/rotari/internal/state"
+	"github.com/rotari-dev/rotari/internal/stickies"
 	webprojection "github.com/rotari-dev/rotari/internal/web"
 )
 
@@ -60,6 +61,13 @@ type webSaveConfigRequest struct {
 	Content   string `json:"content"`
 	Scope     string `json:"scope"`
 	Path      string `json:"path"`
+}
+
+// webStickies is the sticky notes of one page, as /api/stickies reads and
+// replaces them.
+type webStickies struct {
+	Page  string          `json:"page"`
+	Notes []stickies.Note `json:"notes"`
 }
 
 type webSaveNotificationConfigRequest struct {
@@ -415,7 +423,7 @@ func (s site) baseHandler() http.Handler {
 		_ = s.reloadBaseDirs()
 		nonce := setPagePolicy(writer)
 		writer.Header().Set(headerContentType, "text/html; charset=utf-8")
-		_, _ = writer.Write([]byte(jobsPage(livePage{nonce: nonce, terminal: s.Terminal != nil, about: s.About, stoppable: s.AllowControl && s.Shutdown != nil}, s.currentBasePrefix()+"/", projects, rows, selection, true, s.Notifications, s.notificationSession, s.basedirEntries())))
+		_, _ = writer.Write([]byte(jobsPage(livePage{nonce: nonce, terminal: s.Terminal != nil, about: s.About, stoppable: s.AllowControl && s.Shutdown != nil, logout: s.AuthEnabled}, s.currentBasePrefix()+"/", projects, rows, selection, true, s.Notifications, s.notificationSession, s.basedirEntries())))
 	})
 	mux.HandleFunc("/jobs", func(writer http.ResponseWriter, request *http.Request) {
 		http.Redirect(writer, request, s.currentBasePrefix()+"/jobs/", http.StatusMovedPermanently)
@@ -499,6 +507,43 @@ func (s site) baseHandler() http.Handler {
 			return
 		}
 		writeWebJSON(writer, loaded.Settings.Browser)
+	})
+	mux.HandleFunc("/api/stickies", func(writer http.ResponseWriter, request *http.Request) {
+		switch request.Method {
+		case http.MethodGet:
+			if !request.URL.Query().Has("page") {
+				pages, err := stickies.Pages(baseDir)
+				if err != nil {
+					writeWebError(writer, err)
+					return
+				}
+				writeWebJSON(writer, map[string][]stickies.Page{"pages": pages})
+				return
+			}
+			notes, err := stickies.Load(baseDir, request.URL.Query().Get("page"))
+			if err != nil {
+				writeWebError(writer, err)
+				return
+			}
+			writeWebJSON(writer, webStickies{Page: request.URL.Query().Get("page"), Notes: notes})
+		case http.MethodPost:
+			if !allowControl {
+				forbiddenReadOnly(writer)
+				return
+			}
+			var save webStickies
+			if err := json.NewDecoder(request.Body).Decode(&save); err != nil {
+				writeWebError(writer, err)
+				return
+			}
+			if err := stickies.Save(baseDir, save.Page, save.Notes); err != nil {
+				writeWebError(writer, err)
+				return
+			}
+			writeWebJSON(writer, save)
+		default:
+			methodNotAllowed(writer)
+		}
 	})
 	mux.HandleFunc("/api/notifications", s.handleNotifications)
 	mux.HandleFunc("/api/notifications/state", s.handleNotificationState)

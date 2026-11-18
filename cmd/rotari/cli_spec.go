@@ -353,6 +353,16 @@ var cliCommandSpecs = []cliCommandSpec{
 		Positional:  "RUN_ID|ATTEMPT_ID TEXT",
 	},
 	{
+		Name:        "stickies",
+		Description: "list the sticky notes put on Web UI pages, read-only",
+		Flags: []cliFlagSpec{
+			{Name: "config", Description: "config file to use", ValueName: "FILE", CommandLineOnly: true},
+			{Name: "basedir", Description: "state directory", ValueName: "DIR"},
+			{Name: "page", Description: "list only the notes of this Web UI page, such as / or projects/NAME", ValueName: "PAGE", CommandLineOnly: true},
+			{Name: "json", Description: "print the pages and notes as JSON"},
+		},
+	},
+	{
 		Name:        "lineage",
 		Description: "list runs, summarize one run, or compare two runs",
 		Flags: append(commonCLIFlags(),

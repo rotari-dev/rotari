@@ -2293,3 +2293,175 @@ html.terminal-open .output-panel.terminal-launch {
 .terminal-fold:hover {
   background: color-mix(in oklab, var(--accent) 14%, transparent);
 }
+
+/* Sticky notes, on the application pages and the Recent jobs page. */
+#sticky-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+#sticky-layer[hidden] {
+  display: none;
+}
+.sticky-note {
+  --sticky-bg: var(--sticky-yellow);
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  height: 160px;
+  border: 1px solid var(--sticky-edge);
+  border-radius: 3px;
+  background: var(--sticky-bg);
+  color: var(--sticky-ink);
+  box-shadow: 0 3px 10px var(--sticky-shadow);
+  pointer-events: auto;
+  overflow: hidden;
+}
+.sticky-pink {
+  --sticky-bg: var(--sticky-pink);
+}
+.sticky-green {
+  --sticky-bg: var(--sticky-green);
+}
+.sticky-blue {
+  --sticky-bg: var(--sticky-blue);
+}
+.sticky-orange {
+  --sticky-bg: var(--sticky-orange);
+}
+.sticky-error {
+  outline: 2px solid var(--sticky-error);
+}
+.sticky-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  height: 22px;
+  padding: 0 4px;
+  background: var(--sticky-head);
+  cursor: grab;
+  touch-action: none;
+}
+.sticky-head button {
+  min-height: 0;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  line-height: 18px;
+  cursor: pointer;
+}
+.sticky-color::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--sticky-ink);
+  border-radius: 50%;
+  background: var(--sticky-bg);
+}
+.sticky-text {
+  flex: 1;
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  resize: none;
+  box-sizing: border-box;
+}
+
+.settings-panel.stickies-panel {
+  width: 320px;
+}
+.stickies-actions {
+  display: flex;
+  gap: 6px;
+}
+.stickies-list {
+  display: flex;
+  max-height: 50vh;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.stickies-empty {
+  padding: 6px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.stickies-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  text-decoration: none;
+}
+.stickies-item:hover,
+.stickies-item:focus-visible {
+  background: var(--surface-2);
+}
+.stickies-item-time {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.stickies-item-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stickies-item-page {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stickies-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+}
+.stickies-row .stickies-item {
+  min-width: 0;
+  flex: 1;
+}
+.stickies-item-remove {
+  flex: none;
+  min-height: 0;
+  padding: 2px 6px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-2);
+}
+.sticky-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(
+    135deg,
+    transparent 45%,
+    var(--sticky-ink) 45%,
+    var(--sticky-ink) 55%,
+    transparent 55%,
+    transparent 70%,
+    var(--sticky-ink) 70%,
+    var(--sticky-ink) 80%,
+    transparent 80%
+  );
+  opacity: 0.55;
+  cursor: nwse-resize;
+  touch-action: none;
+}

@@ -274,6 +274,7 @@ flowchart TB
     state
     runregistry
     notificationlog
+    stickies
     attachment
     config
   end
@@ -361,6 +362,8 @@ flowchart TB
   executor --> state
   runregistry --> state
   notificationlog --> state
+  stickies --> state
+  webui --> stickies
   webui --> notificationlog
   runwatch --> project
   runwatch --> notificationlog
@@ -390,6 +393,7 @@ are checked against this graph by
 | [internal/config](../internal/config/) | Scope-aware global/cwd workspace/basedir/project discovery, location-key cycle validation, recursive file-value merging and immutable canonical TOML snapshots; YAML, TOML, JSON parsing. Runtime option meanings stay in `cmd/rotari`. | `layers.go` (`LoadScope`, `Load`, `Merge`, `Loaded.Snapshot`), `config.go` |
 | [internal/notification](../internal/notification/) | `notifications.toml`: its schema, scope lookup, validation, serialization, and the shared job/run event and batch model used by both webhook and browser notifications, including the browser inbox text (`NewBrowserMessage`) and the event facts a record may keep (`Event.Recordable`). It also owns the Web UI basedir route (`WebBaseDirID`) that `internal/webui` serves and webhook links point to. Delivery stays in `cmd/rotari` (`runNotificationManager` batches a run's events for the Webhook and the record) and `internal/webui`. | `config.go` (`Load`, `Marshal`), `event.go` (`NewBatch`), `browser.go` (`NewBrowserMessage`) |
 | [internal/notificationlog](../internal/notificationlog/) | The master directory's notification records for the Web inbox, `<masterdir>/notifications/<run-id>.jsonl`, one file per run appended only by that run's process (and, once it stopped, one `run.interrupted` through `AppendOnce`), kept for 10 days, and the inbox's shared read/cleared cursors of each basedir (`inbox-state.json`). `Entries` renders records with each project's current browser settings for both the Web inbox and `rotari notifications`. Knows nothing of HTTP. | `log.go` (`Append`, `Records`, `Advance`), `entries.go` (`Entries`) |
+| [internal/stickies](../internal/stickies/) | The sticky notes users put on Web UI pages, `<basedir>/stickies.json`, a map from a page key (the Web UI route, an arbitrary string rather than a path) to that page's notes, saved atomically under a lock file with limits on notes, pages, and text. Independent of run notes and of every job, run, and result. Knows nothing of HTTP. | `stickies.go` (`Load`, `Save`, `Pages`) |
 | [internal/runwatch](../internal/runwatch/) | Finds runs whose coordinator stopped without finishing them, with the shared `project.Inspect` rule under the shared state lock, and records each once as `run.interrupted` through `notificationlog.Log.AppendOnce`; `rotari web` calls it on a timer. Inbox only, never the Webhook. | `runwatch.go` (`ReportInterrupted`) |
 | [internal/runregistry](../internal/runregistry/) | The master directory's run index, `<masterdir>/runs/<run-id>.json`: register, look up, unregister, and find stale entries for `gc`. | `registry.go` |
 | [internal/attachment](../internal/attachment/) | Per-client run attachments: process-held locks, host and PID-start identity, attachment aggregation, stale-client policy handoff, initiating-client startup reservations, and removal of a deleted run's attachment state (`ForgetRun`, called by `delete`). It does not render CLI output. | `session.go` |
@@ -496,6 +500,7 @@ dispatched from `run` in [main.go](../cmd/rotari/main.go).
 | Read-only context, configuration, supervisor, and run overview (`info`) | [info.go](../cmd/rotari/info.go) |
 | Bug report options, run selection, and the `info` and `check` facts it passes to `internal/bugreport` | [bug_report.go](../cmd/rotari/bug_report.go) |
 | `basedirs`, `projects`, and `runs` command flags and dispatch | [lists.go](../cmd/rotari/lists.go) |
+| `stickies` command and `/api/stickies`: sticky notes read (and, from the Web UI only, saved) through `internal/stickies` | [stickies.go](../cmd/rotari/stickies.go) |
 | `notifications` command: recorded notifications rendered by `notificationlog.Entries`, as the Web inbox renders them | [notifications.go](../cmd/rotari/notifications.go) |
 | Project discovery and list rendering (`showProjectsForBaseDirs`) | [projects.go](../cmd/rotari/projects.go) |
 | Registered basedir list rendering | [basedirs.go](../cmd/rotari/basedirs.go) |

@@ -454,6 +454,17 @@ Usage: `rotari note RUN_ID|ATTEMPT_ID TEXT`
 | `-b` / `--basedir` | `DIR` | `ROTARI_BASEDIR` | state directory |
 | `-p` / `--project-name` | `NAME` | `ROTARI_PROJECT_NAME` | project name |
 
+### `rotari stickies`
+
+list the sticky notes put on Web UI pages, read-only
+
+| Option | Value | Environment | Description |
+| --- | --- | --- | --- |
+| `--config` | `FILE` | `CLI only` | config file to use |
+| `-b` / `--basedir` | `DIR` | `ROTARI_BASEDIR` | state directory |
+| `--page` | `PAGE` | `CLI only` | list only the notes of this Web UI page, such as / or projects/NAME |
+| `--json` | `` | `ROTARI_STICKIES_JSON` | print the pages and notes as JSON |
+
 ### `rotari lineage`
 
 list runs, summarize one run, or compare two runs

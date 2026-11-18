@@ -69,6 +69,9 @@ var webAppSearchJS string
 //go:embed assets/web_app_activity.js
 var webAppActivityJS string
 
+//go:embed assets/web_app_stickies.js
+var webAppStickiesJS string
+
 //go:embed assets/web_app_bootstrap.js
 var webAppBootstrapJS string
 
@@ -83,6 +86,9 @@ var webInfoStylesCSS string
 
 //go:embed assets/web_shell.js
 var webShellJS string
+
+//go:embed assets/jobs_page_controls.js
+var jobsPageControlsJS string
 
 //go:embed assets/web_tokens.css
 var webTokensCSS string
@@ -169,7 +175,22 @@ type livePage struct {
 	about About
 	// stoppable offers Stop server in the Settings menu.
 	stoppable bool
+	// logout offers Sign out, when the server requires a sign-in.
+	logout bool
 }
+
+// logoutControl is the top bar's Sign out.
+func (page livePage) logoutControl() string {
+	if !page.logout {
+		return ""
+	}
+	return `<form method="post" action="/_auth/logout"><button type="submit">Sign out</button></form>`
+}
+
+// stickiesMenuHTML is the top bar's Stickies menu, which web_app_stickies.js
+// brings to life; it is hidden until then, so a page without the script shows
+// nothing.
+const stickiesMenuHTML = `<div class="settings-menu" id="stickies-menu" hidden><button id="stickies-button" type="button" aria-haspopup="true" aria-expanded="false">Stickies</button><div id="stickies-panel" class="settings-panel stickies-panel" hidden><div class="stickies-actions"><button id="stickies-add" type="button">+ New sticky</button><button id="stickies-toggle" type="button"></button></div><div id="stickies-list" class="stickies-list"></div></div></div>`
 
 // stopServerControl is the Settings menu's Stop server, which web_shell.js asks about
 // and sends to POST /_server/shutdown.
@@ -231,7 +252,7 @@ func composeWebPage(page livePage, executors []string, notifications bool, boots
 	basedirJSON, _ := json.Marshal(basedirs)
 	webAppJS := strings.Join([]string{
 		"const diagnosisGuidance = " + string(diagnosisGuidanceJSON) + ";",
-		webAppCoreJS, webAppActionsJS, webAppLogsJS, highlightJS, webAppHighlightJS, webAppPreviewsJS, webAppMarkdownJS, webAppArtifactsJS, webAppLaunchesJS, webAppTablesJS, webAppChartsJS, webAppMatrixJS, webAppNotificationsJS, webAppSearchJS, webAppActivityJS, webAppBootstrapJS,
+		webAppCoreJS, webAppActionsJS, webAppLogsJS, highlightJS, webAppHighlightJS, webAppPreviewsJS, webAppMarkdownJS, webAppArtifactsJS, webAppLaunchesJS, webAppTablesJS, webAppChartsJS, webAppMatrixJS, webAppNotificationsJS, webAppSearchJS, webAppActivityJS, webAppStickiesJS, webAppBootstrapJS,
 	}, "\n")
 	// The scripts go in first, since they hold placeholders of their own. A
 	// Replacer does not search what it inserts, so a value that contains the
@@ -251,6 +272,7 @@ func composeWebPage(page livePage, executors []string, notifications bool, boots
 		"__ROTARI_NOTIFICATION_DEFAULT__", strconv.FormatBool(notifications),
 		"__ROTARI_NOTIFICATION_SESSION__", notificationSession,
 		"__ROTARI_STATIC_BOOTSTRAP__", bootstrap,
+		"__ROTARI_STICKIES_MENU__", stickiesMenuHTML,
 	).Replace(template)
 }
 
@@ -339,9 +361,11 @@ func jobsPage(page livePage, homePath string, projects []string, rows []joblist.
 		scrollKey = currentBasedirScrollID(basedirLists[0])
 	}
 	notificationControl := `<button id="notify-toggle" type="button" data-action="toggleJobsNotifications">Notification off</button>`
-	var toolbar string
+	var toolbar, stickiesMenu, controlsScript string
 	if canFilter {
-		toolbar = `<button id="refresh-button" type="button" data-action="reloadPage">Refresh</button>`
+		toolbar = `<button id="launches-button" type="button" hidden>Launches</button><button id="refresh-button" type="button" data-action="reloadPage">Refresh</button>`
+		stickiesMenu = stickiesMenuHTML
+		controlsScript = jobsPageControlsJS + "\n" + webAppStickiesJS
 	}
 	var crumbs strings.Builder
 	if len(basedirLists) > 0 {
@@ -366,6 +390,9 @@ func jobsPage(page livePage, homePath string, projects []string, rows []joblist.
 		"__ROTARI_JOBS_SCOPE__", html.EscapeString(jobsScopeText(selection)),
 		"__ROTARI_JOBS_NOTIFICATION_CONTROL__", notificationControl,
 		"__ROTARI_JOBS_TOOLBAR__", toolbar,
+		"__ROTARI_AUTH_LOGOUT__", page.logoutControl(),
+		"__ROTARI_STICKIES_MENU__", stickiesMenu,
+		"__ROTARI_JOBS_CONTROLS_SCRIPT__", controlsScript,
 		"__ROTARI_JOBS_LIVE__", strconv.FormatBool(canFilter),
 		"__ROTARI_NOTIFICATION_DEFAULT__", strconv.FormatBool(notifications),
 		"__ROTARI_NOTIFICATION_SESSION__", notificationSession,

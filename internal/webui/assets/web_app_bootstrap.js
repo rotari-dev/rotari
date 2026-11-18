@@ -250,6 +250,14 @@ initOrbitGame();
 // Run pages offer Launch once the server says launching is available.
 loadLauncherAvailability().then(() => {
   if (state) render();
+  // The Recent jobs page's Launches button opens this page with ?launches=1.
+  if (
+    launcherAvailability.available &&
+    new URLSearchParams(location.search).has("launches")
+  ) {
+    history.replaceState(null, "", location.pathname + location.hash);
+    showLaunches();
+  }
 });
 window.addEventListener("popstate", () => refresh(true));
 refresh(true);

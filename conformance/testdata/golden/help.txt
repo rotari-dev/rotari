@@ -26,6 +26,7 @@ Commands:
   notifications  list the notifications runs recorded for the Web inbox across known state directories, without marking them read
   show           show details for a project, run, job, or attempt
   note           add a note to a run or to one job attempt: why it was made or what its result showed
+  stickies       list the sticky notes put on Web UI pages, read-only
   lineage        list runs, summarize one run, or compare two runs
   jobs           list running and recently finished jobs across known state directories
   wait           wait for a run by project, run name, or run ID

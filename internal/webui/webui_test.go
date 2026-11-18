@@ -1916,6 +1916,7 @@ func TestStylesAndScriptsTakeColoursFromTokens(t *testing.T) {
 		"web_app_matrix.js":        webAppMatrixJS,
 		"web_app_notifications.js": webAppNotificationsJS,
 		"web_app_search.js":        webAppSearchJS,
+		"web_app_stickies.js":      webAppStickiesJS,
 		"web_app_bootstrap.js":     webAppBootstrapJS,
 	} {
 		for number, line := range strings.Split(stylesheet, "\n") {

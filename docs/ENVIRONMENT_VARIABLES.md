@@ -156,6 +156,7 @@ choices unset; a plain string option takes the empty string.
 | `ROTARI_SHOW_REPORT` | yes | no | no | Default for rotari show --report. |
 | `ROTARI_SHOW_ARTIFACTS` | yes | no | no | Default for rotari show --artifacts. |
 | `ROTARI_SHOW_WIDE` | yes | no | no | Default for rotari show --wide. |
+| `ROTARI_STICKIES_JSON` | yes | no | no | Default for rotari stickies --json. |
 | `ROTARI_LINEAGE_JSON` | yes | no | no | Default for rotari lineage --json. |
 | `ROTARI_JOBS_FORMAT` | yes | no | no | Default for rotari jobs --format. |
 | `ROTARI_JOBS_SINCE` | yes | no | no | Default for rotari jobs --since. |

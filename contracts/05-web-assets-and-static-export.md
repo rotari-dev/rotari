@@ -1786,6 +1786,31 @@ starting, or a lease that cannot be probed, makes it fail rather than start anot
 [conformance/05-web/web_reattach_test.go](../conformance/05-web/web_reattach_test.go) and the unit tests
 `TestLogTailFollowsTruncationAndReplacement` and `TestEnded`.
 
+**WEB-62** A sticky note is `{id, text, color, x, y, width, height, created_at}` on a page, kept in `<basedir>/stickies.json` as a map from the page
+key to its notes, apart from run notes (`rotari note`) and with no effect on a job, run, status, or selection. The page
+key is the Web UI route without the `/_basedir/ID` prefix, `/` for the home page; it is an arbitrary string and never a
+path. `GET /api/stickies?page=KEY` returns `{"page", "notes"}`, with no notes for a page that has none. `POST
+/api/stickies` with `{"page", "notes"}` replaces that page's notes, and none removes the page; the last save of a page
+wins. `created_at` is RFC 3339, set by the browser that made the note and filled in by the server when missing, and a
+value that is not RFC 3339 is refused. `GET /api/stickies` without `page` returns `{"pages": [{"page", "notes"}]}` for
+every page that has notes. A page holds at most 100 notes of at most 4000 characters, each with a unique ID of at most 64 bytes, a color
+among `yellow`, `pink`, `green`, `blue`, and `orange`, a position of 0 to 1000000, and a size of 0 (the default, 220 by 160) or 120 to 2000 pixels wide and 80 to 2000 high; at most 1000 pages hold notes. A
+request that breaks a limit is refused with 400, and so is one without a page. Without `--allow-control`, the server
+serves notes but refuses `POST` with 403. The file is written atomically under `stickies.lock`. The Web UI shows a
+page's notes in draggable cards, saved shortly after an edit. Its top bar has one **Stickies** menu: **+ New sticky**,
+**Hide on this page** / **Show on this page** (which hides the notes in this browser and deletes none), and the list of
+every note, newest first, as its creation time, its first 24 characters, and its page, which choosing one opens, with an `×` that
+deletes it; a static export has none. The live Recent jobs page, which has no application script, has the same menu (its page
+key is `jobs`), the top bar's **Sign out** when a sign-in is required, and **Launches** when launching is available;
+that button opens the application page with `?launches=1`, which shows the Launches view and drops the parameter. Its
+static export has none of them.
+`rotari stickies` prints each page with its notes and their creation times (or `No sticky notes found.`), `--page` limits it to one page, and
+`--json` prints `{"basedir", "pages": [{"page", "notes"}]}`; it only reads. Implemented in `internal/stickies`, the
+handler in `internal/webui/webui.go`, `web_app_stickies.js`, and `cmd/rotari/stickies.go`; covered by
+[conformance/05-web/stickies_test.go](../conformance/05-web/stickies_test.go) and the unit tests in
+[internal/stickies/stickies_test.go](../internal/stickies/stickies_test.go) and
+[internal/webui/stickies_test.go](../internal/webui/stickies_test.go).
+
 **WEB-46** With `rotari web --allow-terminal`, words a shell prints are links when they name something that exists.
 `POST /_terminal/shells/ID/links` takes a JSON body `{"candidates": [...]}`, at most 64 candidates of at most 4096
 bytes each (400 beyond, 415 for a body that is not JSON, unknown fields 400), with an optional `dir`, the directory

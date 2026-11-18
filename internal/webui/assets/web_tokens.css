@@ -87,11 +87,32 @@
   --logo-dot: #ffffff;
   /* Behind artifact images, so transparent images read the same in both themes. */
   --image-bg: #ffffff;
+  /* Sticky notes: pastel paper with dark ink, dimmer in the dark theme. */
+  --sticky-yellow: #fff3a3;
+  --sticky-pink: #ffc8dd;
+  --sticky-green: #c9f2b5;
+  --sticky-blue: #bde0fe;
+  --sticky-orange: #ffd6a5;
+  --sticky-ink: #2b2b2b;
+  --sticky-edge: rgb(0 0 0 / 0.18);
+  --sticky-head: rgb(0 0 0 / 0.08);
+  --sticky-shadow: rgb(0 0 0 / 0.25);
+  --sticky-error: #d33;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
+    --sticky-yellow: #c9b84a;
+    --sticky-pink: #c98aa3;
+    --sticky-green: #86b072;
+    --sticky-blue: #7aa3c9;
+    --sticky-orange: #c9965a;
+    --sticky-ink: #11161c;
+    --sticky-edge: rgb(255 255 255 / 0.2);
+    --sticky-head: rgb(0 0 0 / 0.18);
+    --sticky-shadow: rgb(0 0 0 / 0.6);
+    --sticky-error: #f07a72;
     --terminal-background: #0b1118;
     --terminal-foreground: #d7dee6;
     --terminal-cursor: #d7dee6;
@@ -160,6 +181,16 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --sticky-yellow: #c9b84a;
+  --sticky-pink: #c98aa3;
+  --sticky-green: #86b072;
+  --sticky-blue: #7aa3c9;
+  --sticky-orange: #c9965a;
+  --sticky-ink: #11161c;
+  --sticky-edge: rgb(255 255 255 / 0.2);
+  --sticky-head: rgb(0 0 0 / 0.18);
+  --sticky-shadow: rgb(0 0 0 / 0.6);
+  --sticky-error: #f07a72;
   --terminal-background: #0b1118;
   --terminal-foreground: #d7dee6;
   --terminal-cursor: #d7dee6;

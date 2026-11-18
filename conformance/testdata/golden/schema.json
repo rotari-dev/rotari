@@ -1117,6 +1117,27 @@
           "value_name": "DIR"
         },
         {
+          "name": "page",
+          "value_name": "PAGE"
+        },
+        {
+          "name": "json"
+        }
+      ],
+      "name": "stickies"
+    },
+    {
+      "flags": [
+        {
+          "name": "config",
+          "value_name": "FILE"
+        },
+        {
+          "name": "basedir",
+          "short": "b",
+          "value_name": "DIR"
+        },
+        {
           "name": "project-name",
           "short": "p",
           "value_name": "NAME"
