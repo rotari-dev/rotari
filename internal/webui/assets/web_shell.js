@@ -5570,6 +5570,8 @@ function shellWord(value) {
   const renderExplorer = () => {
     if (!explorer.element) return;
     const hadFocus = explorer.tree.contains(document.activeElement);
+    // Replacing the rows resets the scroll, and focusing a row scrolls to it.
+    const scrollTop = explorer.tree.scrollTop;
     explorer.visible = [];
     const shell = explorerShell();
     const label = shell ? shellName(shell) : "";
@@ -5589,7 +5591,9 @@ function shellWord(value) {
       explorer.selected = "";
     const first = explorer.tree.querySelector('[role="treeitem"]');
     if (!explorer.selected && first) first.tabIndex = 0;
-    if (hadFocus) (rowOf(explorer.selected) || first)?.focus();
+    explorer.tree.scrollTop = scrollTop;
+    if (hadFocus)
+      (rowOf(explorer.selected) || first)?.focus({ preventScroll: true });
     explorer.footer.replaceChildren();
     if (explorer.busy) showExplorerBusy(explorer.busy, explorer.progress);
     else if (!shell) explorer.footer.append("This pane shows no shell.");
