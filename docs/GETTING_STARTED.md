@@ -264,6 +264,17 @@ registered commands against artifacts; see
 shell of the project you are viewing; see [Terminal](WEB.md#terminal). Anyone
 who can sign in gets a shell as you, so it always requires a token.
 
+Both options require authentication and sign in only on a direct loopback
+connection (or over HTTPS). To view a server on a remote machine, forward its
+port from the machine running the browser, then open `http://127.0.0.1:8787`:
+
+```sh
+# on the remote machine
+rotari web --allow-exec --allow-terminal
+# on your machine
+ssh -L 8787:127.0.0.1:8787 user@remote
+```
+
 See the [web demo](https://rotari-dev.github.io/rotari/) for a read-only UI
 using generated example data. For remote access, authentication, and read-only
 mode, see the [Web UI guide](WEB.md), the [FAQ](FAQ.md#web-ui), and [Security model](SECURITY.md).

@@ -9,6 +9,25 @@ launched itself (see [Launching commands](#launching-commands)).
 
 ```sh
 rotari web                  # http://127.0.0.1:<default port>, with job control
+rotari web --allow-exec     # also launch TensorBoard and other viewers; see Launching commands
+rotari web --allow-terminal # also a terminal panel; see Terminal
+```
+
+`--allow-exec` lets the UI launch commands against artifacts (see
+[Launching commands](#launching-commands)); `--allow-terminal` adds a shell
+panel beside your jobs (see [Terminal](#terminal)). Both can be combined, and
+both always require a token, which `rotari web` generates and prints when you
+give none.
+
+On a remote machine, start the server there and forward its port from the
+machine running the browser, then open `http://127.0.0.1:PORT` locally
+(see [Reaching the UI](#reaching-the-ui)):
+
+```sh
+# on the remote machine
+rotari web --allow-exec --allow-terminal
+# on your machine
+ssh -L 8787:127.0.0.1:8787 user@remote
 ```
 
 A [read-only demo](https://rotari-dev.github.io/rotari/) built from generated
@@ -141,8 +160,10 @@ directly for that.
   `http://localhost:PORT` directly; plain HTTP is accepted for a browser on
   the same host.
 - **Remote machine:** forward the port with `ssh -L PORT:127.0.0.1:PORT host`
-  and keep the loopback binding. Launched services open through the same port,
-  so no further forward is needed.
+  and keep the loopback binding; use the port `rotari web` prints (8787 unless
+  it is taken). `--allow-exec` and `--allow-terminal` need a token and sign in
+  only over such a forward (or HTTPS), so forward the port for them. Launched
+  services open through the same port, so no further forward is needed.
 - **Shared network:** set a token and put an HTTPS reverse proxy in front.
   Browser sign-in is refused over plain HTTP that is not a direct loopback
   connection. Sign in with the user name
