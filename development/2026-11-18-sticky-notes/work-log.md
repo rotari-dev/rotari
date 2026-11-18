@@ -180,3 +180,31 @@ Explorer tests pass. Whether the quality gate turns green is known only after
 the next SonarCloud run.
 
 **Remaining:** Check the gate after the push.
+
+## Format the generated Python CLI metadata
+
+**Commits:** see the commit that adds this entry (`jj log`).
+
+**Change:** `python/rotari/generated_cli.py` is now the generator's output run
+through `ruff check --fix` and `ruff format`, as the Python workflow's
+"Check generated Python CLI metadata" step does.
+
+**Reason:** The Python workflow's `ruff format --check` failed on the file.
+I had regenerated it for the new `stickies` command and copied the
+generator's raw output, without the ruff step. The file in `9bd33582` was
+also unformatted (the commit "Update getting started and generated CLI"
+regenerated it raw), so `main` was already failing this check; it only
+showed once the Python workflow ran on a push (path filter `python/**`).
+
+**Plan impact:** None. The tag `v0.1.31` points at the commit before this fix,
+so its Python workflow run stays red; the shipped binaries are not affected.
+
+**Validation:** With ruff 0.16.9 (CI uses 0.17.1, which could not be
+installed here): `ruff format --check` and `ruff check` with
+`python/pyproject.toml` on `python scripts` pass, the formatted generator
+output equals the committed file, `generate_cli_reference.py --check` and
+`generate_python_api_docs.py --check` pass, and the module imports with 39
+commands. `pytest` is not installed here, so the Python tests did not run.
+
+**Remaining:** Confirm the Python workflow on the pushed commit, since its
+ruff is newer.
