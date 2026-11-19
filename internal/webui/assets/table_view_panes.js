@@ -1,7 +1,7 @@
 // The Table viewer's panes: files a table names, opened in tabs, in panes
 // split right or down. One pane is active, and files clicked in the table
-// open there. Images, video, and PDFs show inline; audio has a player, its
-// waveform, and its spectrogram, which the browser computes from the
+// open there. Images and PDFs show inline; audio and video have a player, a
+// waveform, and a spectrogram, which the browser computes from the
 // decoded samples for the time range in view; text can render Markdown or
 // highlight supported source and config languages.
 "use strict";
@@ -21,6 +21,8 @@ const spectrogramRange = 80;
 // The waveform's default height and bounds, in pixels. The spectrogram takes the
 // rest of the pane.
 const waveHeightDefault = 64;
+// A video's waveform starts taller, as its player is large.
+const videoWaveHeightDefault = 128;
 const waveHeightMin = 32;
 const waveHeightMax = 800;
 // A plot whose size changes is stretched from its last drawing until the
@@ -969,6 +971,7 @@ class TabView {
     this.url = mediaURL(media);
     this.pane = null;
     this.audioData = null;
+    this.videoPlots = { wave: false, spec: false };
     // routing is the player's audio nodes once a channel is chosen.
     this.routing = null;
     // channel is the channel the plots draw, an index or "mix".
@@ -1019,23 +1022,21 @@ class TabView {
       this.root.append(preview);
       return;
     }
-    if (media.kind === "video") {
-      this.root.append(
-        el("video", {
-          className: "tv-video",
-          src: this.url,
-          controls: true,
-          preload: "metadata",
-        }),
-      );
-      return;
-    }
-    this.player = el("audio", {
-      className: "tv-audio",
-      src: this.url,
-      controls: true,
-      preload: "metadata",
-    });
+    // A video has the same plots as audio, drawn from its sound track.
+    this.player =
+      media.kind === "video"
+        ? el("video", {
+            className: "tv-video",
+            src: this.url,
+            controls: true,
+            preload: "metadata",
+          })
+        : el("audio", {
+            className: "tv-audio",
+            src: this.url,
+            controls: true,
+            preload: "metadata",
+          });
     this.waveButton = el(
       "button",
       { type: "button", onclick: () => this.toggle("wave") },
@@ -1052,14 +1053,16 @@ class TabView {
     this.wave = this.plot("tv-waveform");
     this.spec = this.plot("tv-spectrogram");
     this.axis = el("div", { className: "tv-time-axis" });
+    const plotControls = [this.waveButton, this.specButton, this.channelChoice];
+    // A video's plot buttons sit at the top right, in its title line.
+    if (media.kind === "video")
+      title.append(el("span", { className: "tv-plot-buttons" }, ...plotControls));
     this.root.append(
       el(
         "div",
         { className: "tv-audio-controls" },
         this.player,
-        this.waveButton,
-        this.specButton,
-        this.channelChoice,
+        ...(media.kind === "video" ? [] : plotControls),
       ),
       this.status,
       this.wave.box,
@@ -1255,7 +1258,7 @@ class TabView {
     this.handle.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       const start = event.clientY;
-      const height = this.pane.waveHeight || waveHeightDefault;
+      const height = this.pane.waveHeight || this.waveDefault();
       const move = (moved) => {
         this.pane.waveHeight = Math.min(
           waveHeightMax,
@@ -1275,25 +1278,42 @@ class TabView {
 
   toggle(which) {
     if (!this.pane) return;
-    this.pane[which] = !this.pane[which];
+    const shown = this.shown();
+    shown[which] = !shown[which];
     this.update();
+  }
+
+  waveDefault() {
+    return this.media.kind === "video"
+      ? videoWaveHeightDefault
+      : waveHeightDefault;
+  }
+
+  // shown is which plots are on: the pane's for audio, and a video's own, off
+  // until asked for, since decoding a video can be slow.
+  shown() {
+    return this.media.kind === "video" ? this.videoPlots : this.pane;
   }
 
   // update matches the elements to the pane's settings and draws.
   update() {
     if (!this.player) return;
     const pane = this.pane;
-    this.waveButton.setAttribute("aria-pressed", String(pane.wave));
-    this.specButton.setAttribute("aria-pressed", String(pane.spec));
-    this.wave.box.hidden = !pane.wave;
-    this.spec.box.hidden = !pane.spec;
-    this.handle.hidden = !pane.wave || !pane.spec;
-    // Alone, the waveform takes the room the spectrogram would.
-    this.wave.box.style.flex = pane.spec
-      ? "0 0 " + (pane.waveHeight || waveHeightDefault) + "px"
-      : "1 1 " + waveHeightDefault + "px";
-    this.axis.hidden = !pane.wave && !pane.spec;
-    if ((pane.wave || pane.spec) && !this.audioData && !this.loading)
+    const shown = this.shown();
+    this.waveButton.setAttribute("aria-pressed", String(shown.wave));
+    this.specButton.setAttribute("aria-pressed", String(shown.spec));
+    this.wave.box.hidden = !shown.wave;
+    this.spec.box.hidden = !shown.spec;
+    this.handle.hidden = !shown.wave || !shown.spec;
+    // Alone, an audio waveform takes the room the spectrogram would; a
+    // video's keeps its height, as its player already fills the pane.
+    this.wave.box.style.flex =
+      shown.spec || this.media.kind === "video"
+      ? "0 0 " + (pane.waveHeight || this.waveDefault()) + "px"
+      : "1 1 " + this.waveDefault() + "px";
+    this.axis.hidden = !shown.wave && !shown.spec;
+    this.player.classList.toggle("tv-plots-on", shown.wave || shown.spec);
+    if ((shown.wave || shown.spec) && !this.audioData && !this.loading)
       this.analyze();
     this.redraw();
   }
@@ -1687,8 +1707,8 @@ class TabView {
   // playback line and any selection over them.
   drawOverlays() {
     if (!this.player || !this.audioData || !this.root.isConnected) return;
-    if (this.pane.wave) this.drawWave();
-    if (this.pane.spec) this.drawSpectrogram();
+    if (this.shown().wave) this.drawWave();
+    if (this.shown().spec) this.drawSpectrogram();
   }
 
   // overlay draws the playback line and a selection on a plot.

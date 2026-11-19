@@ -442,6 +442,19 @@ a:hover {
   align-items: center;
   gap: 6px;
 }
+.tv-audio-controls .tv-video {
+  flex: 1 1 100%;
+  max-height: 50vh;
+}
+.tv-plot-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.tv-audio-controls .tv-video.tv-plots-on {
+  max-height: 40vh;
+}
 .tv-channel-choice {
   display: inline-flex;
   align-items: center;
