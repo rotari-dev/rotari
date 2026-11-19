@@ -44,7 +44,7 @@ await withPage(cdp, base + '/_auth/login?next=/project/p1', { width: 1280, heigh
   await until('the project\'s shell', shownAre(p1) + ' && document.querySelector(".terminal-status")?.hidden');
   // The project's tab and +, then the divider, the state directory's own tab, and its +.
   const barOrder = 'JSON.stringify([...document.querySelectorAll(".terminal-tabs > .terminal-tab, .terminal-add, .terminal-shared > .terminal-tab-divider, .terminal-shared-tabs > .terminal-tab")].map((item) => item.classList.contains("terminal-tab-divider") ? "|" + item.textContent : item.classList.contains("terminal-shared-add") ? "shared+" : item.classList.contains("terminal-add") ? "+" : item.closest(".terminal-shared") ? "shared" : "tab"))';
-  await until('the shared tab after the divider', barOrder + ' === ' + JSON.stringify(JSON.stringify(['tab', '+', '|All projects', 'shared', 'shared+'])));
+  await until('the shared tab after the divider', barOrder + ' === ' + JSON.stringify(JSON.stringify(['tab', '+', '|Shared across projects', 'shared', 'shared+'])));
   // Split shows the shared shell, the only one in no pane, in the new pane with the keys.
   await page.evaluate('[...document.querySelectorAll(".terminal-bar button")].find((item) => item.getAttribute("aria-label") === "Split right" || item.textContent === "Split right").click()');
   // Both panes connected before typing: what is typed before a pane connects reaches no shell.

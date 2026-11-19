@@ -2730,7 +2730,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     inProject('1', 1, 'p1'), ofBasedir('5', 5), inProject('2', 2, 'p1'), ofBasedir('6', 6), ofBasedir('7', 7, '/c'), plain('8', 8), inProject('9', 9, 'p2'),
   ] });
   await wait(50);
-  assert.deepEqual(tabRow(sharing), ['1', '2', '|All projects', '5', '6', '+']);
+  assert.deepEqual(tabRow(sharing), ['1', '2', '|Shared across projects', '5', '6', '+']);
   assert.deepEqual(sp(sharing).live(), ['1'], 'the project\'s own shell was not shown first');
   const sharedTab = [...sharing.document.querySelectorAll('.terminal-tab [role=tab]')].find((tab) => tab.textContent === '5');
   assert.match(sharedTab.getAttribute('aria-label'), /^Shell 5, of all projects$/);
@@ -2757,7 +2757,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(sharedMenu['Move right'].disabled, false);
   sharedMenu['Move right'].click();
   await wait(30);
-  assert.deepEqual(tabRow(sharing), ['1', '2', '|All projects', '6', '5', '+']);
+  assert.deepEqual(tabRow(sharing), ['1', '2', '|Shared across projects', '6', '5', '+']);
   assert.deepEqual(sharing.server.shells.filter((shell) => shell.basedir === '/b' && !shell.project).map((shell) => shell.id), ['6', '5'], 'the server did not hear the shared order');
   const across = new sharing.window.Event('dragstart', { bubbles: true, cancelable: true });
   sharedTabEl('5').dispatchEvent(across);
@@ -2766,7 +2766,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(acrossOver.defaultPrevented, false, 'a project\'s tab accepted a shared tab');
   sharedTabEl('1').dispatchEvent(new sharing.window.Event('drop', { bubbles: true, cancelable: true }));
   sharedTabEl('5').dispatchEvent(new sharing.window.Event('dragend', { bubbles: true }));
-  assert.deepEqual(tabRow(sharing), ['1', '2', '|All projects', '6', '5', '+']);
+  assert.deepEqual(tabRow(sharing), ['1', '2', '|Shared across projects', '6', '5', '+']);
   // With more than one state directory, the divider still says only All projects; the
   // state directory, whose path is long, is in its title.
   sharing.document.getElementById('sidebar-basedirs').innerHTML =
@@ -2774,12 +2774,12 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     '<div class="sidebar-project-row basedir-row"><a class="sidebar-project-link" href="/_basedir/c/">c</a></div>';
   sharing.polls[0]();
   await wait(30);
-  assert.equal(sharing.document.querySelector('.terminal-tab-divider').textContent, 'All projects');
+  assert.equal(sharing.document.querySelector('.terminal-tab-divider').textContent, 'Shared across projects');
   assert.match(sharing.document.querySelector('.terminal-tab-divider').title, /^Shells of \/b /);
   // A project with no shells of its own shows the shared ones and starts none.
   const borrowing = load(process.argv[1], { stored: '1', path: '/project/p3', shells: [ofBasedir('5', 5), inProject('9', 9, 'p2')] });
   await wait(50);
-  assert.deepEqual(tabRow(borrowing), ['|All projects', '5', '+']);
+  assert.deepEqual(tabRow(borrowing), ['|Shared across projects', '5', '+']);
   assert.deepEqual(sp(borrowing).live(), ['5']);
   assert.equal(borrowing.requests.some((request) => request.startsWith('POST')), false, 'a shell was started beside a shared one');
   borrowing.document.querySelector('.terminal-add').click();
@@ -2789,17 +2789,17 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   // the state directory's own, where All projects would, and shows it; + starts the project's.
   const offering = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1'), inProject('9', 9, 'p2')] });
   await wait(50);
-  assert.deepEqual(tabRow(offering), ['1', '|All projects', '+']);
+  assert.deepEqual(tabRow(offering), ['1', '|Shared across projects', '+']);
   offering.document.querySelector('.terminal-shared-add').click();
   await wait(40);
   assert.match(offering.requests.findLast((request) => request.startsWith('POST')), /\?rows=\d+&cols=\d+&basedir=$/, 'the shared + did not start a shell of the state directory');
-  assert.deepEqual(tabRow(offering), ['1', '|All projects', '1', '+']);
+  assert.deepEqual(tabRow(offering), ['1', '|Shared across projects', '1', '+']);
   assert.equal(offering.server.shells.at(-1).project, '', 'the shared + started a project\'s shell');
   assert.deepEqual(sp(offering).live(), [offering.server.shells.at(-1).id], 'the new shared shell was not shown');
   offering.document.querySelector('.terminal-add').click();
   await wait(40);
   assert.match(offering.requests.findLast((request) => request.startsWith('POST')), /project=p1$/);
-  assert.deepEqual(tabRow(offering), ['1', '2', '|All projects', '1', '+']);
+  assert.deepEqual(tabRow(offering), ['1', '2', '|Shared across projects', '1', '+']);
   // At the state directory's limit, the shared + is off and the project's is not.
   const sharedFull = load(process.argv[1], { stored: '1', path: '/project/p1', limit: 2, shells: [inProject('1', 1, 'p1'), ofBasedir('5', 1), ofBasedir('6', 2)] });
   await wait(50);

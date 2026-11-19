@@ -438,6 +438,7 @@ function shellWord(value) {
   let panel,
     panesBox,
     groups,
+    ownLabel,
     tabs,
     add,
     sharedPart,
@@ -1556,6 +1557,7 @@ function shellWord(value) {
     const sharing = Boolean(sharedGroup());
     const shared = sharedShells();
     sharedPart.hidden = !sharing;
+    ownLabel.hidden = !sharing;
     sharedAdd.disabled =
       shared.length >= groupLimit || shells.length >= shellLimit;
     const drawn = JSON.stringify([
@@ -3818,6 +3820,7 @@ function shellWord(value) {
       tabs.replaceChildren();
       sharedTabs.replaceChildren();
       sharedPart.hidden = true;
+      ownLabel.hidden = true;
       tabsDrawn = "";
       add.disabled = true;
       updatePaneButtons();
@@ -5930,6 +5933,10 @@ function shellWord(value) {
       if (projectLinked) goToPage(path);
       else switchGroup(path);
     };
+    ownLabel = document.createElement("span");
+    ownLabel.className = "terminal-own-label";
+    ownLabel.textContent = "This project";
+    ownLabel.hidden = true;
     tabs = document.createElement("div");
     tabs.className = "terminal-tabs";
     tabs.setAttribute("role", "tablist");
@@ -5948,7 +5955,7 @@ function shellWord(value) {
     sharedPart.hidden = true;
     const divider = document.createElement("span");
     divider.className = "terminal-tab-divider";
-    divider.textContent = "All projects";
+    divider.textContent = "Shared across projects";
     sharedTabs = document.createElement("div");
     sharedTabs.className = "terminal-shared-tabs";
     sharedTabs.setAttribute("role", "tablist");
@@ -6096,6 +6103,7 @@ function shellWord(value) {
       title,
       groups,
       projectLinkButton,
+      ownLabel,
       tabs,
       add,
       sharedPart,

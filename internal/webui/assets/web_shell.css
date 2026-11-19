@@ -1072,6 +1072,14 @@ html.terminal-open[data-terminal-place]:not(.terminal-maximized)
   min-width: 0;
   overflow-x: auto;
 }
+/* Names the project's own tabs, when a state directory's own follow. */
+.terminal-own-label {
+  flex: none;
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
 /* Before a state directory's own tabs on a project's page. */
 .terminal-tab-divider {
   flex: none;
