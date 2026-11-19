@@ -386,6 +386,13 @@ Nothing is typed while a program such as `vim` or `ssh` runs in the shell, and a
 also show its directory in the Explorer, open a new tab there, or copy the path. A directory that is no longer there
 is greyed out, as is a run whose directory cannot be read, with the reason.
 
+Pulldowns under the filter, in **Recent directories** and in **Commands**, pick another state directory (when there is
+more than one) and another project of it, or `(this basedir)` for the shells of its own pages; the list opens at where
+you are. For another place, **Recent directories** shows where its shells have been and where its runs started, and
+**Commands** the commands that its shells ran and that ended, newest first (up to 200, kept in memory until every shell
+ends, and only from shells that mark their commands). Choosing one of those commands types it at the prompt without
+running it, as a directory is typed, or you can copy it; a command with a control character can only be copied.
+
 A shell you start by hand inside a tab, such as `zsh` typed at a bash prompt, is followed as the shell you are in: the
 Explorer follows its directory, **Recent directories** records where it goes, and typing at the prompt treats its
 prompt as the prompt. A bash or zsh you start that way marks its commands too, with nothing to set up, so blocks,

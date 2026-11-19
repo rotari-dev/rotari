@@ -217,7 +217,9 @@ site can start but not read, and an upload needs an `application/octet-stream` b
 
 **Recent directories** (`GET /_terminal/shells/ID/dirs`) answers, behind the same checks, the directories a
 project's shells have been in and where its runs started. The server keeps those directories in memory only, never
-on disk, and forgets them when every shell ends; it records nothing that is typed.
+on disk, and forgets them when every shell ends; it records nothing that is typed. **Commands** of another basedir or project
+(`GET /_terminal/shells/ID/commands`) answers, behind the same checks, the command lines that group's shells ran, as
+their shells marked them, kept in memory only and forgotten the same way, for anyone who can sign in to the terminal.
 
 Links in a shell's output (`POST /_terminal/shells/ID/links`) are found the same way: the page sends words from the
 screen, at most 64 at once, behind the same checks and with a JSON body, with the directory the shell said a command

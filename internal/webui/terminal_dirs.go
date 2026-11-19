@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -87,6 +88,80 @@ type terminalDirsResponse struct {
 	Runs      []terminalRunDirEntry   `json:"runs"`
 	RunsError string                  `json:"runs_error,omitempty"`
 	Workspace *terminalWorkspaceEntry `json:"workspace,omitempty"`
+	// Basedir is the ID of the state directory this answer is for, and Basedirs are those
+	// the server knows, to choose another from; Project is the project of it, empty for the
+	// basedir's own shells, and Projects are those it has. All are empty for shells of no
+	// project.
+	Basedir  string       `json:"basedir"`
+	Basedirs []webBaseDir `json:"basedirs"`
+	Project  string       `json:"project"`
+	Projects []string     `json:"projects"`
+}
+
+// terminalGroupChoice is the group a request for a shell's dirs or commands reads, and
+// what the page needs to offer the others.
+type terminalGroupChoice struct {
+	Group    string
+	Basedir  string
+	Basedirs []webBaseDir
+	Project  string
+	Projects []string
+}
+
+// terminalChosenGroup resolves the group a request asks for: the shell's own, or with a
+// basedir parameter (an ID the server knows) that basedir's own shells, or with a project
+// parameter, empty for a basedir's own shells, that project of the chosen basedir. A
+// basedir that is not the shell's own starts at its own shells when no project is named.
+// It writes the error itself and reports false when the shell is gone, the shell is of no
+// project and so has no basedir to choose among, or the basedir or project is not known.
+func (s site) terminalChosenGroup(writer http.ResponseWriter, request *http.Request, id string) (terminalGroupChoice, bool) {
+	own, ok := s.terminalShellGroup(id)
+	if !ok {
+		http.Error(writer, terminal.ErrNoShell.Error(), http.StatusNotFound)
+		return terminalGroupChoice{}, false
+	}
+	query := request.URL.Query()
+	ownBaseDir, ownProject := terminalGroupPlace(own)
+	choice := terminalGroupChoice{Group: own, Basedirs: []webBaseDir{}, Projects: []string{}}
+	if ownBaseDir == "" {
+		if query.Has("basedir") || query.Has("project") {
+			http.Error(writer, "a shell of no project has no other basedirs or projects", http.StatusBadRequest)
+			return terminalGroupChoice{}, false
+		}
+		return choice, true
+	}
+	baseDir, project := ownBaseDir, ownProject
+	if query.Has("basedir") {
+		path, ok := s.basedirPath(query.Get("basedir"))
+		if !ok {
+			http.Error(writer, "no such basedir", http.StatusNotFound)
+			return terminalGroupChoice{}, false
+		}
+		if path = filepath.Clean(path); path != ownBaseDir {
+			baseDir, project = path, ""
+		}
+	}
+	if query.Has("project") {
+		project = query.Get("project")
+	}
+	names, err := stateinternal.ProjectNamesOrNone(baseDir)
+	if err != nil {
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
+		return terminalGroupChoice{}, false
+	}
+	if project != "" && (!stateinternal.IsValidPathElement(project) || !slices.Contains(names, project)) {
+		http.Error(writer, fmt.Sprintf("project %q was not found", project), http.StatusNotFound)
+		return terminalGroupChoice{}, false
+	}
+	choice.Group = baseDir + "\x00" + project
+	choice.Basedir = basedirID(baseDir)
+	choice.Project = project
+	choice.Projects = append(choice.Projects, names...)
+	choice.Basedirs = s.basedirEntries()
+	if !slices.ContainsFunc(choice.Basedirs, func(entry webBaseDir) bool { return entry.ID == choice.Basedir }) {
+		choice.Basedirs = append(choice.Basedirs, newWebBaseDir(choice.Basedir, baseDir, false))
+	}
+	return choice, true
 }
 
 // serveTerminalDirs answers GET with the directories of a shell's group. It attaches to
@@ -98,12 +173,12 @@ func (s site) serveTerminalDirs(writer http.ResponseWriter, request *http.Reques
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	group, ok := s.terminalShellGroup(id)
+	choice, ok := s.terminalChosenGroup(writer, request, id)
 	if !ok {
-		http.Error(writer, terminal.ErrNoShell.Error(), http.StatusNotFound)
 		return
 	}
-	response := terminalDirsResponse{History: []terminalHistoryEntry{}, Runs: []terminalRunDirEntry{}}
+	group := choice.Group
+	response := terminalDirsResponse{History: []terminalHistoryEntry{}, Runs: []terminalRunDirEntry{}, Basedir: choice.Basedir, Basedirs: choice.Basedirs, Project: choice.Project, Projects: choice.Projects}
 	for _, entry := range s.Terminal.History(group) {
 		response.History = append(response.History, terminalHistoryEntry{terminalDirFacts: newTerminalDirFacts(entry.Dir), EnteredAt: entry.EnteredAt})
 	}

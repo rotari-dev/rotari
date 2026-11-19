@@ -514,6 +514,10 @@ func (s site) serveTerminalShell(writer http.ResponseWriter, request *http.Reque
 		s.serveTerminalDirs(writer, request, id)
 		return
 	}
+	if id, ok := strings.CutSuffix(id, "/"+terminalCommandsName); ok {
+		s.serveTerminalCommands(writer, request, id)
+		return
+	}
 	if id, ok := strings.CutSuffix(id, "/"+terminalLinksName); ok {
 		s.serveTerminalLinks(writer, request, id)
 		return

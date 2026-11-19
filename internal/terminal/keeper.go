@@ -28,6 +28,8 @@ const (
 	exitFlush = 200 * time.Millisecond
 	// historyLimit is how many directories a group's history keeps.
 	historyLimit = 20
+	// commandLimit is how many commands a group's command history keeps.
+	commandLimit = 200
 	// dirSettle is how long a shell back at its prompt after Enter prints nothing before
 	// its directory is read. The line typed is echoed before the command runs, so the
 	// first output after Enter comes too soon; the prompt that follows the command is the
@@ -162,6 +164,14 @@ type DirEntry struct {
 	EnteredAt time.Time
 }
 
+// CommandEntry is a command that a shell of a group ran and that ended.
+type CommandEntry struct {
+	Command string
+	// Exit is its exit status, or nil when the shell gave none.
+	Exit               *int
+	StartedAt, EndedAt time.Time
+}
+
 // Keeper holds shells, which outlive the attachments that show them: callers come
 // and go, and each new one sees recent output. A shell with nothing attached sends
 // its output only to its ring, so a program never waits. An attached reader that falls
@@ -185,7 +195,9 @@ type Keeper struct {
 	lastID int
 	shells []*keptShell // By group, and within one in the order someone arranged.
 	// history is each group's directories, newest first; see History.
-	history    map[string][]DirEntry
+	history map[string][]DirEntry
+	// commands is each group's ended commands, newest first; see Commands.
+	commands   map[string][]CommandEntry
 	idleTimer  *time.Timer
 	idleSerial int
 }
@@ -478,6 +490,7 @@ func (keeper *Keeper) deliver(shell *keptShell, output []byte) {
 	shell.info.ActiveAt = time.Now()
 	attachment := shell.attached
 	if ended := shell.marks.read(output, shell.info.ActiveAt); len(ended) > 0 {
+		keeper.recordCommands(shell.info.Group, ended)
 		last := ended[len(ended)-1]
 		shell.info.LastCommand = &last
 		// A marked command's end is a command's end, whatever the foreground said.
@@ -619,6 +632,34 @@ func (keeper *Keeper) History(group string) []DirEntry {
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
 	return slices.Clone(keeper.history[group])
+}
+
+// recordCommands puts commands the shell said, oldest first, at the front of its group's
+// command history, newest first. The caller holds mu.
+func (keeper *Keeper) recordCommands(group string, ended []LastCommand) {
+	entries := keeper.commands[group]
+	for _, command := range ended {
+		if command.Command == "" {
+			continue
+		}
+		entries = slices.Insert(entries, 0, CommandEntry{Command: command.Command, Exit: command.Exit, StartedAt: command.StartedAt, EndedAt: command.EndedAt})
+	}
+	if len(entries) > commandLimit {
+		entries = entries[:commandLimit]
+	}
+	if keeper.commands == nil {
+		keeper.commands = make(map[string][]CommandEntry)
+	}
+	keeper.commands[group] = entries
+}
+
+// Commands is the commands a group's shells ran and that ended, newest first, up to 200,
+// as the shells' marks said them; a shell that does not mark its commands adds none.
+// EndAll forgets every group's. Nothing of it is kept outside memory.
+func (keeper *Keeper) Commands(group string) []CommandEntry {
+	keeper.mu.Lock()
+	defer keeper.mu.Unlock()
+	return slices.Clone(keeper.commands[group])
 }
 
 func (keeper *Keeper) finish(shell *keptShell) {
@@ -907,6 +948,7 @@ func (keeper *Keeper) EndAll() {
 	ending.Wait()
 	keeper.mu.Lock()
 	keeper.history = nil
+	keeper.commands = nil
 	keeper.mu.Unlock()
 }
 

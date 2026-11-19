@@ -2036,6 +2036,7 @@ html.terminal-open .output-panel.terminal-launch {
   font-size: 12px;
 }
 .terminal-dirs-filter {
+  flex: none;
   margin: 6px;
   padding: 4px 6px;
   border: 1px solid var(--line);
@@ -2044,7 +2045,31 @@ html.terminal-open .output-panel.terminal-launch {
   color: var(--text);
   font-size: 12px;
 }
+.terminal-dirs-pickers {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  margin: 0 6px 6px;
+}
+.terminal-dirs-pickers[hidden] {
+  display: none;
+}
+.terminal-dirs-project {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 3px 4px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+}
+.terminal-dirs-project[hidden] {
+  display: none;
+}
 .terminal-dirs-list {
+  min-height: 0;
+  flex: 1 1 auto;
   overflow-y: auto;
   padding: 0 4px 4px;
 }

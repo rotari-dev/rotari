@@ -1814,6 +1814,28 @@ handler in `internal/webui/webui.go`, `web_app_stickies.js`, and `cmd/rotari/sti
 [internal/stickies/stickies_test.go](../internal/stickies/stickies_test.go) and
 [internal/webui/stickies_test.go](../internal/webui/stickies_test.go).
 
+**WEB-63** With `rotari web --allow-terminal`, the **Recent directories** and **Commands** dropdowns of a project's
+or a basedir's own shell have two pulldowns under the filter: one of the state directories (basedirs) the server knows
+(WEB-34's registered ones, shown when there is more than one), and one of the projects of the chosen basedir, with
+`(this basedir)`, its own shells, first. The dropdown opens at the shell's own basedir and project each time; a choice
+is not kept, and choosing a basedir other than the shell's own starts at its own shells. `GET
+/_terminal/shells/ID/dirs` and `GET /_terminal/shells/ID/commands` answer `basedir` (its ID), `basedirs` (the known
+ones, as the sidebar lists them), `project` (empty for a basedir's own shells), and `projects` (the basedir's, sorted);
+all are empty for a shell of no project. With `?basedir=ID` they answer for that basedir (an unknown ID is 404), and
+with `?project=NAME` for that project of it, empty for the basedir's own shells; a project that the chosen basedir does
+not have, or whose name is not a valid path element (one with `/` or `\`, `.` or `..`), is 404, and either parameter on
+a shell of no project is 400, never an empty answer. For another group, `dirs` gives its `history` and `runs` (or
+`workspace`) as for its own shells (WEB-45). `commands` is the commands that the group's shells ran and that ended, as
+the server read their OSC 133 marks (WEB-55), newest first, at most 200 (`command`, `exit` when the shell gave one,
+`started_at`, `ended_at`); a command the shell did not say is not listed, and a shell with no marks adds none. They are
+kept only in memory and forgotten whenever every shell ends, as WEB-45's directories are. For the shell's own group the
+dropdown lists the focused pane's own blocks, as before, and for any other the server's commands: a row types the
+command at the prompt without Enter, through the same preview check as a directory, or copies it, and a command with a
+control character can only be copied. A refused request is shown in the list. Implemented in `Keeper.Commands` in
+`internal/terminal`, `internal/webui/terminal_dirs.go` and `terminal_commands.go`, and the panel in `web_shell.js`;
+covered by `TestTerminalReadsAnotherProjectsHistory` (projects) and `TestTerminalDirsAndCommandsOfAnotherProject`
+(projects and basedirs).
+
 **WEB-46** With `rotari web --allow-terminal`, words a shell prints are links when they name something that exists.
 `POST /_terminal/shells/ID/links` takes a JSON body `{"candidates": [...]}`, at most 64 candidates of at most 4096
 bytes each (400 beyond, 415 for a body that is not JSON, unknown fields 400), with an optional `dir`, the directory

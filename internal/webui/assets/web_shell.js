@@ -4410,7 +4410,10 @@ function shellWord(value) {
   // openDropdown opens one under anchor, or closes the one anchor opened. load gives what
   // it lists, or { error } to say failed and why; show draws what matches the filter's
   // lowercased text into the list, as rows of class terminal-dirs-row; choose is given the
-  // row Enter chose.
+  // row Enter chose. When what load gives names basedirs or projects, pulldowns of them sit
+  // under the filter, at the ones it says, and choosing another calls load with
+  // { basedir, project }: choosing a basedir names none of its projects, and so asks for
+  // its own shells.
   const openDropdown = async (
     anchor,
     { label, items, className = "", load, show, choose, failed },
@@ -4430,18 +4433,36 @@ function shellWord(value) {
     const list = makeElement("div", "terminal-dirs-list", "Loading...");
     list.setAttribute("role", "listbox");
     list.setAttribute("aria-label", items[0].toUpperCase() + items.slice(1));
-    box.append(filter, list);
+    const pickerRow = makeElement("div", "terminal-dirs-pickers");
+    const basedirPicker = makeElement("select", "terminal-dirs-project");
+    basedirPicker.setAttribute("aria-label", "State directory of the " + items);
+    const picker = makeElement("select", "terminal-dirs-project");
+    picker.setAttribute("aria-label", "Project of the " + items);
+    pickerRow.hidden = true;
+    const pickers = [basedirPicker, picker];
+    pickerRow.append(basedirPicker, picker);
+    box.append(filter, pickerRow, list);
     dropdown = box;
     dropdownAnchor = anchor;
     document.body.append(box);
-    const near = anchor.getBoundingClientRect();
-    const size = box.getBoundingClientRect();
-    box.style.left =
-      Math.max(0, Math.min(near.left, innerWidth - size.width)) + "px";
-    // Above the anchor when the panel is at the bottom and there is no room below.
-    const below = near.bottom + size.height <= innerHeight;
-    box.style.top =
-      Math.max(0, below ? near.bottom : near.top - size.height) + "px";
+    // place puts the box under the anchor, or above it when the panel is at the bottom
+    // and there is no room below, and keeps it within the page, so that its list scrolls
+    // rather than runs off the screen. It is done again whenever the content changes.
+    const place = () => {
+      const near = anchor.getBoundingClientRect();
+      box.style.maxHeight = "";
+      const size = box.getBoundingClientRect();
+      box.style.left =
+        Math.max(0, Math.min(near.left, innerWidth - size.width)) + "px";
+      const room = { below: innerHeight - near.bottom - 8, above: near.top - 8 };
+      const below = size.height <= room.below || room.below >= room.above;
+      const height = Math.min(size.height, below ? room.below : room.above);
+      box.style.maxHeight = Math.max(height, 120) + "px";
+      box.style.top =
+        Math.max(0, below ? near.bottom : near.top - Math.max(height, 120)) +
+        "px";
+    };
+    place();
     // The keys work from the start, so that Escape closes it while it loads or after a
     // refusal.
     let active = null;
@@ -4455,6 +4476,8 @@ function shellWord(value) {
       row?.scrollIntoView?.({ block: "nearest" });
     };
     box.onkeydown = (event) => {
+      // The pulldown keeps its own arrow keys and Enter.
+      if (pickers.includes(event.target) && event.key !== "Escape") return;
       const choices = choosable();
       const at = choices.indexOf(active);
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -4472,7 +4495,7 @@ function shellWord(value) {
       }
     };
     filter.focus();
-    const loaded = await load();
+    let loaded = await load();
     if (dropdown !== box) return;
     if (loaded.error) {
       list.textContent = failed + loaded.error;
@@ -4486,17 +4509,77 @@ function shellWord(value) {
           makeElement("div", "terminal-dirs-empty", "Nothing matches."),
         );
       activate(choosable()[0] || null);
+      place();
     };
     filter.oninput = render;
+    // fillPickers sets the pulldowns to what was loaded: the basedirs when there is a
+    // choice of them, and the projects, with the basedir's own shells first.
+    const fillPickers = () => {
+      const options = (select, entries) => {
+        select.replaceChildren();
+        for (const [value, text] of entries) {
+          const option = makeElement("option", "", text);
+          option.value = value;
+          select.append(option);
+        }
+      };
+      const basedirs = loaded.basedirs || [];
+      options(
+        basedirPicker,
+        basedirs.map((entry) => [
+          entry.id,
+          (entry.parent ? entry.parent + "/" : "") +
+            entry.name +
+            (entry.missing ? " (missing)" : ""),
+        ]),
+      );
+      basedirPicker.value = loaded.basedir;
+      basedirPicker.hidden = basedirs.length < 2;
+      pickerRow.hidden = basedirPicker.hidden && picker.hidden;
+      options(picker, [
+        ["", "(this basedir)"],
+        ...(loaded.projects || []).map((name) => [name, name]),
+      ]);
+      picker.value = loaded.project;
+      picker.hidden = !loaded.basedir;
+      pickerRow.hidden = basedirPicker.hidden && picker.hidden;
+    };
+    // A request that a later choice overtakes is dropped, so that the last choice shows.
+    let choices = 0;
+    const pick = async (selection) => {
+      const mine = ++choices;
+      list.textContent = "Loading...";
+      place();
+      const next = await load(selection);
+      if (dropdown !== box || mine !== choices) return;
+      if (next.error) {
+        list.textContent = failed + next.error;
+        return;
+      }
+      loaded = next;
+      fillPickers();
+      render();
+    };
+    basedirPicker.onchange = () => pick({ basedir: basedirPicker.value });
+    picker.onchange = () =>
+      pick({ basedir: loaded.basedir, project: picker.value });
+    fillPickers();
     render();
   };
   const shellURL = (id, name) =>
     shellsPath + "/" + encodeURIComponent(id) + "/" + name;
   // fetchShellJSON is a shell's dirs or preview, or the reason it could not be had.
-  const fetchShellJSON = async (id, name) => {
+  const fetchShellJSON = async (id, name, selection) => {
     let response;
+    const query = new URLSearchParams();
+    if (selection?.basedir !== undefined)
+      query.set("basedir", selection.basedir);
+    if (selection?.project !== undefined)
+      query.set("project", selection.project);
     try {
-      response = await serverFetch(shellURL(id, name));
+      response = await serverFetch(
+        shellURL(id, name) + (query.toString() ? "?" + query : ""),
+      );
     } catch {}
     if (!response) return { error: "the server did not answer" };
     if (!response.ok) {
@@ -4553,7 +4636,7 @@ function shellWord(value) {
     openDropdown(anchor, {
       label: "Recent directories",
       items: "directories",
-      load: () => fetchShellJSON(id, "dirs"),
+      load: (selection) => fetchShellJSON(id, "dirs", selection),
       failed: "Cannot list the directories: ",
       show: (list, wanted, answer) => {
         for (const [heading, entries, empty] of dirSections(answer)) {
@@ -7730,21 +7813,49 @@ function shellWord(value) {
     pane.term.focus();
   };
   // Commands: the focused pane's commands, newest first, from its blocks. Choosing one goes
-  // to its prompt; a row copies its output or its command line.
+  // to its prompt; a row copies its output or its command line. The pulldowns offer
+  // the other basedirs and projects, whose commands the server heard from their shells: a
+  // row of those copies its command line, or types it at the prompt without running it.
   const openCommands = (anchor) => {
     const pane = focused;
     if (pane.shown === null) {
       closeDropdown();
       return;
     }
+    const id = pane.shown;
+    // The basedir and project the pane's own commands belong to, which the server says.
+    let own = null;
     openDropdown(anchor, {
       label: "Commands",
       items: "commands",
       className: "terminal-commands",
-      load: async () => ({
-        blocks: pane.blocks.filter((block) => block.output).reverse(),
-      }),
-      show: (list, wanted, { blocks }) => {
+      failed: "Cannot list the commands: ",
+      load: async (selection) => {
+        const answer = await fetchShellJSON(id, "commands", selection);
+        if (answer.error) return answer;
+        own ||= { basedir: answer.basedir, project: answer.project };
+        if (answer.basedir !== own.basedir || answer.project !== own.project)
+          return { ...answer, others: answer.commands };
+        return {
+          ...answer,
+          blocks: pane.blocks.filter((block) => block.output).reverse(),
+        };
+      },
+      show: (list, wanted, { blocks, others }) => {
+        if (others) {
+          if (!others.length)
+            list.append(
+              makeElement(
+                "div",
+                "terminal-dirs-empty",
+                "No commands yet in this project.",
+              ),
+            );
+          for (const entry of others)
+            if (!wanted || entry.command.toLowerCase().includes(wanted))
+              list.append(otherCommandRow(id, entry));
+          return;
+        }
         if (!blocks.length) {
           list.append(
             makeElement(
@@ -7761,8 +7872,57 @@ function shellWord(value) {
             list.append(commandRow(pane, block, command));
         }
       },
-      choose: (row) => goToBlock(pane, row.block),
+      choose: (row) =>
+        row.block ? goToBlock(pane, row.block) : typeCommand(id, row.command),
     });
+  };
+  const typeCommand = async (id, command) => {
+    closeDropdown();
+    await typeAtPrompt(id, command, "the command");
+  };
+  // otherCommandRow is a command of another basedir or project, which has no block here.
+  const otherCommandRow = (id, entry) => {
+    const row = makeElement("div", "terminal-dirs-row");
+    row.setAttribute("role", "option");
+    row.command = entry.command;
+    const state = makeElement("span", "terminal-commands-state");
+    state.dataset.state =
+      entry.exit === undefined ? "unknown" : entry.exit === 0 ? "ok" : "failed";
+    const ended = new Date(entry.ended_at).toLocaleString();
+    const detail =
+      (entry.exit === undefined ? "" : "exit " + entry.exit + " \u00b7 ") +
+      ended;
+    row.append(
+      state,
+      makeElement("span", "terminal-dirs-path", entry.command),
+      makeElement("span", "terminal-dirs-detail", detail),
+    );
+    row.title = entry.command + "\n" + detail;
+    // A line break or other control character would run or edit the line when typed.
+    const typable = !/[\x00-\x1f\x7f]/.test(entry.command);
+    if (typable) {
+      row.onclick = (event) => {
+        if (!event.target.closest("button")) typeCommand(id, entry.command);
+      };
+    } else {
+      row.setAttribute("aria-disabled", "true");
+      row.title +=
+        "\nIt has a control character, so it can be copied but not typed.";
+    }
+    const actions = makeElement(
+      "span",
+      "terminal-dirs-actions terminal-commands-actions",
+    );
+    const button = makeElement("button", "", "Copy command");
+    button.type = "button";
+    button.onclick = (event) => {
+      event.stopPropagation();
+      closeDropdown(true);
+      copyText(entry.command, "the command");
+    };
+    actions.append(button);
+    row.append(actions);
+    return row;
   };
   const commandRow = (pane, block, command) => {
     const row = makeElement("div", "terminal-dirs-row");
