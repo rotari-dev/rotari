@@ -80,3 +80,20 @@ func TestSaveFillsAndChecksCreationTime(t *testing.T) {
 		t.Fatal("Save() accepted a created_at that is not RFC 3339")
 	}
 }
+
+func TestSearchMatchesEveryWordIgnoringCase(t *testing.T) {
+	pages := []Page{
+		{Page: "/", Notes: []Note{{ID: "a", Text: "Re-run SEED 2"}, {ID: "b", Text: "seed only"}}},
+		{Page: "projects/x", Notes: []Note{{ID: "c", Text: "other"}}},
+	}
+	got, err := Search(pages, "  seed RE-run ")
+	if err != nil || len(got) != 1 || got[0].Page != "/" || len(got[0].Notes) != 1 || got[0].Notes[0].ID != "a" {
+		t.Fatalf("Search() = %#v, %v", got, err)
+	}
+	if got, err := Search(pages, "absent"); err != nil || got == nil || len(got) != 0 {
+		t.Fatalf("Search(absent) = %#v, %v", got, err)
+	}
+	if _, err := Search(pages, " \t"); err == nil {
+		t.Fatal("a query without words was accepted")
+	}
+}

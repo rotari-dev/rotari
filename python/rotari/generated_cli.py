@@ -1761,6 +1761,13 @@ CLI_SCHEMA: dict[str, Any] = {
                     "value_name": "PAGE",
                 },
                 {
+                    "command_line_only": True,
+                    "description": "list only the notes whose text contains "
+                    "every word of TEXT, ignoring case",
+                    "name": "search",
+                    "value_name": "TEXT",
+                },
+                {
                     "description": "print the pages and notes as JSON",
                     "environment": "ROTARI_STICKIES_JSON",
                     "name": "json",

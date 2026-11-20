@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -158,6 +159,34 @@ func Pages(baseDir string) ([]Page, error) {
 	}
 	sort.Slice(pages, func(i, j int) bool { return pages[i].Page < pages[j].Page })
 	return pages, nil
+}
+
+// Search keeps the notes whose text contains every whitespace-separated word of
+// query, ignoring case, and the pages that still have notes. Pages keep their
+// order, notes theirs. A query without words is an error, not "everything".
+func Search(pages []Page, query string) ([]Page, error) {
+	words := strings.Fields(strings.ToLower(query))
+	if len(words) == 0 {
+		return nil, errors.New("search text must not be empty")
+	}
+	found := []Page{}
+	for _, entry := range pages {
+		var matched []Note
+		for _, note := range entry.Notes {
+			text := strings.ToLower(note.Text)
+			all := true
+			for _, word := range words {
+				all = all && strings.Contains(text, word)
+			}
+			if all {
+				matched = append(matched, note)
+			}
+		}
+		if len(matched) > 0 {
+			found = append(found, Page{Page: entry.Page, Notes: matched})
+		}
+	}
+	return found, nil
 }
 
 // Save replaces the notes on a page; no notes removes the page.

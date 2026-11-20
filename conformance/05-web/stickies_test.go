@@ -59,3 +59,53 @@ func TestWebStickiesAreSharedWithTheCLI(t *testing.T) {
 		t.Fatalf("rotari stickies --page of an empty page = %d: %s", none.Code, none.Stdout)
 	}
 }
+
+// Searching sticky notes finds the notes whose text holds every word, ignoring
+// case, across pages or within one page, the same way through the Web API and
+// `rotari stickies --search`; an empty search is refused rather than listing
+// everything.
+func TestWebStickiesAreSearchable(t *testing.T) {
+	covers(t, "WEB-62")
+	e := support.NewEnv(t)
+	base := e.StartWeb()
+	save := func(page string, notes ...map[string]any) {
+		t.Helper()
+		items := []any{}
+		for _, note := range notes {
+			items = append(items, note)
+		}
+		if response := e.HTTPPostJSON(base+"/api/stickies", map[string]any{"page": page, "notes": items}); response.Status != 200 {
+			t.Fatalf("POST /api/stickies = %d: %s", response.Status, response.Body)
+		}
+	}
+	save("projects/demo",
+		map[string]any{"id": "a", "text": "Re-run SEED 2", "color": "pink", "x": 0, "y": 0},
+		map[string]any{"id": "b", "text": "seed only", "color": "blue", "x": 0, "y": 0})
+	save("projects/other", map[string]any{"id": "c", "text": "re-run later", "color": "green", "x": 0, "y": 0})
+
+	if response := e.HTTPGet(base + "/api/stickies?q=SEED+re-run"); response.Status != 200 ||
+		!strings.Contains(response.Body, "Re-run SEED 2") || strings.Contains(response.Body, "seed only") || strings.Contains(response.Body, "re-run later") {
+		t.Fatalf("search across pages = %d: %s", response.Status, response.Body)
+	}
+	if response := e.HTTPGet(base + "/api/stickies?page=projects/demo&q=seed"); response.Status != 200 ||
+		!strings.Contains(response.Body, "seed only") || !strings.Contains(response.Body, "Re-run SEED 2") {
+		t.Fatalf("search within a page = %d: %s", response.Status, response.Body)
+	}
+	if response := e.HTTPGet(base + "/api/stickies?page=projects/other&q=seed"); response.Status != 200 || strings.Contains(response.Body, "later") || !strings.Contains(response.Body, `"notes":[]`) {
+		t.Fatalf("search without a match = %d: %s", response.Status, response.Body)
+	}
+	if response := e.HTTPGet(base + "/api/stickies?q="); response.Status != 400 {
+		t.Fatalf("empty search = %d: %s", response.Status, response.Body)
+	}
+
+	found := e.Rotari("stickies", "--search", "later")
+	if found.Code != 0 || !strings.Contains(found.Stdout, "projects/other") || strings.Contains(found.Stdout, "seed") {
+		t.Fatalf("rotari stickies --search = %d: %s%s", found.Code, found.Stdout, found.Stderr)
+	}
+	if none := e.Rotari("stickies", "--search", "later", "--page", "projects/demo"); none.Code != 0 || !strings.Contains(none.Stdout, "No sticky notes found.") {
+		t.Fatalf("rotari stickies --search with --page = %d: %s", none.Code, none.Stdout)
+	}
+	if empty := e.Rotari("stickies", "--search", " "); empty.Code == 0 || !strings.Contains(empty.Stderr, "--search") {
+		t.Fatalf("empty --search = %d: %s%s", empty.Code, empty.Stdout, empty.Stderr)
+	}
+}

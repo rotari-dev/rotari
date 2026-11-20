@@ -319,13 +319,23 @@ function stickySnippet(text) {
   if (!line) return "(empty)";
   return line.length > 24 ? line.slice(0, 24) + "…" : line;
 }
+function stickySearchText() {
+  const input = /** @type {HTMLInputElement | null} */ (
+    document.getElementById("stickies-search")
+  );
+  return input ? input.value.trim() : "";
+}
 async function renderStickyList() {
   const list = document.getElementById("stickies-list");
   if (!list) return;
   flushStickySave();
-  const data = await fetchWebJSON("/api/stickies");
+  const query = stickySearchText();
+  const data = await fetchWebJSON(
+    "/api/stickies" + (query ? "?q=" + encodeURIComponent(query) : ""),
+  );
   list.textContent = "";
-  if (data) setStickyPages(data.pages || []);
+  // A search returns only some notes, which would drop the sidebar's marks.
+  if (data && !query) setStickyPages(data.pages || []);
   const entries = [];
   for (const entry of data?.pages || [])
     for (const note of entry.notes || [])
@@ -336,7 +346,11 @@ async function renderStickyList() {
   if (!entries.length) {
     const empty = document.createElement("div");
     empty.className = "stickies-empty";
-    empty.textContent = data ? "No sticky notes yet." : "Could not load notes.";
+    empty.textContent = !data
+      ? "Could not load notes."
+      : query
+        ? "No sticky notes match."
+        : "No sticky notes yet.";
     list.appendChild(empty);
     return;
   }
@@ -421,6 +435,11 @@ if (typeof rewriteStaticLinks !== "function") {
   document.getElementById("stickies-add")?.addEventListener("click", () => {
     addSticky();
     setStickiesMenuOpen(false);
+  });
+  let searchTimer = 0;
+  document.getElementById("stickies-search")?.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(renderStickyList, 200);
   });
   document.getElementById("stickies-toggle")?.addEventListener("click", () => {
     toggleStickies();

@@ -34,7 +34,7 @@ var pairInventory = map[string]struct {
 	"gc":            {3, "4f8007fd85e880d5"},
 	"unlock":        {7, "d81c735b2003da67"},
 	"note":          {3, "c5333bbec5b4f9bc"},
-	"stickies":      {4, "a3715cdd9fed5ce7"},
+	"stickies":      {5, "6833cb1ca3680493"},
 	"change":        {40, "39d6e21a49c89e7d"},
 	"export":        {7, "36180bb4d09c2f4f"},
 	"import":        {7, "32eb87a68c1692c7"},

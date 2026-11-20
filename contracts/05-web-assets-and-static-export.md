@@ -1793,24 +1793,27 @@ path. `GET /api/stickies?page=KEY` returns `{"page", "notes"}`, with no notes fo
 /api/stickies` with `{"page", "notes"}` replaces that page's notes, and none removes the page; the last save of a page
 wins. `created_at` is RFC 3339, set by the browser that made the note and filled in by the server when missing, and a
 value that is not RFC 3339 is refused. `GET /api/stickies` without `page` returns `{"pages": [{"page", "notes"}]}` for
-every page that has notes. A page holds at most 100 notes of at most 4000 characters, each with a unique ID of at most 64 bytes, a color
+every page that has notes. Either form takes `q=TEXT`, which keeps the notes whose text holds every whitespace-separated
+word of `TEXT`, ignoring case, and drops the pages left with none (a single page then answers with its matching notes,
+possibly none); a `q` without words is refused with 400. A page holds at most 100 notes of at most 4000 characters, each with a unique ID of at most 64 bytes, a color
 among `yellow`, `pink`, `green`, `blue`, and `orange`, a position of 0 to 1000000, and a size of 0 (the default, 220 by 160) or 120 to 2000 pixels wide and 80 to 2000 high; at most 1000 pages hold notes. A
 request that breaks a limit is refused with 400, and so is one without a page. Without `--allow-control`, the server
 serves notes but refuses `POST` with 403. The file is written atomically under `stickies.lock`. The Web UI shows a
 page's notes in draggable cards, saved shortly after an edit. Its top bar has one **Stickies** menu: **+ New sticky**,
 **Hide on this page** / **Show on this page** (which hides the notes in this browser and deletes none), and the list of
 every note, newest first, as its creation time, its first 24 characters, and its page, which choosing one opens, with an `×` that
-deletes it; a static export has none. The live Recent jobs page, which has no application script, has the same menu (its page
+deletes it, above a search box that narrows that list to the notes matching what is typed (a search leaves the
+sidebar's marks as they are); a static export has none. The live Recent jobs page, which has no application script, has the same menu (its page
 key is `jobs`), the top bar's **Sign out** when a sign-in is required, and **Launches** when launching is available;
 that button opens the application page with `?launches=1`, which shows the Launches view and drops the parameter. Its
 static export has none of them. In the sidebar of both pages, the link of a page that has notes carries a dot in the colour
 of its first note, with that note's first characters (and how many more there are) as its title, and the link of each
 parent page of such a page, as a project of a run, carries a faint dot; the marks follow every drawing of the sidebar and
 only links into the basedir the page belongs to get them.
-`rotari stickies` prints each page with its notes and their creation times (or `No sticky notes found.`), `--page` limits it to one page, and
-`--json` prints `{"basedir", "pages": [{"page", "notes"}]}`; it only reads. Implemented in `internal/stickies`, the
+`rotari stickies` prints each page with its notes and their creation times (or `No sticky notes found.`), `--page` limits it to one page, `--search TEXT` keeps only the notes matching `TEXT` as the API's `q` does (combined with
+`--page` it searches that page; an empty `TEXT` is an error), and `--json` prints `{"basedir", "pages": [{"page", "notes"}]}`; it only reads. Implemented in `internal/stickies`, the
 handler in `internal/webui/webui.go`, `web_app_stickies.js`, and `cmd/rotari/stickies.go`; covered by
-[conformance/05-web/stickies_test.go](../conformance/05-web/stickies_test.go) and the unit tests in
+[conformance/05-web/stickies_test.go](../conformance/05-web/stickies_test.go) (`TestWebStickiesAreSearchable` for search) and the unit tests in
 [internal/stickies/stickies_test.go](../internal/stickies/stickies_test.go) and
 [internal/webui/stickies_test.go](../internal/webui/stickies_test.go).
 

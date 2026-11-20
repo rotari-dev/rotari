@@ -1121,6 +1121,10 @@
           "value_name": "PAGE"
         },
         {
+          "name": "search",
+          "value_name": "TEXT"
+        },
+        {
           "name": "json"
         }
       ],

@@ -2437,6 +2437,11 @@ html.terminal-open .output-panel.terminal-launch {
   display: flex;
   gap: 6px;
 }
+.stickies-search {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+}
 .stickies-list {
   display: flex;
   max-height: 50vh;

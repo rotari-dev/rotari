@@ -463,6 +463,7 @@ list the sticky notes put on Web UI pages, read-only
 | `--config` | `FILE` | `CLI only` | config file to use |
 | `-b` / `--basedir` | `DIR` | `ROTARI_BASEDIR` | state directory |
 | `--page` | `PAGE` | `CLI only` | list only the notes of this Web UI page, such as / or projects/NAME |
+| `--search` | `TEXT` | `CLI only` | list only the notes whose text contains every word of TEXT, ignoring case |
 | `--json` | `` | `ROTARI_STICKIES_JSON` | print the pages and notes as JSON |
 
 ### `rotari lineage`

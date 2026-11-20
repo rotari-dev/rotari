@@ -359,6 +359,7 @@ var cliCommandSpecs = []cliCommandSpec{
 			{Name: "config", Description: "config file to use", ValueName: "FILE", CommandLineOnly: true},
 			{Name: "basedir", Description: "state directory", ValueName: "DIR"},
 			{Name: "page", Description: "list only the notes of this Web UI page, such as / or projects/NAME", ValueName: "PAGE", CommandLineOnly: true},
+			{Name: "search", Description: "list only the notes whose text contains every word of TEXT, ignoring case", ValueName: "TEXT", CommandLineOnly: true},
 			{Name: "json", Description: "print the pages and notes as JSON"},
 		},
 	},

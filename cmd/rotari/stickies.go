@@ -19,6 +19,7 @@ func cmdStickies(args []string) int {
 	fs.SetOutput(os.Stderr)
 	basedir := cliString(fs, "basedir", "")
 	page := cliString(fs, "page", "")
+	search := cliString(fs, "search", "")
 	jsonOutput := cliBool(fs, "json", false)
 	if err := cliParse(fs, args); err != nil {
 		return 1
@@ -49,6 +50,13 @@ func cmdStickies(args []string) int {
 			}
 		}
 		pages = filtered
+	}
+	if cliOptionSet(fs, "search") {
+		pages, err = stickies.Search(pages, *search)
+		if err != nil {
+			printError("--search: " + err.Error())
+			return 1
+		}
 	}
 	if *jsonOutput {
 		encoded, err := json.MarshalIndent(map[string]any{"basedir": baseDir, "pages": pages}, "", "  ")

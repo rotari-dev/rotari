@@ -201,14 +201,14 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
   puts a coloured note on the page you are viewing, **Hide on this page** (or
   **Show**) hides or shows that page's notes in this browser without deleting
   them, and the list below shows every note, newest first, with its creation
-  time, first words, and page; choose one to go to that page, or its `×` to delete it. In the sidebar, pages with notes carry a coloured dot (hover for the first note),
+  time, first words, and page; choose one to go to that page, or its `×` to delete it; the search box above the list narrows it to notes containing every word you type, ignoring case. In the sidebar, pages with notes carry a coloured dot (hover for the first note),
   and the project of a run with notes carries a faint one. Drag a note by
   its header, resize it by the corner grip, type in it, click the dot to change its colour, and `×` to
   delete it. Notes belong to a page, are kept in
   the state directory (so every browser sees them), and are separate from run
   notes; they change nothing about runs or jobs. A read-only server shows them
   but cannot change them, and a static export has none. `rotari stickies`
-  lists them from the command line (`--page PAGE`, `--json`).
+  lists them from the command line (`--page PAGE`, `--search TEXT`, `--json`).
 - **Theme:** `Settings` selects Light, Dark, or System.
 - **Stop server:** with job control on, `Settings` can stop the `rotari web` serving the page, detached or not. It
   asks first, naming what runs in the terminal's shells, since stopping ends them. From the command line,

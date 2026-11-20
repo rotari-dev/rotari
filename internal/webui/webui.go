@@ -511,8 +511,12 @@ func (s site) baseHandler() http.Handler {
 	mux.HandleFunc("/api/stickies", func(writer http.ResponseWriter, request *http.Request) {
 		switch request.Method {
 		case http.MethodGet:
-			if !request.URL.Query().Has("page") {
+			query := request.URL.Query()
+			if !query.Has("page") {
 				pages, err := stickies.Pages(baseDir)
+				if err == nil && query.Has("q") {
+					pages, err = stickies.Search(pages, query.Get("q"))
+				}
 				if err != nil {
 					writeWebError(writer, err)
 					return
@@ -520,12 +524,20 @@ func (s site) baseHandler() http.Handler {
 				writeWebJSON(writer, map[string][]stickies.Page{"pages": pages})
 				return
 			}
-			notes, err := stickies.Load(baseDir, request.URL.Query().Get("page"))
+			notes, err := stickies.Load(baseDir, query.Get("page"))
+			if err == nil && query.Has("q") {
+				var found []stickies.Page
+				found, err = stickies.Search([]stickies.Page{{Page: query.Get("page"), Notes: notes}}, query.Get("q"))
+				notes = []stickies.Note{}
+				if len(found) > 0 {
+					notes = found[0].Notes
+				}
+			}
 			if err != nil {
 				writeWebError(writer, err)
 				return
 			}
-			writeWebJSON(writer, webStickies{Page: request.URL.Query().Get("page"), Notes: notes})
+			writeWebJSON(writer, webStickies{Page: query.Get("page"), Notes: notes})
 		case http.MethodPost:
 			if !allowControl {
 				forbiddenReadOnly(writer)

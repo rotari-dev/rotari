@@ -190,7 +190,7 @@ func (page livePage) logoutControl() string {
 // stickiesMenuHTML is the top bar's Stickies menu, which web_app_stickies.js
 // brings to life; it is hidden until then, so a page without the script shows
 // nothing.
-const stickiesMenuHTML = `<div class="stickies-menu" id="stickies-menu" hidden><button id="stickies-button" type="button" aria-haspopup="true" aria-expanded="false">Stickies</button><div id="stickies-panel" class="stickies-panel" hidden><div class="stickies-actions"><button id="stickies-add" type="button">+ New sticky</button><button id="stickies-toggle" type="button"></button></div><div id="stickies-list" class="stickies-list"></div></div></div>`
+const stickiesMenuHTML = `<div class="stickies-menu" id="stickies-menu" hidden><button id="stickies-button" type="button" aria-haspopup="true" aria-expanded="false">Stickies</button><div id="stickies-panel" class="stickies-panel" hidden><div class="stickies-actions"><button id="stickies-add" type="button">+ New sticky</button><button id="stickies-toggle" type="button"></button></div><input id="stickies-search" class="stickies-search" type="search" placeholder="Search notes" aria-label="Search sticky notes" autocomplete="off"><div id="stickies-list" class="stickies-list"></div></div></div>`
 
 // stopServerControl is the Settings menu's Stop server, which web_shell.js asks about
 // and sends to POST /_server/shutdown.
