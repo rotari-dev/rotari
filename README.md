@@ -145,6 +145,19 @@ rotari add python train.py --lr 0.001
 rotari run
 ```
 
+Jobs use the `local` executor by default. Choose another executor when adding a
+job with `-e` / `--executor`; for example, submit a job to Slurm and pass a
+partition option:
+
+```sh
+rotari add -e slurm --executor-option="--partition=gpu" python train.py --lr 0.1
+rotari run
+```
+
+You can instead set a default for jobs that do not already have an executor
+with `rotari run -e slurm`. See [Executors and schedulers](docs/EXECUTORS.md) for
+SSH and scheduler setup and backend-specific options.
+
 `rotari run` and `rotari retry` inherit the caller's environment by default;
 pass `--env=NONE` to suppress it while retaining job `--env` and rotari
 metadata.
