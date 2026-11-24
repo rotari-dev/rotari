@@ -482,6 +482,9 @@ function shellWord(value) {
       awaitingWindow = sessionStorage.getItem(windowedKey) === "1";
     } catch {}
   }
+  // What a connection brought and xterm.js has not been given (see giveOutput), and how
+  // many of the bytes it has been given it has not parsed yet.
+  const emptyQueue = () => ({ messages: [], unparsed: 0 });
   // newPane makes a place to show a shell: one terminal screen, and one connection to
   // the shell it shows. All of a connection's state is its pane's own.
   const newPane = () => ({
@@ -494,6 +497,7 @@ function shellWord(value) {
     viewport: null,
     socket: null,
     shown: null, // The ID of the shell this pane shows.
+    queue: emptyQueue(),
     pendingSend: null, // A command waiting for this pane to connect to a shell.
     heldResize: null, // The last size a drag gave it, for its shell when the drag ends.
     connectSerial: 0,
@@ -3300,6 +3304,8 @@ function shellWord(value) {
     const previous = pane.socket;
     pane.socket = null;
     previous?.close();
+    // The replay brings back what was still waiting.
+    pane.queue = emptyQueue();
     showStatus(pane, "Connecting...");
     const serial = ++pane.connectSerial;
     pane.waitingToOpen = true;
@@ -3348,8 +3354,6 @@ function shellWord(value) {
       current.replayed = true;
       // After the replay, so that it lands at the end of what is on screen.
       const sending = Boolean(pane.pendingSend);
-      const bytes = new Uint8Array(event.data);
-      const at = recordBytes(pane, bytes);
       const done = () => {
         if (replay && pane.socket === current) {
           // xterm.js follows output only while the view is at the bottom, and a late
@@ -3364,9 +3368,12 @@ function shellWord(value) {
         }
         if (sending) deliverSend(pane);
       };
-      // While the screen is written again, output waits, and follows it.
-      if (pane.rewriting) pane.rewriting.after.push(done);
-      else feed(pane, bytes, at, done);
+      pane.queue.messages.push({
+        bytes: new Uint8Array(event.data),
+        at: 0,
+        done,
+      });
+      giveOutput(pane);
     };
     current.onclose = (event) => {
       if (pane.socket !== current) return;
@@ -3481,6 +3488,7 @@ function shellWord(value) {
     const { socket } = pane;
     pane.socket = null;
     socket?.close();
+    pane.queue = emptyQueue();
     settleSend(pane, "That pane closed, so nothing was sent.");
     pane.observer.disconnect();
     pane.term.dispose();
@@ -3810,6 +3818,7 @@ function shellWord(value) {
       const socket = pane.socket;
       pane.socket = null;
       socket?.close();
+      pane.queue = emptyQueue();
       settleSend(pane, "The terminal's project changed, so nothing was sent.");
       pane.shown = null;
       if (pane.term) {
@@ -7118,9 +7127,41 @@ function shellWord(value) {
   };
   // feed scans a chunk of the kept bytes at its place and writes it to the terminal.
   const feed = (pane, bytes, at, done) => {
-    if (!bytes) return;
+    if (!bytes) throw new Error("output to write again is no longer kept");
     scanMarks(pane, bytes, at);
     pane.term.write(bytes, done);
+  };
+  // giveOutput gives xterm.js what waits in a pane's queue, a piece at a time, while little
+  // of what it was given is unparsed: it throws away what it is given with 50 MB waiting,
+  // which a large replay or a page whose timers the browser slows can reach. Output is
+  // recorded as it is given, so that the record is what is on screen and a rewrite never
+  // writes what still waits; nothing is given while the screen is written again.
+  const giveLimit = 2 * 1024 * 1024;
+  const givePiece = 256 * 1024;
+  const giveOutput = (pane) => {
+    const { queue } = pane;
+    while (
+      queue.messages.length &&
+      queue.unparsed < giveLimit &&
+      !pane.rewriting
+    ) {
+      const message = queue.messages[0];
+      const whole = message.bytes.length <= givePiece;
+      // A copy, so that the record does not hold the whole of a large message.
+      const bytes = whole
+        ? message.bytes
+        : message.bytes.slice(message.at, message.at + givePiece);
+      message.at += bytes.length;
+      const last = message.at >= message.bytes.length;
+      if (last) queue.messages.shift();
+      queue.unparsed += bytes.length;
+      feed(pane, bytes, recordBytes(pane, bytes), () => {
+        queue.unparsed -= bytes.length;
+        if (last) message.done();
+        // A queue given up for another is not this pane's any more.
+        if (pane.queue === queue) giveOutput(pane);
+      });
+    }
   };
   // foldInfo says whether a block can fold, and where its kept and folded lines are: an
   // ended command, out of the alternate screen, whose output is wholly kept and is longer
@@ -7172,8 +7213,8 @@ function shellWord(value) {
     );
   // rewrite writes a pane's kept bytes to its terminal again, each folded output's middle
   // given way to its line, keeping the blocks' times, and scrolls to the prompt of the
-  // block at focus (a prompt's place in the bytes). Output that arrives meanwhile is kept
-  // and written after.
+  // block at focus (a prompt's place in the bytes). Output that arrives meanwhile waits in
+  // the pane's queue (see giveOutput).
   const rewrite = (pane, focus, then) => {
     if (pane.rewriting) {
       pane.rewriting.again = focus;
@@ -7181,7 +7222,7 @@ function shellWord(value) {
     }
     const { term } = pane;
     const serial = pane.recordSerial;
-    const rewriting = { after: [], again: undefined };
+    const rewriting = { again: undefined };
     pane.rewriting = rewriting;
     const times = new Map(
       pane.blocks.map((block) => [
@@ -7219,9 +7260,6 @@ function shellWord(value) {
         }
         feed(pane, recordSlice(pane, at, end), at, () => {
           if (serial !== pane.recordSerial) return;
-          // What came while it was written follows it.
-          if (pane.record.end > end)
-            feed(pane, recordSlice(pane, end, pane.record.end), end);
           pane.blocksLive = live;
           for (const block of pane.blocks) {
             const kept = times.get(block.bytes?.prompt);
@@ -7232,7 +7270,6 @@ function shellWord(value) {
           }
           if (!pane.blocks.length) showBlockGutter(pane, false);
           pane.rewriting = null;
-          for (const done of rewriting.after) done();
           const target = pane.blocks.find(
             (block) => block.bytes?.prompt === focus,
           );
@@ -7241,6 +7278,7 @@ function shellWord(value) {
           if (target) then?.(target);
           updateSticky(pane);
           if (rewriting.again !== undefined) rewrite(pane, rewriting.again);
+          giveOutput(pane);
         });
       }),
     );
@@ -8258,6 +8296,7 @@ function shellWord(value) {
       const { socket } = pane;
       pane.socket = null;
       socket?.close();
+      pane.queue = emptyQueue();
       settleSend(
         pane,
         "The terminal moved to its own window, so nothing was sent.",

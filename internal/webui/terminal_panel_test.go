@@ -51,7 +51,17 @@ const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedi
 const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/activity', maximized = false, fontSize = '', explorer = '', session = {}, holdHere = [], holdLists = false, windowName = '' } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
   // xterm.js parses what it is given later; a test can hold that back.
-  const parser = { held: false, waiting: [], release() { this.held = false; this.waiting.splice(0).forEach((parse) => parse()); } };
+  // What is written is parsed in order, also what a callback writes, as xterm.js's queue is.
+  const parser = {
+    held: false, draining: false, waiting: [],
+    add(parse) { this.waiting.push(parse); if (!this.held) this.drain(); },
+    drain(count = Infinity) {
+      if (this.draining) return;
+      this.draining = true;
+      try { while (this.waiting.length && count-- > 0) this.waiting.shift()(); } finally { this.draining = false; }
+    },
+    release() { this.held = false; this.drain(); },
+  };
   const server = { shells: [...shells], lastID: 100, limit, startError: '', tight, observers: [], holdHere, holdLists };
   const fakeShells = (url, method, body) => {
     requests.push(method + ' ' + url);
@@ -371,9 +381,12 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
         }
         dispose() { this.disposed = true; }
         write(data, done) {
-          const parse = () => { written.push(Buffer.from(data).toString()); (this.writes ||= []).push(Buffer.from(data).toString()); if (this.parses) this.parseText(Buffer.from(data).toString()); done?.(); };
-          if (parser.held) parser.waiting.push(parse);
-          else parse();
+          if (this.disposed) throw new Error('written to after it was disposed');
+          // xterm.js's own limit on what waits to be parsed.
+          if ((this.unparsed || 0) > 5e7) throw new Error('write data discarded, use flow control to avoid losing data');
+          this.unparsed = (this.unparsed || 0) + data.length;
+          const parse = () => { this.unparsed -= data.length; written.push(Buffer.from(data).toString()); (this.writes ||= []).push(Buffer.from(data).toString()); if (this.parses) this.parseText(Buffer.from(data).toString()); done?.(); };
+          parser.add(parse);
         }
         paste(text) { pasted.push(text); (this.pastes ||= []).push(text); }
         clear() { this.cleared = (this.cleared || 0) + 1; this.markers.forEach((marker) => marker.dispose()); }
@@ -4702,6 +4715,136 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.match(fo.document.querySelector('.terminal-send-note').textContent, /cannot fold now/);
   assert.ok(foPane().record.end - foPane().record.start <= 8 * 1024 * 1024 + 5 * 1024 * 1024);
   assert.ok(foPane().record.start > 0, 'nothing was let go past 8 MiB');
+  }
+
+  // Output waits in the pane's own queue, so that xterm.js is never given more than it can
+  // hold: what is given stays small, nothing is lost or reordered, and output goes on after
+  // a large replay, a tab switch, Clear, and a screen written again.
+  {
+  const MiB = 1024 * 1024;
+  const open = async (shells = [inProject('1', 1, 'p1')]) => {
+    const page = load(process.argv[1], { stored: '1', path: '/project/p1', shells, remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+    await wait(50);
+    page.sockets.at(-1).onopen?.();
+    return page;
+  };
+  const filled = (size, letter = 'x') => new Uint8Array(size).fill(letter.charCodeAt(0));
+  const say = (socket, data) => socket.onmessage({ data: (typeof data === 'string' ? new TextEncoder().encode(data) : data).buffer });
+  const total = (term) => (term.writes || []).reduce((sum, text) => sum + Buffer.byteLength(text), 0);
+  const paneOf = (page) => page.document.querySelector('.terminal-pane').terminalPane;
+
+  // Ordinary output is given at once.
+  const burst = await open();
+  say(burst.sockets.at(-1), 'prompt');
+  assert.deepEqual(burst.terminals.at(-1).writes, ['prompt'], 'output waited with nothing before it');
+  // A burst of more than xterm.js holds.
+  burst.parser.held = true;
+  for (let i = 0; i < 14; i++) say(burst.sockets.at(-1), filled(4 * MiB));
+  say(burst.sockets.at(-1), 'the end');
+  assert.ok(burst.terminals.at(-1).unparsed <= 2 * MiB + 256 * 1024, 'given too much at once: ' + burst.terminals.at(-1).unparsed);
+  assert.ok(paneOf(burst).record.end <= 'prompt'.length + 2 * MiB + 256 * 1024, 'what was not given yet is in the record');
+  burst.parser.drain(4);
+  assert.ok(burst.terminals.at(-1).unparsed <= 2 * MiB + 256 * 1024, 'given too much later: ' + burst.terminals.at(-1).unparsed);
+  burst.parser.release();
+  assert.equal(total(burst.terminals.at(-1)), 'prompt'.length + 56 * MiB + 'the end'.length, 'output was lost');
+  assert.equal(burst.terminals.at(-1).writes.at(-1), 'the end', 'output changed order');
+  assert.ok(burst.terminals.at(-1).writes.every((text) => text.length <= 256 * 1024), 'a large message was given whole');
+
+  // A replay of more than xterm.js holds, with output after it, and then Clear.
+  const replayed = await open();
+  replayed.parser.held = true;
+  say(replayed.sockets.at(-1), filled(52 * MiB));
+  say(replayed.sockets.at(-1), 'after');
+  assert.equal(paneOf(replayed).blocksLive, false, 'the replay ended before it was parsed');
+  replayed.parser.release();
+  assert.equal(total(replayed.terminals.at(-1)), 52 * MiB + 'after'.length);
+  assert.equal(replayed.terminals.at(-1).writes.at(-1), 'after');
+  assert.equal(paneOf(replayed).blocksLive, true, 'the replay never ended');
+  const kept = paneOf(replayed).record.chunks.reduce((sum, chunk) => sum + chunk.bytes.buffer.byteLength, 0);
+  assert.ok(kept <= 9 * MiB, 'the record keeps ' + kept + ' bytes in memory');
+  replayed.parser.held = true;
+  say(replayed.sockets.at(-1), filled(4 * MiB));
+  [...replayed.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'Clear').click();
+  replayed.parser.release();
+  say(replayed.sockets.at(-1), 'cleared');
+  assert.equal(replayed.terminals.at(-1).writes.at(-1), 'cleared', 'nothing came after Clear');
+
+  // A mark and a character across a piece's edge keep their place.
+  const split = await open();
+  say(split.sockets.at(-1), 'replay');
+  const before = filled(256 * 1024 - 5);
+  const marked = new TextEncoder().encode('\x1b]133;A\x07あ');
+  const across = new Uint8Array(before.length + marked.length + 20).fill(0x79);
+  across.set(before);
+  across.set(marked, before.length);
+  split.parser.held = true;
+  say(split.sockets.at(-1), across);
+  const at = 'replay'.length + before.length;
+  assert.deepEqual(JSON.parse(JSON.stringify(paneOf(split).markQueue)), [{ kind: 'A', at, after: at + 8 }]);
+  assert.equal(paneOf(split).record.end, 'replay'.length + across.length);
+  split.parser.release();
+
+  // A tab switch drops what waits, which the replay brings back, and output goes on.
+  const switching = await open([inProject('1', 1, 'p1'), inProject('2', 2, 'p1')]);
+  say(switching.sockets.at(-1), 'first');
+  switching.parser.held = true;
+  say(switching.sockets.at(-1), filled(8 * MiB, 'f'));
+  [...[...switching.document.querySelectorAll('.terminal-tabs .terminal-tab')][1].children].find((part) => !part.classList.contains('terminal-tab-close')).click();
+  await wait(20);
+  switching.parser.release();
+  await wait(20);
+  switching.sockets.at(-1).onopen?.();
+  say(switching.sockets.at(-1), 'second');
+  assert.deepEqual(switching.terminals.at(-1).writes, ['second'], 'the first shell\'s output came after the switch');
+  switching.parser.held = true;
+  say(switching.sockets.at(-1), filled(5 * MiB, 's'));
+  switching.parser.release();
+  assert.equal(total(switching.terminals.at(-1)), 'second'.length + 5 * MiB, 'output stopped after the switch');
+
+  // A shell that ends has its last output shown.
+  const ending = await open();
+  say(ending.sockets.at(-1), 'prompt');
+  ending.parser.held = true;
+  say(ending.sockets.at(-1), filled(5 * MiB));
+  say(ending.sockets.at(-1), 'bye');
+  ending.sockets.at(-1).onclose({ code: 4002, reason: 'exit status 0' });
+  ending.parser.release();
+  assert.equal(ending.terminals.at(-1).writes.at(-1), 'bye', 'the last output was dropped');
+  await wait(20);
+
+  // A closed pane's terminal is given nothing more.
+  const closing = await open([inProject('1', 1, 'p1'), inProject('2', 2, 'p1')]);
+  say(closing.sockets.at(-1), 'one');
+  closing.document.querySelector('[aria-label="Split right"]').click();
+  await wait(30);
+  closing.sockets.at(-1).onopen?.();
+  say(closing.sockets.at(-1), 'two');
+  closing.parser.held = true;
+  say(closing.sockets.at(-1), filled(5 * MiB));
+  closing.document.querySelector('[aria-label="Close pane"]').click();
+  assert.ok(closing.terminals.at(-1).disposed, 'the pane did not close');
+  closing.parser.release();
+  await wait(20);
+
+  // Output of more than the record keeps, while the screen is written again, follows it.
+  const folding = await open();
+  const numbered = Array.from({ length: 20 }, (_, i) => 'line ' + (i + 1) + '\r\n').join('');
+  folding.terminals.at(-1).parses = true;
+  folding.terminals.at(-1).lines = [''];
+  say(folding.sockets.at(-1), '\x1b]133;A\x07$ \x1b]133;B\x07seq 20\r\n\x1b]133;C\x07' + numbered + '\x1b]133;D;0\x07\x1b]133;A\x07$ \x1b]133;B\x07');
+  await wait(10);
+  folding.parser.held = true;
+  paneOf(folding).blocks[0].decoration.render().querySelector('.terminal-block-mark').click();
+  [...folding.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Fold output').click();
+  folding.terminals.at(-1).parses = false;
+  for (let i = 0; i < 5; i++) say(folding.sockets.at(-1), filled(2 * MiB, 'z'));
+  say(folding.sockets.at(-1), 'last');
+  folding.parser.release();
+  await wait(30);
+  const after = folding.terminals.at(-1).writes.join('');
+  assert.equal(after.split('z').length - 1, 10 * MiB, 'output during a rewrite was lost or doubled');
+  assert.ok(after.endsWith('last'), 'output stopped after a rewrite');
+  assert.equal(after.split('lines folded').length - 1, 1, 'the fold was not written');
   }
 
   // Folds last while the page shows the shell: a tab switch replays it, and the same

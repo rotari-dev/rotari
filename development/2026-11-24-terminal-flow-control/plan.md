@@ -2,7 +2,8 @@
 
 Created: 2026-11-24
 Status: Phase 1 is done. After its results the user chose, on 2026-11-24, a change to the page alone over the
-acknowledgements first planned. Phases 2 to 4 are not started.
+acknowledgements first planned. Phase 2 is implemented, and goes into `main` only with phase 3: without its limit, a page
+that falls behind keeps everything waiting in memory. Phases 3 and 4 are not started.
 Related: [Web terminal](../2026-11-05-web-terminal/plan.md),
 [folding output](../2026-11-16-terminal-fold-output/plan.md), and "A very fast program can make the terminal panel lose
 output" in [ISSUES.md](../ISSUES.md)
