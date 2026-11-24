@@ -728,7 +728,8 @@ The first time, it asks where VS Code runs:
 - **Connect with Remote SSH**, when the server is remote and you forward its port. Give the name you use with `ssh` on
   your machine, such as `lab` for `ssh lab`, or `USER@HOST`. It suggests the server's host name up to the first dot.
   Use the name your VS Code windows already connect with: VS Code may take another name of the same host for another
-  connection, and open another window. VS Code needs its Remote - SSH extension.
+  connection, and open another window. VS Code needs its Remote - SSH extension, and
+  asks for a password itself if `ssh` needs one; rotari takes none. For another port, use a `Host` alias in `~/.ssh/config`.
 
 Your browser keeps the answer for that server; **Settings** > **VS Code connection...**, or **Change** in the note that
 appears, changes it. The browser may ask before it opens VS Code; tell it to always allow the address you open rotari

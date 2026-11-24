@@ -147,6 +147,7 @@ let p = load();
 p.open({ path: '/w/a.py' });
 assert.equal(p.radios()[1].checked, true);
 assert.equal(p.name().value, 'ks000');
+assert.match(p.dialog().textContent, /as in ssh ks000, or USER@HOST\. VS Code asks for a password/);
 p.cancel();
 assert.equal(p.dialog(), null);
 p.open({ path: '/w/a.py' });
@@ -178,7 +179,7 @@ assert.equal(p.radios()[0].checked, true);
 p.cancel();
 
 // A name ssh would read as something else is refused where it is typed and where it was kept.
-for (const bad of ['', '-oProxyCommand=x', 'u@-h', 'a b', 'a/b', 'a\nb', 'a@b@c', '日本', 'h:22']) {
+for (const bad of ['', '-oProxyCommand=x', 'u@-h', 'a b', 'a/b', 'a\nb', 'a@b@c', '日本', 'h:22', 'u:secret@h']) {
   p = load();
   p.open({ path: '/w/a.py' });
   p.name().value = bad.replace('\n', ' ');

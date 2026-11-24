@@ -234,7 +234,7 @@
       "terminal-launch-hint",
       "The name you use with ssh on the machine this browser runs on, as in ssh " +
         (suggested.name || "HOST") +
-        ".",
+        ", or USER@HOST. VS Code asks for a password if ssh needs one; do not put it here.",
     );
     const says = element("p", "terminal-launch-problem", problem || "");
     says.setAttribute("role", "alert");
