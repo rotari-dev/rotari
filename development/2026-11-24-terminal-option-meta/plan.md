@@ -54,5 +54,5 @@ reads the setting and is used both where a pane opens and where it changes.
 
 - `TestTerminalPanel` (JSDOM): off by default, on from storage, a bad stored value, every pane and later ones, the menu
   item only on a Mac and while a program takes the mouse, storage refused.
-- By hand on a Mac: `M-b` and `M-f` in bash and zsh, a `tmux` `M-` binding, Neovim `<A-j>`, Japanese input, and Option-¥
-  with the setting off.
+- By hand on a Mac: `M-b` and `M-f` in bash and zsh, a `tmux` `M-` binding, Neovim `<A-j>`, Japanese input, and
+  Option-¥ with the setting off.

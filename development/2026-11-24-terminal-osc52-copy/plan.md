@@ -10,7 +10,7 @@ Related: [Web terminal](../2026-11-05-web-terminal/plan.md),
 
 `tmux` and Neovim can copy to the clipboard of the machine in front of the user by printing OSC 52, also through `ssh`.
 The panel ignores it, so a yank in Neovim or `tmux`'s copy mode stays on the server. Selecting with the mouse does not
-replace it: with mouse reporting on, as both usually have it, the program gets the mouse, and a selection across `tmux`
+replace it: with mouse reporting on, Neovim's default and an option of `tmux`, the program gets the mouse, and a selection across `tmux`
 panes takes in both.
 
 ## Today
@@ -40,7 +40,7 @@ Writing the clipboard from OSC 52, for the panes of the panel and its own window
 
 1. **Off by default, chosen per browser**: **Let programs copy** in the bar's Options menu of the [font
    plan](../2026-11-24-terminal-font/plan.md), marked when on. The pane's right-click menu does not open while a program
-   takes the mouse, as `tmux` usually does. Turning it on says what it allows. Only `"1"` under `rotari-terminal-osc52`
+   takes the mouse. Turning it on says what it allows. Only `"1"` under `rotari-terminal-osc52`
    is on. When storage is refused, it lasts for the page, and a note says so.
 2. **Every copy is shown**: a note says how many characters a program copied.
 3. **Only for live output.** A replay and a fold's rewrite print old bytes again, and must not copy again: nothing is

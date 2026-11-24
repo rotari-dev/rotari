@@ -33,8 +33,8 @@ The font of the terminal's panes and of what is drawn to match them (the sticky 
 1. **A font name, kept by the browser.** **Font...** asks for one family name, with a preview line of text, box
    drawing, and Nerd Font icons.
 2. **Where: an Options button in the panel's bar**, whose menu holds **Font...**. The pane's right-click menu does not
-   open while a program takes the mouse, as `tmux` and Neovim usually do, and **Settings** is not on the panel's own
-   window. The other two plans add to this menu; whichever is done first makes the button.
+   open while a program takes the mouse, as Neovim does by default and `tmux` when told to, and **Settings** is not on the
+   panel's own window. The other two plans add to this menu; whichever is done first makes the button.
 3. **The default stack follows the name**, so a missing font or glyph falls back as today. Empty means the default.
 4. **Checked whenever it is read**, since stored values can be edited: at most 100 characters, no control characters,
    quoted as a CSS string. A bad stored value is not used, and the dialog says why.
