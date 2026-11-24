@@ -427,7 +427,9 @@ hex word that is no job, such as a git hash, stays text. Click a run or job to o
 (a job only queued opens the project's page); the panel and its shells stay, and Ctrl- or Cmd-click opens a new tab
 instead. Click a directory to open a new terminal tab there, or a file to open it in the Table viewer;
 right-click a path for the menu its row in the Explorer has, with **Show in the Explorer** too. A `:12` or
-`:12:3` after a path is left out. A relative path is taken from the directory the command that printed it ran in:
+`:12:3` after a path is the line, and column, that **Open in VS Code at line 12** in that menu opens
+([Opening files in VS Code](#opening-files-in-vs-code)); a name without a slash, such as `train.py:12`, is a link only
+with one. A Python traceback's `File "train.py", line 12` is one link. A relative path is taken from the directory the command that printed it ran in:
 bash and zsh started by rotari say it at each prompt (OSC 7, as other terminals read it), as do fish and many prompts,
 so a path printed before a `cd` still names what it did. A command line that changes directory itself, such as
 `cd sub && ls -d */`, prints relative to where it went, which the shell does not say, so its paths are taken from
@@ -710,7 +712,8 @@ See [Launcher commands](CONFIGURATION.md#launcher-commands) and
 
 **Open in VS Code** opens a file or directory of the server in the VS Code installed on the machine your browser runs
 on. It is beside the launch buttons of Artifacts and **Files**, and, with `--allow-terminal`, on the Explorer's rows
-and in the menu of a path a shell printed. It works on any live server, read-only or not: the browser hands VS Code a
+and in the menu of a path a shell printed, at its line if it has one. The terminal's bar, each card in **All shells**, and
+a pane's right-click menu open the directory the shell is in now. It works on any live server, read-only or not: the browser hands VS Code a
 `vscode://` URL, and the server runs nothing. A static export does not have it.
 
 The first time, it asks where VS Code runs:

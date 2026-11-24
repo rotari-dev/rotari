@@ -1594,8 +1594,8 @@ text; **Select all**; while a command line is being typed at the prompt (found a
 cursor to text...**, which asks for text and moves the cursor to its next place in the line after the cursor, then
 from the line's start, or says it is not there, **Move the cursor to the start**, and **Move the cursor to the end**
 (past its text, or the cursor if further), each moving it as WEB-50's click does; and, on a command's
-prompt or output (WEB-48), that command's **Copy command** and **Copy output**; **Open transcript** (WEB-60), off
-before the pane has any output; and last, **Keep the command at the top**, checked while the sticky line (WEB-59) is
+prompt or output (WEB-48), that command's **Copy command** and **Copy output**; where it is offered, **Open this directory in VS Code** (WEB-64);
+**Open transcript** (WEB-60), off before the pane has any output; and last, **Keep the command at the top**, checked while the sticky line (WEB-59) is
 on. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
 [`TestTerminalPanelInBrowser`](../conformance/05-web/terminal_panel_browser_test.go).
 
@@ -1843,15 +1843,16 @@ covered by `TestTerminalReadsAnotherProjectsHistory` (projects) and `TestTermina
 or without it, and a static export does not. It opens an absolute path of the server by following a `vscode://` URL in
 the browser; the server runs nothing. Where it is: on each file or directory of Artifacts and **Files** and in the
 title of their previews, and, with the terminal on, on the Explorer's rows and in the menu of a row or a printed path
-(WEB-42, WEB-46), whose clicks do not change. `GET /api/vscode-target` takes a content request's fields (WEB-6) and
+(WEB-42, WEB-46), whose clicks do not change, and in the terminal's bar, on All shells cards, and in a pane's right-click
+menu (WEB-51) for the directory the shell is in now, or a note saying why that is not known. `GET /api/vscode-target` takes a content request's fields (WEB-6) and
 answers the artifact's `path` and `kind` (`file` or `directory`), refusing what the content request refuses. The page
 asks once where VS Code runs, starting from what the server suggests: Remote SSH when it was started with
 `SSH_CONNECTION` set, with its host name up to the first dot, and the same machine otherwise. The browser keeps the
 answer under the server's host name, so one server's is not used for another at the same address; without storage or
 a known host name, or with a kept answer that cannot be read or used, it asks again and says why. Settings and the note
 shown after opening change it. The URL is `vscode://file/PATH` for the same machine and
-`vscode://vscode-remote/ssh-remote+NAME/PATH` for Remote SSH, each path segment percent-encoded, with `:1` after a
-remote file, which VS Code would otherwise open in place of a window's folder, and `?windowId=_blank` after a
+`vscode://vscode-remote/ssh-remote+NAME/PATH` for Remote SSH, each path segment percent-encoded, with `:LINE` or `:LINE:COL` for a
+file that was printed with one, else `:1` after a remote file, which VS Code would otherwise open in place of a window's folder, and `?windowId=_blank` after a
 directory. NAME is checked at every use: letters, digits, `.`, `_`, and `-`, with an optional `USER@`, neither part
 starting with `-`. A path that is not absolute, holds NUL, or has a number or nothing after a colon is refused with
 the reason. The note says what was asked and never that it opened, which a page cannot know. Implemented in
@@ -1872,9 +1873,10 @@ distinct candidate that names something, in the order asked, with its `text` and
   runs, newest first, linking to that run's page with `?job_id=`, or else in its queue, linking to the project's page.
   A shell of a basedir's own pages or of no project links no job, and a word of that form that is no such job is no
   link.
-- `dir` or `file`: a candidate holding `/`, absolute or relative to `dir` when given, else to the shell's working
-  directory when asked, with a trailing `:LINE` or `:LINE:COL` left out, that is a directory or a regular file on this
-  host now; `path` is its absolute, cleaned path. With a `host` that is not this one (this one being its name
+- `dir` or `file`: a candidate holding `/`, or ending in `:LINE` or `:LINE:COL`, absolute or relative to `dir` when
+  given, else to the shell's working directory when asked, with that ending left out, that is a directory (only for a
+  candidate holding `/`) or a regular file on this host now; `path` is its absolute, cleaned path, and a file has
+  `line` and `column` from the ending when they are positive and fit 32 bits, `column` only with `line`. With a `host` that is not this one (this one being its name
   ignoring case, or the same up to the first dot, empty, or `localhost`), no candidate is a path; a host name the
   server cannot read makes every named host another's, said in `problems`.
 
@@ -1882,7 +1884,9 @@ distinct candidate that names something, in the order asked, with its `text` and
 run's snapshot, the queue, a basedir's projects); neither turns the answer into an error. A shell not running is
 404, a method but POST 405, and the route is served only where the terminal is (404 without it), behind its checks.
 The panel finds candidates on the line under the pointer, its wrapped parts joined, leaving out trailing
-punctuation and words holding `://`, which stay web links, and none on the rows of the command line being typed at
+punctuation and words holding `://`, which stay web links; a word up to its `:LINE` or `:LINE:COL` is one, with what
+follows another colon, as `grep -n` prints, left out, and so is a Python traceback's `File "PATH", line N`, asked as
+`PATH:N` and with spaces allowed in PATH. It finds none on the rows of the command line being typed at
 the prompt (as WEB-50 finds it), which are for moving in and copying. A line in a block (WEB-48) is asked with the directory the
 shell said by OSC 7 (`file://HOST/PATH`, the path percent-decoded as UTF-8) before that block's prompt, as `dir` and
 `host`; when what it said does not decode to an absolute path, relative paths on its lines are not asked about, and
@@ -1897,7 +1901,7 @@ Explorer following, and a file opens in the Table viewer (WEB-42). A right click
 held or a program tracks the mouse (WEB-51), opens the menu its row in the Explorer has (WEB-42 to WEB-44: Open in
 the Table viewer, Open in a new terminal tab, in a file's folder, Send the path to the terminal, Download,
 Upload..., New File..., New Folder..., Cut, Copy, Paste, Rename..., Delete..., Copy the path, Copy the path from
-here), with **Show in the Explorer** after the second, showing the directory, or a file's folder, with Follow off;
+here, and where it is offered **Open in VS Code**, WEB-64, **at line N** for a file with a line, at its column too), with **Show in the Explorer** after the second, showing the directory, or a file's folder, with Follow off;
 off a link, the terminal's own menu (WEB-51). A link a program prints with OSC 8 (`ESC ] 8 ; params ; URI ST`, as
 `ls --hyperlink` and compilers do) is underlined by xterm.js whatever the line, and opens by its address's scheme: a
 `file://HOST/PATH` (the path percent-decoded as UTF-8) is asked about as the absolute candidate PATH with `host`, and

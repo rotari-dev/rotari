@@ -447,6 +447,7 @@ function shellWord(value) {
     sharedAdd,
     launchButton,
     viewerButton,
+    vscodeButton,
     dirsButton,
     commandsButton,
     splitRightButton,
@@ -2684,6 +2685,16 @@ function shellWord(value) {
     viewHere.title = "Open the directory this shell is in now in the Table viewer";
     drawIcon(viewHere, explorerIcons.open);
     viewHere.onclick = () => openShellInViewer(shell);
+    const vscodeHere = [];
+    if (window.vscodeOffered()) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute("aria-label", "Open " + label + " in VS Code");
+      button.title = "Open the directory this shell is in now in VS Code";
+      drawIcon(button, explorerIcons.editor);
+      button.onclick = () => openShellInVSCode(shell.id);
+      vscodeHere.push(button);
+    }
     // Move to another project: a menu of where it can go, as dragging its card does.
     const moveTo = document.createElement("button");
     moveTo.type = "button";
@@ -2711,7 +2722,7 @@ function shellWord(value) {
     };
     const actions = document.createElement("span");
     actions.className = "terminal-overview-actions";
-    actions.append(viewHere, launchHere, moveTo, rename, end);
+    actions.append(viewHere, ...vscodeHere, launchHere, moveTo, rename, end);
     const item = document.createElement("div");
     item.className = "terminal-overview-item";
     item.append(card, run, tree, actions);
@@ -3960,6 +3971,7 @@ function shellWord(value) {
     closePaneButton.disabled = panes.length < 2;
     launchButton.disabled = focused.shown === null;
     viewerButton.disabled = focused.shown === null;
+    if (vscodeButton) vscodeButton.disabled = focused.shown === null;
     dirsButton.disabled = focused.shown === null;
     commandsButton.disabled = focused.shown === null;
   };
@@ -4337,6 +4349,22 @@ function shellWord(value) {
   const openShellInViewer = (shell) =>
     openTableViewer({ shell: shell.id }, shellName(shell));
   const openInViewer = (path) => openTableViewer({ path }, path);
+  // openShellInVSCode opens the directory a shell is in now.
+  const openShellInVSCode = async (id) => {
+    const { cwd, cwd_error, error } = await fetchShellJSON(id, "preview");
+    // A name that is not UTF-8 comes with U+FFFD in place of what it is.
+    const problem =
+      error ||
+      cwd_error ||
+      (!cwd && "it is not known") ||
+      (cwd.includes("\ufffd") && "its name is not valid UTF-8");
+    if (problem)
+      showNote(
+        "Cannot open the shell's directory in VS Code: " + problem,
+        6000,
+      );
+    else window.openInVSCode({ path: cwd, folder: true });
+  };
   // openTableViewer opens the Table viewer on what the request names, a path or a running
   // shell, whose directory is pinned.
   const openTableViewer = async (request, named) => {
@@ -4757,14 +4785,37 @@ function shellWord(value) {
     /\b[0-9a-f]{9}(?:-[0-9]+)?\b/g,
     /[^\s"'`<>()[\]{},;|]*\/[^\s"'`<>()[\]{},;|]*/g,
   ];
+  // A path with a line, and column, as compilers and grep -n print it, which may have no
+  // slash; what follows another colon, as grep's text does, is not of it.
+  const linkPositionForm =
+    /(?<![^\s"'`<>()[\]{},;|])[^\s"'`<>()[\]{},;|:]+:[0-9]+(?::[0-9]+)?(?![^\s"'`<>()[\]{},;|:.!?])/g;
+  // A path as a Python traceback says it, which may hold spaces.
+  const linkTracebackForm = /\bFile "([^"]+)", line ([0-9]+)/g;
   // The server's limit on candidates in one request.
   const linkAskLimit = 64;
   const linkAnswerLife = 5000;
   const linkAnswers = new Map();
   let linksFailedNoted = false;
-  // linkCandidates are the words of a line that may be links, where they are in it.
+  // linkCandidates are the words of a line that may be links, where they are in it. A
+  // traceback's is asked as PATH:LINE, whatever it is written as.
   const linkCandidates = (text) => {
     const found = new Map();
+    for (const match of text.matchAll(linkTracebackForm)) {
+      const start = match.index + 'File "'.length;
+      const end = match.index + match[0].length;
+      found.set(start + ":" + (end - start), {
+        text: match[1] + ":" + match[2],
+        start,
+        end,
+      });
+    }
+    for (const match of text.matchAll(linkPositionForm))
+      if (!match[0].startsWith("//"))
+        found.set(match.index + ":" + match[0].length, {
+          text: match[0],
+          start: match.index,
+          end: match.index + match[0].length,
+        });
     for (const form of linkForms) {
       for (const match of text.matchAll(form)) {
         // A full stop, comma, or colon after a word ends the sentence, not the path.
@@ -4844,7 +4895,7 @@ function shellWord(value) {
     !linkForms
       .slice(0, 2)
       .some((form) => new RegExp("^" + form.source + "$").test(text)) &&
-    text.includes("/") &&
+    (text.includes("/") || /:[0-9]+$/.test(text)) &&
     !text.startsWith("/");
   // fileURL reads file://HOST/PATH, with the path percent-encoded, as shells say their
   // directory (OSC 7) and programs link a file (OSC 8): the host and the path, or null
@@ -5585,10 +5636,23 @@ function shellWord(value) {
   };
   // pathChoices is the menu of a file or folder, an Explorer row's or a link's in a shell's
   // output, which adds Show in the Explorer.
-  const pathChoices = (path, folder, fromLink = false) => [
+  const pathChoices = (path, folder, fromLink = null) => [
     ["Open in the Table viewer", () => openInViewer(path), true],
     ...(window.vscodeOffered()
-      ? [["Open in VS Code", () => window.openInVSCode({ path, folder }), true]]
+      ? [
+          [
+            "Open in VS Code" +
+              (fromLink?.line ? " at line " + fromLink.line : ""),
+            () =>
+              window.openInVSCode({
+                path,
+                folder,
+                line: fromLink?.line,
+                column: fromLink?.column,
+              }),
+            true,
+          ],
+        ]
       : []),
     ["Launch...", () => openPathLaunchDialog(path, folder), true],
     // A file's folder, as editors open a terminal for a file.
@@ -6160,6 +6224,16 @@ function shellWord(value) {
       },
       "Open the directory this pane's shell is in now in the Table viewer, in a new tab",
     );
+    vscodeButton = window.vscodeOffered()
+      ? iconButton(
+          "Open in VS Code",
+          explorerIcons.editor,
+          () => {
+            if (focused.shown !== null) openShellInVSCode(focused.shown);
+          },
+          "Open the directory this pane's shell is in now in VS Code",
+        )
+      : null;
     dirsButton = iconButton(
       "Recent directories",
       icons.recentDirs,
@@ -6229,6 +6303,7 @@ function shellWord(value) {
       "terminal-bar-tools",
       overviewButton,
       viewerButton,
+      ...(vscodeButton ? [vscodeButton] : []),
       launchButton,
       dirsButton,
       commandsButton,
@@ -6747,7 +6822,7 @@ function shellWord(value) {
     // A path's link offers what its row in the Explorer does.
     const link = pane.hoveredLink;
     if (link?.kind === "dir" || link?.kind === "file") {
-      openPanelMenu(event, pathChoices(link.path, link.kind === "dir", true));
+      openPanelMenu(event, pathChoices(link.path, link.kind === "dir", link));
       return;
     }
     // Any other link a program printed (OSC 8), with its address.
@@ -6818,6 +6893,12 @@ function shellWord(value) {
         ["Copy output", () => copyBlockOutput(pane, block), true],
       );
     }
+    if (window.vscodeOffered())
+      choices.push([
+        "Open this directory in VS Code",
+        () => openShellInVSCode(pane.shown),
+        pane.shown !== null,
+      ]);
     choices.push([
       "Open transcript",
       () => openTranscript(pane),

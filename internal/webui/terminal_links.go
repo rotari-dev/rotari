@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/rotari-dev/rotari/internal/resolve"
@@ -58,13 +59,16 @@ type terminalLinksRequest struct {
 }
 
 // terminalLink is a candidate that names something: Kind is run, job, dir, or file. A
-// run or job has the page's Link; a path has its absolute Path, without a line number.
-// Project is the run's or job's project.
+// run or job has the page's Link; a path has its absolute Path, without a line number. A
+// file has the Line, and Column, given after it, when they are positive. Project is the
+// run's or job's project.
 type terminalLink struct {
 	Text    string `json:"text"`
 	Kind    string `json:"kind"`
 	Link    string `json:"link,omitempty"`
 	Path    string `json:"path,omitempty"`
+	Line    int    `json:"line,omitempty"`
+	Column  int    `json:"column,omitempty"`
 	Project string `json:"project,omitempty"`
 }
 
@@ -174,8 +178,17 @@ func (finder *terminalLinkFinder) find(candidate string) (terminalLink, bool) {
 		link.Kind = "job"
 		link.Project, link.Link = finder.job(candidate)
 		return link, link.Link != ""
-	case strings.Contains(candidate, "/") && !finder.remote:
+	case finder.remote:
+		return link, false
+	case strings.Contains(candidate, "/") || terminalLinePosition.MatchString(candidate):
 		link.Kind, link.Path = finder.path(candidate)
+		if link.Kind == "dir" && !strings.Contains(candidate, "/") {
+			// A word and a number, such as a time, names no directory.
+			return link, false
+		}
+		if link.Kind == "file" {
+			link.Line, link.Column = terminalPosition(candidate)
+		}
 		return link, link.Path != ""
 	}
 	return link, false
@@ -276,6 +289,23 @@ func (finder *terminalLinkFinder) path(candidate string) (kind, path string) {
 		return "file", path
 	}
 	return "", ""
+}
+
+// terminalPosition is the line and column after a path, each 0 when there is none. One that
+// is not positive, or too large for an editor's, is none; a column needs a line.
+func terminalPosition(candidate string) (line, column int) {
+	number := func(text string) int {
+		value, err := strconv.ParseInt(text, 10, 32)
+		if err != nil || value < 1 {
+			return 0
+		}
+		return int(value)
+	}
+	parts := strings.Split(strings.TrimPrefix(terminalLinePosition.FindString(candidate), ":"), ":")
+	if line = number(parts[0]); line > 0 && len(parts) > 1 {
+		column = number(parts[1])
+	}
+	return line, column
 }
 
 // terminalLocalHost says whether a host a shell named in OSC 7 is this one: the same name

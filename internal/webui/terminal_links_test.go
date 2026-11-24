@@ -115,12 +115,38 @@ func TestTerminalLinksAreWhatExists(t *testing.T) {
 		{Text: "bbbbbbbb2-3", Kind: "job", Project: "p", Link: "/project/p/run/" + older + "?job_id=bbbbbbbb2-3"},
 		{Text: "ccccccccc", Kind: "job", Project: "p", Link: "/project/p"},
 		{Text: "sub/x.csv", Kind: "file", Path: filepath.Join(work, "sub", "x.csv")},
-		{Text: "sub/x.csv:12:3", Kind: "file", Path: filepath.Join(work, "sub", "x.csv")},
+		{Text: "sub/x.csv:12:3", Kind: "file", Path: filepath.Join(work, "sub", "x.csv"), Line: 12, Column: 3},
 		{Text: "./sub", Kind: "dir", Path: filepath.Join(work, "sub")},
 		{Text: work, Kind: "dir", Path: work},
 	}
 	if !reflect.DeepEqual(got.Links, want) || got.DirError != "" || len(got.Problems) != 0 {
 		t.Errorf("links of a project's shell:\n got %+v\nwant %+v", got, want)
+	}
+
+	// A line, and column, after a path, with a slash in it or not. One that cannot be a line
+	// leaves the file; a word without a slash needs one, and names no directory.
+	if err := os.MkdirAll(filepath.Join(work, "12"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, "a b.py"), []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	spaced, table := filepath.Join(work, "a b.py"), filepath.Join(work, "sub", "x.csv")
+	got = terminalLinksOf(t, server, project, "a b.py:7", "a b.py:7:2", spaced+":3", "a b.py", "12:30", "12:30:45", "none.py:3",
+		"./12:30", "sub/x.csv:0", "sub/x.csv:4:0", "sub/x.csv:99999999999", "sub/x.csv:5:99999999999", "a b.py:0")
+	want = []terminalLink{
+		{Text: "a b.py:7", Kind: "file", Path: spaced, Line: 7},
+		{Text: "a b.py:7:2", Kind: "file", Path: spaced, Line: 7, Column: 2},
+		{Text: spaced + ":3", Kind: "file", Path: spaced, Line: 3},
+		{Text: "./12:30", Kind: "dir", Path: filepath.Join(work, "12")},
+		{Text: "sub/x.csv:0", Kind: "file", Path: table},
+		{Text: "sub/x.csv:4:0", Kind: "file", Path: table, Line: 4},
+		{Text: "sub/x.csv:99999999999", Kind: "file", Path: table},
+		{Text: "sub/x.csv:5:99999999999", Kind: "file", Path: table, Line: 5},
+		{Text: "a b.py:0", Kind: "file", Path: spaced},
+	}
+	if !reflect.DeepEqual(got.Links, want) {
+		t.Errorf("links with lines:\n got %+v\nwant %+v", got.Links, want)
 	}
 
 	// A shell of no project finds runs in every basedir, and no jobs.
@@ -182,7 +208,7 @@ func TestTerminalLinksAreWhatExists(t *testing.T) {
 			t.Errorf("a path from host %q, which is this one, did not link: %+v", host, got)
 		}
 	}
-	far := ask(terminalLinksRequest{Candidates: []string{"sub/y.txt", work, newer}, Dir: elsewhere, Host: "far-away-" + ownShort})
+	far := ask(terminalLinksRequest{Candidates: []string{"sub/y.txt", "y.txt:3", work, newer}, Dir: elsewhere, Host: "far-away-" + ownShort})
 	wantFar := []terminalLink{{Text: newer, Kind: "run", Project: "p", Link: "/project/p/run/" + newer}}
 	if !reflect.DeepEqual(far.Links, wantFar) || len(far.Problems) != 0 {
 		t.Errorf("links from another host:\n got %+v\nwant %+v", far, wantFar)

@@ -17,6 +17,8 @@ type terminalLinkAnswer struct {
 	Kind    string `json:"kind"`
 	Link    string `json:"link,omitempty"`
 	Path    string `json:"path,omitempty"`
+	Line    int    `json:"line,omitempty"`
+	Column  int    `json:"column,omitempty"`
 	Project string `json:"project,omitempty"`
 }
 
@@ -49,6 +51,9 @@ func TestTerminalOutputLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "out dir", "x.csv"), []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "top.py"), []byte("a\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	links := base + "/_terminal/shells/" + shell.ID + "/links"
@@ -86,13 +91,14 @@ func TestTerminalOutputLinks(t *testing.T) {
 
 	runPage := "/project/" + run.Project + "/run/" + run.RunID
 	got := ask(run.RunID, "20200101-000000-deadbeef", run.OKJob, queued, "012345678",
-		"out dir/x.csv:3:7", filepath.Join(dir, "out dir"), "nowhere/x", "plain")
+		"out dir/x.csv:3:7", filepath.Join(dir, "out dir"), "nowhere/x", "plain", "top.py:12", "top.py", "12:30")
 	want := []terminalLinkAnswer{
 		{Text: run.RunID, Kind: "run", Project: run.Project, Link: runPage},
 		{Text: run.OKJob, Kind: "job", Project: run.Project, Link: runPage + "?job_id=" + run.OKJob},
 		{Text: queued, Kind: "job", Project: run.Project, Link: "/project/" + run.Project},
-		{Text: "out dir/x.csv:3:7", Kind: "file", Path: filepath.Join(dir, "out dir", "x.csv")},
+		{Text: "out dir/x.csv:3:7", Kind: "file", Path: filepath.Join(dir, "out dir", "x.csv"), Line: 3, Column: 7},
 		{Text: filepath.Join(dir, "out dir"), Kind: "dir", Path: filepath.Join(dir, "out dir")},
+		{Text: "top.py:12", Kind: "file", Path: filepath.Join(dir, "top.py"), Line: 12},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("links:\n got %+v\nwant %+v", got, want)

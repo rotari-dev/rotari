@@ -4287,7 +4287,82 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   winTerm.lines = ['run ' + run];
   const [winRun] = await new Promise((resolve) => winTerm.linkProviders[0].provideLinks(1, resolve));
   winRun.activate({});
+  // Its bar and All shells have Open in VS Code beside the Table viewer, as this page offers
+  // it, for the directory the shell is in now.
+  {
+    const vscode = [];
+    lkWin.window.openInVSCode = (target) => vscode.push(target.path + ' ' + target.folder);
+    lkWin.server.cwds = { 1: '/w/p1/sub' };
+    const labels = [...lkWin.document.querySelectorAll('.terminal-bar button')].map((each) => each.getAttribute('aria-label'));
+    assert.equal(labels[labels.indexOf('Table viewer') + 1], 'Open in VS Code');
+    lkWin.document.querySelector('.terminal-bar [aria-label="Open in VS Code"]').click();
+    await wait(20);
+    lkWin.document.querySelector('.terminal-bar [aria-label="All shells"]').click();
+    await wait(50);
+    lkWin.document.querySelector('.terminal-overview [aria-label^="Open shell 1"][aria-label$="in VS Code"]').click();
+    await wait(20);
+    assert.deepEqual(vscode, ['/w/p1/sub true', '/w/p1/sub true']);
+  }
   assert.ok(lkTold.some((message) => message.type === 'rotari-terminal-go' && message.path === '/project/p1/run/' + run), JSON.stringify(lkTold));
+  // A line after a path: what grep -n and compilers print, with a slash or not, and a Python
+  // traceback's, asked as PATH:LINE; a path that holds another is one link.
+  Object.assign(lk.server.links, {
+    'train.py:12': { kind: 'file', path: '/w/p1/train.py', line: 12 },
+    'src/a.py:3:7': { kind: 'file', path: '/w/p1/src/a.py', line: 3, column: 7 },
+    'src/b.py:9': { kind: 'file', path: '/w/p1/src/b.py', line: 9 },
+    '/w/p1/a b.py:41': { kind: 'file', path: '/w/p1/a b.py', line: 41 },
+  });
+  lkTerm.lines = [
+    'train.py:12: error at src/a.py:3:7, then src/b.py:9:def f():',
+    '  File "/w/p1/a b.py", line 41, in main',
+    'at 12:30:45 on host:8787 from http://example.com:80/x',
+  ];
+  assert.deepEqual(shape(await linksOn(1)).map((each) => each[0]).sort(), ['src/a.py:3:7', 'src/b.py:9', 'train.py:12']);
+  const [traceback] = await linksOn(2);
+  assert.deepEqual(shape([traceback]), [['/w/p1/a b.py:41', 9, 2, 30, 2]]);
+  assert.equal(await linksOn(3), undefined);
+  assert.ok(!lk.server.linkAsks.at(-1).some((text) => text.includes('example.com')), 'a web address was asked about');
+  // The menu opens VS Code at the line, where it is offered.
+  {
+    const offer = lk.document.createElement('div');
+    offer.id = 'vscode-connection';
+    lk.document.body.append(offer);
+    const vscode = [];
+    lk.window.openInVSCode = (target) => vscode.push(target);
+    const atLine = async (link) => {
+      link.hover();
+      rightClick();
+      const item = [...lk.document.querySelectorAll('.terminal-tab-menu button')].find((each) => each.textContent.startsWith('Open in VS Code'));
+      const label = item.textContent;
+      item.click();
+      link.leave();
+      return label;
+    };
+    assert.equal(await atLine(traceback), 'Open in VS Code at line 41');
+    const column = (await linksOn(1)).find((link) => link.text === 'src/a.py:3:7');
+    assert.equal(await atLine(column), 'Open in VS Code at line 3');
+    assert.equal(await atLine(dirLink), 'Open in VS Code');
+    assert.deepEqual(vscode.map((each) => [each.path, each.folder, each.line, each.column].join(' ')), ['/w/p1/a b.py false 41 ', '/w/p1/src/a.py false 3 7', '/w/p1/out true  ']);
+    // A shell's directory opens from the pane's menu, and one that is not known says so.
+    const here = async () => {
+      rightClick();
+      [...lk.document.querySelectorAll('.terminal-tab-menu button')].find((each) => each.textContent === 'Open this directory in VS Code').click();
+      await wait(20);
+    };
+    // Opening a directory's link above went to its shell; the pane's own is asked.
+    const shownHere = lk.document.querySelector('.terminal-pane').terminalPane.shown;
+    lk.server.cwds = { [shownHere]: '/w/p1/now' };
+    await here();
+    assert.deepEqual([vscode.at(-1).path, vscode.at(-1).folder], ['/w/p1/now', true]);
+    for (const [cwds, reason] of [[{}, /no such process/], [{ [shownHere]: '/w/\ufffd' }, /not valid UTF-8/]]) {
+      const before = vscode.length;
+      lk.server.cwds = cwds;
+      await here();
+      assert.equal(vscode.length, before);
+      assert.match(lk.document.querySelector('.terminal-send-note').textContent, reason);
+    }
+    offer.remove();
+  }
   // When the server cannot be asked, nothing is a link, and a note says so once.
   lk.server.linksStatus = 500;
   lkTerm.lines = ['other 20261114-000800-bbbbbbbb'];
