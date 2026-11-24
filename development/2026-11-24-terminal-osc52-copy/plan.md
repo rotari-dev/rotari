@@ -1,0 +1,104 @@
+# Plan: Copying from programs with OSC 52 in the Web terminal
+
+Created: 2026-11-24
+Status: Proposed; not started.
+Related: [Web terminal](../2026-11-05-web-terminal/plan.md),
+[fast output](../2026-11-24-terminal-flow-control/plan.md), and the two plans proposed with this one:
+[font](../2026-11-24-terminal-font/plan.md) and [Option as Meta](../2026-11-24-terminal-option-meta/plan.md)
+
+## Purpose
+
+`tmux` and Neovim can copy to the clipboard of the machine in front of the user by printing OSC 52, also through `ssh`.
+The panel ignores it, so a yank in Neovim or `tmux`'s copy mode stays on the server. Selecting with the mouse does not
+replace it: with mouse reporting on, as both usually have it, the program gets the mouse, and a selection across `tmux`
+panes takes in both.
+
+## Today
+
+Nothing handles OSC 52: xterm.js 5.5.0 leaves it to an addon that rotari does not include. The page writes the clipboard
+only when someone chooses **Copy** or the like, and [docs/SECURITY.md](../../docs/SECURITY.md) relies on that: a false
+mark "can at worst put text in front of you".
+
+## Risk
+
+Anything that can print in a terminal could then replace the clipboard: a file shown with `cat`, a job's log, a remote
+host over `ssh`. Text waiting there can be pasted elsewhere and run. So this is off unless chosen.
+
+## Scope
+
+Writing the clipboard from OSC 52, for the panes of the panel and its own window.
+
+## Non-goals
+
+- **Reading the clipboard** (`OSC 52 ; c ; ?`). It is never answered, whatever the setting: any program, local or
+  remote, could take what is there.
+- The primary selection, which browsers do not have.
+- Clipboard content other than text.
+- A CLI, config, or server setting. The clipboard is the browser's, and a server must not turn this on for it.
+
+## Decisions
+
+1. **Off by default, chosen per browser**: **Let programs copy** in the bar's Options menu of the [font
+   plan](../2026-11-24-terminal-font/plan.md), marked when on. The pane's right-click menu does not open while a program
+   takes the mouse, as `tmux` usually does. Turning it on says what it allows. Only `"1"` under `rotari-terminal-osc52`
+   is on. When storage is refused, it lasts for the page, and a note says so.
+2. **Every copy is shown**: a note says how many characters a program copied.
+3. **Only for live output.** A replay and a fold's rewrite print old bytes again, and must not copy again: nothing is
+   copied until the replay is parsed, nor during a rewrite. A note does not appear either.
+4. **Only where the user is**: the pane is the focused one, and the page is visible and has focus. Otherwise nothing is
+   copied, and a note with a **Copy** button offers it when the user comes back; only the latest is kept, in memory.
+5. **When the browser refuses**, as those that want a key press or click first do, the same note with **Copy** is shown.
+   A success is never reported before the browser says so.
+6. **What is accepted**: the selection empty or containing `c`; standard base64 of valid UTF-8; at most 1 MiB decoded.
+   Anything else copies nothing and a note says why. An empty text does not clear the clipboard.
+7. **While it is off**, the first OSC 52 seen live in a page is told once, as a note naming the setting, so that it is
+   not a silent failure. Later ones are not.
+8. **No new dependency.** The handler is a few lines with `registerOscHandler`, and xterm.js's clipboard addon would
+   also bring reading.
+
+### Rejected
+
+- **On by default**, as some terminals have it. The page is also where job logs from anywhere are shown.
+- **Asking at each copy.** With Neovim copying each yank it would be turned off at once.
+
+## Design
+
+- `openTerminal` registers the handler beside those for OSC 133 and OSC 7. `pane.blocksLive` already says that a replay
+  is over and no rewrite runs; it is renamed for both uses, or given a function of its own, so that one rule decides.
+- The base64 is decoded by one function that returns the text or a reason, with the limit applied before decoding.
+- The note with a button is shared with the panel's other notes.
+
+## Variants to cover
+
+| Dimension | Values |
+| --- | --- |
+| Setting | off, on, changed while a program takes the mouse, stored badly, storage refused, changed in another tab |
+| Sequence | BEL and ST ends, split across messages, empty selection, `c`, `p`, query, bad base64, bad UTF-8, empty, too long |
+| Moment | live, replay, fold's rewrite, reconnect, hidden page, other pane focused, panel closed, alternate screen |
+| Browser | allowed, refused, no clipboard API |
+
+## Contracts and documentation
+
+- A new contract ID, the next free when implemented.
+- [docs/WEB.md](../../docs/WEB.md): the setting, and how to turn it on in `tmux` and Neovim, checked by hand first.
+  [docs/SECURITY.md](../../docs/SECURITY.md): the risk above, that reading is never answered, and what it now says of
+  the clipboard.
+
+## Phases
+
+1. **Check by hand** what `tmux` and Neovim print under `TERM=xterm-256color`, and what they need to be told, in a
+   terminal that shows it. If the usual versions do not print OSC 52 here without more than a line of their
+   configuration, decide again.
+2. **The setting and the handler**, with their tests.
+3. **Contracts and docs.**
+
+## Tests and validation
+
+- `TestTerminalPanel` (JSDOM): each row above, with a clipboard that records, refuses, or is missing. A replay that
+  holds OSC 52 and a fold over one must copy nothing, and a query must send nothing to the shell.
+- By hand: a yank in Neovim and a copy in `tmux`, directly and through `ssh`, in Chrome, Firefox, and Safari.
+
+## Open questions
+
+1. **Telling the user while it is off** (decision 7). Proposed: once per page. The alternative says nothing, and leaves
+   it to the docs.
