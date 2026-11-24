@@ -146,6 +146,9 @@ type ShellInfo struct {
 	// Running says a command holds the shell's foreground as Shells looks, rather than
 	// its prompt; false when that cannot be told.
 	Running bool
+	// Program is the name of the program running then, without its arguments, or "" when
+	// none is or it is not known.
+	Program string
 	// StartedAt is when the shell started, and ActiveAt when it last printed something or
 	// was typed into, or started; the time since ActiveAt is how long it has been idle.
 	StartedAt, ActiveAt time.Time
@@ -357,7 +360,7 @@ func (keeper *Keeper) Shells() []ShellInfo {
 	infos := make([]ShellInfo, 0, len(keeper.shells))
 	for _, shell := range keeper.shells {
 		info := shell.info
-		info.Running, _ = shell.session.busy()
+		info.Running, info.Program, _ = shell.session.running()
 		infos = append(infos, info)
 	}
 	return infos

@@ -1446,7 +1446,10 @@ a config, as WEB-36 says. A shell's `unseen_output` says it has printed somethin
 until one has; its `command_finished` says a command it ran in its foreground ended, back at its current shell's prompt
 (WEB-52), or its marks said a command ended (WEB-55), while no connection showed it, and a connection showing it clears
 it; its `last_command` is WEB-55's; its `running` says a command holds
-its foreground, rather than its current shell at its prompt, as the list is made; its `started_at` is when it started and its `active_at` when it last printed or was typed into,
+its foreground, rather than its current shell at its prompt, as the list is made, and its `program`, present only then, is
+the name of the program that does: the last path element of its first argument without a leading `-`, a pipeline's first
+program, at most 64 bytes, with U+FFFD for what is not UTF-8, a control, or a bidirectional formatting character, and
+absent when it cannot be read; its `started_at` is when it started and its `active_at` when it last printed or was typed into,
 which the list's `now` dates by the server's clock. A shell's `id` is never reused while the server runs, its `number` is the lowest not in
 use in its project when it started, and its `link` is the page that shows it: its project's page, its basedir's
 All projects for a basedir's own shell, and `/activity` for one of no project. A connection names its shell with
@@ -2150,7 +2153,8 @@ keeps from a menu in the panel's bar, by default with a tab for each
 shell of the page's project, followed by its basedir's own (WEB-56); on a basedir's other pages, such as All
 projects and Recent jobs, of that basedir's own; and on Activity and History search, of no project. A list names the projects with
 shells, and choosing one goes to its page while the link is on (WEB-54). A tab whose shell is `running` (WEB-34), shown or
-not, has a mark saying a command runs, apart from its bell or unseen-output mark. A bar too narrow for its parts wraps,
+not, has a mark saying a command runs, apart from its bell or unseen-output mark, and its `program`, when there is one, after
+its number or name, in its tooltip, and in its accessible label. A bar too narrow for its parts wraps,
 and no part of it is drawn over another or past its edge. A tab not shown whose `command_finished` is set shows a bell in place of
 its unseen-output mark, as its All shells card does. A tab's tooltip and an All shells card say when the shell
 started and how long it has been idle, by the server's clock. A card's line of what runs also says how many

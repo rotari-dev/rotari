@@ -881,20 +881,21 @@ func TestTerminalMarksACommandFinishedOutOfSight(t *testing.T) {
 	e := terminalEnv(t)
 	base := e.StartWeb("--allow-terminal")
 	headers := http.Header{"X-Rotari-Token": {launchToken}}
-	running := false
+	running, program := false, ""
 	finished := func() bool {
 		t.Helper()
 		status, body := terminalShellsRequest(t, http.MethodGet, base+"/_terminal/shells", headers)
 		var listed struct {
 			Shells []struct {
-				CommandFinished bool `json:"command_finished"`
-				Running         bool `json:"running"`
+				CommandFinished bool   `json:"command_finished"`
+				Running         bool   `json:"running"`
+				Program         string `json:"program"`
 			} `json:"shells"`
 		}
 		if err := json.Unmarshal(body, &listed); status != http.StatusOK || err != nil || len(listed.Shells) != 1 {
 			t.Fatalf("listing: status %d, %v: %s", status, err, body)
 		}
-		running = listed.Shells[0].Running
+		running, program = listed.Shells[0].Running, listed.Shells[0].Program
 		return listed.Shells[0].CommandFinished
 	}
 	page := openTerminalPage(t, base)
@@ -910,8 +911,8 @@ func TestTerminalMarksACommandFinishedOutOfSight(t *testing.T) {
 			t.Fatal("sleep never ran")
 		}
 	}
-	if finished() || !running {
-		t.Errorf("a command still running counted as finished, or not as running (running %v)", running)
+	if finished() || !running || program != "sleep" {
+		t.Errorf("a command still running counted as finished, or not as running (running %v, program %q)", running, program)
 	}
 	_ = page.connection.Close(websocket.StatusNormalClosure, "")
 	for deadline := time.Now().Add(terminalWait); !finished(); time.Sleep(50 * time.Millisecond) {
@@ -919,8 +920,8 @@ func TestTerminalMarksACommandFinishedOutOfSight(t *testing.T) {
 			t.Fatal("the command that ended out of sight never counted as finished")
 		}
 	}
-	if running {
-		t.Error("a shell back at its prompt counted as running a command")
+	if running || program != "" {
+		t.Errorf("a shell back at its prompt counted as running a command (running %v, program %q)", running, program)
 	}
 	again := openTerminalPage(t, base)
 	again.await("ready-2")

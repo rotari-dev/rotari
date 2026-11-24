@@ -954,6 +954,29 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   await wait(20);
   assert.deepEqual(runningTabs(), [false, false, false, true]);
   assert.match(webShellCSS, /\.terminal-tab-running::before \{/);
+  // The program, when the list names it, follows the number or the name, in the tooltip and
+  // the label too, as text; without it there is the mark alone. A tab at its prompt has none.
+  const programs = () => busyLabels().map((label) => [label.querySelector('.terminal-tab-name')?.textContent ?? label.textContent, label.querySelector('.terminal-tab-program')?.textContent ?? null]);
+  const named = { 1: 'python3', 2: '<b>x</b>', 3: 'vim', 4: 'stale' };
+  busyPage.server.shells.forEach((shell) => { shell.running = shell.id !== '4'; shell.program = named[shell.id]; if (shell.id === '2') shell.name = 'train'; });
+  busyPage.polls[0]();
+  await wait(20);
+  assert.deepEqual(programs(), [['1', 'python3'], ['train', '<b>x</b>'], ['3', 'vim'], ['4', null]]);
+  assert.equal(busyLabels()[1].querySelector('b'), null, 'a program\'s name was taken as markup');
+  assert.deepEqual(busyLabels().map((label) => label.getAttribute('aria-label')),
+    ['Shell 1, running python3', 'Shell 2, train, new output, running <b>x</b>', 'Shell 3, command finished, running vim', 'Shell 4']);
+  assert.deepEqual(busyLabels().map((label) => label.title.replace(/Started in .*/, '')),
+    ['Running python3. ', 'New output. Running <b>x</b>. ', 'A command finished. Running vim. ', '']);
+  // Another program in the same shell draws its tab again, and the same list does not.
+  const drawnLabel = busyLabels()[0];
+  busyPage.polls[0]();
+  await wait(20);
+  assert.equal(busyLabels()[0], drawnLabel, 'the same list drew the tabs again');
+  busyPage.server.shells.forEach((shell) => { shell.program = shell.id === '1' ? 'make' : undefined; });
+  busyPage.polls[0]();
+  await wait(20);
+  assert.deepEqual(programs(), [['1', 'make'], ['train', null], ['3', null], ['4', null]]);
+  assert.deepEqual(runningTabs(), [true, true, true, false]);
   // With the shells' marks, the server says how the last command ended: a failure rings the
   // bell red, its title says the command, its code, and how long it took, and each card has a
   // line on its shell's last command; a shown shell's failure rings no bell.

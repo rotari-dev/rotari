@@ -948,14 +948,14 @@ func TestCommandFinishedIsAnEndNoAttachmentShowed(t *testing.T) {
 	if finished() {
 		t.Error("a command that ended in view counted as finished")
 	}
-	if keeper.Shells()[0].Running {
+	if shell := keeper.Shells()[0]; shell.Running || shell.Program != "" {
 		t.Error("a shell at its prompt counted as running a command")
 	}
 	if _, err := fmt.Fprintf(first, "sleep 1\n"); err != nil {
 		t.Fatal(err)
 	}
 	for deadline := time.Now().Add(testWait); ; time.Sleep(20 * time.Millisecond) {
-		if command, _ := keeper.Foreground(id); command == "sleep 1" && keeper.Shells()[0].Running {
+		if command, _ := keeper.Foreground(id); command == "sleep 1" && keeper.Shells()[0].Running && keeper.Shells()[0].Program == "sleep" {
 			break
 		}
 		if time.Now().After(deadline) {

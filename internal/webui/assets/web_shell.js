@@ -1573,6 +1573,7 @@ function shellWord(value) {
         shell.unseen_output,
         shell.command_finished,
         shell.running,
+        shell.program,
       ]),
       panes.map((pane) => pane.shown),
       panes.indexOf(focused),
@@ -1594,6 +1595,8 @@ function shellWord(value) {
       const ended = finished ? lastCommand(shell) : null;
       // A command runs in its foreground, whether the tab is shown or not.
       const running = Boolean(shell.running);
+      // The program it is, when the server could tell.
+      const program = running ? shell.program || "" : "";
       tab.classList.toggle("terminal-tab-running", running);
       tab.classList.toggle("terminal-tab-unseen", unseen && !finished);
       tab.classList.toggle("terminal-tab-finished", finished);
@@ -1615,7 +1618,9 @@ function shellWord(value) {
               : unseen
                 ? ", new output"
                 : "") +
-          (running ? ", command running" : "") +
+          (running
+            ? ", " + (program ? "running " + program : "command running")
+            : "") +
           (elsewhere ? ", in another pane" : "") +
           (isShared(shell) ? ", of all projects" : ""),
       );
@@ -1632,7 +1637,11 @@ function shellWord(value) {
               : unseen
                 ? "New output. "
                 : "") +
-          (running ? "A command is running. " : "") +
+          (program
+            ? "Running " + program + ". "
+            : running
+              ? "A command is running. "
+              : "") +
           (elsewhere ? "In another pane. " : "") +
           "Started in " +
           shell.dir +
@@ -1648,6 +1657,13 @@ function shellWord(value) {
       titled();
       label.onpointerenter = titled;
       label.textContent = shell.name || String(shell.number);
+      if (program) {
+        label.classList.add("terminal-tab-labelled");
+        label.replaceChildren(
+          makeElement("span", "terminal-tab-name", label.textContent),
+          makeElement("span", "terminal-tab-program", program),
+        );
+      }
       label.onclick = () => chooseTab(shell.id);
       const close = document.createElement("button");
       close.type = "button";

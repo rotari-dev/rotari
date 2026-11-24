@@ -203,7 +203,7 @@ func (session *Session) Dir() (string, error) {
 // Foreground is the command line of the program the current shell runs in the foreground,
 // or "" while it is at its prompt. A pipeline gives its first program.
 func (session *Session) Foreground() (string, error) {
-	group, prompt, err := session.atPrompt()
+	group, prompt, _, err := session.atPrompt()
 	if err != nil || prompt {
 		return "", err
 	}
@@ -211,17 +211,21 @@ func (session *Session) Foreground() (string, error) {
 }
 
 // atPrompt says whether the current shell is at its prompt: the terminal's foreground
-// group is the session's shell, or is led by an interactive shell. It gives the group too.
-func (session *Session) atPrompt() (int, bool, error) {
+// group is the session's shell, or is led by an interactive shell. It gives the group too,
+// and its leader's arguments when it read them.
+func (session *Session) atPrompt() (int, bool, []string, error) {
 	group, err := session.foregroundGroup()
 	if err != nil {
-		return 0, false, err
+		return 0, false, nil, err
 	}
 	if group == session.command.Process.Pid {
-		return group, true, nil
+		return group, true, nil, nil
 	}
 	args, err := processArgs(group)
-	return group, err == nil && interactiveShell(args), nil
+	if err != nil {
+		return group, false, nil, nil
+	}
+	return group, interactiveShell(args), args, nil
 }
 
 // Process is a process a shell started, directly or through others.
@@ -255,8 +259,18 @@ func (session *Session) Descendants() ([]Process, error) {
 // busy says a command holds the terminal's foreground, as opposed to the current shell
 // at its prompt.
 func (session *Session) busy() (bool, error) {
-	_, prompt, err := session.atPrompt()
-	return err == nil && !prompt, err
+	busy, _, err := session.running()
+	return busy, err
+}
+
+// running is busy, with the name of the program that holds the foreground, or "" when it is
+// not known. A pipeline gives its first program.
+func (session *Session) running() (bool, string, error) {
+	_, prompt, args, err := session.atPrompt()
+	if err != nil || prompt {
+		return false, "", err
+	}
+	return true, programName(args), nil
 }
 
 // foregroundGroup is the terminal's foreground process group.

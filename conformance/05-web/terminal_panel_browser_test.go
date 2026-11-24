@@ -111,6 +111,7 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await typeLine('cat');
   await until('the first tab to be marked as running', runningTabs + ' === "[true,false]"');
   if (await page.evaluate('getComputedStyle(document.querySelector(".terminal-tab-running"), "::before").width') === 'auto') throw new Error('the running mark is not drawn');
+  await until('the tab to name the program', 'document.querySelector(".terminal-tab-running .terminal-tab-program")?.textContent === "cat"');
   await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'c', code: 'KeyC', modifiers: 2, windowsVirtualKeyCode: 67, nativeVirtualKeyCode: 67 });
   await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'c', code: 'KeyC', modifiers: 2, windowsVirtualKeyCode: 67 });
   await until('the mark to go with the command', runningTabs + ' === "[false,false]"');

@@ -518,7 +518,9 @@ in a pane, or closes if there is none. Each browser tab keeps its own panes for 
 project, and gets them back after following a link. A bar too narrow for its tabs and buttons wraps onto more rows.
 
 A tab shows a small triangle while a command runs in its shell's foreground, whether you are looking at it or not,
-and pointing at it says so; a shell at its prompt has none, even with a command left in the background with `&`.
+with the program's name, such as `1 python3`, after the tab's number or name; a script run by `python` shows `python`, and
+**All shells** has the whole command line. Pointing at the tab says it too. It follows within five seconds, so a short
+command may not show. A shell at its prompt has neither, even with a command left in the background with `&`.
 
 A tab you are not looking at is marked when it prints something, until you show it, and the list marks
 other projects the same way. When a command finishes in a tab you are not looking at, such as a build or a

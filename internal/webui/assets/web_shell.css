@@ -1244,6 +1244,29 @@ html.terminal-open[data-terminal-place]:not(.terminal-maximized)
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* With what runs in it after its number or name, which gives way first. */
+.terminal-tab [role="tab"].terminal-tab-labelled {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.terminal-tab [role="tab"].terminal-tab-labelled::before {
+  flex: none;
+  margin-right: 0;
+}
+.terminal-tab-name {
+  flex: 0 1 auto;
+  min-width: 1ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.terminal-tab-program {
+  flex: none;
+  max-width: 12ch;
+  overflow: hidden;
+  color: var(--text-2);
+  text-overflow: ellipsis;
+}
 .terminal-tab-menu {
   position: fixed;
   z-index: 70;

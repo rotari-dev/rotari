@@ -336,6 +336,9 @@ type terminalShellResponse struct {
 	CommandFinished bool `json:"command_finished"`
 	// Running is a command running in the shell's foreground now, which signing out asks about.
 	Running bool `json:"running"`
+	// Program is the name of the program running, absent when it is not known. The whole
+	// command line, whose arguments may hold secrets, is only in a shell's preview.
+	Program string `json:"program,omitempty"`
 	// StartedAt is when the shell started, and ActiveAt when it last printed or was typed
 	// into; the list's now dates them by the server's clock.
 	StartedAt time.Time `json:"started_at"`
@@ -366,7 +369,7 @@ type terminalLastCommand struct {
 }
 
 func (s site) terminalShellResponse(shell terminal.ShellInfo) terminalShellResponse {
-	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Name: shell.Name, Dir: shell.Dir, UnseenOutput: shell.UnseenOutput, CommandFinished: shell.CommandFinished, Running: shell.Running, StartedAt: shell.StartedAt, ActiveAt: shell.ActiveAt, Link: terminalNoProjectLink}
+	response := terminalShellResponse{ID: shell.ID, Number: shell.Number, Name: shell.Name, Dir: shell.Dir, UnseenOutput: shell.UnseenOutput, CommandFinished: shell.CommandFinished, Running: shell.Running, Program: shell.Program, StartedAt: shell.StartedAt, ActiveAt: shell.ActiveAt, Link: terminalNoProjectLink}
 	baseDir, project := terminalGroupPlace(shell.Group)
 	if last := shell.LastCommand; last != nil {
 		response.LastCommand = &terminalLastCommand{Command: last.Command, Exit: last.Exit, StartedAt: last.StartedAt, EndedAt: last.EndedAt, Sequence: last.Sequence}
