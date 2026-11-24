@@ -2,8 +2,9 @@
 
 Created: 2026-11-24
 Status: Design confirmed by phase 1's deciding checks on 2026-11-24. Phases 2
-(the rename) and 3 (opening without a line) are implemented; phase 3 has not been
-tried in a real browser. Phases 4 and 5 are not started.
+(the rename), 3 (opening without a line, which the user then tried in a browser),
+and 4 (lines in shell output) are implemented; phase 4 has not been tried in a real
+browser. Phase 5 is not started.
 Related: [artifact launcher](../2026-10-20-artifact-launcher/plan.md),
 [terminal Explorer](../2026-11-13-terminal-explorer/plan.md),
 [terminal output links](../2026-11-14-terminal-output-links/plan.md)
@@ -138,7 +139,10 @@ name would open another window.
       the file system.
 11. **Directories** open as folders in a window of their own, with
     `?windowId=_blank`, so that none takes the place of an open folder.
-12. **Paths on another host.** A path is the server's. Output a shell says came
+12. **The terminal's own menus** (asked for by the user on 2026-11-24) open the
+    directory the shell is in now, where the Table viewer is offered: the bar, All
+    shells cards, and, as well, a pane's right-click menu.
+13. **Paths on another host.** A path is the server's. Output a shell says came
     from another host has no path links today, and gets none.
 
 ## Design

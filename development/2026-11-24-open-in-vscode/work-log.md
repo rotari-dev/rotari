@@ -41,3 +41,19 @@ Plan: [plan.md](plan.md)
 - **Remaining:** The unchecked cases of phase 1, on the finished feature. Two
   processes of one session edited this change for a while; the older one was
   stopped, and all of it was read and tested after that.
+
+## 2026-11-24 18:06:23 +0900 - `f5f9fd38` - Lines in shell output, and shells' directories
+
+- **Change:** `terminal_links.go` answers a file's line and column, and takes a name
+  without a slash that has one; `web_shell.js` finds `PATH:LINE` and Python
+  tracebacks, opens them from a path's menu, and opens a shell's directory from the
+  bar, All shells cards, and a pane's menu. WEB-46, WEB-51, WEB-64, WEB, and
+  ARCHITECTURE; unit, JSDOM, and conformance tests.
+- **Reason:** Phase 4, and the user's request for the terminal's own menus.
+- **Plan impact:** Phase 4 is implemented; decision 12 was added. The user had tried
+  phase 3 in a browser and confirmed it before this.
+- **Validation:** `go vet ./...`, the Web UI type check, and `go test` on every
+  package but `pairedits`, `pairjobcontrol`, and `pairruns` passed, with Go 1.25.8
+  and Node 24. Not run: those three, `go test -race`, and pre-commit (not installed).
+  Not tried in a real browser.
+- **Remaining:** Phase 5, and the unchecked cases of phase 1.
