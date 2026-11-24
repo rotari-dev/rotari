@@ -83,7 +83,8 @@ The same browsers, on 2026-11-24 from the same temporary branch, again deleted (
   15 minutes, for a reason not known.
 - Giving live output in pieces of 2 MiB rather than 256 KiB was tried, in case small pieces slowed a visible page. It
   made no difference, so 256 KiB stays.
-- The terminal's other browser tests passed on both systems, in the run before last, with 2 MiB pieces.
+- Six of the terminal's other browser tests passed on both systems with the change as it is, and all of them with 2 MiB
+  pieces.
 
 ## Scope
 
