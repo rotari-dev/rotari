@@ -1,8 +1,9 @@
 # Plan: Open in VS Code
 
 Created: 2026-11-24
-Status: Design confirmed by phase 1's deciding checks on 2026-11-24. Phase 2 (the
-rename) is implemented; phases 3 to 5 are not started.
+Status: Design confirmed by phase 1's deciding checks on 2026-11-24. Phases 2
+(the rename) and 3 (opening without a line) are implemented; phase 3 has not been
+tried in a real browser. Phases 4 and 5 are not started.
 Related: [artifact launcher](../2026-10-20-artifact-launcher/plan.md),
 [terminal Explorer](../2026-11-13-terminal-explorer/plan.md),
 [terminal output links](../2026-11-14-terminal-output-links/plan.md)
@@ -117,9 +118,9 @@ name would open another window.
    the reason. IPv6 addresses need an alias.
 8. **Building the URL.** Only absolute paths. Each path segment is
    percent-encoded. Line and column are positive integers, a column needs a
-   line, and a directory takes neither. As remembered, VS Code takes a remote
-   path without `:NUMBER` at its end for a folder, so a remote file without a
-   line gets `:1`. A path that itself has `:NUMBER` in it is refused, with the
+   line, and a directory takes neither. A remote file without a line gets `:1`:
+   without one, VS Code replaced the window's folder with that one file (phase 1).
+   A path that itself has `:NUMBER` in it is refused, with the
    reason, unless phase 1 finds an unambiguous form. Opening goes through one
    shared function that takes no other scheme.
 9. **A default click does not change.** A printed file path still opens the
@@ -135,16 +136,18 @@ name would open another window.
       path may be asked about, as for shell output. Without it, only paths under
       the roots the job's artifacts are served from, so that a page cannot probe
       the file system.
-11. **Directories** open as folders. VS Code usually uses another window for one,
-    by its `window.openFoldersInNewWindow`.
+11. **Directories** open as folders in a window of their own, with
+    `?windowId=_blank`, so that none takes the place of an open folder.
 12. **Paths on another host.** A path is the server's. Output a shell says came
     from another host has no path links today, and gets none.
 
 ## Design
 
-- **`GET /api/editor`**: `{host, suggested_name, suggested_remote}`, for the
-  storage key and the dialog. No credentials or user names.
-- **`GET /api/editor/target`**: the artifact fields of a content request;
+- **`#vscode-connection`**, an element of live pages that holds the server's host
+  name and the suggestions, for the storage key and the dialog. Its presence is
+  what offers the action, so a static export needs no check and no route is
+  needed (planned as `GET /api/editor`). No credentials or user names.
+- **`GET /api/vscode-target`**: the artifact fields of a content request;
   answers `{path, kind}` through `resolveArtifact`, so its trust rules stay in
   one place, and refuses what it refuses.
 - **`terminal_links.go`**: the position that `terminalLinePosition` drops today
@@ -183,7 +186,7 @@ A carried job's log uses the working directory of the attempt that wrote it.
 2. **Rename** the built-in: registry and template, tests, conformance, contract,
    CONFIGURATION, WEB, SECURITY, and FAQ. Implemented; the release notes are
    still to say it (decision 2).
-3. **Open without a line**: the two routes, the dialog, Settings, Explorer rows,
+3. **Open without a line**: the route, the dialog, Settings, Explorer rows,
    the path menu, Artifacts and **Files**.
 4. **Lines in shell output**: positions in `terminal_links.go` and the new forms.
 5. **Lines in job logs.**
@@ -207,13 +210,18 @@ live `rotari web` (the browser's name was not recorded): after allowing it once,
 the browser did not ask again, and the terminal's shells stayed connected. An
 address typed in has no website for the browser to remember.
 
+Checked by the user on 2026-11-24, from the address bar: without a position, the
+file opened in the existing window, whose folder closed, leaving that file alone.
+The directory `docs` with `?windowId=_blank` opened in another window and left
+the existing one as it was.
+
 Not yet checked:
 
 - With another window open on something else, which one is used.
 - The same with the connection down, and with no VS Code running.
-- A file without a position, a directory, and names with spaces, non-ASCII
-  characters, `#`, and `:12`.
-- `vscode://file/PATH:LINE:COLUMN` on a local machine.
+- Names with spaces, non-ASCII characters, `#`, and `:12`.
+- `vscode://file/PATH:LINE:COLUMN`, a file without a position, and a directory, on
+  a local machine.
 - From a page in VS Code's integrated browser.
 - The same in the other browsers among Chrome, Safari, and Firefox.
 
@@ -227,13 +235,13 @@ Not yet checked:
 
 ## Tests and validation
 
-- `internal/webui`: both routes in each server mode, refused artifacts,
+- `internal/webui`: the route in each server mode, refused artifacts,
   positions in links, both new forms, and log paths inside and outside the roots
   without the terminal.
 - Page tests: the dialog and its suggestions, each stored choice, the key per
   server, refused names (a leading `-`, `/`, spaces, control characters), URL
   building for each target name and position, and nothing opened on Cancel.
-- Conformance through the binary: both routes, and positions in links.
+- Conformance through the binary: the route, and positions in links.
 - The phase 1 checks, done and not yet done, on the finished feature.
 - Node-based tests and the type check need a newer Node than this machine's
   default v12.
