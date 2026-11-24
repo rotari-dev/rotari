@@ -4,7 +4,7 @@ Created: 2026-11-24
 Status: Design confirmed by phase 1's deciding checks on 2026-11-24. Phases 2
 (the rename), 3 (opening without a line, which the user then tried in a browser),
 and 4 (lines in shell output) are implemented, and the user has tried both in a
-browser. Phase 5 is not started.
+browser. Phase 5 (lines in job logs) is implemented and not yet tried in a browser.
 Related: [artifact launcher](../2026-10-20-artifact-launcher/plan.md),
 [terminal Explorer](../2026-11-13-terminal-explorer/plan.md),
 [terminal output links](../2026-11-14-terminal-output-links/plan.md)
@@ -162,8 +162,8 @@ name would open another window.
   - `File "PATH", line N`, whose path may hold spaces.
 - **Job logs**: a route for an attempt's log candidates shares the finder of the
   shell links. Relative paths are taken from that attempt's recorded working
-  directory. The log dialog's text stays text nodes, and only lines in view are
-  asked about.
+  directory. The log dialog's text stays text, and only lines in view are asked
+  about. Only files are links: a directory would open another window.
 - **`web_vscode.js`** (new): the stored choice, its check, the dialog, and the
   URL; used by the terminal, Artifacts, and logs. The click follows an anchor in
   place, which left the page and its shells as they were in phase 1. The page

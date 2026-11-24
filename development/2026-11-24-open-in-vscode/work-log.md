@@ -57,3 +57,30 @@ Plan: [plan.md](plan.md)
   and Node 24. Not run: those three, `go test -race`, and pre-commit (not installed).
   Not tried in a real browser.
 - **Remaining:** Phase 5, and the unchecked cases of phase 1.
+
+## 2026-11-24 18:43:40 +0900 - `6d28cc8f` - Lines in job logs
+
+- **Change:** `log_links.go` holds how a printed path is read, now shared with shells'
+  output, and `POST /api/log-links`; `web_app_logs.js` links the lines in view of the
+  log dialog. Contract WEB-65 with `TestWebJobLogLinks` (a plain, a failed, a rerun,
+  and a carried job, array tasks, read-only, and with the terminal), unit and JSDOM
+  tests, WEB, SECURITY, and ARCHITECTURE.
+- **Reason:** Phase 5.
+- **Plan impact:** All phases are implemented. Only files are links in a log.
+- **Validation:** `go vet ./...`, the Web UI type check, and `go test` on every
+  package but `pairedits`, `pairjobcontrol`, and `pairruns` passed, with Go 1.25.8
+  and Node 24. Not run: those three, `go test -race`, and pre-commit (not installed).
+  Not tried in a real browser.
+- **Remaining:** The unchecked cases of phase 1, the links in a browser, and the
+  release notes' word on the renamed launcher.
+
+## 2026-11-24 18:44:16 +0900 - `d13ba8f1` - What the dialog takes as an SSH host
+
+- **Change:** The dialog's hint and WEB say that `USER@HOST` is taken and that VS Code
+  asks for a password; a test refuses `USER:PASSWORD@HOST`, as the check already did.
+- **Reason:** The user asked whether a user name may be given, and about passwords.
+- **Plan impact:** None.
+- **Validation:** The VS Code tests of `internal/webui` and `conformance/05-web`, and
+  Prettier, passed. The full suite was not run again for this change. Opening with
+  `USER@HOST` has not been tried.
+- **Remaining:** None.
