@@ -755,6 +755,13 @@ func (s site) baseHandler() http.Handler {
 		}
 		writeWebJSON(writer, s.webArtifactListingOf(listing, baseDir, projectName, runID))
 	})
+	mux.HandleFunc("/api/log-links", func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			methodNotAllowed(writer)
+			return
+		}
+		s.serveLogLinks(baseDir, writer, request)
+	})
 	s.registerLaunchRoutes(mux, baseDir)
 	mux.Handle("/tableview/", http.StripPrefix("/tableview", tableView{
 		resolve:     func(query url.Values) (tableViewSource, error) { return s.tableViewSourceOf(baseDir, query) },

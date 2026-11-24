@@ -587,6 +587,15 @@ section {
   max-height: 240px;
   min-height: 0;
 }
+.log .log-path {
+  text-decoration: underline;
+  text-decoration-color: var(--muted);
+  cursor: pointer;
+}
+.log .log-path:hover,
+.log .log-path:focus-visible {
+  text-decoration-color: currentcolor;
+}
 .log.log-error {
   color: var(--s-bad);
   border-color: var(--s-bad);

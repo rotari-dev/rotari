@@ -16,6 +16,154 @@ async function loadLogChunk(queue, run, job, attemptID, stream, before) {
   if (!response.ok) throw new Error(text.trim() || "HTTP " + response.status);
   return text;
 }
+// Paths in a job's log that name a file open in VS Code, at the line printed
+// with them. The lines in view are asked about, and the server says which
+// paths exist; the log stays text otherwise.
+const logLinkAskLimit = 64;
+// A longer line is not searched.
+const logLinkLineLimit = 4096;
+// A path that is no file is asked about again, since a running job makes files.
+const logLinkMissingLife = 10000;
+let logLinkObserver = null;
+// showLogOutput shows the text of the open log, and nothing else's.
+function showLogOutput(output, text) {
+  const log = selectedLog;
+  // Drawing the same text again would lose a selection in it.
+  if (log && log.drawn === text && output.textContent === text) return;
+  logLinkObserver?.disconnect();
+  logLinkObserver = null;
+  if (log) log.drawn = text;
+  if (
+    !log ||
+    log.error ||
+    !window.vscodeOffered() ||
+    typeof IntersectionObserver === "undefined"
+  ) {
+    output.textContent = text;
+    return;
+  }
+  log.links ||= new Map();
+  const content = document.createDocumentFragment();
+  const searched = [];
+  let plain = "";
+  text.split("\n").forEach((line, index) => {
+    if (index) plain += "\n";
+    const candidates =
+      line.length > logLinkLineLimit ? [] : window.outputPathCandidates(line);
+    if (!candidates.length) {
+      plain += line;
+      return;
+    }
+    content.append(plain);
+    plain = "";
+    const element = document.createElement("span");
+    element.textContent = line;
+    searched.push({ element, line, candidates });
+    content.append(element);
+  });
+  content.append(plain);
+  output.replaceChildren(content);
+  const bySpan = new Map(searched.map((item) => [item.element, item]));
+  logLinkObserver = new IntersectionObserver(
+    (entries, observer) => {
+      const inView = entries.filter((entry) => entry.isIntersecting);
+      for (const entry of inView) observer.unobserve(entry.target);
+      if (inView.length)
+        linkLogLines(
+          log,
+          inView.map((entry) => bySpan.get(entry.target)),
+        );
+    },
+    { root: output },
+  );
+  for (const { element } of searched) logLinkObserver.observe(element);
+}
+// linkLogLines asks about lines' candidates and makes links of the answers.
+async function linkLogLines(log, lines) {
+  const now = Date.now();
+  const unknown = [
+    ...new Set(
+      lines.flatMap((line) => line.candidates.map((item) => item.text)),
+    ),
+  ].filter((text) => !(log.links.get(text)?.until > now));
+  for (let start = 0; start < unknown.length; start += logLinkAskLimit) {
+    const candidates = unknown.slice(start, start + logLinkAskLimit);
+    let answer;
+    try {
+      const response = await fetch("/api/log-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_name: log.queue,
+          run_id: log.run,
+          job_id: log.job,
+          attempt_id: log.attemptID || "",
+          candidates,
+        }),
+      });
+      if (!response.ok)
+        throw new Error(
+          (await response.text()).trim() || "HTTP " + response.status,
+        );
+      answer = await response.json();
+    } catch (error) {
+      if (!log.linksFailed && log === selectedLog)
+        window.showVSCodeNote(
+          "Paths in this log are not links: " + error.message,
+        );
+      log.linksFailed = true;
+      return;
+    }
+    const until = Date.now() + logLinkMissingLife;
+    for (const text of candidates) log.links.set(text, { link: null, until });
+    for (const link of answer.links || [])
+      log.links.set(link.text, { link, until: Infinity });
+  }
+  if (log !== selectedLog) return;
+  for (const line of lines)
+    if (line.element.isConnected) linkLogLine(log, line);
+}
+// linkLogLine makes links of a line's paths, a longer one holding a shorter.
+function linkLogLine(log, { element, line, candidates }) {
+  const linked = candidates
+    .map((item) => ({ ...item, link: log.links.get(item.text)?.link }))
+    .filter((item) => item.link)
+    .sort((a, b) => a.start - b.start || b.end - a.end);
+  const content = document.createDocumentFragment();
+  let at = 0;
+  for (const { start, end, link } of linked) {
+    if (start < at) continue;
+    const path = document.createElement("span");
+    path.className = "log-path";
+    path.textContent = line.slice(start, end);
+    path.title =
+      "Open " +
+      link.path +
+      " in VS Code" +
+      (link.line ? " at line " + link.line : "");
+    path.tabIndex = 0;
+    path.setAttribute("role", "link");
+    const open = () =>
+      window.openInVSCode({
+        path: link.path,
+        folder: false,
+        line: link.line,
+        column: link.column,
+      });
+    path.onclick = () => {
+      // Selecting text ends in a click too.
+      if (getSelection()?.isCollapsed ?? true) open();
+    };
+    path.onkeydown = (event) => {
+      if (event.key === "Enter") open();
+    };
+    content.append(line.slice(at, start), path);
+    at = end;
+  }
+  if (!at) return;
+  content.append(line.slice(at));
+  element.replaceChildren(content);
+}
 function attachLogLoader(output) {
   output.onscroll = async () => {
     if (
@@ -47,8 +195,8 @@ function attachLogLoader(output) {
       selectedLog.done = true;
     } else {
       selectedLog.before += 200;
-      output.textContent = chunk + selectedOutput;
-      selectedOutput = output.textContent;
+      selectedOutput = chunk + selectedOutput;
+      showLogOutput(output, selectedOutput);
       openOutputModal(isCompactOutput(selectedOutput));
       output.scrollTop = output.scrollHeight - previousHeight;
     }
@@ -89,7 +237,7 @@ async function showLog(queue, run, job, attemptID, stream, logMode) {
     selectedOutput = "Failed to load log: " + error.message;
   }
   const output = ensureModalOutput();
-  output.textContent = selectedOutput;
+  showLogOutput(output, selectedOutput);
   openOutputModal(isCompactOutput(selectedOutput));
   output.scrollTop = output.scrollHeight;
   attachLogLoader(output);
@@ -161,7 +309,7 @@ async function followOutput() {
     selectedLog.error = "";
     selectedOutput = latest;
     const output = ensureModalOutput();
-    output.textContent = latest;
+    showLogOutput(output, latest);
     output.scrollTop = output.scrollHeight;
     openOutputModal(isCompactOutput(latest));
   }
@@ -469,7 +617,7 @@ function closeOutputModal() {
 function restoreSelectedOutput() {
   if (selectedLog && selectedOutput) {
     const output = ensureModalOutput();
-    output.textContent = selectedOutput;
+    showLogOutput(output, selectedOutput);
     openOutputModal(isCompactOutput(selectedOutput));
     attachLogLoader(output);
   }

@@ -127,7 +127,9 @@ command reports how many files and bytes it copied.
 
 **Open in VS Code** makes the browser open a `vscode://` URL; the server runs
 nothing. For an artifact, the server answers its path only where it would serve
-its contents. The SSH host in the URL comes from the browser's storage, which a
+its contents, and for a path in a job's log, whether it is a file only under the
+same directories, unless the terminal is on, where any path may be asked about as
+in a shell. The SSH host in the URL comes from the browser's storage, which a
 launched service, on the same origin, can write; the page refuses one that is
 not a plain `[USER@]HOST`, such as one `ssh` would read as an option. A service
 could still make it another host's name, which VS Code would connect to.

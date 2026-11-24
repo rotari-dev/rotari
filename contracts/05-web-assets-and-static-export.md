@@ -1863,6 +1863,22 @@ the reason. The note says what was asked and never that it opened, which a page 
 [`TestWebOpensArtifactsInVSCode`](../conformance/05-web/vscode_test.go) (what is offered, and the targets) and the unit
 tests in [internal/webui/vscode_test.go](../internal/webui/vscode_test.go) (the dialog, what is kept, and the URLs).
 
+**WEB-65** On live pages, read-only or not, paths in a job's log dialog that name a regular file on the server's host open
+it in VS Code (WEB-64), at the line and column printed with them, on a click that ends no selection or on Enter.
+Candidates are found as WEB-46 finds paths, with their lines and Python tracebacks, and no runs or jobs, on lines of at
+most 4096 characters. `POST /api/log-links` takes a JSON body of `project_name`, `run_id`, `job_id`, `attempt_id` (empty
+for the latest, or a carried job's, as `/api/log`), and `candidates`, limited as WEB-46's, and answers `links`, one for
+each distinct candidate that is a file: its `text`, absolute `path`, and `line` and `column` as WEB-46's. Relative paths
+are read against the working directory recorded for the attempt that wrote the log, or not at all without one, which
+`dir_error` says. With the terminal on, and over a connection the terminal accepts, any path may be asked about; otherwise
+only one under the roots the attempt's artifacts are served from (WEB-6), through `os.Root`, so that nothing outside them
+is said to exist. A body that is not JSON is 415, and an unknown run, job, or attempt, a name that is no path element, an
+unknown field, or a limit passed is 400. The page asks about lines as they come into view, keeps answers while the dialog
+shows that log, a missing path's for ten seconds, and leaves the log's text as it is; a refusal is said once. A static
+export asks nothing. A path is the server's, whichever host the job ran on. Implemented in `internal/webui/log_links.go`
+and `web_app_logs.js`; covered by [`TestWebJobLogLinks`](../conformance/05-web/log_links_test.go) and the unit tests in
+[internal/webui/log_links_test.go](../internal/webui/log_links_test.go).
+
 **WEB-46** With `rotari web --allow-terminal`, words a shell prints are links when they name something that exists.
 `POST /_terminal/shells/ID/links` takes a JSON body `{"candidates": [...]}`, at most 64 candidates of at most 4096
 bytes each (400 beyond, 415 for a body that is not JSON, unknown fields 400), with an optional `dir`, the directory

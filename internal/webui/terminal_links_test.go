@@ -218,7 +218,7 @@ func TestTerminalLinksAreWhatExists(t *testing.T) {
 		id, contentType, body string
 		want                  int
 	}{
-		"too many":       {project, "application/json", `{"candidates":[` + strings.Repeat(`"a",`, terminalLinksLimit) + `"a"]}`, http.StatusBadRequest},
+		"too many":       {project, "application/json", `{"candidates":[` + strings.Repeat(`"a",`, linkCandidatesLimit) + `"a"]}`, http.StatusBadRequest},
 		"too long":       {project, "application/json", `{"candidates":["` + strings.Repeat("a", terminalLinkLimit+1) + `"]}`, http.StatusBadRequest},
 		"unknown fields": {project, "application/json", `{"candidates":[],"more":1}`, http.StatusBadRequest},
 		"not JSON":       {project, "text/plain", `{"candidates":[]}`, http.StatusUnsupportedMediaType},

@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/rotari-dev/rotari/internal/resolve"
@@ -29,10 +28,8 @@ import (
 const terminalLinksName = "links"
 
 const (
-	// terminalLinksLimit is the most candidates one request asks about: a few lines' worth.
-	terminalLinksLimit = 64
-	// terminalLinkLimit is the longest candidate, in bytes.
-	terminalLinkLimit = 4096
+	// terminalLinkLimit is the longest directory or host a request may give, in bytes.
+	terminalLinkLimit = linkCandidateLimit
 	// terminalLinkJobRunsRead is how many of a project's newest runs are searched for a
 	// job, so that a hover costs as many snapshot reads at most.
 	terminalLinkJobRunsRead = 20
@@ -43,9 +40,6 @@ var (
 	terminalRunIDForm = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}-[0-9a-f]{8}$`)
 	// terminalJobIDForm is a job ID as rotari makes one, or an array task's.
 	terminalJobIDForm = regexp.MustCompile(`^[0-9a-f]{9}(-[0-9]+)?$`)
-	// terminalLinePosition is the line, and column, that compilers and tracebacks print
-	// after a path.
-	terminalLinePosition = regexp.MustCompile(`(:[0-9]+){1,2}$`)
 )
 
 // terminalLinksRequest asks about candidates. Dir, when given, is the directory the
@@ -96,21 +90,15 @@ func (s site) serveTerminalLinks(writer http.ResponseWriter, request *http.Reque
 		return
 	}
 	var asked terminalLinksRequest
-	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, (terminalLinkLimit+16)*(terminalLinksLimit+2)))
+	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, (linkCandidateLimit+16)*(linkCandidatesLimit+2)))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&asked); err != nil {
 		http.Error(writer, "invalid request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if len(asked.Candidates) > terminalLinksLimit {
-		http.Error(writer, fmt.Sprintf("at most %d candidates at once", terminalLinksLimit), http.StatusBadRequest)
+	if err := checkLinkCandidates(asked.Candidates); err != nil {
+		http.Error(writer, err.Error(), http.StatusBadRequest)
 		return
-	}
-	for _, candidate := range asked.Candidates {
-		if len(candidate) > terminalLinkLimit {
-			http.Error(writer, fmt.Sprintf("a candidate is longer than %d bytes", terminalLinkLimit), http.StatusBadRequest)
-			return
-		}
 	}
 	if asked.Dir != "" && (!filepath.IsAbs(asked.Dir) || len(asked.Dir) > terminalLinkLimit) {
 		http.Error(writer, fmt.Sprintf("dir must be an absolute path of at most %d bytes", terminalLinkLimit), http.StatusBadRequest)
@@ -180,18 +168,10 @@ func (finder *terminalLinkFinder) find(candidate string) (terminalLink, bool) {
 		return link, link.Link != ""
 	case finder.remote:
 		return link, false
-	case strings.Contains(candidate, "/") || terminalLinePosition.MatchString(candidate):
-		link.Kind, link.Path = finder.path(candidate)
-		if link.Kind == "dir" && !strings.Contains(candidate, "/") {
-			// A word and a number, such as a time, names no directory.
-			return link, false
-		}
-		if link.Kind == "file" {
-			link.Line, link.Column = terminalPosition(candidate)
-		}
-		return link, link.Path != ""
 	}
-	return link, false
+	found, ok := findPrintedPath(candidate, finder.shellDir, os.Stat)
+	link.Kind, link.Path, link.Line, link.Column = found.kind, found.path, found.line, found.column
+	return link, ok
 }
 
 // run is the page of a run: of the shell's project, another project of its basedir, or,
@@ -264,48 +244,6 @@ func (finder *terminalLinkFinder) job(jobID string) (project, link string) {
 		return project, finder.site.terminalPageLink(baseDir, projectPage)
 	}
 	return "", ""
-}
-
-// path is what a path names, absolute or relative to the directory asked about or, with
-// none, where the shell is now, with a line and column left off: a directory or a file.
-// Anything else is no link.
-func (finder *terminalLinkFinder) path(candidate string) (kind, path string) {
-	path = terminalLinePosition.ReplaceAllString(candidate, "")
-	if !filepath.IsAbs(path) {
-		dir := finder.shellDir()
-		if dir == "" {
-			return "", ""
-		}
-		path = filepath.Join(dir, path)
-	}
-	path = filepath.Clean(path)
-	info, err := os.Stat(path)
-	switch {
-	case err != nil:
-		return "", ""
-	case info.IsDir():
-		return "dir", path
-	case info.Mode().IsRegular():
-		return "file", path
-	}
-	return "", ""
-}
-
-// terminalPosition is the line and column after a path, each 0 when there is none. One that
-// is not positive, or too large for an editor's, is none; a column needs a line.
-func terminalPosition(candidate string) (line, column int) {
-	number := func(text string) int {
-		value, err := strconv.ParseInt(text, 10, 32)
-		if err != nil || value < 1 {
-			return 0
-		}
-		return int(value)
-	}
-	parts := strings.Split(strings.TrimPrefix(terminalLinePosition.FindString(candidate), ":"), ":")
-	if line = number(parts[0]); line > 0 && len(parts) > 1 {
-		column = number(parts[1])
-	}
-	return line, column
 }
 
 // terminalLocalHost says whether a host a shell named in OSC 7 is this one: the same name

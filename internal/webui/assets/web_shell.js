@@ -4847,6 +4847,12 @@ function shellWord(value) {
     }
     return [...found.values()];
   };
+  // A job's log finds paths as a shell's output does (web_app_logs.js), and neither runs
+  // nor jobs.
+  window.outputPathCandidates = (text) =>
+    linkCandidates(text).filter((candidate) =>
+      /\/|:[0-9]+$/.test(candidate.text),
+    );
   // askLinks is what the server says each text is, null for none, or null altogether when
   // it could not be asked. place is where the command that printed them ran, as the shell
   // said it (OSC 7): relative paths are resolved there, none at all when it could not be

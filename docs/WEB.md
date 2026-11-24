@@ -715,7 +715,11 @@ See [Launcher commands](CONFIGURATION.md#launcher-commands) and
 **Open in VS Code** opens a file or directory of the server in the VS Code installed on the machine your browser runs
 on. It is beside the launch buttons of Artifacts and **Files**, and, with `--allow-terminal`, on the Explorer's rows
 and in the menu of a path a shell printed, at its line if it has one. The terminal's bar, each card in **All shells**, and
-a pane's right-click menu open the directory the shell is in now. It works on any live server, read-only or not: the browser hands VS Code a
+a pane's right-click menu open the directory the shell is in now. In a job's **Log**, a path that names a file is
+underlined, and a click opens it, at the line printed with it, as in `train.py:12` or a Python traceback. A relative path
+is taken from the job's working directory. Without `--allow-terminal`, only paths whose files **Artifacts** may show are
+underlined. A path is looked for on the server's host, so one from a job on another host is a link only where both have
+it. It works on any live server, read-only or not: the browser hands VS Code a
 `vscode://` URL, and the server runs nothing. A static export does not have it.
 
 The first time, it asks where VS Code runs:

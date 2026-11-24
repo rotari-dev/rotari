@@ -20,6 +20,8 @@ interface Window {
   vscodeOffered(): boolean;
   openInVSCode(target: { path: string; folder?: boolean; line?: number; column?: number }): void;
   showVSCodeNote(message: string): void;
+  // web_shell.js: the words of a line that may be paths.
+  outputPathCandidates(text: string): { text: string; start: number; end: number }[];
   __ROTARI_STATIC_STATE__?: unknown;
   __ROTARI_STATIC_WORD_CLOUDS__?: Record<string, unknown>;
 }

@@ -138,7 +138,9 @@ flowchart LR
    **Open in VS Code** runs nothing on the server: the page frame's
    [web_vscode.js](../internal/webui/assets/web_vscode.js) opens a `vscode://` URL, from where the browser keeps how
    its VS Code reaches this host, and `/api/vscode-target`
-   ([internal/webui/vscode.go](../internal/webui/vscode.go)) says where an artifact is.
+   ([internal/webui/vscode.go](../internal/webui/vscode.go)) says where an artifact is; `/api/log-links`
+   ([internal/webui/log_links.go](../internal/webui/log_links.go), which also finds the paths in shells' output) which paths in a
+   job's log are files.
    With `--allow-terminal`, it holds shells in an `internal/terminal` `Keeper`
    ([cmd/rotari/web_terminal.go](../cmd/rotari/web_terminal.go) builds it;
    [internal/webui/terminal.go](../internal/webui/terminal.go) serves them at `/_terminal/shells`,
