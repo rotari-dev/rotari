@@ -15,4 +15,17 @@ Plan: [plan.md](plan.md)
   UI type check, and `go test` on every package but `pairedits`, `pairjobcontrol`,
   and `pairruns` passed, with Go 1.25.8 and Node 24. Not run: those three,
   `go test -race`, pre-commit (not installed), and the browser tests (no Chrome).
-- **Remaining:** Seeing the tabs in a real browser, with long names and at a side.
+- **Remaining:** None; the next entry fixed what the user then saw in a browser.
+
+## 2026-11-24 18:31:15 +0900 - `78637883` - Centre the program
+
+- **Change:** `align-items: center` on a tab's label, with a JSDOM check of the rule
+  and a step of the browser test that measures it.
+- **Reason:** The user saw a blank line under a running tab's text: the page gives a
+  button at least 36 pixels, and a flex one aligned by baseline starts at the top.
+- **Plan impact:** None. The user found the rest of the tabs right, long names and a
+  panel at a side included.
+- **Validation:** In Chrome 158, a reduced copy of the button measured 8 pixels off
+  its middle before and 0 after. `TestTerminalPanel` and Prettier passed. The browser
+  test was not run (no Chrome on this machine), nor the full suite for this change.
+- **Remaining:** None.

@@ -730,8 +730,8 @@ Your browser keeps the answer for that server; **Settings** > **VS Code connecti
 appears, changes it. The browser may ask before it opens VS Code; tell it to always allow the address you open rotari
 at. A page is not told whether VS Code opened anything, so a wrong name shows as an error in VS Code, not here.
 
-VS Code chooses the window: a file usually opens in the window that has its folder open, and a directory in a window
-of its own. A path with a number after a colon, such as `a:12`, is refused, since VS Code would take the number for a
+VS Code chooses the window: a file usually opens in the window that has its folder open, and a directory in
+the window that has it open, or else in one of its own. A path with a number after a colon, such as `a:12`, is refused, since VS Code would take the number for a
 line. This is separate from the **VS Code (Web)** launcher, which runs a VS Code of its own in the browser.
 
 ### Experiment trackers

@@ -3,7 +3,7 @@
 Created: 2026-11-24
 Status: Design confirmed by phase 1's deciding checks on 2026-11-24. Phases 2
 (the rename), 3 (opening without a line, which the user then tried in a browser),
-and 4 (lines in shell output) are implemented; phase 4 has not been tried in a real
+and 4 (lines in shell output) are implemented, and the user has tried both in a
 browser. Phase 5 is not started.
 Related: [artifact launcher](../2026-10-20-artifact-launcher/plan.md),
 [terminal Explorer](../2026-11-13-terminal-explorer/plan.md),
@@ -218,6 +218,10 @@ Checked by the user on 2026-11-24, from the address bar: without a position, the
 file opened in the existing window, whose folder closed, leaving that file alone.
 The directory `docs` with `?windowId=_blank` opened in another window and left
 the existing one as it was.
+
+Checked by the user on 2026-11-24, with phase 4: a Python traceback's line opened,
+and a shell's directory opened from the terminal's bar and menu in the same window,
+which the user prefers. Taken to be a directory that window already had open.
 
 Not yet checked:
 

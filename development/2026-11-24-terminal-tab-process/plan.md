@@ -2,7 +2,7 @@
 
 Created: 2026-11-24
 Status: Agreed on 2026-11-24, with the user confirming decisions 1 to 3. Both phases
-are implemented; the tabs have not been seen in a real browser.
+are implemented. The user has seen the tabs in a browser.
 Related: [web terminal](../2026-11-05-web-terminal/plan.md),
 [command bell](../2026-11-09-command-bell/plan.md),
 [nested shells](../2026-11-15-terminal-nested-shells/plan.md)
