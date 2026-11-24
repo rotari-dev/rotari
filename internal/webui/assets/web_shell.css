@@ -1244,10 +1244,11 @@ html.terminal-open[data-terminal-place]:not(.terminal-maximized)
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* With what runs in it after its number or name, which gives way first. */
+/* With what runs in it after its number or name, which gives way first. A button centres
+   its text in the page's least height for one, which a flex one does only when told. */
 .terminal-tab [role="tab"].terminal-tab-labelled {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 5px;
 }
 .terminal-tab [role="tab"].terminal-tab-labelled::before {

@@ -967,6 +967,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     ['Shell 1, running python3', 'Shell 2, train, new output, running <b>x</b>', 'Shell 3, command finished, running vim', 'Shell 4']);
   assert.deepEqual(busyLabels().map((label) => label.title.replace(/Started in .*/, '')),
     ['Running python3. ', 'New output. Running <b>x</b>. ', 'A command finished. Running vim. ', '']);
+  assert.match(webShellCSS, /\.terminal-tab-labelled \{\s*display: flex;\s*align-items: center;/);
   // Another program in the same shell draws its tab again, and the same list does not.
   const drawnLabel = busyLabels()[0];
   busyPage.polls[0]();
