@@ -186,7 +186,7 @@ func BuiltinCommands() []Command {
 	panel.Patterns = []string{"*.py"}
 	gradio := service("Gradio", gradioCommand, []TargetKind{TargetFile}, DefaultReadyPath)
 	gradio.Patterns = []string{"*.py"}
-	vscode := service("VS Code", vscodeCommand, directory, "/version")
+	vscode := service("VS Code (Web)", vscodeCommand, directory, "/version")
 	vscode.ProxyHeaders = map[string]string{"Cookie": "vscode-tkn=$" + EnvToken}
 	return []Command{
 		service("TensorBoard", tensorBoardCommand, directory, DefaultReadyPath),
@@ -572,7 +572,7 @@ func Template() []byte {
 # named mlflow.db), Aim, Streamlit (*.py files), Datasette (*.db, *.sqlite,
 # and *.sqlite3 files), marimo (*.py, *.md, *.markdown, and *.qmd files and
 # directories, requires the launch token), Panel (*.py files), Gradio (*.py
-# files), and VS Code (directories, requires the launch token; install the
+# files), and VS Code (Web) (directories, requires the launch token; install the
 # standalone VS Code CLI on PATH as code-cli, which accepts the VS Code Server
 # license terms, https://aka.ms/vscode-server-license). Each is shown disabled while its program is not installed. An
 # entry with the same name replaces one.

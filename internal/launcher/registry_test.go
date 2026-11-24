@@ -27,7 +27,7 @@ func TestBuiltinCommands(t *testing.T) {
 		"marimo":          {"marimo", []TargetKind{TargetFile, TargetDirectory}, nil, "/health"},
 		"Panel":           {"panel", []TargetKind{TargetFile}, []string{"*.py"}, DefaultReadyPath},
 		"Gradio":          {"gradio", []TargetKind{TargetFile}, []string{"*.py"}, DefaultReadyPath},
-		"VS Code":         {"code-cli", []TargetKind{TargetDirectory}, nil, "/version"},
+		"VS Code (Web)":   {"code-cli", []TargetKind{TargetDirectory}, nil, "/version"},
 	}
 	builtins := BuiltinCommands()
 	if len(builtins) != len(want) {
@@ -66,9 +66,9 @@ func TestBuiltinCommands(t *testing.T) {
 				t.Errorf("Jupyter Lab does not require the launch token: %+v", got)
 			}
 		}
-		if got.Name == "VS Code" {
+		if got.Name == "VS Code (Web)" {
 			if got.ProxyHeaders["Cookie"] != "vscode-tkn=$"+EnvToken || !strings.Contains(got.Command, `--connection-token-file "$`+EnvTokenFile+`"`) || strings.Contains(got.Command, `"$`+EnvToken+`"`) {
-				t.Errorf("VS Code does not require the launch token: %+v", got)
+				t.Errorf("VS Code (Web) does not require the launch token: %+v", got)
 			}
 		}
 	}
@@ -269,12 +269,12 @@ func TestLoadRegistryReplacesBuiltins(t *testing.T) {
 		return strings.Join(names, ",")
 	}
 	registry := write(plot)
-	if got := names(registry); got != "TensorBoard,Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,Panel,Gradio,VS Code,Plot" {
+	if got := names(registry); got != "TensorBoard,Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,Panel,Gradio,VS Code (Web),Plot" {
 		t.Fatalf("file without built-in names = %s", got)
 	}
 	registry = write(plot + "[[launcher]]\nname = \"TensorBoard\"\ncommand = \"conda run -n tb tensorboard\"\ntargets = [\"directory\"]\nmode = \"service\"\n")
 	replaced := registry.Commands[len(registry.Commands)-1]
-	if got := names(registry); got != "Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,Panel,Gradio,VS Code,Plot,TensorBoard" ||
+	if got := names(registry); got != "Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,Panel,Gradio,VS Code (Web),Plot,TensorBoard" ||
 		replaced.Builtin || replaced.Command != "conda run -n tb tensorboard" {
 		t.Fatalf("file replacing TensorBoard = %s, %+v", got, replaced)
 	}
