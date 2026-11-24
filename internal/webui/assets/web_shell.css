@@ -1039,18 +1039,23 @@ html.terminal-open[data-terminal-place]:not(.terminal-maximized)
 .terminal-tabs {
   display: flex;
   flex: 0 1 auto;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
   overflow-x: auto;
 }
+/* Every tab is outlined, so that one not shown still reads as a tab. */
 .terminal-tab {
   display: flex;
   flex: none;
-  border: 1px solid transparent;
+  border: 1px solid var(--line);
   border-radius: 4px;
 }
+.terminal-tab:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
 .terminal-tab:has([aria-selected="true"]) {
-  border-color: var(--line);
+  border-color: var(--muted);
   background: var(--terminal-background);
   color: var(--text);
 }
@@ -1068,7 +1073,7 @@ html.terminal-open[data-terminal-place]:not(.terminal-maximized)
 .terminal-shared-tabs {
   display: flex;
   flex: 0 1 auto;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
   overflow-x: auto;
 }
@@ -1093,7 +1098,7 @@ html.terminal-open[data-terminal-place]:not(.terminal-maximized)
 }
 /* Shown too, in the pane the keys are not going to. */
 .terminal-tab-other-pane {
-  border-color: var(--line);
+  border-color: var(--muted);
   border-style: dashed;
 }
 .terminal-bar .terminal-tab button {

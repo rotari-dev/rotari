@@ -505,8 +505,9 @@ would get too small. Drag the handles between the panes to change their shares; 
 pane with a colored top edge has the keys, and **Clear** and the send buttons act on it, while **A-**, **A+**, and
 **Maximize** apply to the whole panel.
 
-There is one row of tabs. Clicking a tab shows it in the focused pane, and a dashed tab is in another
-pane: clicking it makes the two panes change places, since a shell cannot be in two. **+** starts a
+There is one row of tabs, each outlined. Clicking a tab shows it in the focused pane, whose tab has a darker
+outline, and a dashed tab is in another pane: clicking it makes the two panes change places, since a shell
+cannot be in two. **+** starts a
 shell in the focused pane. The **Close pane** icon closes the focused pane, and its shell keeps running in its tab;
 closing a tab ends its shell, wherever it shows. When a pane's shell ends, the pane moves to a tab not
 in a pane, or closes if there is none. Each browser tab keeps its own panes for each

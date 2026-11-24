@@ -96,6 +96,10 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the second shell to run a command', screenHas('second-[]'));
   await page.evaluate('document.querySelectorAll(".terminal-tab [role=tab]")[0].click()');
   await until('the first tab', 'document.querySelectorAll(".terminal-tab [role=tab]")[0]?.getAttribute("aria-selected") === "true"');
+  // A tab not shown is outlined too, so that it reads as a tab, and the shown one's outline differs.
+  const outlines = await page.evaluate('JSON.stringify([...document.querySelectorAll(".terminal-tab")].slice(0, 2).map((tab) => { const style = getComputedStyle(tab); return { style: style.borderTopStyle, width: style.borderTopWidth, colour: style.borderTopColor }; }))');
+  const [shownOutline, hiddenOutline] = JSON.parse(outlines);
+  if (hiddenOutline.style !== 'solid' || hiddenOutline.width === '0px' || /, 0\)$|transparent/.test(hiddenOutline.colour) || hiddenOutline.colour === shownOutline.colour) throw new Error('a tab not shown has no outline of its own: ' + outlines);
   await until('the first shell replayed', screenHas('value-kept'));
   await until('the first shell', settled);
   await typeLine('echo "again-$VALUE"');
