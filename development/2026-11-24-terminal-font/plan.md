@@ -1,7 +1,7 @@
 # Plan: Choosing the Web terminal's font
 
 Created: 2026-11-24
-Status: Proposed; not started.
+Status: Proposed; not started. One name rather than a list was decided by the user on 2026-11-24.
 Related: [Web terminal](../2026-11-05-web-terminal/plan.md), and the two plans proposed with this one: [Option as
 Meta](../2026-11-24-terminal-option-meta/plan.md) and [OSC 52 copy](../2026-11-24-terminal-osc52-copy/plan.md)
 
@@ -69,8 +69,3 @@ sticky line, so each follows. xterm.js measures cells when the option is set; th
   sticky line.
 - A browser test only if it can be a step of an existing one: CI's `conformance/05-web` has little time left.
 - By hand: a Nerd Font on Linux, macOS, and Windows, with `tmux` and Neovim showing icons and box drawing.
-
-## Open questions
-
-1. **One name or a list.** Proposed: one, with the default stack after it. A list would allow an icon font apart from
-   the text font.
