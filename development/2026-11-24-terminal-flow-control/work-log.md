@@ -35,4 +35,4 @@ Plan: [plan.md](plan.md)
   `conformance`, `conformance/05-web`, `internal/webui`, and `internal/terminal` passed, with Go 1.25.8 and Node 24.
   Not run: the browser tests (no Chrome here), `go test -race`, pre-commit, the other packages, and
   `scripts/check.sh`. Prettier 3.9.8 wants two places in `web_shell.js` that were there before.
-- **Remaining:** the browser test of the plan, and the checks by hand.
+- **Remaining:** the browser test of the plan (below), and the checks by hand.

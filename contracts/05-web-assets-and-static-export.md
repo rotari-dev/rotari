@@ -2257,7 +2257,8 @@ neither connects nor retries, and a page whose sign-in has gone stops retrying a
 2 MiB given is unparsed and no fold is being written, the rest waiting in the page, so that none is lost to xterm.js's own
 limit. With more than 8 MiB waiting, the replay aside, the pane drops its connection and what waits, and the program
 goes on; it reconnects when the page is visible, taking the shell from no other connection, and says that only the most
-recent output shows (`TestTerminalPanel`). `TestTerminalPanelInBrowser` checks the panel in
+recent output shows (`TestTerminalPanel`, and in headless Chrome `TestTerminalFastOutputInBrowser`).
+`TestTerminalPanelInBrowser` checks the panel in
 headless Chrome.
 
 **WEB-29** Live application, Recent jobs, and Table viewer pages send a

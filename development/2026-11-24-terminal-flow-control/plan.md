@@ -2,8 +2,8 @@
 
 Created: 2026-11-24
 Status: Phase 1 is done. After its results the user chose, on 2026-11-24, a change to the page alone over the
-acknowledgements first planned. Phases 2 to 4 are implemented; see [work-log.md](work-log.md). Not done: the browser
-test, and the checks by hand.
+acknowledgements first planned. Phases 2 to 4 are implemented; see [work-log.md](work-log.md). Not done: the checks by
+hand.
 Related: [Web terminal](../2026-11-05-web-terminal/plan.md),
 [folding output](../2026-11-16-terminal-fold-output/plan.md), and "A very fast program can make the terminal panel lose
 output" in [ISSUES.md](../ISSUES.md)
@@ -66,6 +66,24 @@ and not yet parsed.
 - The second macOS hidden run ended soon after the queue reached 50 MB, so its loss says little about the rate. A hidden
   page on Ubuntu was not slowed there, which may be only headless Chrome.
 - Firefox, Safari, and a visible page on a busy machine were not tested.
+
+## After the change
+
+The same browsers, on 2026-11-24 from the same temporary branch, again deleted (runs
+[45403194237](https://github.com/rotari-dev/rotari/actions/runs/45403194237),
+[45405423290](https://github.com/rotari-dev/rotari/actions/runs/45405423290), and
+[45414498132](https://github.com/rotari-dev/rotari/actions/runs/45414498132)):
+
+- A visible page printing 198 MB never fell behind in any run on either system; at most 1.2 MB waited.
+- A hidden page threw nothing, said it fell behind when it had, and showed the prompt after Ctrl-C.
+- After a full 64 MiB replay every line came, on both systems; the code before the change lost some on both.
+- On Ubuntu a page hidden just as the output starts sometimes falls behind within half a second, and sometimes not at
+  all. It looked like a fault of this change, so the code before it was run the same way: in one of two runs it threw
+  away most of 423 MB. The change's own two runs kept up. macOS was not compared so: those jobs were cancelled after
+  15 minutes, for a reason not known.
+- Giving live output in pieces of 2 MiB rather than 256 KiB was tried, in case small pieces slowed a visible page. It
+  made no difference, so 256 KiB stays.
+- The terminal's other browser tests passed on both systems, in the run before last, with 2 MiB pieces.
 
 ## Scope
 
