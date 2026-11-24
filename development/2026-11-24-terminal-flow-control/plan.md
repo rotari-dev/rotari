@@ -14,14 +14,14 @@ drops the connection, and comes back with the replay, saying so.
 
 ## Problem
 
-`onmessage` gives xterm.js each message at once. With more than 50 MB unparsed, `term.write` throws
-`write data discarded`, and that message is gone. The page cannot pause a WebSocket, and goes on receiving.
+`onmessage` gives xterm.js each message at once. With more than 50 MB unparsed, `term.write` throws `write data
+discarded`, and that message is gone. The page cannot pause a WebSocket, and goes on receiving.
 
 1. **A hidden page.** Browsers slow its timers, in which xterm.js parses. Output piles up and is lost.
 2. **A large replay.** `--terminal-replay-size` may be up to 64 MiB, sent as one message. xterm.js takes it, since it
    checks its limit before adding, and throws on what follows until enough is parsed.
-3. **Output during a rewrite** (from reading the code). While folding rewrites the screen, output waits in the pane's
-   8 MiB record. What falls out of it is gone: `recordSlice` returns null, and `feed` writes nothing, silently.
+3. **Output during a rewrite** (from reading the code). While folding rewrites the screen, output waits in the pane's 8
+   MiB record. What falls out of it is gone: `recordSlice` returns null, and `feed` writes nothing, silently.
 
 In 1 and 2, `recordBytes` and `scanMarks` have already taken the message when `write` throws, so folding and blocks can
 disagree with the screen as well.
@@ -36,9 +36,8 @@ On the shared development machine, with few CPUs; single runs, so only the order
 | `Keeper` to a Go reader, without a WebSocket, 100-character lines | 105 MB/s |
 | The same, 4-character lines | 18 MB/s |
 
-xterm.js alone threw once 50.0 MB was queued. A Node 24 client with the vendored xterm.js, connected to a real
-`rotari web` over its WebSocket, lost 92.8 MB of 200 MB, and after Ctrl-C lost the prompt too. That turned out **not**
-to
+xterm.js alone threw once 50.0 MB was queued. A Node 24 client with the vendored xterm.js, connected to a real `rotari
+web` over its WebSocket, lost 92.8 MB of 200 MB, and after Ctrl-C lost the prompt too. That turned out **not** to
 predict what a browser does.
 
 ## Phase 1 results
@@ -59,8 +58,7 @@ and not yet parsed.
 | A replay of at most 8.3 MB, then output | Nothing lost | Nothing lost |
 
 - **A burst loses output only in a hidden page.** A visible page in Chrome kept up, for reasons not established; it
-  seems that
-  receiving does not get ahead of parsing there.
+  seems that receiving does not get ahead of parsing there.
 - **A late Ctrl-C**, which the first design was also for, was not seen.
 - **The large replay is confirmed** on both systems. A first test missed it by coming back before the replay filled.
 - **Output during a rewrite** was not tested.
@@ -91,11 +89,9 @@ The page's path from `onmessage` to `term.write`, in `web_shell.js`.
 4. **Nothing is given during a rewrite.** Output waits in the queue, which replaces the rewrite's own list of waiting
    callbacks (`rewriting.after`) and the output it takes back from the record.
 5. **More than 8 MiB queued, the replay aside, ends the connection.** The queue is dropped. A hidden page reconnects
-   when
-   it is visible, as `reconnect` already does; a visible one does so at once, without taking the shell from another tab.
-   The program goes on meanwhile, printing to the server's ring. Chosen by the user over slowing the program, which
-   could
-   hold up a long job whose tab is merely out of sight.
+   when it is visible, as `reconnect` already does; a visible one does so at once, without taking the shell from another
+   tab. The program goes on meanwhile, printing to the server's ring. Chosen by the user over slowing the program, which
+   could hold up a long job whose tab is merely out of sight.
 6. **The page says so.** After such a reconnect a note says that the terminal fell behind and shows only recent output.
 7. **The queue outlives the connection when the shell ends**, so that its last output is still shown. A new connection
    drops it, since the replay brings that output back.
@@ -150,7 +146,6 @@ that message is parsed, not once it is queued.
 ## Risks
 
 - **Output stuck in the queue.** If a piece's callback never comes, such as after `term.reset` at the wrong time,
-  nothing
-  more is shown. Connecting, switching, and rewriting each need a test that output goes on afterwards.
+  nothing more is shown. Connecting, switching, and rewriting each need a test that output goes on afterwards.
 - **`web_shell.js` is changed by other work** at the same time. Phases 2 and 3 are done in a workspace of their own from
   `main`.
