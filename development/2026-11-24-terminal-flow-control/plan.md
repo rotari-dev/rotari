@@ -1,8 +1,9 @@
 # Plan: Flow control between the Web terminal's page and server
 
 Created: 2026-11-24
-Status: Design accepted by the user on 2026-11-24, with both open questions as proposed; not started. Phase 1 decides
-whether phases 2 to 4 are done.
+Status: Design accepted by the user on 2026-11-24, with both open questions as proposed. Phase 1 was run on
+2026-11-24 and found the loss under narrower conditions than expected, so the design is to be decided again before
+phase 2; see [Phase 1 results](#phase-1-results). Nothing is implemented.
 Related: [Web terminal](../2026-11-05-web-terminal/plan.md),
 [folding output](../2026-11-16-terminal-fold-output/plan.md), and "A very fast program can make the terminal panel lose
 output" in [ISSUES.md](../ISSUES.md)
@@ -49,8 +50,50 @@ On the shared development machine, with few CPUs; single runs, so only the order
 | `Keeper` to a Go reader, without a WebSocket, 100-character lines | 105 MB/s |
 | The same, 4-character lines | 18 MB/s |
 
-xterm.js alone threw once 50.0 MB was queued. The loss has **not** been reproduced through `rotari web` and a browser;
-phase 1 does that.
+xterm.js alone threw once 50.0 MB was queued. A Node 24 client with the vendored xterm.js, connected to a real
+`rotari web` over its WebSocket, lost 92.8 MB of 200 MB, and after Ctrl-C lost the prompt too. That turned out **not** to
+predict what a browser does.
+
+### Phase 1 results
+
+Headless Chrome on GitHub's `ubuntu-latest` and `macos-latest`, on 2026-11-24, from a temporary branch since deleted
+(runs [45359759648](https://github.com/rotari-dev/rotari/actions/runs/45359759648),
+[45360358427](https://github.com/rotari-dev/rotari/actions/runs/45360358427),
+[45361645995](https://github.com/rotari-dev/rotari/actions/runs/45361645995), and
+[45362574593](https://github.com/rotari-dev/rotari/actions/runs/45362574593)). "Queued" is what xterm.js has been given
+and not yet parsed.
+
+| Scenario | Ubuntu | macOS |
+| --- | --- | --- |
+| Visible page, 200 MB of 100-character lines | Nothing lost; at most 1.2 MB queued | Nothing lost; at most 2.9 MB queued |
+| Visible page, `yes` for 4 s, then Ctrl-C | Prompt after 0.11 s | Prompt after 0.11 s |
+| Hidden page, `yes` for 15 s and more (two runs) | Nothing lost; parsed at 27 to 28 MB/s | **Lost** 78.8 MB and 0.5 MB; parsed at 0.27 and 0.013 MB/s |
+| A full 64 MiB replay (first message 67.1 MB), then output | **Threw** once | **Threw** twice |
+| A replay of at most 8.3 MB, then output | Nothing lost | Nothing lost |
+
+- **Consequence 1 needs a hidden page.** A visible page in Chrome kept up, for reasons not established; it seems that
+  receiving does not get ahead of parsing there.
+- **Consequence 2 was not seen**: Ctrl-C was not late.
+- **Consequence 3 is confirmed** on both systems. It was first missed by a test that came back before the replay filled.
+- **Consequence 4** was not tested.
+- The second macOS hidden run ended soon after the queue reached 50 MB, so its loss says little about the rate. A hidden
+  page on Ubuntu was not slowed there, which may be only headless Chrome.
+- Firefox, Safari, and a visible page on a busy machine were not tested.
+
+### What follows
+
+The case for phases 2 and 3 as designed is weaker: the server's window mainly serves hidden pages, where decision 7
+already acknowledges what is received rather than parsed. A page-only change may be enough, with no protocol:
+
+- The page keeps what xterm.js has not been given in a queue of its own, and gives it more only while a few MiB are
+  unparsed. That covers a large replay and output during a rewrite.
+- If that queue, the replay aside, passes 8 MiB, the page closes the connection, and reconnects when visible, as chosen
+  for hidden pages.
+
+It drops the promise that a visible page always makes the program wait; a visible page that falls that far behind comes
+back with only the replay.
+
+**To decide:** the page-only change, or the acknowledgements as designed.
 
 ## Scope
 
