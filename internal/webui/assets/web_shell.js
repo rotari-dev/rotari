@@ -482,9 +482,9 @@ function shellWord(value) {
       awaitingWindow = sessionStorage.getItem(windowedKey) === "1";
     } catch {}
   }
-  // What a connection brought and xterm.js has not been given (see giveOutput), and how
-  // many of the bytes it has been given it has not parsed yet.
-  const emptyQueue = () => ({ messages: [], unparsed: 0 });
+  // What a connection brought and xterm.js has not been given (see giveOutput), how many
+  // bytes of it came after the replay, and how many of the bytes given are not parsed yet.
+  const emptyQueue = () => ({ messages: [], waiting: 0, unparsed: 0 });
   // newPane makes a place to show a shell: one terminal screen, and one connection to
   // the shell it shows. All of a connection's state is its pane's own.
   const newPane = () => ({
@@ -498,6 +498,7 @@ function shellWord(value) {
     socket: null,
     shown: null, // The ID of the shell this pane shows.
     queue: emptyQueue(),
+    fellBehind: null, // The ID of a shell whose output it could not keep up with, until said.
     pendingSend: null, // A command waiting for this pane to connect to a shell.
     heldResize: null, // The last size a drag gave it, for its shell when the drag ends.
     connectSerial: 0,
@@ -3365,15 +3366,15 @@ function shellWord(value) {
           if (!pane.blocks.length) showBlockGutter(pane, false);
           refold(pane);
           updateSticky(pane);
+          sayFellBehind(pane);
         }
         if (sending) deliverSend(pane);
       };
-      pane.queue.messages.push({
-        bytes: new Uint8Array(event.data),
-        at: 0,
-        done,
-      });
+      const bytes = new Uint8Array(event.data);
+      pane.queue.messages.push({ bytes, at: 0, replay, done });
+      if (!replay) pane.queue.waiting += bytes.length;
       giveOutput(pane);
+      if (pane.queue.waiting > waitingLimit) fallBehind(pane);
     };
     current.onclose = (event) => {
       if (pane.socket !== current) return;
@@ -3910,6 +3911,7 @@ function shellWord(value) {
   };
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
+    panes.forEach(sayFellBehind);
     const waiting = panes.filter((pane) => pane.whenVisible);
     if (waiting.length) waiting.forEach((pane) => pane.whenVisible());
     else refreshShells();
@@ -7154,6 +7156,7 @@ function shellWord(value) {
       message.at += bytes.length;
       const last = message.at >= message.bytes.length;
       if (last) queue.messages.shift();
+      if (!message.replay) queue.waiting -= bytes.length;
       queue.unparsed += bytes.length;
       feed(pane, bytes, recordBytes(pane, bytes), () => {
         queue.unparsed -= bytes.length;
@@ -7162,6 +7165,34 @@ function shellWord(value) {
         if (pane.queue === queue) giveOutput(pane);
       });
     }
+  };
+  // A pane with more than waitingLimit waiting, the replay aside, gives up its connection
+  // rather than keep ever more of it, and the program goes on. The replay it comes back to
+  // has only recent output, which the viewer is told once it is there to see.
+  const waitingLimit = 8 * 1024 * 1024;
+  const fallBehind = (pane) => {
+    const { socket } = pane;
+    pane.socket = null;
+    pane.queue = emptyQueue();
+    pane.fellBehind = pane.shown;
+    socket?.close();
+    settleSend(
+      pane,
+      "The terminal fell behind its output, so nothing was sent.",
+    );
+    reconnect(pane);
+  };
+  const sayFellBehind = (pane) => {
+    // Said where the replay shows, so not before it does, nor to a page nobody sees.
+    if (!pane.fellBehind || !pane.socket || !pane.blocksLive || document.hidden)
+      return;
+    const said = pane.fellBehind === pane.shown;
+    pane.fellBehind = null;
+    if (said)
+      showNote(
+        "The terminal fell behind this shell's output and shows only the most recent.",
+        8000,
+      );
   };
   // foldInfo says whether a block can fold, and where its kept and folded lines are: an
   // ended command, out of the alternate screen, whose output is wholly kept and is longer

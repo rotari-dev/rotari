@@ -568,6 +568,9 @@ rotari web --allow-terminal
 - **Tabs you are not looking at:** their programs keep running. Switching to one shows up to its
   last 256 KiB of output again, as following a link does, not its whole scrollback. Each pane keeps
   up to 10,000 lines, so a replay of shorter lines starts later.
+- **Very fast output:** a page that cannot keep up, usually one out of sight, whose work the browser
+  slows, lets go of the shell once 8 MiB waits to be shown. The program is not slowed. The page
+  comes back to the shell when it is in sight, with only recent output, and says so.
 - **Several browser tabs:** each browser tab shows one shell and remembers which. Two can use
   different shells at once. If one opens a shell another is using, it takes it, and the other says
   so and offers to take it back.

@@ -2,8 +2,8 @@
 
 Created: 2026-11-24
 Status: Phase 1 is done. After its results the user chose, on 2026-11-24, a change to the page alone over the
-acknowledgements first planned. Phase 2 is implemented, and goes into `main` only with phase 3: without its limit, a page
-that falls behind keeps everything waiting in memory. Phases 3 and 4 are not started.
+acknowledgements first planned. Phases 2 to 4 are implemented; see [work-log.md](work-log.md). Not done: the browser
+test, and the checks by hand.
 Related: [Web terminal](../2026-11-05-web-terminal/plan.md),
 [folding output](../2026-11-16-terminal-fold-output/plan.md), and "A very fast program can make the terminal panel lose
 output" in [ISSUES.md](../ISSUES.md)
@@ -90,9 +90,9 @@ The page's path from `onmessage` to `term.write`, in `web_shell.js`.
 4. **Nothing is given during a rewrite.** Output waits in the queue, which replaces the rewrite's own list of waiting
    callbacks (`rewriting.after`) and the output it takes back from the record.
 5. **More than 8 MiB queued, the replay aside, ends the connection.** The queue is dropped. A hidden page reconnects
-   when it is visible, as `reconnect` already does; a visible one does so at once, without taking the shell from another
-   tab. The program goes on meanwhile, printing to the server's ring. Chosen by the user over slowing the program, which
-   could hold up a long job whose tab is merely out of sight.
+   when it is visible, as `reconnect` already does; a visible one does so after about a second, without taking the shell
+   from another tab. The program goes on meanwhile, printing to the server's ring. Chosen by the user over slowing the
+   program, which could hold up a long job whose tab is merely out of sight.
 6. **The page says so.** After such a reconnect a note says that the terminal fell behind and shows only recent output.
 7. **The queue outlives the connection when the shell ends**, so that its last output is still shown. A new connection
    drops it, since the replay brings that output back.
@@ -134,7 +134,7 @@ that message is parsed, not once it is queued.
 ## Tests and validation
 
 - `TestTerminalPanel` (JSDOM), with a stand-in that parses only when told and throws over 50 MB as xterm.js does: what
-  is given and when, pieces, a rewrite with more than 8 MiB arriving, the limit for a hidden and a visible page, the
+  is given and when, pieces, a rewrite with nearly 8 MiB arriving, the limit for a hidden and a visible page, the
   note, and each event in the table. Each must fail before the change where it covers a fault.
 - `TestTerminalFastOutputInBrowser`, from the reproducer (local commit `4abd039c`, whose replay scenario goes to the
   wrong page and must wait for the replay to fill): the full 64 MiB replay, which failed on both systems, and a hidden
@@ -148,5 +148,8 @@ that message is parsed, not once it is queued.
 
 - **Output stuck in the queue.** If a piece's callback never comes, such as after `term.reset` at the wrong time,
   nothing more is shown. Connecting, switching, and rewriting each need a test that output goes on afterwards.
+- **A large replay with fast output.** If 8 MiB arrives while a replay of tens of MiB is parsed, the page lets go again
+  and starts the replay over, until the program slows. The shell still takes keys between, such as Ctrl-C. Only a raised
+  `--terminal-replay-size` can reach this.
 - **`web_shell.js` is changed by other work** at the same time. Phases 2 and 3 are done in a workspace of their own from
   `main`.

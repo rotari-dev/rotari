@@ -1457,7 +1457,8 @@ All projects for a basedir's own shell, and `/activity` for one of no project. A
 connections and replays recent output to the next, except what came before a `clear` message. A new connection to it takes it over, closing
 the last with code 4001; one with `takeover=0`, which a page reconnecting by itself sends, gets 4001
 itself when another connection has that shell. An attached reader receives output in order without loss while it
-keeps reading; a slow reader makes the program wait, and a reader taking nothing for 30 seconds is detached.
+keeps reading; a slow reader makes the program wait, and a reader taking nothing for 30 seconds is detached. The
+panel's page keeps reading, and lets go when it cannot show what it read soon enough (WEB-33).
 Without an attached reader, the program continues and only recent output is kept for replay. Covered by
 [`TestTerminalStreamsOutputBurst`](../conformance/05-web/terminal_stream_test.go), `TestSlowReaderMakesTheProgramWait`,
 and `TestProgramsDoNotStallWithNothingAttached`. Connections to different shells do not disturb each
@@ -2252,7 +2253,11 @@ links and reloading in that tab keep it. A window opened by its address has no s
 says it has nowhere to go. A blocked window leaves the panel where it was, saying why.
 xterm.js loads when the panel first opens, under the page's nonce. A browser tab that is not visible
 neither connects nor retries, and a page whose sign-in has gone stops retrying and says so
-(`TestTerminalPanel`). `TestTerminalPanelInBrowser` checks the panel in
+(`TestTerminalPanel`). A pane gives xterm.js its output in order, in pieces of at most 256 KiB, only while less than
+2 MiB given is unparsed and no fold is being written, the rest waiting in the page, so that none is lost to xterm.js's own
+limit. With more than 8 MiB waiting, the replay aside, the pane drops its connection and what waits, and the program
+goes on; it reconnects when the page is visible, taking the shell from no other connection, and says that only the most
+recent output shows (`TestTerminalPanel`). `TestTerminalPanelInBrowser` checks the panel in
 headless Chrome.
 
 **WEB-29** Live application, Recent jobs, and Table viewer pages send a

@@ -4737,12 +4737,15 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const burst = await open();
   say(burst.sockets.at(-1), 'prompt');
   assert.deepEqual(burst.terminals.at(-1).writes, ['prompt'], 'output waited with nothing before it');
-  // A burst of more than xterm.js holds.
+  // A burst of more than xterm.js holds, parsed as it comes.
   burst.parser.held = true;
-  for (let i = 0; i < 14; i++) say(burst.sockets.at(-1), filled(4 * MiB));
+  for (let i = 0; i < 14; i++) {
+    say(burst.sockets.at(-1), filled(4 * MiB));
+    if (i % 2) burst.parser.drain(i < 13 ? 32 : 0);
+  }
   say(burst.sockets.at(-1), 'the end');
   assert.ok(burst.terminals.at(-1).unparsed <= 2 * MiB + 256 * 1024, 'given too much at once: ' + burst.terminals.at(-1).unparsed);
-  assert.ok(paneOf(burst).record.end <= 'prompt'.length + 2 * MiB + 256 * 1024, 'what was not given yet is in the record');
+  assert.ok(paneOf(burst).record.end <= total(burst.terminals.at(-1)) + 2 * MiB + 256 * 1024, 'what was not given yet is in the record');
   burst.parser.drain(4);
   assert.ok(burst.terminals.at(-1).unparsed <= 2 * MiB + 256 * 1024, 'given too much later: ' + burst.terminals.at(-1).unparsed);
   burst.parser.release();
@@ -4826,7 +4829,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   closing.parser.release();
   await wait(20);
 
-  // Output of more than the record keeps, while the screen is written again, follows it.
+  // Output while the screen is written again, of a size that would push out of the record
+  // what it holds, follows it.
   const folding = await open();
   const numbered = Array.from({ length: 20 }, (_, i) => 'line ' + (i + 1) + '\r\n').join('');
   folding.terminals.at(-1).parses = true;
@@ -4837,14 +4841,101 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   paneOf(folding).blocks[0].decoration.render().querySelector('.terminal-block-mark').click();
   [...folding.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Fold output').click();
   folding.terminals.at(-1).parses = false;
-  for (let i = 0; i < 5; i++) say(folding.sockets.at(-1), filled(2 * MiB, 'z'));
+  for (let i = 0; i < 4; i++) say(folding.sockets.at(-1), filled(2 * MiB - 8, 'z'));
   say(folding.sockets.at(-1), 'last');
   folding.parser.release();
   await wait(30);
   const after = folding.terminals.at(-1).writes.join('');
-  assert.equal(after.split('z').length - 1, 10 * MiB, 'output during a rewrite was lost or doubled');
+  assert.equal(after.split('z').length - 1, 8 * MiB - 32, 'output during a rewrite was lost or doubled');
   assert.ok(after.endsWith('last'), 'output stopped after a rewrite');
   assert.equal(after.split('lines folded').length - 1, 1, 'the fold was not written');
+
+  // A pane with more than 8 MiB waiting, the replay aside, gives up its connection. A page
+  // in view comes back soon, without taking the shell from another tab, and says what it shows.
+  const note = (page) => page.document.querySelector('.terminal-send-note');
+  const noted = (page) => Boolean(note(page) && !note(page).hidden && /fell behind/.test(note(page).textContent));
+  const behind = await open();
+  const first = behind.sockets.at(-1);
+  behind.parser.held = true;
+  say(first, filled(52 * MiB, 'r'));
+  for (let i = 0; i < 8; i++) say(first, filled(MiB));
+  assert.ok(!first.closed, 'gave up with 8 MiB waiting, or counted the replay');
+  say(first, 'x');
+  assert.ok(first.closed, 'kept on with more than 8 MiB waiting');
+  assert.equal(paneOf(behind).queue.messages.length, 0, 'what waited is still kept');
+  say(first, 'late');
+  first.onclose?.({ code: 1005, reason: '' });
+  assert.equal(paneOf(behind).queue.messages.length, 0, 'a connection given up still brought output');
+  behind.parser.release();
+  for (let i = 0; i < 60 && behind.sockets.length < 2; i++) await wait(50);
+  assert.equal(behind.sockets.length, 2, 'did not come back, or came back more than once');
+  assert.ok(behind.sockets[1].url.includes('takeover=0'), 'took the shell: ' + behind.sockets[1].url);
+  assert.ok(!noted(behind), 'said so before there was anything to see');
+  behind.sockets[1].onopen?.();
+  say(behind.sockets[1], 'recent');
+  assert.deepEqual(behind.terminals.at(-1).writes, ['recent'], 'old output is still on the screen');
+  assert.ok(noted(behind), 'did not say that output is missing');
+  note(behind).hidden = true;
+  say(behind.sockets[1], 'more');
+  assert.equal(behind.terminals.at(-1).writes.at(-1), 'more');
+  assert.ok(!noted(behind), 'said so twice');
+
+  // A hidden page waits to be seen, and says so then.
+  const unseen = load(process.argv[1], { stored: '1', path: '/project/p1', hidden: true, shells: [inProject('1', 1, 'p1')], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  unseen.window.__hidden = false;
+  unseen.document.dispatchEvent(new unseen.window.Event('visibilitychange'));
+  await wait(50);
+  unseen.sockets.at(-1).onopen?.();
+  say(unseen.sockets.at(-1), 'prompt');
+  unseen.window.__hidden = true;
+  unseen.parser.held = true;
+  for (let i = 0; i < 11; i++) say(unseen.sockets.at(-1), filled(MiB));
+  assert.ok(unseen.sockets.at(-1).closed, 'a hidden page kept on');
+  unseen.parser.release();
+  await wait(1300);
+  assert.equal(unseen.sockets.length, 1, 'a hidden page reconnected');
+  unseen.window.__hidden = false;
+  unseen.document.dispatchEvent(new unseen.window.Event('visibilitychange'));
+  for (let i = 0; i < 60 && unseen.sockets.length < 2; i++) await wait(50);
+  assert.equal(unseen.sockets.length, 2, 'did not come back when seen');
+  unseen.sockets[1].onopen?.();
+  // Hidden again as the replay comes: said when it is next seen.
+  unseen.window.__hidden = true;
+  say(unseen.sockets[1], 'recent');
+  assert.ok(!noted(unseen), 'said so to nobody');
+  unseen.window.__hidden = false;
+  unseen.document.dispatchEvent(new unseen.window.Event('visibilitychange'));
+  assert.ok(noted(unseen), 'did not say so when seen');
+
+  // A pane showing another shell by then says nothing of it.
+  const away = await open([inProject('1', 1, 'p1'), inProject('2', 2, 'p1')]);
+  say(away.sockets.at(-1), 'prompt');
+  away.parser.held = true;
+  for (let i = 0; i < 11; i++) say(away.sockets.at(-1), filled(MiB));
+  assert.ok(away.sockets.at(-1).closed);
+  [...[...away.document.querySelectorAll('.terminal-tabs .terminal-tab')][1].children].find((part) => !part.classList.contains('terminal-tab-close')).click();
+  away.parser.release();
+  await wait(20);
+  away.sockets.at(-1).onopen?.();
+  say(away.sockets.at(-1), 'second');
+  assert.ok(!noted(away), 'said so of another shell');
+  const count = away.sockets.length;
+  await wait(1300);
+  assert.equal(away.sockets.length, count, 'the given-up connection came back over another shell');
+
+  // Moving to another project drops what waits, so none of it comes on the cleared screen.
+  const moving = await open([inProject('1', 1, 'p1'), inProject('2', 1, 'p2')]);
+  say(moving.sockets.at(-1), 'prompt');
+  sp(moving).bar('Link terminal and project').click();
+  moving.parser.held = true;
+  say(moving.sockets.at(-1), filled(6 * MiB, 'm'));
+  const select = moving.document.querySelector('.terminal-groups');
+  select.value = [...select.options].find((option) => option.value.endsWith('/project/p2')).value;
+  select.onchange();
+  moving.parser.release();
+  assert.deepEqual(moving.terminals.at(-1).writes, [], 'the last project\'s output came after the move');
+  await wait(50);
   }
 
   // Folds last while the page shows the shell: a tab switch replays it, and the same
