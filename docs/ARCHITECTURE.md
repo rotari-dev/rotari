@@ -135,6 +135,10 @@ flowchart LR
    nothing under a basedir; their output lives in a private
    `$TMPDIR/rotari-web-launches-*` directory removed at shutdown, or by the
    next Web server if this one was killed.
+   **Open in VS Code** runs nothing on the server: the page frame's
+   [web_vscode.js](../internal/webui/assets/web_vscode.js) opens a `vscode://` URL, from where the browser keeps how
+   its VS Code reaches this host, and `/api/vscode-target`
+   ([internal/webui/vscode.go](../internal/webui/vscode.go)) says where an artifact is.
    With `--allow-terminal`, it holds shells in an `internal/terminal` `Keeper`
    ([cmd/rotari/web_terminal.go](../cmd/rotari/web_terminal.go) builds it;
    [internal/webui/terminal.go](../internal/webui/terminal.go) serves them at `/_terminal/shells`,

@@ -1839,6 +1839,26 @@ control character can only be copied. A refused request is shown in the list. Im
 covered by `TestTerminalReadsAnotherProjectsHistory` (projects) and `TestTerminalDirsAndCommandsOfAnotherProject`
 (projects and basedirs).
 
+**WEB-64** The live application page, Recent jobs page, and terminal window offer **Open in VS Code**, with job control
+or without it, and a static export does not. It opens an absolute path of the server by following a `vscode://` URL in
+the browser; the server runs nothing. Where it is: on each file or directory of Artifacts and **Files** and in the
+title of their previews, and, with the terminal on, on the Explorer's rows and in the menu of a row or a printed path
+(WEB-42, WEB-46), whose clicks do not change. `GET /api/vscode-target` takes a content request's fields (WEB-6) and
+answers the artifact's `path` and `kind` (`file` or `directory`), refusing what the content request refuses. The page
+asks once where VS Code runs, starting from what the server suggests: Remote SSH when it was started with
+`SSH_CONNECTION` set, with its host name up to the first dot, and the same machine otherwise. The browser keeps the
+answer under the server's host name, so one server's is not used for another at the same address; without storage or
+a known host name, or with a kept answer that cannot be read or used, it asks again and says why. Settings and the note
+shown after opening change it. The URL is `vscode://file/PATH` for the same machine and
+`vscode://vscode-remote/ssh-remote+NAME/PATH` for Remote SSH, each path segment percent-encoded, with `:1` after a
+remote file, which VS Code would otherwise open in place of a window's folder, and `?windowId=_blank` after a
+directory. NAME is checked at every use: letters, digits, `.`, `_`, and `-`, with an optional `USER@`, neither part
+starting with `-`. A path that is not absolute, holds NUL, or has a number or nothing after a colon is refused with
+the reason. The note says what was asked and never that it opened, which a page cannot know. Implemented in
+`internal/webui/vscode.go` and `web_vscode.js`; covered by
+[`TestWebOpensArtifactsInVSCode`](../conformance/05-web/vscode_test.go) (what is offered, and the targets) and the unit
+tests in [internal/webui/vscode_test.go](../internal/webui/vscode_test.go) (the dialog, what is kept, and the URLs).
+
 **WEB-46** With `rotari web --allow-terminal`, words a shell prints are links when they name something that exists.
 `POST /_terminal/shells/ID/links` takes a JSON body `{"candidates": [...]}`, at most 64 candidates of at most 4096
 bytes each (400 beyond, 415 for a body that is not JSON, unknown fields 400), with an optional `dir`, the directory
@@ -1988,7 +2008,7 @@ tree shows such a refusal in place, says how many entries it leaves out with a l
 shows control characters in names as escapes, and offers nothing for a name marked `not_utf8`. A row's buttons and
 menu send its path to the terminal, relative to the shell's directory when under it and otherwise absolute, through
 the send buttons' rules (one word, quoted as `shellQuote` does, refused with a note for control characters); open it
-in the Table viewer; open a new tab of the page's shells in that folder, or a file's folder; or copy it whole or
+in the Table viewer, or in VS Code (WEB-64); open a new tab of the page's shells in that folder, or a file's folder; or copy it whole or
 from the shell's directory. A new tab asks `POST /_terminal/shells` with `dir` (WEB-34). A row dropped on a pane sends its path to that
 pane. Opening asks `POST /api/tableview-sources` with `{"path": "/ABS"}`, which needs the terminal (403 without)
 and HTTPS or a direct loopback connection (403 otherwise), takes either `path` or `shell` (400 for both), follows

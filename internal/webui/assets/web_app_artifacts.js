@@ -330,6 +330,32 @@ function artifactTypeBadge(type, category) {
     "</span>"
   );
 }
+// artifactVSCodeButton opens the artifact in VS Code, on a live page.
+function artifactVSCodeButton(index, child) {
+  return window.vscodeOffered()
+    ? ' <button type="button" class="artifact-vscode" title="' +
+        esc("Open " + artifactTitle(index, child) + " in VS Code") +
+        '" ' +
+        actionAttributes("openArtifactInVSCode", index, child) +
+        ">Open in VS Code</button>"
+    : "";
+}
+// openArtifactInVSCode asks the server where the artifact is, under the rules
+// of its previews, and opens that.
+async function openArtifactInVSCode(index, child) {
+  const title = artifactTitle(index, child);
+  try {
+    const target = await fetchArtifactJSON("/api/vscode-target", index, child);
+    window.openInVSCode({
+      path: target.path,
+      folder: target.kind === "directory",
+    });
+  } catch (error) {
+    window.showVSCodeNote(
+      "Cannot open " + title + " in VS Code: " + error.message,
+    );
+  }
+}
 // artifactActionCells are a row's Launch and Download cells: a file can be
 // downloaded, and a file or a directory launched on with a button per
 // command that accepts it. Other types, and rows that cannot be opened
@@ -338,7 +364,10 @@ function artifactActionCells(index, child, type) {
   const launchable = type === "file" || type === "directory";
   return (
     '<td class="artifact-action">' +
-    (launchable ? artifactLaunchButtons(index, child, type) : "") +
+    (launchable
+      ? artifactLaunchButtons(index, child, type) +
+        artifactVSCodeButton(index, child)
+      : "") +
     '</td><td class="artifact-action">' +
     (type === "file" ? artifactDownloadLink(index, child) : "") +
     "</td>"
@@ -363,6 +392,7 @@ function artifactHeader(index, child, type) {
         ">Up</button>"
       : "") +
     artifactLaunchButtons(index, child, type) +
+    artifactVSCodeButton(index, child) +
     "</p>"
   );
 }

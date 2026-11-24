@@ -51,6 +51,7 @@
     moreArtifactTable: () => moreArtifactTable(),
     moreArtifactText: () => moreArtifactText(),
     openArtifact: (_, args) => openArtifact(...args),
+    openArtifactInVSCode: (_, args) => openArtifactInVSCode(...args),
     openMatrixCell: (el) => openMatrixCell(el),
     popupMenuToggled: (el) => popupMenuToggled(el),
     refreshWithBasedirs: () => refreshWithBasedirs(),
@@ -4144,6 +4145,8 @@ function shellWord(value) {
       "M2 6h12",
       "M6 6v7.5",
     ],
+    // Angle brackets, for an editor.
+    editor: ["M6 4.5L2.5 8 6 11.5", "M10 4.5L13.5 8 10 11.5"],
     chevronRight: ["M6 4l4 4-4 4"],
     chevronDown: ["M4 6l4 4 4-4"],
     folder: ["M1.5 3.5h4.5l1.5 1.5h6.5v8h-12.5z"],
@@ -5172,8 +5175,21 @@ function shellWord(value) {
         event.stopPropagation();
         openPathLaunchDialog(path, folder);
       });
-      for (const button of [send, view, launch]) button.tabIndex = -1;
-      actions.append(send, view, launch);
+      const buttons = [send, view];
+      if (window.vscodeOffered())
+        buttons.push(
+          explorerIconButton(
+            "Open in VS Code",
+            explorerIcons.editor,
+            (event) => {
+              event.stopPropagation();
+              window.openInVSCode({ path, folder });
+            },
+          ),
+        );
+      buttons.push(launch);
+      for (const button of buttons) button.tabIndex = -1;
+      actions.append(...buttons);
       row.append(actions);
       row.draggable = true;
       row.ondragstart = (event) => {
@@ -5571,6 +5587,9 @@ function shellWord(value) {
   // output, which adds Show in the Explorer.
   const pathChoices = (path, folder, fromLink = false) => [
     ["Open in the Table viewer", () => openInViewer(path), true],
+    ...(window.vscodeOffered()
+      ? [["Open in VS Code", () => window.openInVSCode({ path, folder }), true]]
+      : []),
     ["Launch...", () => openPathLaunchDialog(path, folder), true],
     // A file's folder, as editors open a terminal for a file.
     [

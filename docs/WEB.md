@@ -193,6 +193,8 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
   [Operations](OPERATIONS.md#shared-filesystem-use).
 - **Artifacts:** preview and download what jobs wrote, open tables, and
   launch TensorBoard and other viewers on it; see [Artifacts](#artifacts).
+- **Open in VS Code:** files and directories in the VS Code on your machine; see
+  [Opening files in VS Code](#opening-files-in-vs-code).
 - **Config:** **Generate config** and **View config** edit one config source at
   a time; see [Configuration](CONFIGURATION.md).
 - **Notifications:** the in-page inbox and optional desktop popups; see
@@ -346,8 +348,8 @@ tree stays where you put it while the shell moves on; the line at its foot then 
 **Follow** button to go back. You can go up and down anywhere, as the shell can.
 
 Click a folder to open or close it, and double-click a file, or press Enter on it, to open it in the Table viewer
-in a new tab; the arrow keys move through the tree. Pointing at a row shows two buttons: send its path to the
-terminal, and open it in the Table viewer. Right-click offers those, **Open in a new terminal tab**, which starts
+in a new tab; the arrow keys move through the tree. Pointing at a row shows buttons that send its path to the
+terminal, open it in the Table viewer or [in VS Code](#opening-files-in-vs-code), and launch a command on it. Right-click offers those, **Open in a new terminal tab**, which starts
 a shell of the terminal's project in that folder (a file's own folder, for a file), **Copy the path**, and **Copy the
 path from here**, relative to the shell's directory. You can also drag a row onto a pane to type its path there. A path goes
 in as the send buttons above send a value: relative to the shell's directory when the file is under it, otherwise
@@ -703,6 +705,29 @@ why the launcher file would stop it from starting.
 
 See [Launcher commands](CONFIGURATION.md#launcher-commands) and
 [Security model](SECURITY.md#launching-services-and-commands).
+
+### Opening files in VS Code
+
+**Open in VS Code** opens a file or directory of the server in the VS Code installed on the machine your browser runs
+on. It is beside the launch buttons of Artifacts and **Files**, and, with `--allow-terminal`, on the Explorer's rows
+and in the menu of a path a shell printed. It works on any live server, read-only or not: the browser hands VS Code a
+`vscode://` URL, and the server runs nothing. A static export does not have it.
+
+The first time, it asks where VS Code runs:
+
+- **VS Code runs on the same machine as rotari web**, when the server is on your own machine.
+- **Connect with Remote SSH**, when the server is remote and you forward its port. Give the name you use with `ssh` on
+  your machine, such as `lab` for `ssh lab`, or `USER@HOST`. It suggests the server's host name up to the first dot.
+  Use the name your VS Code windows already connect with: VS Code may take another name of the same host for another
+  connection, and open another window. VS Code needs its Remote - SSH extension.
+
+Your browser keeps the answer for that server; **Settings** > **VS Code connection...**, or **Change** in the note that
+appears, changes it. The browser may ask before it opens VS Code; tell it to always allow the address you open rotari
+at. A page is not told whether VS Code opened anything, so a wrong name shows as an error in VS Code, not here.
+
+VS Code chooses the window: a file usually opens in the window that has its folder open, and a directory in a window
+of its own. A path with a number after a colon, such as `a:12`, is refused, since VS Code would take the number for a
+line. This is separate from the **VS Code (Web)** launcher, which runs a VS Code of its own in the browser.
 
 ### Experiment trackers
 

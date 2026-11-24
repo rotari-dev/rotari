@@ -175,6 +175,8 @@ type livePage struct {
 	about About
 	// stoppable offers Stop server in the Settings menu.
 	stoppable bool
+	// vscode offers Open in VS Code.
+	vscode *vscodeConnection
 	// logout offers Sign out, when the server requires a sign-in.
 	logout bool
 }
@@ -257,11 +259,12 @@ func composeWebPage(page livePage, executors []string, notifications bool, boots
 	// The scripts go in first, since they hold placeholders of their own. A
 	// Replacer does not search what it inserts, so a value that contains the
 	// text of a placeholder stays as written.
-	template := strings.NewReplacer("__ROTARI_SHELL_SCRIPT__", webShellJS, "__ROTARI_WEB_APP__", webAppJS).Replace(webTemplateHTML)
+	template := strings.NewReplacer("__ROTARI_SHELL_SCRIPT__", pageFrameJS(), "__ROTARI_WEB_APP__", webAppJS).Replace(webTemplateHTML)
 	return strings.NewReplacer(
 		scriptNonceSlot, scriptNonceAttribute(page.nonce),
 		"__ROTARI_TERMINAL_CONTROL__", page.terminalControl(),
 		"__ROTARI_ABOUT__", page.aboutSection(),
+		"__ROTARI_VSCODE__", page.vscodeControl(),
 		"__ROTARI_STOP_SERVER__", page.stopServerControl(),
 		"__ROTARI_BASEDIRS__", string(basedirJSON),
 		"__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllNotificationBasedirs"),
@@ -300,7 +303,7 @@ func composeInfoHTML(template, homePath, content string, values ...string) strin
 	activityPath := strings.TrimRight(homePath, "/") + "/activity/"
 	return strings.NewReplacer(append([]string{
 		"__ROTARI_FAVICON_LINKS__", faviconLinks(),
-		"__ROTARI_SHELL_SCRIPT__", webShellJS,
+		"__ROTARI_SHELL_SCRIPT__", pageFrameJS(),
 		"__ROTARI_INFO_STYLES__", styles,
 		"__ROTARI_BRAND_ICON__", brandIcon(),
 		"__ROTARI_HOME_PATH__", html.EscapeString(homePath),
@@ -382,6 +385,7 @@ func jobsPage(page livePage, homePath string, projects []string, rows []joblist.
 		scriptNonceSlot, scriptNonceAttribute(page.nonce),
 		"__ROTARI_TERMINAL_CONTROL__", page.terminalControl(),
 		"__ROTARI_ABOUT__", page.aboutSection(),
+		"__ROTARI_VSCODE__", page.vscodeControl(),
 		"__ROTARI_STOP_SERVER__", page.stopServerControl(),
 		"__ROTARI_JOBS_PROJECTS__", sidebar.String(),
 		"__ROTARI_ALL_BASEDIRS_BELL__", allBasedirsBellHTML("toggleAllJobsNotificationBasedirs"),

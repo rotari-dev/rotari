@@ -646,6 +646,21 @@ main {
 }
 /* Stop server, above the About section; its selectors outweigh both top bars' toolbar
    buttons, as the About section's do. */
+.settings-vscode {
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.settings-panel .settings-vscode button {
+  width: 100%;
+  min-height: 0;
+  padding: 7px 8px;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+.settings-panel .settings-vscode button:hover {
+  background: var(--surface-2);
+}
 .settings-stop {
   display: flex;
   flex-direction: column;
@@ -975,6 +990,32 @@ html[data-terminal-window] #terminal-panel {
   font-size: 12px;
 }
 .terminal-send-note[hidden] {
+  display: none;
+}
+.vscode-note {
+  overflow-wrap: anywhere;
+}
+.vscode-note button {
+  min-height: 0;
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 12px;
+}
+.vscode-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.vscode-form label {
+  display: block;
+}
+.vscode-form .vscode-host {
+  padding-left: 22px;
+}
+.vscode-form p {
+  margin: 0;
+}
+.vscode-form p:empty {
   display: none;
 }
 .terminal-resizer {

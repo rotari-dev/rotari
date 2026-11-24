@@ -32,7 +32,7 @@ func TestTerminalPanel(t *testing.T) {
 		t.Fatal(err)
 	}
 	terminalWindow := filepath.Join(dir, "window.html")
-	if err := os.WriteFile(terminalWindow, []byte(composeTerminalWindow("page-nonce")), 0o600); err != nil {
+	if err := os.WriteFile(terminalWindow, []byte(composeTerminalWindow("page-nonce", vscodeConnection{Host: "srv"})), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	script := `
@@ -3764,6 +3764,24 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   menuOf(exRow('train.yaml'))[13].click();
   await wait(10);
   assert.deepEqual(exCopied, ['conf/train.yaml', '/w/p1/conf/train.yaml']);
+  // A page that offers VS Code has it in the menu, for a file and a folder alike.
+  {
+    const offer = ex.document.createElement('div');
+    offer.id = 'vscode-connection';
+    ex.document.body.append(offer);
+    const opened = [];
+    ex.window.openInVSCode = (target) => opened.push(target);
+    assert.equal(menuOf(exRow('train.yaml'))[1].textContent, 'Open in VS Code');
+    menuOf(exRow('train.yaml'))[1].click();
+    menuOf(exRow('conf'))[1].click();
+    // The tree draws the button the next time it draws its rows.
+    exRow('conf').click();
+    exRow('conf').click();
+    await wait(20);
+    exRow('train.yaml').querySelector('[aria-label="Open in VS Code"]').click();
+    assert.deepEqual(opened.map((target) => target.path + ' ' + target.folder), ['/w/p1/conf/train.yaml false', '/w/p1/conf true', '/w/p1/conf/train.yaml false']);
+    offer.remove();
+  }
   // A new tab opens in a folder, or in a file's folder, as a shell of the page's project.
   const startsBefore = ex.server.shells.length;
   menuOf(exRow('train.yaml'))[2].click();

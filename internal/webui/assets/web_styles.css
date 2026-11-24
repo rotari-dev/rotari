@@ -1751,7 +1751,12 @@ pre,
   gap: 0.25rem;
   vertical-align: middle;
 }
-.artifact-launchers .launch-viewer {
+.artifact-launchers .launch-viewer,
+.artifact-vscode {
+  min-height: 0;
+  padding: 3px 8px;
+}
+.artifact-vscode {
   min-height: 0;
   padding: 3px 8px;
 }

@@ -16,6 +16,10 @@ declare function formatBytes(size: number): string;
 
 // Static-export data that web_static_bootstrap.js puts on the window.
 interface Window {
+  // web_vscode.js, which every page loads first.
+  vscodeOffered(): boolean;
+  openInVSCode(target: { path: string; folder?: boolean; line?: number; column?: number }): void;
+  showVSCodeNote(message: string): void;
   __ROTARI_STATIC_STATE__?: unknown;
   __ROTARI_STATIC_WORD_CLOUDS__?: Record<string, unknown>;
 }
