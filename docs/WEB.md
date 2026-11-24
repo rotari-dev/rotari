@@ -511,7 +511,10 @@ cannot be in two. **+** starts a
 shell in the focused pane. The **Close pane** icon closes the focused pane, and its shell keeps running in its tab;
 closing a tab ends its shell, wherever it shows. When a pane's shell ends, the pane moves to a tab not
 in a pane, or closes if there is none. Each browser tab keeps its own panes for each
-project, and gets them back after following a link.
+project, and gets them back after following a link. A bar too narrow for its tabs and buttons wraps onto more rows.
+
+A tab shows a small triangle while a command runs in its shell's foreground, whether you are looking at it or not,
+and pointing at it says so; a shell at its prompt has none, even with a command left in the background with `&`.
 
 A tab you are not looking at is marked when it prints something, until you show it, and the list marks
 other projects the same way. When a command finishes in a tab you are not looking at, such as a build or a

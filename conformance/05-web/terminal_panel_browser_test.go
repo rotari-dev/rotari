@@ -106,6 +106,15 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   await until('the first shell to keep its state', screenHas('again-kept'));
   await collect();
 
+  // A tab is marked while a command runs in its shell, and only then.
+  const runningTabs = 'JSON.stringify([...document.querySelectorAll(".terminal-tab")].map((tab) => tab.classList.contains("terminal-tab-running")))';
+  await typeLine('cat');
+  await until('the first tab to be marked as running', runningTabs + ' === "[true,false]"');
+  if (await page.evaluate('getComputedStyle(document.querySelector(".terminal-tab-running"), "::before").width') === 'auto') throw new Error('the running mark is not drawn');
+  await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'c', code: 'KeyC', modifiers: 2, windowsVirtualKeyCode: 67, nativeVirtualKeyCode: 67 });
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'c', code: 'KeyC', modifiers: 2, windowsVirtualKeyCode: 67 });
+  await until('the mark to go with the command', runningTabs + ' === "[false,false]"');
+
   // Output of more lines than xterm.js keeps by default comes back whole: the
   // replay holds all of it, and so must the scrollback it is written into.
   await typeLine('i=0; while [ $i -lt 3000 ]; do i=$((i+1)); echo "line-$i."; done; echo "printed-$((i))"');
@@ -593,6 +602,17 @@ await withPage(cdp, base + '/_auth/login?next=/', { width: 1280, height: 900, se
   // The pane can still be scrolled up from the command-block checks above.
   await until('the same shell in the page', '(() => { document.querySelector(".terminal-pane")?.terminalPane?.term?.scrollToBottom(); return ' + screenHas('popped-$((2+3))') + '; })()');
   await collect();
+
+  // A narrow bar wraps: nothing in it is drawn over anything else or past its edge.
+  const barFaults = 'JSON.stringify((() => { const bar = document.querySelector(".terminal-bar"); const edge = bar.getBoundingClientRect().right; const items = [...bar.querySelectorAll(":scope button:not(.terminal-tab button), select, .terminal-title, .terminal-own-label, .terminal-tab-divider, .terminal-tabs, .terminal-shared-tabs")].map((item) => ({ name: item.getAttribute("aria-label") || item.className || item.textContent, box: item.getBoundingClientRect() })).filter(({ box }) => box.width > 0); const faults = items.filter(({ box }) => box.right > edge + 1).map(({ name }) => name + " is past the edge"); items.forEach((a, index) => items.slice(index + 1).forEach((b) => { if (Math.min(a.box.right, b.box.right) - Math.max(a.box.left, b.box.left) > 1 && Math.min(a.box.bottom, b.box.bottom) - Math.max(a.box.top, b.box.top) > 1) faults.push(a.name + " overlaps " + b.name); })); const tabs = document.querySelector(".terminal-tabs"); if (tabs.childElementCount && tabs.clientWidth < 20) faults.push("the tabs are " + tabs.clientWidth + " wide"); return faults; })())';
+  for (const width of [1000, 800, 600, 420]) {
+    await page.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+    await sleep(300);
+    const faults = JSON.parse(await page.evaluate(barFaults));
+    if (faults.length) throw new Error('the bar at ' + width + ' pixels wide: ' + faults.join('; '));
+  }
+  await page.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+  await sleep(300);
 
   // All shells shows a card for each shell in the page's dialog, as a log is, saying where
   // it is now, and choosing one closes it.

@@ -934,6 +934,26 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const bellCard = (id) => belling.document.querySelector('.terminal-overview-card[data-shell="' + id + '"]');
   assert.deepEqual(['1', '2', '3'].map((id) => [bellCard(id).classList.contains('terminal-overview-finished'), bellCard(id).querySelector('.terminal-overview-state').textContent]), [[false, 'shown'], [true, 'command finished'], [false, 'new output']]);
   assert.match(webShellCSS, /\.terminal-tab-finished \[role="tab"\]::before,\s*\.terminal-overview-finished \.terminal-overview-name::before \{/);
+  // A tab whose shell runs a command says so, shown or not, beside its bell or dot, and stops
+  // saying so once the list does.
+  const busyPage = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [
+    { ...inProject('1', 1, 'p1'), running: true }, { ...inProject('2', 2, 'p1'), running: true, unseen_output: true },
+    { ...inProject('3', 3, 'p1'), running: true, command_finished: true }, { ...inProject('4', 4, 'p1'), running: false },
+  ], remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  await wait(50);
+  const runningTabs = () => [...busyPage.document.querySelectorAll('.terminal-tab')].map((tab) => tab.classList.contains('terminal-tab-running'));
+  const busyLabels = () => [...busyPage.document.querySelectorAll('.terminal-tab [role=tab]')];
+  assert.deepEqual(runningTabs(), [true, true, true, false]);
+  assert.deepEqual(busyLabels().map((label) => label.getAttribute('aria-label')),
+    ['Shell 1, command running', 'Shell 2, new output, command running', 'Shell 3, command finished, command running', 'Shell 4']);
+  assert.deepEqual(busyLabels().map((label) => label.title.replace(/Started in .*/, '')),
+    ['A command is running. ', 'New output. A command is running. ', 'A command finished. A command is running. ', '']);
+  assert.ok(busyPage.document.querySelector('.terminal-tab-finished').classList.contains('terminal-tab-running'), 'running hid the bell');
+  busyPage.server.shells.forEach((shell) => { shell.running = shell.id === '4'; });
+  busyPage.polls[0]();
+  await wait(20);
+  assert.deepEqual(runningTabs(), [false, false, false, true]);
+  assert.match(webShellCSS, /\.terminal-tab-running::before \{/);
   // With the shells' marks, the server says how the last command ended: a failure rings the
   // bell red, its title says the command, its code, and how long it took, and each card has a
   // line on its shell's last command; a shown shell's failure rings no bell.
@@ -2463,9 +2483,11 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const tightItems = [...tightMenu.document.querySelectorAll('.terminal-tab-menu button')];
   assert.deepEqual(tightItems.map((item) => [item.textContent, item.disabled]), [['Bottom', false], ['Left (needs a wider window)', true], ['Right (needs a wider window)', true], ['Window', false]]);
   assert.equal(tightItems[1].getAttribute('aria-checked'), 'true');
-  // At a side the tabs have a row of their own, and maximized there is room for one row.
-  assert.match(webShellCSS, /\[data-terminal-place\]:not\(\.terminal-maximized\) \.terminal-bar \{\s*flex-wrap: wrap;/);
-  assert.match(webShellCSS, /\[data-terminal-place\]:not\(\.terminal-maximized\)\s+\.terminal-tabs \{\s*order: 1;\s*flex: 1 0 100%;/);
+  // A bar too narrow for one row wraps, wherever the panel is, instead of drawing one part
+  // over another; at a side the tabs always have a row of their own.
+  assert.match(webShellCSS, /\n\.terminal-bar \{\s*display: flex;\s*flex: none;\s*flex-wrap: wrap;/);
+  assert.match(webShellCSS, /\.terminal-bar-lead,\s*\.terminal-bar-tabs,\s*\.terminal-bar-tools \{[^}]*flex-wrap: wrap;/);
+  assert.match(webShellCSS, /\[data-terminal-place\]:not\(\.terminal-maximized\)\s+\.terminal-bar-tabs \{\s*order: 1;\s*flex: 1 0 100%;/);
 
   // A window of its own opens at once on the project its path names, fills itself, has
   // nothing to resize, maximize, hide, or move, and leaves the pages' panel as it was.
@@ -2721,9 +2743,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const tabRow = (page) => {
     const names = (box) => [...box.children].map((item) => item.querySelector('[role=tab]').textContent);
     const part = page.document.querySelector('.terminal-shared');
-    const bar = [...page.document.querySelector('.terminal-bar').children];
-    assert.equal(bar.indexOf(page.document.querySelector('.terminal-add')), bar.indexOf(page.document.querySelector('.terminal-tabs')) + 1, 'the project\'s + is not after its tabs');
-    assert.equal(bar.indexOf(part), bar.indexOf(page.document.querySelector('.terminal-add')) + 1, 'the shared tabs are not after the project\'s +');
+    const own = page.document.querySelector('.terminal-own');
+    assert.equal(page.document.querySelector('.terminal-tabs').nextElementSibling, own.querySelector('.terminal-add'), 'the project\'s + is not after its tabs');
+    assert.equal(own.lastElementChild, own.querySelector('.terminal-add'), 'something follows the project\'s +');
+    assert.equal(own.nextElementSibling, part, 'the shared tabs are not after the project\'s +');
     return part.hidden ? names(page.document.querySelector('.terminal-tabs')) : [...names(page.document.querySelector('.terminal-tabs')), '|' + part.querySelector('.terminal-tab-divider').textContent, ...names(part.querySelector('.terminal-shared-tabs')), part.lastElementChild === part.querySelector('.terminal-shared-add') ? '+' : '(no +)'];
   };
   const sharing = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [
@@ -3665,7 +3688,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   const exNames = () => exRows().map((row) => row.querySelector('.terminal-explorer-name').textContent);
   const exFooter = () => ex.document.querySelector('.terminal-explorer-footer').textContent;
   const exNote = () => ex.document.querySelector('.terminal-send-note')?.textContent;
-  assert.equal(ex.document.querySelector('.terminal-bar').firstElementChild, exToggle, 'the Explorer button is not first in the bar');
+  assert.equal(ex.document.querySelector('.terminal-bar button'), exToggle, 'the Explorer button is not first in the bar');
   // It opens with the panel unless it was closed, which the browser remembers.
   assert.equal(exToggle.getAttribute('aria-pressed'), 'true');
   assert.equal(exAside().hidden, false, 'the Explorer did not open with the panel');

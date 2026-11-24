@@ -1570,6 +1570,7 @@ function shellWord(value) {
         shell.dir,
         shell.unseen_output,
         shell.command_finished,
+        shell.running,
       ]),
       panes.map((pane) => pane.shown),
       panes.indexOf(focused),
@@ -1589,6 +1590,9 @@ function shellWord(value) {
       const finished = Boolean(shell.command_finished) && !showing;
       // A command that ended out of sight with a failure rings a red bell.
       const ended = finished ? lastCommand(shell) : null;
+      // A command runs in its foreground, whether the tab is shown or not.
+      const running = Boolean(shell.running);
+      tab.classList.toggle("terminal-tab-running", running);
       tab.classList.toggle("terminal-tab-unseen", unseen && !finished);
       tab.classList.toggle("terminal-tab-finished", finished);
       tab.classList.toggle("terminal-tab-failed", Boolean(ended?.failed));
@@ -1609,6 +1613,7 @@ function shellWord(value) {
               : unseen
                 ? ", new output"
                 : "") +
+          (running ? ", command running" : "") +
           (elsewhere ? ", in another pane" : "") +
           (isShared(shell) ? ", of all projects" : ""),
       );
@@ -1625,6 +1630,7 @@ function shellWord(value) {
               : unseen
                 ? "New output. "
                 : "") +
+          (running ? "A command is running. " : "") +
           (elsewhere ? "In another pane. " : "") +
           "Started in " +
           shell.dir +
@@ -6181,15 +6187,27 @@ function shellWord(value) {
     explorer.toggle.setAttribute("aria-label", "Explorer");
     explorer.toggle.title = "Explorer: the files where this pane's shell is";
     explorer.toggle.onclick = () => setExplorerOpen(!explorer.open);
-    bar.append(
+    // Three parts, so that a bar too narrow for one row wraps between them.
+    const barPart = (className, ...items) => {
+      const part = document.createElement("div");
+      part.className = className;
+      part.append(...items);
+      return part;
+    };
+    const lead = barPart(
+      "terminal-bar-lead",
       explorer.toggle,
       title,
       groups,
       projectLinkButton,
-      ownLabel,
-      tabs,
-      add,
+    );
+    const strip = barPart(
+      "terminal-bar-tabs",
+      barPart("terminal-own", ownLabel, tabs, add),
       sharedPart,
+    );
+    const tools = barPart(
+      "terminal-bar-tools",
       overviewButton,
       viewerButton,
       launchButton,
@@ -6206,6 +6224,7 @@ function shellWord(value) {
       maximize,
       hide,
     );
+    bar.append(lead, strip, tools);
     panesBox = document.createElement("div");
     panesBox.className = "terminal-panes";
     buildPane(focused);

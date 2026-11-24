@@ -1005,11 +1005,13 @@ html.terminal-open[data-terminal-place="right"] .terminal-resizer {
   background: var(--line);
   outline: none;
 }
+/* Too narrow for one row, the bar wraps: between its parts, and within one wider than it. */
 .terminal-bar {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 2px 8px;
   min-height: 30px;
   padding: 2px 8px;
   border-bottom: 1px solid var(--line-soft);
@@ -1017,12 +1019,30 @@ html.terminal-open[data-terminal-place="right"] .terminal-resizer {
   color: var(--text-2);
   font-size: 12px;
 }
-/* Too many for one row at a side: the tabs have a row of their own under the buttons. */
-html.terminal-open[data-terminal-place]:not(.terminal-maximized) .terminal-bar {
+.terminal-bar-lead,
+.terminal-bar-tabs,
+.terminal-bar-tools {
+  display: flex;
+  flex: 0 1 auto;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
 }
+.terminal-bar-tools {
+  flex-grow: 1;
+}
+/* A project's page's own tabs, with their label and +. */
+.terminal-own {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+/* Too many for one row at a side: the tabs have a row of their own under the buttons. */
 html.terminal-open[data-terminal-place]:not(.terminal-maximized)
-  .terminal-tabs {
+  .terminal-bar-tabs {
   order: 1;
   flex: 1 0 100%;
 }
@@ -1117,6 +1137,17 @@ html.terminal-open[data-terminal-place]:not(.terminal-maximized)
 }
 .terminal-drop-after {
   box-shadow: inset -2px 0 0 var(--text);
+}
+/* A tab whose shell runs a command in its foreground, before any dot or bell. */
+.terminal-tab-running::before {
+  content: "";
+  flex: none;
+  align-self: center;
+  width: 7px;
+  height: 8px;
+  margin-left: 6px;
+  background: var(--s-run);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
 /* A tab with output nobody has seen. */
 .terminal-tab-unseen {

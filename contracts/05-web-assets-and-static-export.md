@@ -2125,7 +2125,9 @@ basedir's All projects row when the basedir has shells of its own. It opens a pa
 keeps from a menu in the panel's bar, by default with a tab for each
 shell of the page's project, followed by its basedir's own (WEB-56); on a basedir's other pages, such as All
 projects and Recent jobs, of that basedir's own; and on Activity and History search, of no project. A list names the projects with
-shells, and choosing one goes to its page while the link is on (WEB-54). A tab not shown whose `command_finished` is set shows a bell in place of
+shells, and choosing one goes to its page while the link is on (WEB-54). A tab whose shell is `running` (WEB-34), shown or
+not, has a mark saying a command runs, apart from its bell or unseen-output mark. A bar too narrow for its parts wraps,
+and no part of it is drawn over another or past its edge. A tab not shown whose `command_finished` is set shows a bell in place of
 its unseen-output mark, as its All shells card does. A tab's tooltip and an All shells card say when the shell
 started and how long it has been idle, by the server's clock. A card's line of what runs also says how many
 processes the shell has started, background ones when nothing runs in its foreground, and opens into their tree. Signing out from a page with the terminal first asks, naming
