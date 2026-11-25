@@ -4919,6 +4919,45 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   say(replayed.sockets.at(-1), 'cleared');
   assert.equal(replayed.terminals.at(-1).writes.at(-1), 'cleared', 'nothing came after Clear');
 
+  // Output shown again is not answered again, and what is typed meanwhile is sent.
+  const ESC = String.fromCharCode(27);
+  const asked = await open();
+  const [askedSocket, askedTerm] = [asked.sockets.at(-1), asked.terminals.at(-1)];
+  askedSocket.readyState = 1;
+  const answers = ['[?1;2c', '[>0;276;0c', '[0n', '[3;1R', '[?3;1R', '[?2026;0$y', '[4;0$y', '[8;24;80t', '[I', '[O', 'P1$r0m' + ESC + '\\', 'P0$r' + ESC + '\\', ']4;1;rgb:ffff/0000/0000' + ESC + '\\', ']11;rgb:0000/0000/0000' + ESC + '\\'].map((text) => ESC + text);
+  const typed = ['a', '\r', ESC, ESC + '[A', ESC + 'OR', ESC + '[200~3;1R' + ESC + '[201~', '1R', ESC + '[<0;3;1M', 'x' + ESC + '[3;1R'];
+  const sentNow = (data) => {
+    const before = askedSocket.sent.length;
+    askedTerm.data(data);
+    return askedSocket.sent.length > before;
+  };
+  asked.parser.held = true;
+  askedSocket.onmessage({ data: JSON.stringify({ type: 'replay', answered: 3 }) });
+  assert.match(asked.document.querySelector('.terminal-status').textContent, /Waiting|Connecting/, 'a message counted as output');
+  say(askedSocket, 'oldnew');
+  for (const text of answers) assert.equal(sentNow(text), false, 'answered again: ' + JSON.stringify(text));
+  for (const text of typed) assert.equal(sentNow(text), true, 'lost what was typed: ' + JSON.stringify(text));
+  asked.parser.drain(1);
+  for (const text of answers) assert.equal(sentNow(text), true, 'not answered: ' + JSON.stringify(text));
+  asked.parser.release();
+  assert.deepEqual(askedTerm.writes, ['old', 'new']);
+  assert.equal(paneOf(asked).blocksLive, true, 'the replay never ended');
+  assert.throws(() => askedSocket.onmessage({ data: '{"type":"other"}' }), /unknown terminal message other/);
+  // Without the message, as for a shell's first connection, all of it is answered.
+  const fresh = await open();
+  fresh.sockets.at(-1).readyState = 1;
+  fresh.parser.held = true;
+  say(fresh.sockets.at(-1), 'new');
+  const freshSent = fresh.sockets.at(-1).sent.length;
+  fresh.terminals.at(-1).data(ESC + '[3;1R');
+  assert.equal(fresh.sockets.at(-1).sent.length, freshSent + 1, 'a first question was not answered');
+  fresh.parser.release();
+  // A large replay's pieces break where what was answered ends.
+  const long = await open();
+  long.sockets.at(-1).onmessage({ data: JSON.stringify({ type: 'replay', answered: 256 * 1024 + 5 }) });
+  say(long.sockets.at(-1), filled(256 * 1024 + 8));
+  assert.deepEqual(long.terminals.at(-1).writes.map((text) => text.length), [256 * 1024, 5, 3]);
+
   // A mark and a character across a piece's edge keep their place.
   const split = await open();
   say(split.sockets.at(-1), 'replay');
@@ -5121,9 +5160,20 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   await wait(10);
   assert.ok(folded(), 'the shell came back unfolded: ' + rfTerm.lines.join('|'));
   assert.ok(rfTerm.lines.some((line) => line.startsWith('$ more')), 'what followed the folded block was lost');
-  // Unfolding forgets it.
+  // Unfolding forgets it. The screen written again is not answered again; what comes after is.
+  rf.parser.held = true;
   rfPane().blocks[0].fold.decoration.render().click();
+  rf.parser.drain(1);
   await wait(10);
+  const rfAnswered = () => {
+    const before = rf.sockets.at(-1).sent.length;
+    rfTerm.data('\x1b[3;1R');
+    return rf.sockets.at(-1).sent.length > before;
+  };
+  assert.equal(rfAnswered(), false, 'answered the screen written again');
+  rf.parser.release();
+  await wait(10);
+  assert.equal(rfAnswered(), true, 'not answered after the screen was written again');
   tab(1).click();
   await wait(20);
   replay(history);

@@ -814,6 +814,59 @@ func TestNoIdleLimitKeepsTheShells(t *testing.T) {
 	}
 }
 
+// Replayed counts what an earlier attachment took, so neither what the shell printed before
+// anything attached nor what it printed while nothing was.
+func TestReplayedIsWhatAnEarlierAttachmentTook(t *testing.T) {
+	keeper := newTestKeeper(t, testIdle, 1<<16)
+	started, err := keeper.Start(StartOptions{Rows: 24, Cols: 80, Banner: "banner\r\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Attached, but nothing taken: the next has it all to take.
+	untaken, err := keeper.Attach(started.ID, 24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	untaken.Detach()
+	first := watchShell(t, keeper, started.ID)
+	if got := first.Replayed(); got != 0 {
+		t.Errorf("Replayed() = %d before anything was taken, want 0", got)
+	}
+	away := filepath.Join(t.TempDir(), "away")
+	first.run(t, `stty -echo; PS1=; echo "ready-$((1+1))"`, "ready-2")
+	first.run(t, `echo "seen-$((1+1))"; while [ ! -e '`+away+`' ]; do sleep 0.02; done; echo "unseen-$((1+1))"`, "seen-2")
+	first.Detach()
+	first.awaitEnd(t, DetachedByCaller)
+	if err := os.WriteFile(away, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(testWait); !keeper.Shells()[0].UnseenOutput; time.Sleep(5 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("output with nothing attached never came")
+		}
+	}
+	second, err := keeper.Attach(started.ID, 24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay, _ := second.Next()
+	answered := string(replay[:second.Replayed()])
+	if !strings.HasSuffix(answered, "seen-2\r\n") || strings.Contains(answered, "unseen-2") {
+		t.Errorf("Replayed() covers %q of %q, want to the end of seen-2", answered, replay)
+	}
+	if err := second.ClearOutput(); err != nil {
+		t.Fatal(err)
+	}
+	second.Detach()
+	third, err := keeper.Attach(started.ID, 24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := third.Replayed(); got != 0 {
+		t.Errorf("Replayed() = %d after ClearOutput, want 0", got)
+	}
+}
+
 // Cleared output does not come back, while what follows it does.
 func TestClearOutputForgetsWhatWouldBeReplayed(t *testing.T) {
 	keeper := newTestKeeper(t, testIdle, 1<<16)

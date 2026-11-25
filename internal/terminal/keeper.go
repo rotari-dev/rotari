@@ -428,13 +428,15 @@ func (keeper *Keeper) attach(id string, rows, cols uint16, takeOver bool) (*Atta
 	if shell.attached != nil {
 		shell.detach(TakenOver)
 	}
+	replay := shell.ring.contents()
 	attachment := &Attachment{
-		keeper:  keeper,
-		shell:   shell,
-		pending: shell.ring.contents(),
-		wake:    make(chan struct{}, 1),
-		room:    make(chan struct{}, 1),
-		ended:   make(chan struct{}),
+		keeper:   keeper,
+		shell:    shell,
+		pending:  replay,
+		replayed: max(0, len(replay)-shell.ring.untaken),
+		wake:     make(chan struct{}, 1),
+		room:     make(chan struct{}, 1),
+		ended:    make(chan struct{}),
 	}
 	shell.attached = attachment
 	return attachment, nil
@@ -986,11 +988,20 @@ type Attachment struct {
 	keeper  *Keeper
 	shell   *keptShell
 	pending []byte
-	wake    chan struct{}
-	room    chan struct{}
-	ended   chan struct{}
-	reason  DetachReason
-	result  Result
+	// replayed is how much of what Next first returns earlier attachments took.
+	replayed int
+	wake     chan struct{}
+	room     chan struct{}
+	ended    chan struct{}
+	reason   DetachReason
+	result   Result
+}
+
+// Replayed is how many bytes at the start of what Next first returns an earlier
+// attachment took. A terminal that shows them again must not answer the questions in
+// them again: the program that asked has its answer, and may be gone.
+func (attachment *Attachment) Replayed() int {
+	return attachment.replayed
 }
 
 // Next returns the output so far, waiting until there is some. It returns false once
@@ -1002,6 +1013,10 @@ func (attachment *Attachment) Next() ([]byte, bool) {
 		keeper.mu.Lock()
 		output := attachment.pending
 		attachment.pending = nil
+		// One taken over or detached cannot answer what it takes.
+		if attachment.shell.attached == attachment {
+			attachment.shell.ring.untaken = 0
+		}
 		keeper.mu.Unlock()
 		if len(output) > 0 {
 			signal(attachment.room)
@@ -1100,10 +1115,14 @@ type outputRing struct {
 	limit     int
 	data      []byte
 	truncated bool
+	// untaken is how many of the last bytes written no attachment has taken, which can be
+	// more than are kept.
+	untaken int
 }
 
 func (ring *outputRing) write(output []byte) {
 	ring.data = append(ring.data, output...)
+	ring.untaken += len(output)
 	if len(ring.data) > 2*ring.limit {
 		ring.data = append(ring.data[:0], ring.data[len(ring.data)-ring.limit:]...)
 		ring.truncated = true

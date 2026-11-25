@@ -1459,7 +1459,13 @@ the last with code 4001; one with `takeover=0`, which a page reconnecting by its
 itself when another connection has that shell. An attached reader receives output in order without loss while it
 keeps reading; a slow reader makes the program wait, and a reader taking nothing for 30 seconds is detached. The
 panel's page keeps reading, and lets go when it cannot show what it read soon enough (WEB-33).
-Without an attached reader, the program continues and only recent output is kept for replay. Covered by
+Without an attached reader, the program continues and only recent output is kept for replay. A connection
+whose replay begins with output an earlier connection received is first sent a text message,
+`{"type":"replay","answered":N}`, saying how many bytes that is. The panel answers none of the questions in those bytes
+(such as `ESC [ 6 n`, the cursor's position), nor any when a fold writes the screen again, since the answer would be input
+to whatever runs by then; what is typed meanwhile is sent. It answers a question no connection has received, such as one
+asked before the page first connects (`TestTerminalSaysWhatWasAnsweredBefore`, `TestTerminalPanel`, and in headless Chrome
+[`TestTerminalAnswersOnceInBrowser`](../conformance/05-web/terminal_answers_browser_test.go)). Covered by
 [`TestTerminalStreamsOutputBurst`](../conformance/05-web/terminal_stream_test.go), `TestSlowReaderMakesTheProgramWait`,
 and `TestProgramsDoNotStallWithNothingAttached`. Connections to different shells do not disturb each
 other. A shell ends with its own exit or `DELETE` (4002 with how it ended). All of them end on

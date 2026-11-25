@@ -510,6 +510,7 @@ function shellWord(value) {
     socket: null,
     shown: null, // The ID of the shell this pane shows.
     queue: emptyQueue(),
+    answered: false, // xterm.js is parsing output whose questions were answered before.
     fellBehind: null, // The ID of a shell whose output it could not keep up with, until said.
     pendingSend: null, // A command waiting for this pane to connect to a shell.
     heldResize: null, // The last size a drag gave it, for its shell when the drag ends.
@@ -3501,6 +3502,7 @@ function shellWord(value) {
     // Replay brings the screen back, so what is here would appear twice, and its blocks.
     dropBlocks(pane);
     pane.blocksLive = false;
+    pane.answered = false;
     resetRecord(pane);
     term.reset();
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
@@ -3517,6 +3519,8 @@ function shellWord(value) {
         (takeOver ? "" : "&takeover=0"),
     );
     pane.socket = current;
+    // How much of the replay was shown before, which the server says first if any was.
+    let answered = 0;
     current.binaryType = "arraybuffer";
     current.onopen = () => {
       if (pane.socket !== current) return;
@@ -3527,8 +3531,15 @@ function shellWord(value) {
     current.onmessage = (event) => {
       // Closing leaves what was already on its way, which is another shell's output now.
       if (pane.socket !== current) return;
+      if (typeof event.data === "string") {
+        const message = JSON.parse(event.data);
+        if (message.type !== "replay")
+          throw new Error("unknown terminal message " + message.type);
+        answered = message.answered;
+        return;
+      }
       showStatus(pane, "");
-      // The first message is the replay (Keeper.Attach); what follows is seen as it comes.
+      // The first message of output is the replay (Keeper.Attach); what follows is seen as it comes.
       const replay = !current.replayed;
       current.replayed = true;
       // After the replay, so that it lands at the end of what is on screen.
@@ -3549,7 +3560,13 @@ function shellWord(value) {
         if (sending) deliverSend(pane);
       };
       const bytes = new Uint8Array(event.data);
-      pane.queue.messages.push({ bytes, at: 0, replay, done });
+      pane.queue.messages.push({
+        bytes,
+        at: 0,
+        replay,
+        answered: replay ? answered : 0,
+        done,
+      });
       if (!replay) pane.queue.waiting += bytes.length;
       giveOutput(pane);
       if (pane.queue.waiting > waitingLimit) fallBehind(pane);
@@ -7337,18 +7354,27 @@ function shellWord(value) {
       !pane.rewriting
     ) {
       const message = queue.messages[0];
-      const whole = message.bytes.length <= givePiece;
+      // What was answered before and what was not are never in one piece.
+      const old = message.at < message.answered;
+      const end = Math.min(
+        message.at + givePiece,
+        old ? message.answered : message.bytes.length,
+      );
       // A copy, so that the record does not hold the whole of a large message.
-      const bytes = whole
-        ? message.bytes
-        : message.bytes.slice(message.at, message.at + givePiece);
-      message.at += bytes.length;
+      const bytes =
+        end - message.at === message.bytes.length
+          ? message.bytes
+          : message.bytes.slice(message.at, end);
+      message.at = end;
+      if (old) pane.answered = true;
+      const answeredEnd = old && end === message.answered;
       const last = message.at >= message.bytes.length;
       if (last) queue.messages.shift();
       if (!message.replay) queue.waiting -= bytes.length;
       queue.unparsed += bytes.length;
       feed(pane, bytes, recordBytes(pane, bytes), () => {
         queue.unparsed -= bytes.length;
+        if (answeredEnd) pane.answered = false;
         if (last) message.done();
         // A queue given up for another is not this pane's any more.
         if (pane.queue === queue) giveOutput(pane);
@@ -7463,6 +7489,7 @@ function shellWord(value) {
         pane.scan = { state: 0, begin: 0, data: "" };
         pane.blocksLive = false;
         term.reset();
+        pane.answered = true;
         const { start, end } = pane.record;
         const folds = [...pane.folds.values()]
           .filter((fold) => fold.outStart >= start && fold.outEnd <= end)
@@ -7479,6 +7506,7 @@ function shellWord(value) {
           at = fold.tailStart;
         }
         feed(pane, recordSlice(pane, at, end), at, () => {
+          pane.answered = false;
           if (serial !== pane.recordSerial) return;
           pane.blocksLive = live;
           for (const block of pane.blocks) {
@@ -8366,6 +8394,12 @@ function shellWord(value) {
     row.append(actions);
     return row;
   };
+  // isAnswer matches what xterm.js says by itself to output that asks: its attributes, its
+  // status, the cursor's position, a mode, the size, a color, a setting, or the focus. Output
+  // shown again asks again, and the answer would be typed into whatever runs by then. The
+  // viewer's input comes to onData too, and is sent even meanwhile.
+  const isAnswer =
+    /^\u001b(?:\[(?:[?>]?[\d;]*c|0n|\??\d+;\d+R|\??\d+;\d+\$y|\d+;\d+;\d+t|[IO])|P[01]\$r[^]*\u001b\\|\](?:4;\d+|1[0-2]);rgb:[^]*\u001b\\)$/;
   // openTerminal gives a pane its screen, inside its viewport.
   const openTerminal = (pane) => {
     const { viewport } = pane;
@@ -8407,6 +8441,7 @@ function shellWord(value) {
     );
     fit.fit();
     term.onData((data) => {
+      if (pane.answered && isAnswer.test(data)) return;
       send(pane, new TextEncoder().encode(data));
       // Enter may have changed the shell's directory, which the Explorer follows.
       if (pane === focused && data.includes("\r")) explorerSoon();

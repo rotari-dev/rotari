@@ -593,6 +593,32 @@ func TestTerminalClearForgetsTheReplay(t *testing.T) {
 	}
 }
 
+// A connection that shows output again hears first how much was shown before; a shell's first
+// connection hears nothing of it.
+func TestTerminalSaysWhatWasAnsweredBefore(t *testing.T) {
+	server, _ := terminalServer(t, "/bin/sh")
+	first := dialTerminal(t, server)
+	first.typeLine(`echo "one-$((1+1))"`)
+	first.await("one-2")
+	if strings.Contains(first.text.String(), `"replay"`) {
+		t.Errorf("a first connection was told of a replay:\n%s", first.text.String())
+	}
+	_ = first.connection.Close(websocket.StatusNormalClosure, "")
+	second := dialTerminal(t, server)
+	var said terminalReplay
+	message := <-second.outputs
+	if err := json.Unmarshal(message, &said); err != nil {
+		t.Fatalf("the first message is not JSON: %v\n%s", err, message)
+	}
+	replay := <-second.outputs
+	if said.Type != "replay" || said.Answered <= 0 || said.Answered > len(replay) {
+		t.Fatalf("said %+v before %d bytes", said, len(replay))
+	}
+	if !strings.Contains(string(replay[:said.Answered]), "one-2\r\n") {
+		t.Errorf("answered %q of %q", replay[:said.Answered], replay)
+	}
+}
+
 func TestTerminalBadResizeKeepsTheShell(t *testing.T) {
 	server, _ := terminalServer(t, "/bin/sh")
 	client := dialTerminal(t, server)

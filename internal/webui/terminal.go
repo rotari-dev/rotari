@@ -704,6 +704,13 @@ func (s site) renameTerminalShell(writer http.ResponseWriter, request *http.Requ
 	writeTerminalJSON(writer, http.StatusOK, s.terminalShellResponse(shell))
 }
 
+// terminalReplay is a text message to the page, sent before any output: the first
+// Answered bytes that follow were shown before, and the page must not answer what they ask.
+type terminalReplay struct {
+	Type     string `json:"type"`
+	Answered int    `json:"answered"`
+}
+
 func (s site) serveTerminalSocket(writer http.ResponseWriter, request *http.Request) {
 	id := request.URL.Query().Get("shell")
 	if id == "" {
@@ -766,17 +773,27 @@ func serveTerminalConnection(connection *websocket.Conn, attachment *terminal.At
 			}
 		}
 	}()
+	write := func(kind websocket.MessageType, message []byte) {
+		writeCtx, stop := context.WithTimeout(ctx, terminalWriteLimit)
+		defer stop()
+		if err := connection.Write(writeCtx, kind, message); err != nil {
+			attachment.Detach()
+		}
+	}
+	if answered := attachment.Replayed(); answered > 0 {
+		message, err := json.Marshal(terminalReplay{Type: "replay", Answered: answered})
+		if err != nil {
+			_ = connection.Close(websocket.StatusInternalError, closeReason(err.Error()))
+			return
+		}
+		write(websocket.MessageText, message)
+	}
 	for {
 		output, ok := attachment.Next()
 		if !ok {
 			break
 		}
-		writeCtx, stop := context.WithTimeout(ctx, terminalWriteLimit)
-		err := connection.Write(writeCtx, websocket.MessageBinary, output)
-		stop()
-		if err != nil {
-			attachment.Detach()
-		}
+		write(websocket.MessageBinary, output)
 	}
 	code, reason := terminalCloseStatus(attachment)
 	if code == websocket.StatusNormalClosure {
