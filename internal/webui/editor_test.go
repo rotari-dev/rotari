@@ -220,32 +220,49 @@ for (const options of [{ broken: true }, { host: '' }]) {
   }
 }
 
-// Settings hides it in this browser, and other tabs follow; nothing opens meanwhile, and
-// showing it again brings it back. One that cannot be kept holds for the page, with a note.
+// None, in Settings, hides it in this browser, and other tabs follow; nothing opens meanwhile,
+// and an editor brings it back. One that cannot be kept holds for the page, with a note.
 p = load({ stored: local });
 await new Promise((resolve) => setTimeout(resolve, 20));
-const show = () => p.document.getElementById('editor-show');
-const hidden = () => [p.window.editorOffered(), p.window.editorAvailable(), p.document.documentElement.hasAttribute('data-editor-hidden'), p.document.getElementById('editor-connection-button').disabled, p.window.localStorage.getItem('rotari-editor-hidden')];
-assert.deepEqual([show().checked, ...hidden()], [true, true, true, false, false, null]);
-show().click();
-assert.deepEqual(hidden(), [false, true, true, true, '1']);
+const choice = () => p.document.getElementById('editor-choice');
+const choose = (value) => {
+  choice().value = value;
+  choice().dispatchEvent(new p.window.Event('change', { bubbles: true }));
+};
+const follow = (value) => {
+  p.window.localStorage.setItem('rotari-editor', value);
+  p.window.dispatchEvent(new p.window.StorageEvent('storage', { key: 'rotari-editor', newValue: value }));
+};
+const state = () => [choice().value, p.window.editorOffered(), p.window.editorAvailable(), p.document.documentElement.hasAttribute('data-editor-hidden'), p.document.getElementById('editor-connection-button').disabled, p.window.localStorage.getItem('rotari-editor')];
+assert.deepEqual([...choice().options].map((each) => each.textContent), ['None', 'VS Code', 'VSCodium', 'Cursor', 'Zed']);
+assert.deepEqual(state(), ['vscode', true, true, false, false, null]);
+choose('none');
+assert.deepEqual(state(), ['none', false, true, true, true, 'none']);
 p.open({ path: '/w/a.py' });
-assert.deepEqual([p.opened, p.dialog()], [[], null]);
-show().click();
-assert.deepEqual(hidden(), [true, true, false, false, null]);
+assert.deepEqual([p.opened, p.dialog(), p.note()], [[], null, '']);
+choose('cursor');
+assert.deepEqual(state(), ['cursor', true, true, false, false, 'cursor']);
 p.open({ path: '/w/a.py' });
-assert.equal(p.opened.length, 1);
-p.window.localStorage.setItem('rotari-editor-hidden', '1');
-p.window.dispatchEvent(new p.window.StorageEvent('storage', { key: 'rotari-editor-hidden', newValue: '1' }));
-assert.deepEqual([show().checked, ...hidden()], [false, false, true, true, true, '1']);
-p = load({ stored: { ...local, 'rotari-editor-hidden': '1' } });
+assert.deepEqual(p.opened, ['cursor://file/w/a.py']);
+follow('none');
+assert.deepEqual(state(), ['none', false, true, true, true, 'none']);
+follow('zed');
+assert.deepEqual(state(), ['zed', true, true, false, false, 'zed']);
+// Storage that is cleared is VS Code again.
+follow('none');
+p.window.localStorage.clear();
+p.window.dispatchEvent(new p.window.StorageEvent('storage', { key: null }));
+assert.deepEqual(state(), ['vscode', true, true, false, false, null]);
+p = load({ stored: { ...local, 'rotari-editor': 'none' } });
 assert.equal(p.window.editorOffered(), false);
 await new Promise((resolve) => setTimeout(resolve, 20));
-assert.deepEqual([show().checked, ...hidden()], [false, false, true, true, true, '1']);
+assert.deepEqual(state(), ['none', false, true, true, true, 'none']);
 p = load({ readOnly: true });
 await new Promise((resolve) => setTimeout(resolve, 20));
-show().click();
-assert.deepEqual([p.window.editorOffered(), p.note()], [false, 'Open in editor is hidden on this page only: storage is full']);
+choose('none');
+assert.deepEqual([p.window.editorOffered(), p.note()], [false, 'Open in editor is off on this page only: storage is full.']);
+choose('zed');
+assert.equal(p.window.editorOffered(), true);
 
 // Each editor's URLs, for a file with and without a place, a directory, and a name with
 // characters to encode; a number after a colon is refused for all of them.
@@ -270,7 +287,7 @@ for (const [stored, start] of [[remote('kamo@ks000'), 'zed://ssh/kamo@ks000'], [
 }
 // An editor not known here, as another program may have written, opens nothing: it asks, with
 // the reason, at VS Code, and what is chosen then is kept.
-for (const unknown of ['', 'javascript', 'VSCODE', 'vscode-insiders', '__proto__', 'constructor']) {
+for (const unknown of ['', 'javascript', 'VSCODE', 'None', 'vscode-insiders', '__proto__', 'constructor']) {
   p = load({ stored: { ...remote('ks000'), 'rotari-editor': unknown } });
   assert.equal(p.window.editorName(), 'VS Code');
   p.open({ path: '/w/a.py' });
@@ -295,23 +312,16 @@ p.document.body.append(made);
 p.window.labelEditorAction(made, { title: 'Open /w/<b>', label: 'Open shell 1', text: 'Open', after: ' at line 3' });
 const named = () => [made.title, made.getAttribute('aria-label'), made.textContent, made.children.length];
 assert.deepEqual(named(), ['Open /w/<b> in VS Code at line 3', 'Open shell 1 in VS Code', 'Open in VS Code', 0]);
-const choice = () => p.document.getElementById('editor-choice');
-assert.deepEqual([choice().value, choice().options.length], ['vscode', 4]);
-choice().value = 'cursor';
-choice().dispatchEvent(new p.window.Event('change', { bubbles: true }));
+choose('cursor');
 assert.deepEqual([...named(), p.window.localStorage.getItem('rotari-editor')], ['Open /w/<b> in Cursor at line 3', 'Open shell 1 in Cursor', 'Open in Cursor', 0, 'cursor']);
 p.open({ path: '/w/a.py' });
 assert.deepEqual(p.opened, ['cursor://file/w/a.py']);
-p.window.localStorage.setItem('rotari-editor', 'zed');
-p.window.dispatchEvent(new p.window.StorageEvent('storage', { key: 'rotari-editor', newValue: 'zed' }));
+follow('zed');
 assert.deepEqual([made.textContent, choice().value], ['Open in Zed', 'zed']);
-p.document.getElementById('editor-show').click();
-assert.equal(choice().disabled, true);
 // One that cannot be kept holds for the page.
 p = load({ stored: local, readOnly: true });
 await new Promise((resolve) => setTimeout(resolve, 20));
-choice().value = 'zed';
-choice().dispatchEvent(new p.window.Event('change', { bubbles: true }));
+choose('zed');
 assert.equal(p.note(), 'Files open in Zed on this page only: storage is full.');
 p.open({ path: '/w/a.py' });
 assert.deepEqual(p.opened, ['zed://file/w/a.py']);

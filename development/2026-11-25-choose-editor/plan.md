@@ -84,7 +84,7 @@ to add once its URL is known.
 5. **Labels name the editor:** **Open in Cursor**, **Open in Zed**, and for VS Code
    **Open in VS Code**, the wording of Microsoft's rules. Before one is chosen it is
    VS Code. Buttons already drawn change their labels when the choice does, in other
-   tabs too. Settings says **Editor**, **Editor connection...**, and **Show Open in editor**.
+   tabs too. Settings says **Editor** and **Editor connection...**.
 6. **The icon stays `<>`** for all of them; no editor's own mark is used.
 7. **Positions and refusals.** A VS Code family path with `:NUMBER` in it is refused,
    as today. Zed reads a position from the end of a path too, so the same rule holds.
@@ -94,11 +94,17 @@ to add once its URL is known.
    `GET /api/editor-target`, `#editor-connection`, `openInEditor`. WEB-64 is
    reworded, WEB-65 and the others that name it follow.
 
+9. **None** (asked for by the user on 2026-11-25) is in the list of Settings, not of the
+   dialog, and hides the action everywhere in the browser. It takes the place of the
+   **Show Open in editor** check box, which read as a setting for one icon alone and not
+   as having no editor to use. Its key, `rotari-editor-hidden`, is no longer read; it was
+   never released. Choosing which icons are shown is another matter, and not this plan.
+
 ## Variants to cover
 
 | Dimension | Values |
 | --- | --- |
-| Editor | each of the four, none kept, unknown in the storage |
+| Editor | each of the four, None, nothing kept, unknown in the storage |
 | Target | file with and without a position, directory, each refused name |
 | Connection | same machine, SSH, `USER@HOST`, refused name, storage refused |
 | Place | every place that offers it, drawn before the choice changed, hidden |

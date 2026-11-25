@@ -4336,7 +4336,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     const labels = [...lkWin.document.querySelectorAll('.terminal-bar button')].map((each) => each.getAttribute('aria-label'));
     assert.equal(labels[labels.indexOf('Table viewer') + 1], 'Open in VS Code');
     assert.ok(lkWin.document.querySelector('.terminal-bar [aria-label="Open in VS Code"]').classList.contains('editor-action'));
-    // Hidden in Settings, its drawn buttons go by style, and menus do not have it.
+    // With no editor chosen in Settings, its drawn buttons go by style, and menus do not have it.
     assert.match(webShellCSS, /html\[data-editor-hidden\] button\.editor-action \{\s*display: none;/);
     const winViewport = lkWin.document.querySelector('.terminal-viewport');
     const winMenu = () => {

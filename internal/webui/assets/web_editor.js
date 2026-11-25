@@ -20,41 +20,21 @@
   const editorKey = "rotari-editor";
   const keyPrefix = "rotari-editor-host-";
   const connection = () => document.getElementById("editor-connection");
-  // A live page can offer it, and does unless this browser was told, in Settings, not to.
-  // What is drawn once has the class editor-action, which the page's style then hides.
-  const hiddenKey = "rotari-editor-hidden";
+  // A live page can offer it, and does unless this browser's Settings chose no editor. What
+  // is drawn once has the class editor-action, which the page's style then hides.
+  const noEditor = "none";
   const root = document.documentElement;
-  const applyHidden = (hidden) => {
-    root.toggleAttribute("data-editor-hidden", hidden);
-    const shown = document.getElementById("editor-show");
-    if (shown) shown.checked = !hidden;
-    for (const id of ["editor-choice", "editor-connection-button"]) {
-      const control = document.getElementById(id);
-      if (control) control.disabled = hidden;
-    }
+  const isOff = () => root.hasAttribute("data-editor-hidden");
+  const setOff = (off) => {
+    root.toggleAttribute("data-editor-hidden", off);
+    const settings = document.getElementById("editor-connection-button");
+    if (settings) settings.disabled = off;
   };
-  const storedHidden = () => {
-    try {
-      return localStorage.getItem(hiddenKey) === "1";
-    } catch {
-      return false;
-    }
-  };
-  applyHidden(storedHidden());
-  // Another tab, or the terminal's window, follows.
-  window.addEventListener("storage", (event) => {
-    if (event.key === hiddenKey || event.key === null)
-      applyHidden(storedHidden());
-    if (event.key === editorKey || event.key === null) {
-      readEditor();
-      labelActions();
-    }
-  });
   window.editorAvailable = () => Boolean(connection());
-  window.editorOffered = () =>
-    window.editorAvailable() && !root.hasAttribute("data-editor-hidden");
+  window.editorOffered = () => window.editorAvailable() && !isOff();
 
-  // editor is the editor in use, and editorProblem why it is not what was kept.
+  // editor is the editor in use, also while none is, and editorProblem why it is not what
+  // was kept.
   let editor = editors[0];
   let editorProblem = "";
   const readEditor = () => {
@@ -62,18 +42,23 @@
     try {
       kept = localStorage.getItem(editorKey);
     } catch {}
+    setOff(kept === noEditor);
     const found = editors.find((each) => each.id === kept);
     editor = found || editors[0];
     editorProblem =
-      kept === null || found ? "" : "The kept editor is not one known here.";
+      kept === null || kept === noEditor || found
+        ? ""
+        : "The kept editor is not one known here.";
   };
-  // keepEditor uses an editor from now on, and returns why it could not be kept, or "".
+  // keepEditor uses an editor, or none for null, from now on, and returns why it could not
+  // be kept, or "".
   const keepEditor = (chosen) => {
-    editor = chosen;
+    setOff(!chosen);
+    editor = chosen || editor;
     editorProblem = "";
     labelActions();
     try {
-      localStorage.setItem(editorKey, chosen.id);
+      localStorage.setItem(editorKey, chosen ? chosen.id : noEditor);
       return "";
     } catch (error) {
       return error.message;
@@ -98,9 +83,15 @@
     ))
       labelAction(element);
     const chosen = document.getElementById("editor-choice");
-    if (chosen) chosen.value = editor.id;
+    if (chosen) chosen.value = isOff() ? noEditor : editor.id;
   };
   readEditor();
+  // Another tab, or the terminal's window, follows.
+  window.addEventListener("storage", (event) => {
+    if (event.key !== editorKey && event.key !== null) return;
+    readEditor();
+    labelActions();
+  });
   window.editorName = () => editor.name;
   // labelEditorAction names an element: {title, label, text, after}, as labelAction.
   window.labelEditorAction = (element, { title, label, text, after }) => {
@@ -413,7 +404,7 @@
     showDialog(null, editorProblem || storedChoice().problem);
   // openInEditor opens an absolute path of the server: {path, folder, line, column}.
   window.openInEditor = (target) => {
-    // A path linked in a log before this was hidden is text again.
+    // A path linked in a log before no editor was chosen is text again.
     if (!window.editorOffered()) return;
     const problem = targetProblem(target);
     if (problem) {
@@ -426,34 +417,22 @@
   };
   window.showEditorNote = (message) => showNote(message, false);
   document.addEventListener("DOMContentLoaded", () => {
-    applyHidden(root.hasAttribute("data-editor-hidden"));
-    const shown = document.getElementById("editor-show");
-    if (shown)
-      shown.addEventListener("change", () => {
-        const hidden = !shown.checked;
-        applyHidden(hidden);
-        try {
-          if (hidden) localStorage.setItem(hiddenKey, "1");
-          else localStorage.removeItem(hiddenKey);
-        } catch (error) {
-          showNote(
-            "Open in editor is " +
-              (hidden ? "hidden" : "shown") +
-              " on this page only: " +
-              error.message,
-            false,
-          );
-        }
-      });
+    setOff(isOff());
     const chosen = document.getElementById("editor-choice");
     if (chosen) {
+      const none = element("option", "", "None");
+      none.value = noEditor;
+      chosen.append(none);
       fillEditorSelect(chosen);
       chosen.addEventListener("change", () => {
-        const unkept = keepEditor(selectedEditor(chosen));
+        const unkept = keepEditor(
+          chosen.value === noEditor ? null : selectedEditor(chosen),
+        );
         if (unkept)
           showNote(
-            "Files open in " +
-              editor.name +
+            (isOff()
+              ? "Open in editor is off"
+              : "Files open in " + editor.name) +
               " on this page only: " +
               unkept +
               ".",

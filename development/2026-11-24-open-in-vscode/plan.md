@@ -148,7 +148,8 @@ name would open another window.
     shells cards, and, as well, a pane's right-click menu.
 13. **Hiding it** (asked for by the user on 2026-11-25). A page cannot learn whether
     VS Code is installed, and an icon is too small a thing for the first dialog to
-    ask about, so **Show Open in VS Code** in Settings hides it per browser.
+    ask about, so Settings hides it per browser: first with a check box, and since the
+    [choice of editor](../2026-11-25-choose-editor/plan.md) with **None** there.
 14. **Paths on another host.** A path is the server's. Output a shell says came
     from another host has no path links today, and gets none.
 

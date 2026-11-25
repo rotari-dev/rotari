@@ -653,6 +653,7 @@ main {
 .settings-editor label {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   color: var(--text-2);
   font-size: 13px;
@@ -664,14 +665,7 @@ main {
   padding: 3px 8px;
   font-size: 12px;
 }
-.settings-editor label:has(select) {
-  justify-content: space-between;
-}
-.settings-editor input {
-  min-width: 0;
-  min-height: 0;
-}
-/* Not shown in this browser, as its Settings say. */
+/* Not shown in this browser, whose Settings chose no editor. */
 html[data-editor-hidden] button.editor-action {
   display: none;
 }

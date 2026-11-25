@@ -785,7 +785,7 @@ The first time, it asks for the editor and where it runs:
   if `ssh` needs one; rotari takes none. For another port, use a `Host` alias in `~/.ssh/config`.
 
 Your browser keeps the editor, and the answer for that server; **Settings** > **Editor connection...**, or **Change** in
-the note that appears, changes them. Clear **Settings** > **Show Open in editor** to hide it everywhere in this browser.
+the note that appears, changes them. Choose **None** in **Settings** > **Editor** to hide it everywhere in this browser.
 The browser may ask before it opens the editor; tell it to always allow the address you open rotari at. A page is not
 told whether an editor is installed or opened anything, so a wrong name shows as an error in the editor, not here.
 

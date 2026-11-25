@@ -1863,9 +1863,9 @@ asks once where the editor runs, starting from what the server suggests: over SS
 `SSH_CONNECTION` set, with its host name up to the first dot, and the same machine otherwise. The browser keeps the
 answer under the server's host name, so one server's is not used for another at the same address; without storage or
 a known host name, or with a kept answer that cannot be read or used, it asks again and says why. Settings and the note
-shown after opening change it. **Show Open in editor** in Settings, on at first, hides the action in that browser, its
-other tabs and the terminal's window included, for every server at that address: its buttons, menu items, and the links of
-logs. The URL is `SCHEME://file/PATH` for the same machine and `SCHEME://vscode-remote/ssh-remote+NAME/PATH` over SSH, with
+shown after opening change it. **None** for the editor, in Settings only, hides the action in that browser, its
+other tabs and the terminal's window included, for every server at that address, until an editor is chosen again: its
+buttons, menu items, and the links of logs. The URL is `SCHEME://file/PATH` for the same machine and `SCHEME://vscode-remote/ssh-remote+NAME/PATH` over SSH, with
 SCHEME `vscode`, `vscodium`, or `cursor`, and for Zed `zed://file/PATH` and `zed://ssh/NAME/PATH`; each
 path segment is percent-encoded, with `:LINE` or `:LINE:COL` for a file that was printed with one. But for Zed, a file
 over SSH without one has `:1`, which VS Code would otherwise open in place of a window's folder, and a directory has
