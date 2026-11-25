@@ -256,6 +256,15 @@ function shellWord(value) {
       "M13.5 10L10 13.5",
     ],
     closePane: [paneFrame, "M6 6l4 4", "M10 6l-4 4"],
+    // Sliders.
+    options: [
+      "M2 4.5h6.5",
+      "M11.5 4.5H14",
+      "M10 3v3",
+      "M2 11.5h2.5",
+      "M7.5 11.5H14",
+      "M6 10v3",
+    ],
     maximize: [
       "M9.5 2.5h4v4",
       "M13.5 2.5L9 7",
@@ -379,6 +388,9 @@ function shellWord(value) {
   const maximizedKey = "rotari-terminal-maximized";
   const fontSizeKey = "rotari-terminal-font-size";
   // "0" turns off the line that keeps a command at the top of its scrolled output.
+  // The name of a font installed on the browser's machine, before the page's own.
+  const fontKey = "rotari-terminal-font";
+  const maxFontName = 100;
   const stickyKey = "rotari-terminal-sticky";
   const defaultFontSize = 13;
   const minFontSize = 8;
@@ -712,9 +724,168 @@ function shellWord(value) {
       recolourBlocks(pane);
     }
   };
-  const fontFamily = () =>
-    getComputedStyle(root).getPropertyValue("--font-mono").trim() ||
-    "monospace";
+  // fontProblem says why a font name is not used, or "". A launched service shares this
+  // origin and could write the storage, and xterm.js puts the name in a style sheet, so a
+  // name is checked whenever it is read, and always quoted.
+  const fontProblem = (name) =>
+    name.length > maxFontName
+      ? "A font name has at most " + maxFontName + " characters."
+      : /[\p{Cc}\p{Cf}\p{Cs}]/u.test(name)
+        ? "A font name has no control characters."
+        : "";
+  const savedFont = () => {
+    let name = "";
+    try {
+      name = localStorage.getItem(fontKey) || "";
+    } catch {}
+    const problem = fontProblem(name);
+    return { name: problem ? "" : name, problem };
+  };
+  let font = savedFont();
+  // The page's own fonts follow the chosen one, for when it or a character of it is missing.
+  const quotedFont = (name) => '"' + name.replace(/["\\]/g, "\\$&") + '"';
+  const fontFamily = (name = font.name) =>
+    (name ? quotedFont(name) + ", " : "") +
+    (getComputedStyle(root).getPropertyValue("--font-mono").trim() ||
+      "monospace");
+  // fontLooks says what can be told of a font by measuring: that this browser shows it as
+  // it shows a font that does not exist, or that its characters differ in width.
+  const fontLooks = (name) => {
+    const context = name && document.createElement("canvas").getContext("2d");
+    if (!context) return "";
+    const width = (text, family) => {
+      context.font = "32px " + family;
+      return context.measureText(text).width;
+    };
+    const generics = ["monospace", "serif", "sans-serif"];
+    const quoted = quotedFont(name);
+    const sample = "mmwwiill10Oo";
+    if (
+      generics.every(
+        (generic) =>
+          width(sample, quoted + ", " + generic) === width(sample, generic),
+      )
+    )
+      return "This browser does not seem to have " + name + ".";
+    return width("iiii", quoted + ", monospace") ===
+      width("WWWW", quoted + ", monospace")
+      ? ""
+      : name + " is not monospaced, so text will not line up.";
+  };
+  let fontSerial = 0;
+  const applyFont = async () => {
+    const serial = ++fontSerial;
+    const family = fontFamily();
+    // xterm.js measures its cells as it is given a font, so a font still loading waits.
+    try {
+      await document.fonts?.load("16px " + family);
+    } catch {}
+    if (serial !== fontSerial) return;
+    for (const pane of panes)
+      if (pane.term) pane.term.options.fontFamily = family;
+    // Other cells, so another size, which the shells hear of.
+    fitPanes();
+    for (const pane of panes) if (pane.term) updateSticky(pane);
+  };
+  // openFontDialog asks for the terminal's font, with a line of it to look at.
+  const openFontDialog = () => {
+    closeOverview();
+    closeLaunchDialog();
+    launchDialog = makeElement("div", "output-modal terminal-launch-modal");
+    launchDialog.setAttribute("role", "dialog");
+    launchDialog.setAttribute("aria-modal", "true");
+    launchDialog.setAttribute("aria-labelledby", "terminal-font-title");
+    const done = () => {
+      closeLaunchDialog();
+      focused.term?.focus();
+    };
+    launchDialog.onclick = (event) => {
+      if (event.target === launchDialog) done();
+    };
+    launchDialog.onkeydown = (event) => {
+      event.stopPropagation();
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      done();
+    };
+    const box = makeElement("div", "output-panel terminal-launch");
+    const head = makeElement("header");
+    const title = makeElement("strong", "", "Terminal font");
+    title.id = "terminal-font-title";
+    head.append(title);
+    const form = makeElement("form", "terminal-font-form");
+    const row = makeElement("label", "", "Font ");
+    const input = makeElement("input");
+    input.type = "text";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.value = font.name;
+    row.append(input);
+    const hint = makeElement(
+      "p",
+      "terminal-launch-hint",
+      "The name of one font installed on the computer this browser runs on, such as JetBrainsMono Nerd Font. Empty for the default.",
+    );
+    // Text, box drawing, and icons of Powerline and Nerd Fonts.
+    const preview = makeElement(
+      "div",
+      "terminal-font-preview",
+      "AaBb Il1 O0 {} => \u3042\u6f22 \u2502\u2500\u253c\u256d\u256e \ue0b0 \ue0a0 \uf07b",
+    );
+    const says = makeElement("p", "terminal-launch-problem", font.problem);
+    says.setAttribute("role", "status");
+    const look = () => {
+      const name = input.value.trim();
+      const problem = fontProblem(name);
+      preview.style.fontFamily = fontFamily(problem ? "" : name);
+      says.textContent = problem || fontLooks(name);
+    };
+    input.oninput = look;
+    preview.style.fontFamily = fontFamily();
+    if (!font.problem) look();
+    const choices = makeElement("div", "terminal-launch-choices");
+    const save = makeElement("button", "", "Save");
+    save.type = "submit";
+    choices.append(
+      textButton("Use the default", () => {
+        input.value = "";
+        look();
+        input.focus();
+      }),
+      textButton("Cancel", done),
+      save,
+    );
+    form.append(row, hint, preview, says, choices);
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      const name = input.value.trim();
+      if (fontProblem(name)) {
+        look();
+        input.focus();
+        return;
+      }
+      font = { name, problem: "" };
+      let kept = true;
+      try {
+        if (name) localStorage.setItem(fontKey, name);
+        else localStorage.removeItem(fontKey);
+      } catch {
+        kept = false;
+      }
+      done();
+      applyFont();
+      if (!kept)
+        showNote(
+          "The font was not kept, as this browser does not let the page store it.",
+          6000,
+        );
+    };
+    box.append(head, form);
+    launchDialog.append(box);
+    document.body.append(launchDialog);
+    input.focus();
+    input.select();
+  };
   const buildResizer = () => {
     const resizer = document.createElement("div");
     resizer.className = "terminal-resizer";
@@ -1466,6 +1637,10 @@ function shellWord(value) {
       Math.max(0, Math.min(y, innerHeight - size.height)) + "px";
     panelMenu.querySelector("button:not(:disabled)").focus();
   };
+  // What is set for every pane, from the bar, since the pane's own menu does not open while
+  // a program takes the mouse.
+  const openOptionsMenu = (event) =>
+    openPanelMenu(event, [["Font...", openFontDialog, true]]);
   const openTabMenu = (event, shell) => {
     const inGroup = shells.filter((item) => sameGroup(item, shell));
     const place = inGroup.findIndex((item) => item.id === shell.id);
@@ -6242,6 +6417,8 @@ function shellWord(value) {
       openPlaceMenu,
     );
     placeButton.disabled = false;
+    const optionsButton = iconButton("Options", icons.options, openOptionsMenu);
+    optionsButton.disabled = false;
     launchButton = iconButton(
       "Launch here",
       icons.launch,
@@ -6354,6 +6531,7 @@ function shellWord(value) {
       spacer,
       fontButton("A-", "Smaller text", -1),
       fontButton("A+", "Larger text", 1),
+      optionsButton,
       clear,
       splitRightButton,
       splitDownButton,

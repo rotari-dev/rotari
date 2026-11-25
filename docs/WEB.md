@@ -547,6 +547,11 @@ open; right-click one to copy its address.
 
 **A-** and **A+** change the text size, which the browser remembers.
 
+**Options**, then **Font...**, sets the terminal's font to one installed on the computer the browser runs on, such as a
+Nerd Font for the icons of a prompt, `tmux`, or Neovim. Give one name; the default fonts follow it for characters it
+lacks. The dialog shows a sample, and says when the browser does not seem to have the font or its characters differ in
+width. The browser remembers the font, so each browser, and each computer, has its own.
+
 The **Maximize** icon gives the panel the whole window, for programs such as `vim`, until you press it
 again, now **Restore**. Each icon's name shows when you point at it.
 The browser remembers it from page to page. Keep the panel small to reach the page's menus and dialogs.

@@ -48,7 +48,7 @@ const ofBasedir = (id, number, basedir = '/b') => ({ id, number, basedir, projec
 // overviewHeadings are All shells' group headings, their lines joined by " / ".
 const overviewHeadings = (root) => [...root.querySelectorAll('.terminal-overview-heading')].map((heading) => [...heading.children].map((line) => line.textContent).join(' / '));
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
-const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/activity', maximized = false, fontSize = '', explorer = '', session = {}, holdHere = [], holdLists = false, windowName = '' } = {}) => {
+const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/activity', maximized = false, fontSize = '', terminalFont = '', explorer = '', session = {}, holdHere = [], holdLists = false, windowName = '' } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
   // xterm.js parses what it is given later; a test can hold that back.
   // What is written is parsed in order, also what a callback writes, as xterm.js's queue is.
@@ -143,6 +143,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       if (stored) window.localStorage.setItem('rotari-terminal-open', stored);
       if (maximized) window.localStorage.setItem('rotari-terminal-maximized', '1');
       if (fontSize) window.localStorage.setItem('rotari-terminal-font-size', fontSize);
+      if (terminalFont) window.localStorage.setItem('rotari-terminal-font', terminalFont);
       if (explorer) window.localStorage.setItem('rotari-terminal-explorer', explorer);
       for (const [key, value] of Object.entries(session)) window.sessionStorage.setItem(key, value);
       if (windowName) window.name = windowName;
@@ -4731,6 +4732,138 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.ok(foPane().record.start > 0, 'nothing was let go past 8 MiB');
   }
 
+  // The font: one name from the bar's Options, quoted before the page's own, checked whenever
+  // it is read, for every pane and those opened later, and kept by the browser.
+  {
+  const withFont = (stored, shells = [inProject('1', 1, 'p1'), inProject('2', 2, 'p1')]) => load(process.argv[1], { stored: '1', path: '/project/p1', shells, terminalFont: stored, remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+  const options = (page) => [...page.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'Options');
+  const dialogOf = (page) => page.document.querySelector('.terminal-font-form');
+  const problem = (page) => page.document.querySelector('.terminal-font-form .terminal-launch-problem').textContent;
+  const openFont = (page) => {
+    options(page).click();
+    [...page.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Font...').click();
+    assert.ok(dialogOf(page), 'the font dialog did not open');
+  };
+  const type = (page, name) => {
+    const input = dialogOf(page).querySelector('input');
+    input.value = name;
+    input.dispatchEvent(new page.window.Event('input', { bubbles: true }));
+  };
+  const save = async (page) => {
+    dialogOf(page).dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }));
+    await wait(10);
+  };
+  const families = (page) => page.terminals.filter((term) => !term.disposed).map((term) => term.options.fontFamily);
+  // What every browser falls back to has a width, and so do the fonts named here: Mono's
+  // characters are one width, Sans's two, and any other is shown as the one after it.
+  const measures = (page) => {
+    page.window.HTMLCanvasElement.prototype.getContext = () => ({
+      font: '',
+      measureText(text) {
+        const families = this.font.replace(/^32px /, '').split(', ').map((name) => name.replace(/^"|"$/g, ''));
+        const known = families.find((name) => ['Mono', 'Sans', 'monospace', 'serif', 'sans-serif'].includes(name));
+        const each = { Mono: () => 21, Sans: (c) => (c === 'i' ? 5 : 30), monospace: () => 20, serif: (c) => (c === 'i' ? 7 : 25), 'sans-serif': (c) => (c === 'i' ? 6 : 26) }[known];
+        return { width: [...text].reduce((sum, c) => sum + each(c), 0) };
+      },
+    });
+  };
+
+  const page = withFont('');
+  await wait(50);
+  page.sockets.at(-1).onopen?.();
+  assert.deepEqual(families(page), ['monospace']);
+  page.document.querySelector('[aria-label="Split right"]').click();
+  await wait(30);
+  assert.deepEqual(families(page), ['monospace', 'monospace']);
+  // The button opens its menu while a program takes the mouse, as the pane's own menu does not.
+  page.terminals[0].modes.mouseTrackingMode = 'any';
+  openFont(page);
+  measures(page);
+  type(page, 'Mono');
+  assert.equal(problem(page), '');
+  assert.equal(dialogOf(page).querySelector('.terminal-font-preview').style.fontFamily.replace(/'/g, '"'), '"Mono", monospace');
+  type(page, 'Absent');
+  assert.equal(problem(page), 'This browser does not seem to have Absent.');
+  type(page, 'Sans');
+  assert.equal(problem(page), 'Sans is not monospaced, so text will not line up.');
+  type(page, 'x'.repeat(101));
+  assert.match(problem(page), /at most 100 characters/);
+  await save(page);
+  assert.ok(dialogOf(page), 'a refused name was saved');
+  for (const name of ['a\u0007b', 'a‮b', 'a\ud800b']) {
+    type(page, name);
+    assert.match(problem(page), /no control characters/, JSON.stringify(name));
+  }
+  assert.deepEqual(families(page), ['monospace', 'monospace'], 'the font changed before it was saved');
+  // Cancel and Escape keep what was.
+  dialogOf(page).dispatchEvent(new page.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  assert.equal(dialogOf(page), null, 'Escape left the dialog');
+  openFont(page);
+  type(page, '  Jet "Brains" \\ Mono, x  ');
+  const fitsBefore = page.fits.length;
+  await save(page);
+  assert.equal(dialogOf(page), null);
+  const quoted = '"Jet \\"Brains\\" \\\\ Mono, x", monospace';
+  assert.deepEqual(families(page), [quoted, quoted], 'not every pane changed, or the name is not quoted');
+  assert.equal(page.window.localStorage.getItem('rotari-terminal-font'), 'Jet "Brains" \\ Mono, x');
+  assert.ok(page.fits.length >= fitsBefore + 2, 'the panes did not fit their new cells');
+  page.document.querySelector('[aria-label="Close pane"]').click();
+  page.document.querySelector('[aria-label="Split right"]').click();
+  await wait(30);
+  assert.equal(families(page).at(-1), quoted, 'a pane opened later has another font');
+  // The default again.
+  openFont(page);
+  assert.equal(dialogOf(page).querySelector('input').value, 'Jet "Brains" \\ Mono, x');
+  [...dialogOf(page).querySelectorAll('button')].find((item) => item.textContent === 'Use the default').click();
+  await save(page);
+  assert.equal(page.window.localStorage.getItem('rotari-terminal-font'), null);
+  assert.ok(families(page).every((family) => family === 'monospace'));
+  // Not kept: it holds for the page, and the page says so.
+  openFont(page);
+  type(page, '源ノ Mono');
+  page.window.Storage.prototype.setItem = () => { throw new Error('refused'); };
+  await save(page);
+  assert.ok(families(page).every((family) => family === '"源ノ Mono", monospace'));
+  assert.match(page.document.querySelector('.terminal-send-note').textContent, /font was not kept/);
+
+  // A stored name is used, and one that could not be typed is not, and says why.
+  const kept = withFont('Mono');
+  await wait(50);
+  assert.deepEqual(families(kept), ['"Mono", monospace']);
+  for (const bad of ['x'.repeat(101), 'a\nb']) {
+    const edited = withFont(bad);
+    await wait(50);
+    assert.deepEqual(families(edited), ['monospace'], 'used a bad stored name');
+    openFont(edited);
+    assert.match(problem(edited), /at most 100|no control/);
+    assert.equal(dialogOf(edited).querySelector('input').value, '');
+  }
+  // With no canvas to measure with, nothing is claimed of a font.
+  const blind = withFont('');
+  await wait(50);
+  blind.window.HTMLCanvasElement.prototype.getContext = () => null;
+  openFont(blind);
+  type(blind, 'Absent');
+  assert.equal(problem(blind), '');
+  // The font waits for what is loading, and the last choice stands.
+  const slow = withFont('');
+  await wait(50);
+  const loads = [];
+  slow.window.document.fonts = { ready: Promise.resolve(), load: (text) => new Promise((resolve) => loads.push([text, resolve])) };
+  for (const name of ['Mono', 'Other']) {
+    openFont(slow);
+    type(slow, name);
+    await save(slow);
+  }
+  assert.deepEqual(families(slow), ['monospace'], 'did not wait for the font');
+  assert.deepEqual(loads.map(([text]) => text), ['16px "Mono", monospace', '16px "Other", monospace']);
+  loads[1][1]();
+  await wait(10);
+  loads[0][1]();
+  await wait(10);
+  assert.deepEqual(families(slow), ['"Other", monospace'], 'an earlier choice won');
+  }
+
   // Output waits in the pane's own queue, so that xterm.js is never given more than it can
   // hold: what is given stays small, nothing is lost or reordered, and output goes on after
   // a large replay, a tab switch, Clear, and a screen written again.
@@ -5049,6 +5182,13 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.deepEqual(JSON.parse(JSON.stringify(at(40))), ['$ for i in 1 …', 'ok'], 'a command of two lines');
   assert.match(sticky().title, /^for i in 1\ndo echo \$i; done\nExit 0/);
   assert.deepEqual(JSON.parse(JSON.stringify(at(50))), ['$ sleep 9', 'running']);
+  // A font chosen while it shows is its font too.
+  [...sk.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'Options').click();
+  [...sk.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Font...').click();
+  sk.document.querySelector('.terminal-font-form input').value = 'Mono';
+  sk.document.querySelector('.terminal-font-form').dispatchEvent(new sk.window.Event('submit', { bubbles: true, cancelable: true }));
+  await wait(10);
+  assert.equal(sticky().style.fontFamily.replace(/'/g, '"'), '"Mono", monospace');
   // The running command ends: the line's mark follows.
   out('\x1b]133;D;1\x07\x1b]133;A\x07$ \x1b]133;B\x07');
   await wait(10);

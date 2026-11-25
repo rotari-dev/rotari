@@ -2264,6 +2264,10 @@ neither connects nor retries, and a page whose sign-in has gone stops retrying a
 limit. With more than 8 MiB waiting, the replay aside, the pane drops its connection and what waits, and the program
 goes on; it reconnects when the page is visible, taking the shell from no other connection, and says that only the most
 recent output shows (`TestTerminalPanel`, and in headless Chrome `TestTerminalFastOutputInBrowser`).
+**Font...** in the menu of the bar's **Options** button, which opens also while a program takes the mouse, names one font
+of the browser's machine for every pane, before `--font-mono`, kept in the browser's local storage. A name of more than
+100 characters or with control or format characters is refused, also when read from storage, and a name is always
+quoted as a CSS string (`TestTerminalPanel`).
 `TestTerminalPanelInBrowser` checks the panel in
 headless Chrome.
 

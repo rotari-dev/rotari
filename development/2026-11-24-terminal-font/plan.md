@@ -1,7 +1,8 @@
 # Plan: Choosing the Web terminal's font
 
 Created: 2026-11-24
-Status: Proposed; not started. One name rather than a list was decided by the user on 2026-11-24.
+Status: Implemented on 2026-11-25; see [work-log.md](work-log.md). Not done: the checks by hand. One name rather than a
+list was decided by the user on 2026-11-24.
 Related: [Web terminal](../2026-11-05-web-terminal/plan.md), and the two plans proposed with this one: [Option as
 Meta](../2026-11-24-terminal-option-meta/plan.md) and [OSC 52 copy](../2026-11-24-terminal-osc52-copy/plan.md)
 
@@ -33,8 +34,8 @@ The font of the terminal's panes and of what is drawn to match them (the sticky 
 1. **A font name, kept by the browser.** **Font...** asks for one family name, with a preview line of text, box
    drawing, and Nerd Font icons.
 2. **Where: an Options button in the panel's bar**, whose menu holds **Font...**. The pane's right-click menu does not
-   open while a program takes the mouse, as Neovim does by default and `tmux` when told to, and **Settings** is not on the
-   panel's own window. The other two plans add to this menu; whichever is done first makes the button.
+   open while a program takes the mouse, as Neovim does by default and `tmux` when told to, and **Settings** is not on
+   the panel's own window. The other two plans add to this menu; whichever is done first makes the button.
 3. **The default stack follows the name**, so a missing font or glyph falls back as today. Empty means the default.
 4. **Checked whenever it is read**, since stored values can be edited: at most 100 characters, no control characters,
    quoted as a CSS string. A bad stored value is not used, and the dialog says why.
@@ -61,7 +62,9 @@ sticky line, so each follows. xterm.js measures cells when the option is set; th
 
 ## Contracts and documentation
 
-- A new contract ID, the next free when implemented. [docs/WEB.md](../../docs/WEB.md) beside **A-** and **A+**.
+- WEB-33's note, and no ID of its own: [contracts/README.md](../../contracts/README.md) gives an ID when a conformance
+  test checks the rule, and only `TestTerminalPanel` checks this one. [docs/WEB.md](../../docs/WEB.md) beside **A-** and
+  **A+**.
 
 ## Tests and validation
 

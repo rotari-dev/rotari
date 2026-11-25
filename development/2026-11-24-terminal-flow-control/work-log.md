@@ -48,4 +48,5 @@ Plan: [plan.md](plan.md)
 - **Validation:** in CI, with 256 KiB and with 2 MiB pieces, three runs each on Ubuntu and macOS passed; the replay
   scenario failed on both without the change. The committed test differs from what ran only in shorter waits, one figure
   less, and no burst; that form has not run in Chrome. `go vet` of the package and `go test ./conformance` passed here.
-- **Remaining:** the checks by hand, and a first CI run of the committed test.
+- **Remaining:** the checks by hand. The committed test's first CI run, for `52347ad5` on 2026-11-25, passed on Ubuntu
+  and macOS.

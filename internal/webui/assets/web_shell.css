@@ -1047,6 +1047,36 @@ html[data-terminal-window] #terminal-panel {
 .editor-form p:empty {
   display: none;
 }
+.terminal-font-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.terminal-font-form label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.terminal-font-form input {
+  flex: 1;
+  min-width: 0;
+}
+.terminal-font-form p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.terminal-font-form p:empty {
+  display: none;
+}
+.terminal-font-preview {
+  overflow: hidden;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  color: var(--terminal-foreground);
+  background: var(--terminal-background);
+  font-size: 15px;
+  white-space: nowrap;
+}
 .terminal-resizer {
   flex: none;
   height: 5px;
