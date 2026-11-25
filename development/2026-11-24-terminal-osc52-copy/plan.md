@@ -1,7 +1,7 @@
 # Plan: Copying from programs with OSC 52 in the Web terminal
 
 Created: 2026-11-24
-Status: Proposed. Phase 1 was done on 2026-11-25 except that Neovim was read about, not run; see [Phase 1
+Status: Proposed. Phase 1 was done on 2026-11-25; see [Phase 1
 results](#phase-1-results). Nothing is implemented.
 Related: [Web terminal](../2026-11-05-web-terminal/plan.md),
 [fast output](../2026-11-24-terminal-flow-control/plan.md), and the two plans proposed with this one:
@@ -41,17 +41,21 @@ tmux 3.2a, the one on the development machine, on 2026-11-25: run with no config
 
 So `tmux`'s own copying needs no configuration, and one line lets programs inside it copy.
 
-Neovim is not on the machine. From its [documentation](https://neovim.io/doc/user/provider/) and its `osc52.lua` files
-on `master`, of 2026-11-24, with no version stated:
+Neovim 0.12.6 (`--clean`, the same answers), on 2026-11-25:
 
-- It prints `ESC ] 52 ; c ; BASE64 ESC \` for `+` and `p` for `*`, ended by ST.
-- It uses OSC 52 by itself when nothing else provides a clipboard and the terminal says it can: `52` in its answer to
-  `ESC [ c`, or an answer to a query for `Ms`. xterm.js gives neither. `vim.g.clipboard = 'osc52'` makes it, in one
-  line.
-- With it, `p` from `+` or `*` **asks the terminal** (`?`), and waits about 10 seconds, less with Ctrl-C, when nothing
-  answers. That is what decision "never answered" gives a user who adds that line.
+| What | Result |
+| --- | --- |
+| No configuration, `"+yy` | Nothing printed. It asks `ESC [ c` and XTGETTCAP `Ms`, and xterm.js tells it of no OSC 52 |
+| No configuration, `52` in the answer to `ESC [ c`, or `Ms` answered | Printed |
+| `g:clipboard = 'osc52'`: `"+yy`, `"*yy`, UTF-8, 300 kB, `clipboard=unnamedplus` with `yy` | Printed, whole; selection `c`, or `p` for `*`; ended by ST |
+| The same, `"+p`, nothing answering | Asks with `?`, and goes on only after 10.0 s |
+| The same, answered as empty | Goes on at once, and pastes nothing |
+| The same, answered as empty, `unnamedplus`, `yyp` | Pastes nothing: what Neovim itself yanked cannot be put |
+| A `g:clipboard` that copies by OSC 52 and pastes from the register | Printed on copying. Never asks; `yyp` and `"+p` work |
+| Inside `tmux`, default | Nothing reaches the outside |
+| Inside `tmux`, `set -s set-clipboard on` | Printed, with the selection empty, also for `*` |
 
-tmux and Neovim both print it with at most a line of configuration, so the plan goes on, once open question 2 is
+tmux and Neovim print it with at most a line of configuration each, so the plan goes on, once open question 2 is
 settled.
 
 ## Scope
@@ -132,10 +136,12 @@ Writing the clipboard from OSC 52, for the panes of the panel and its own window
 
 1. **Telling the user while it is off** (decision 7). Proposed: once per page. The alternative says nothing, and leaves
    it to the docs.
-2. **What a query gets.** Never answering keeps a Neovim set to `osc52` waiting 10 seconds at each `p` from `+`.
-   - **Proposed: answered as empty**, only while the setting is on, and only where a copy would be taken (decision 3 and
-     4). It tells nothing of the clipboard, and Neovim goes on at once, pasting nothing. Like any answer, it is typed
-     into whatever runs, so never for a replay.
-   - The alternative never answers, and the docs give a Neovim configuration of several lines whose paste does not ask.
+2. **What a query gets.** Never answering stalls a Neovim set to `osc52` for 10 seconds at each put from `+`. Answering
+   as empty does not stall it, but a put then does nothing, so with `unnamedplus` `yyp` is broken without a word.
+   - **Proposed: never answered, and the docs give the configuration that never asks**, the one in the table that pastes from the register. It is
+     some lines rather than one, and the only one measured under which putting works.
+   - **Answered as empty.** It tells nothing of the clipboard. Like any answer, it is typed into whatever runs.
+   - **Answered with what programs last copied in that pane**, never the clipboard. `yyp` would work with the one line.
+     But a later program, such as a remote host reached by `ssh`, could ask for what an earlier one copied.
 3. **Saying that it can.** Answering Neovim's `Ms` query while the setting is on would make it copy with no
    configuration. Proposed: not at first. It is one more answer, and it depends on how Neovim asks.
