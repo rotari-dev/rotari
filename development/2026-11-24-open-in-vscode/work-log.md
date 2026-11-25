@@ -103,3 +103,15 @@ Plan: [plan.md](plan.md)
   which say `Open in VS Code` is the wording, an icon is not to be modified, and the
   Web version is **VS Code for the Web**. The launcher's name and the `<>` icon await
   a reading of the page.
+
+## 2026-11-25 13:48:26 +0900 - `62b9ec3c` - The approved names
+
+- **Change:** The built-in **VS Code (Web)** is **VS Code for the Web** in the registry,
+  tests, WEB-15, and the documents; a pane's menu says **Open in VS Code**.
+- **Reason:** The user gave the "Open in VS Code" part of Microsoft's rules, which
+  refuse the earlier name.
+- **Plan impact:** Decision 1.
+- **Validation:** `internal/launcher`, `internal/archtest`, `conformance`, and the
+  launch, VS Code, and terminal panel tests of `internal/webui`,
+  `conformance/05-web`, and `cmd/rotari` passed. The full suite was not run again.
+- **Remaining:** The release notes' word on the renamed launcher.

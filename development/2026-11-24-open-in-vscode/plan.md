@@ -26,8 +26,8 @@ editing them.
 2. Line and column: a printed `PATH:LINE` or `PATH:LINE:COLUMN`, and Python's
    `File "PATH", line N`, open at that place. This covers shell output and job
    logs.
-3. The built-in launcher **VS Code**, which starts the Web version, becomes
-   **VS Code (Web)**.
+3. The built-in launcher **VS Code**, which starts the Web version, 3. The built-in launcher **VS Code**, which starts the Web version, becomes
+   **VS Code for the Web**.
 
 ## Non-goals
 
@@ -79,11 +79,15 @@ name would open another window.
 
 ## Decisions
 
-1. **Names.** The action is **Open in VS Code**; the built-in becomes
-   **VS Code (Web)**, as **MLflow (SQLite)** is named.
+1. **Names.** The action is **Open in VS Code**; the built-in becomes **VS Code for
+   the Web**. Both are the wording of Microsoft's rules for VS Code's name
+   (code.visualstudio.com/brand, its "Open in VS Code" part, as the user gave it on
+   2026-11-25), which refuse **VS Code (Web)**, the name it first got here. The line
+   in **Open in VS Code at line N** comes after the product's name and leaves it as
+   it is. The icon stays `<>`: that part says nothing of the official one.
 2. **The rename replaces nothing.** An entry named `VS Code` in someone's
    `launchers.toml` no longer replaces the built-in and appears beside
-   **VS Code (Web)**. The built-in has shipped since v0.1.25, so the release
+   **VS Code for the Web**. The built-in has shipped since v0.1.25, so the release
    notes and [docs/CONFIGURATION.md](../../docs/CONFIGURATION.md) say to rename
    the entry. No alias for the old name is kept.
 3. **Asked once per browser.** The first **Open in VS Code** asks:
