@@ -2,26 +2,18 @@
 
 <iframe src="https://www.youtube-nocookie.com/embed/UjoVz2AfFSw" title="Every project and past run in one Web UI" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
-`rotari web` serves a status UI for your runs: job state, logs, history across
-projects, artifacts, and config. It is a separate process from `rotari run`.
-Closing or stopping it never affects runs; it only stops the commands it
-launched itself (see [Launching commands](#launching-commands)).
+`rotari web` serves a UI for your runs: job state, logs, history across
+projects, artifacts, and config. It is a separate process from `rotari run`:
+stopping it never affects runs, only its [terminal](#terminal)'s shells and the
+commands it [launched](#launching-commands).
 
 ```sh
 rotari web                  # http://127.0.0.1:<default port>, with job control
-rotari web --allow-exec     # also launch TensorBoard and other viewers; see Launching commands
-rotari web --allow-terminal # also a terminal panel; see Terminal
+rotari web --allow-exec     # also launch TensorBoard and other viewers
+rotari web --allow-terminal # also a terminal panel
 ```
 
-`--allow-exec` lets the UI launch commands against artifacts (see
-[Launching commands](#launching-commands)); `--allow-terminal` adds a shell
-panel beside your jobs (see [Terminal](#terminal)). Both can be combined, and
-both always require a token, which `rotari web` generates and prints when you
-give none.
-
-On a remote machine, start the server there and forward its port from the
-machine running the browser, then open `http://127.0.0.1:PORT` locally
-(see [Reaching the UI](#reaching-the-ui)):
+On a remote machine, forward the port:
 
 ```sh
 # on the remote machine
@@ -30,8 +22,8 @@ rotari web --allow-exec --allow-terminal
 ssh -L 8787:127.0.0.1:8787 user@remote
 ```
 
-A [read-only demo](https://rotari-dev.github.io/rotari/) built from generated
-data shows the UI without installing anything.
+The [read-only demo](https://rotari-dev.github.io/rotari/) needs no
+installation.
 
 ## Choosing a mode
 
@@ -43,90 +35,43 @@ what you need.
 | Static export | `rotari web --static-dir DIR` | Browse a snapshot as plain files; nothing is served live. | n/a |
 | Read-only | `rotari web --allow-control=false` | View everything the live server serves; control and file-write APIs return `403`. | Recommended beyond loopback |
 | Control (default) | `rotari web` | Also copy, change, remove, cancel, and clear jobs, edit queues, and save config files. | Required beyond loopback |
-| Terminal | `rotari web --allow-terminal` | Also open a shell on this host, as you, in a panel beside the jobs. | Always required |
+| Terminal | `rotari web --allow-terminal` | Also open a shell on this host, as you. | Always required |
 | Launching | `rotari web --allow-exec` | Also run registered commands and built-in services against artifacts. | Always required |
 
-- Job control does not start runs; execution starts only through `rotari run`, which the
-  terminal can of course run.
-- `--allow-exec` and `--allow-terminal` need job control, so neither can be combined with
-  `--allow-control=false` or `--static-dir`.
-- Options that only make sense for one mode, such as `--host` with
-  `--static-dir`, are rejected rather than ignored.
+Job control does not start runs; only `rotari run` does. `--allow-exec` and
+`--allow-terminal` can be combined, but not with `--allow-control=false` or
+`--static-dir`.
 
 ## Options
 
-The full list is in the [CLI reference](CLI_REFERENCE.md#rotari-web); the
-environment variables are in
-[Environment variables](ENVIRONMENT_VARIABLES.md). In short:
-
-| Option | Purpose |
-| --- | --- |
-| `--host`, `--port` | Listen address; the default host is `127.0.0.1`. |
-| `--auth-token` | Require a token. Prefer `ROTARI_WEB_AUTH_TOKEN` so it stays out of the process list. |
-| `--allow-control` | Job control on (default) or `=false` for read-only. |
-| `--allow-exec` | Let the UI launch registered commands; see below. |
-| `--allow-terminal` | Add a terminal panel; see below. |
-| `--terminal-idle-timeout`, `--terminal-max-shells`, `--terminal-max-shells-per-project`, `--terminal-replay-size`, `--terminal-shell`, `--terminal-shell-integration` | With `--allow-terminal`, change its limits and how its shells start; see below. |
-| `--allowed-host NAME` | With `--allow-exec` or `--allow-terminal`, accept one more `Host` header name (repeatable). |
-| `--artifact-root DIR` | Also serve recorded artifact files under `DIR` (repeatable). |
-| `--detach`, `--disconnect-action`, `--shutdown` | Leave the server running in the background, and stop it; see [Stopping and detaching](#stopping-and-detaching). |
-| `--static-dir DIR` | Write a static export instead of serving. |
-| `--static-artifact-contents` | With `--static-dir`, copy previewable artifact files into the export. |
-| `--notifications` | Default state of the browser notification toggle. |
+See the [CLI reference](CLI_REFERENCE.md#rotari-web) and
+[Environment variables](ENVIRONMENT_VARIABLES.md).
 
 ### Stopping and detaching
 
-At a terminal, `rotari web` works like `rotari run`. Once it listens, it says how:
-
-```console
-$ rotari web --allow-terminal
-rotari web listening at http://127.0.0.1:8080
-Press Ctrl-D to detach and keep the server running; Ctrl-C to stop it.
-Shells end when the server stops or you sign out.
-```
+At a terminal:
 
 - **Ctrl-C** stops the server.
-- **Ctrl-D** detaches it: the prompt comes back and the server keeps running in the background, as
-  `--detach` would have started it. It prints the URL and PID, and `rotari web --shutdown` stops it.
-  There is one detached server per user and host, so Ctrl-D while another is detached says so and stays
-  attached.
-- **Closing the terminal**, or SIGHUP or SIGTERM to `rotari web`, follows `--disconnect-action`: `stop`, the
-  default, or `detach`. It can also be set as `disconnect-action` under `[web]` in a config, or in
-  `ROTARI_WEB_DISCONNECT_ACTION`. A top-level `disconnect-action` and `ROTARI_DISCONNECT_ACTION` are for
-  runs and do not apply. A `rotari web` killed outright follows it too.
-- **`--detach`** starts the server already detached, and returns once it listens.
+- **Ctrl-D** detaches it: it keeps running in the background, as with
+  `--detach`. Stop it with `rotari web --shutdown`.
+- **Closing the terminal**, SIGHUP, SIGTERM, or killing `rotari web` follows
+  `--disconnect-action`: `stop` (default) or `detach`. In a config, set it under
+  `[web]`; the top-level `disconnect-action` and `ROTARI_DISCONNECT_ACTION` are
+  for runs.
 
-Running `rotari web` again at a terminal, with the same options, attaches to the detached server instead of
-starting another, much as `rotari wait` attaches to a run:
+There is one detached server per user and host. Running `rotari web` again at a
+terminal with the same options attaches to it and shows its log; Ctrl-D or
+closing the terminal then leaves it running, and Ctrl-C stops it. With different
+options, it starts a second server.
 
-```console
-$ rotari web --allow-terminal
-rotari web listening at http://127.0.0.1:8080 in the background (PID 12345, running since 2026-11-17 09:12:03); showing its log
-Press Ctrl-D to detach and keep the server running; Ctrl-C to stop it.
-Shells end when the server stops or you sign out.
-```
-
-It shows what the server logs from then on. Ctrl-D, or closing the terminal, leaves the server running, whatever
-`--disconnect-action` says, since it was already detached; Ctrl-C stops it, as `rotari web --shutdown` does but
-without asking. When the server stops some other way, for example from the Web UI, `rotari web` says so and exits.
-Options that differ from the detached server's, such as another `--basedir` or no `--allow-terminal`, start a
-second server of its own, and `rotari web` names the detached one. A generated token is not printed again; use the
-one printed when the server started, or set `ROTARI_WEB_AUTH_TOKEN`.
-
-The default differs from `rotari run`'s on purpose. A run ends by itself, so leaving it running costs nothing
-later. A server runs until it is stopped, so one left behind by every closed terminal would pile up, and most
-Web tools stop when their terminal closes.
-
-At a terminal, `rotari web` therefore runs as two processes: the one you started, which shows the server's
-output, and the server, started in the background. The first goes away when you detach. Started without a
-terminal, as from a script or a service, with the default `stop`, it serves in its own process as before, and
-SIGTERM stops it.
+Without a terminal, as from a script or a service, and with the default `stop`,
+it serves in its own process and SIGTERM stops it.
 
 ### Setting them in a config or the environment
 
-Each option above can also go in a config file, at the top level or under `[web]`, or in its
-environment variable, except `--artifact-root`. For example, in the global config
-(`~/.config/rotari/config.toml`):
+Each option except `--artifact-root` can also go in a config file, at the top
+level or under `[web]`, or in its environment variable. For example, in
+`~/.config/rotari/config.toml`:
 
 ```toml
 [web]
@@ -134,41 +79,36 @@ allow-terminal = true
 terminal-max-shells = 16
 ```
 
-`--allow-terminal`, `--allow-exec`, and `--allowed-host` let other people reach this host, so
-`rotari web` reads them only from the command line, the environment, the global config, or a file
-named with `--config`. With the terminal or launchers on, the same goes for `--host` and
-`--auth-token`. A workspace (`.rotari.toml`), basedir, or project config may have been written by
-someone else, or come with a cloned repository, so `rotari web` ignores its values for them and says
-so when it starts:
+`allow-terminal`, `allow-exec`, and `allowed-host` are read only from the
+command line, the environment, the global config, or a file named with
+`--config`; so are `host` and `auth-token` when the terminal or launchers are
+on. A workspace (`.rotari.toml`), basedir, or project config may have been
+written by someone else, so its values for them are ignored with a warning.
 
-```text
-WARNING: ignoring allow-terminal = true in workspace config /work/.rotari.toml; rotari web reads it only from the command line, ROTARI_WEB_ALLOW_TERMINAL, the global config, or --config FILE
-```
+With `allow-terminal` or `allow-exec` in the global config or the environment,
+`--static-dir` is rejected, as it is for `host` there; use `--config FILE` with
+a file without them for the export.
 
-A value from a config or variable that does not parse, such as `terminal-max-shells = "lots"`, stops
-`rotari web` with an error naming where it came from. With `allow-terminal` or `allow-exec` in the
-global config or the environment, `--static-dir` is rejected, as it is for `host` there; use
-`--config FILE` with a file without them for the export.
-
-Settings in the Web UI cannot add, change, or remove `auth-token` in any config file; edit the file
-directly for that.
+Settings in the Web UI cannot change `auth-token` in a config file; edit the
+file directly.
 
 ## Reaching the UI
 
 - **Same machine:** the default `127.0.0.1` binding needs no token unless you
-  use `--allow-exec`. With one, sign in at `http://127.0.0.1:PORT` or
-  `http://localhost:PORT` directly; plain HTTP is accepted for a browser on
-  the same host.
-- **Remote machine:** forward the port with `ssh -L PORT:127.0.0.1:PORT host`
-  and keep the loopback binding; use the port `rotari web` prints (8787 unless
-  it is taken). `--allow-exec` and `--allow-terminal` need a token and sign in
-  only over such a forward (or HTTPS), so forward the port for them. Launched
-  services open through the same port, so no further forward is needed.
-- **Shared network:** set a token and put an HTTPS reverse proxy in front.
-  Browser sign-in is refused over plain HTTP that is not a direct loopback
-  connection. Sign in with the user name
-  `rotari` and the token as the password; the session lasts 12 hours. API
-  clients send `Authorization: Bearer TOKEN` or `X-Rotari-Token: TOKEN`.
+  use `--allow-exec` or `--allow-terminal`.
+- **Remote machine:** keep the loopback binding and forward the printed port
+  (8787 unless it is taken) with `ssh -L`. Launched services use the same port.
+- **Shared network:** set a token and put an HTTPS reverse proxy in front;
+  sign-in is refused over plain HTTP except on a direct loopback connection.
+  With `--allow-exec` or `--allow-terminal`, allow its `Host` name with
+  `--allowed-host`. The terminal needs WebSocket connections to
+  `/_terminal/ws`.
+
+Sign in with the user name `rotari` and the token as the password; the session
+lasts 12 hours. API clients send `Authorization: Bearer TOKEN` or
+`X-Rotari-Token: TOKEN`. Where a token is always required, one is generated and
+printed unless you set it. Prefer `ROTARI_WEB_AUTH_TOKEN` to `--auth-token`,
+which shows in the process list.
 
 The token is authentication, not encryption. See
 [Security model](SECURITY.md) before exposing the server, and
@@ -176,131 +116,44 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 
 ## What you can do
 
-- **Runs and jobs:** state, attempts, logs, and reports for a run or selected
-  jobs. A report is never sent anywhere; see the
-  [FAQ](FAQ.md#does-the-web-ui-send-run-details-to-an-ai-service).
-- **Several projects and state directories:** switch from the sidebar. A
-  registered state directory whose directory was removed is marked
-  **missing**; `rotari gc` removes it from the registry.
-  **Activity** shows runs across every state directory on a calendar;
-  **Recent jobs** lists unfinished jobs and jobs finished in the last hours or
-  in a range you drag on a timeline of runs;
-  **History search** searches project, run, and job history (live server only).
-- **Control** (not in read-only mode): copy, change, remove, cancel, and clear
-  jobs, and **Create queue** or **Append to queue**, which a separate
+- **Runs and jobs:** state, attempts, logs, and reports. A report is never
+  [sent anywhere](FAQ.md#does-the-web-ui-send-run-details-to-an-ai-service).
+- **Several projects and state directories:** switch from the sidebar, or look
+  across them with **Activity**, **Recent jobs**, and **History search** (live
+  server only). `rotari gc` unregisters a state directory marked **missing**.
+- **Control:** change jobs, and create or append to a queue, which a separate
   `rotari run` executes. **Recover…** on an interrupted run does what
   `rotari unlock` does; see
   [Operations](OPERATIONS.md#shared-filesystem-use).
-- **Artifacts:** preview and download what jobs wrote, open tables, and
-  launch TensorBoard and other viewers on it; see [Artifacts](#artifacts).
-- **Open in your editor:** files and directories in the VS Code, or another editor, on your machine; see
-  [Opening files in your editor](#opening-files-in-your-editor).
-- **Config:** **Generate config** and **View config** edit one config source at
-  a time; see [Configuration](CONFIGURATION.md).
-- **Notifications:** the in-page inbox and optional desktop popups; see
+- **Files:** [artifacts](#artifacts), [tables](#viewing-tables), and
+  [your editor](#opening-files-in-your-editor).
+- **Config:** see [Configuration](CONFIGURATION.md).
+- **Notifications:** see
   [Notifications](NOTIFICATIONS.md#browser-notifications).
-- **Sticky notes:** **Stickies** in the top bar opens a menu: **+ New sticky**
-  puts a coloured note on the page you are viewing, **Hide on this page** (or
-  **Show**) hides or shows that page's notes in this browser without deleting
-  them, and the list below shows every note, newest first, with its creation
-  time, first words, and page; choose one to go to that page, or its `×` to delete it; the search box above the list narrows it to notes containing every word you type, ignoring case. In the sidebar, pages with notes carry a coloured dot (hover for the first note),
-  and the project of a run with notes carries a faint one. Drag a note by
-  its header, resize it by the corner grip, type in it, click the dot to change its colour, and `×` to
-  delete it. Notes belong to a page, are kept in
-  the state directory (so every browser sees them), and are separate from run
-  notes; they change nothing about runs or jobs. A read-only server shows them
-  but cannot change them, and a static export has none. `rotari stickies`
-  lists them from the command line (`--page PAGE`, `--search TEXT`, `--json`).
-- **Theme:** `Settings` selects Light, Dark, or System.
-- **Stop server:** with job control on, `Settings` can stop the `rotari web` serving the page, detached or not. It
-  asks first, naming what runs in the terminal's shells, since stopping ends them. From the command line,
-  `rotari web --shutdown` does the same for a [detached server](#keeping-shells-through-a-disconnect).
-- **Which rotari:** the foot of `Settings` shows the version of the `rotari web` serving the page and the path of
-  its binary, with buttons to copy the path or send it to the terminal.
+- **Stickies:** notes on a page, kept in the state directory, so every browser
+  sees them. They are separate from run notes and change nothing about runs.
+  `rotari stickies` lists them from the command line.
+- **Settings:** theme, editor, **Stop server** (with job control), and the
+  version and path of the running `rotari`.
 
 ## Terminal
 
 <iframe src="https://www.youtube-nocookie.com/embed/nObEULGw63k" title="Shells that belong to your experiments" style="width: 100%; aspect-ratio: 16 / 9; border: 0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
 
-`rotari web --allow-terminal` adds a **Terminal** button to the top bar, which opens a shell in
-a panel along the bottom of the page, so you can type while watching jobs or reading a log. Drag
-the panel's top edge to change its height. The **Panel position** icon in its bar moves it down the left or
-right of the window, for a tall shell beside the jobs; the browser remembers the choice, and in a window
-under 1000 pixels wide the panel stays at the bottom. Panes stack when the panel is too narrow for columns.
-An icon in the bar that opens a menu, list, or dialog (**Panel position**, **Launch here**, **All shells**,
-**Recent directories**, **Commands**) closes it when you click it again, as does a command's mark for its menu.
+`rotari web --allow-terminal` adds a **Terminal** panel: tabs, up to four split
+panes, a file Explorer, and, from its **Panel position** menu, a separate
+browser window.
 
-**Window** in the same menu moves the whole panel, with its tabs, panes, and project list, into a browser
-window of its own, for a second screen. The page gets all of its room back. The page and the window keep to one
-project by default, as with the panel: moving to another project's page switches the window, and choosing a project in the
-window takes the page there. A state directory's **All projects** and **Recent jobs** switch it to that state
-directory's own shells, and Activity and History search, of no project, leave the window as it is. While the window is open, the **Terminal** button brings it
-to the front, the send buttons type into it, and **Open a terminal here** starts the shell there. Following
-links in the page keeps the window. Close the window, or choose **Back to page** in its **Panel position** menu,
-to put the panel back where it was. If the browser blocks pop-ups, the panel stays and says so. Reloading the
-page while the window is open keeps the window, but a page opened in another browser tab takes its shells, as
-another tab does today. Closing the browser tab closes its window too; the shells keep running for the next page
-that opens the terminal.
-The button shows how many shells are running in all
-projects, as **Terminal (3)**, so you can see what is left running with the panel closed, and each project
-in the sidebar with a shell running has a terminal icon, as does a state directory's **All projects** when the
-state directory has shells of its own; point at it to see how many.
+Anyone who can sign in gets a shell as you, on the host running `rotari web`.
+It opens only on a direct `localhost` connection, such as an SSH forward, or
+over HTTPS. See the [security model](SECURITY.md#the-web-terminal).
 
-The **All shells** icon beside **+** opens a dialog over the page, as a log does, listing every running shell,
-grouped by project with the terminal's first, each group headed by its state directory over the project's name
-(**All projects** for the state directory's own shells), so projects of one name in two state directories are told
-apart. Under each project's name, a line says what its last run (the one
-`rotari show` shows) is doing, such as `Last run running, started 12m ago · 3 in progress · 5 pending · 0 failed`,
-counted as the run page's Jobs card counts them; click it to open that run. Each card shows its tab name, the directory its shell is in now, and
-the command running in it, if any, and when it started and how long it has been idle (no output and no
-typing); a tab's tooltip says the same. Next to the command, the card says how many processes the shell has
-started, as `▶ make · 3 processes`, or `2 background processes` when nothing runs in front; click it to see each
-one's process ID and command, indented under its parent. A process that left the shell, such as one started with
-`nohup` or `setsid`, is not counted. Choose one with a click, or with the arrow keys and Enter, to close the dialog
-and show that shell in the pane with the keys; one of another project normally takes the page there, as the project list
-does. The pencil on a card renames its tab and the cross ends its shell, after asking; **F2** and **Delete** do
-the same for the card with the keys, and the dialog stays open for the next one. **End all** beside a project's
-name ends its shells, and **End all shells** at the top every shell, after asking. The **+** beside a project's name
-starts another shell there, and **New shell in** under the cards starts one in a project or state directory that
-has none (**All projects** under the state directory), or in no project; each starts where that page would, and the new shell appears as a card without being shown
-in a pane.
+### Shells and projects
 
-To move a shell to another project, drag its card onto that project's group, or use the **Move** icon on the card,
-which lists the projects (and **All projects** of each state directory) it can go to, those without shells too. The
-shell keeps running as it is; its next command uses the new project (`rotari add` without `-p` adds there), and a
-command running now keeps the project it had until it ends. A pane showing it on a page of the old project shows
-another of that project's shells instead. Moving works for bash and zsh started with rotari's shell integration
-(the default); a shell of no project, or another shell, cannot move, and its icon says why. The list is taken when the dialog
-opens, and **Refresh** takes it again. Escape, **Close**, **All shells**
-again, or a click beside the dialog closes it. The directory is the shell's own, not that of a program running in it, and when the
-server cannot find it the card says where the shell started instead. The command is the one in the foreground,
-the first of a pipeline; a shell with no job control runs everything in its own process group, so its cards
-show no command.
-
-Shells belong to projects, as an editor's terminals belong to its window. By default a project's pages show
-that project's tabs, and the list beside them goes to other projects that have shells. A state
-directory's **All projects** and **Recent jobs** show the shells of that state directory itself, for
-work across its projects. Activity and History search, which cover every state directory, show the
-shells of no project.
-
-Those shells of the state directory itself stay at hand on its projects' pages: after a project's tabs (labelled **This project**) and its
-**+**, behind a divider marked **Shared across projects**, come the state directory's own (its path is in the divider's
-tooltip) and a second **+**, which starts another of them, as **All projects** would, even when there is none yet.
-Choose one, split to it, or pick it in **All shells** as you would a project's tab; the page stays where it is.
-Following a link to another project of the same state directory keeps a pane that showed one in its place, and the
-keys with it if it had them, while the pane that showed the old project's shell shows the new project's. So a shell
-started on **All projects** for work across projects stays beside each project's own as you move between them. A
-project with no shells of its own shows the shared ones and starts none; **+** still starts one in the project.
-
-The **Link terminal and project** icon beside the project list is on by default. Turn it off to keep the
-terminal's project and panes when you open another page, and to choose another project in the terminal's
-list or **All shells** without moving the page. The choice and terminal project stay with this browser tab
-through navigation and reloads, including when the panel moves into a window or back. Turn it on again to
-follow the current page; for a separate window, Activity and History search still leave the window as it
-is. With the link off, **+**, splitting, and the Explorer's **Open in a new terminal tab** start shells in
-the terminal's project, where that project's latest run started. A run's **Open a terminal here** is an
-explicit exception: it switches the terminal to the run's project and starts there. Send buttons type into
-the displayed shell and name its project when it differs from the page's, without pressing Enter.
+Shells belong to projects: a project's pages show that project's tabs. A state
+directory also has shells of its own, for work across its projects, which its
+projects' pages show under **Shared across projects**. Turn off **Link terminal
+and project** to keep the terminal's project while you visit other pages.
 
 | Where you are | Where a new shell starts |
 |---|---|
@@ -309,381 +162,168 @@ the displayed shell and name its project when it differs from the page's, withou
 | A state directory's All projects or Recent jobs | The workspace it belongs to, otherwise your home directory |
 | Activity or History search | Your home directory |
 
-A state directory belongs to a workspace when it is named `.rotari-state`, as `rotari init` makes
-it, or when the `.rotari.toml` beside it names it as `basedir`; the workspace is the directory that
-holds both. Any other state directory, such as the default `~/.local/state/rotari`, has no
-workspace, and its shells start in your home directory.
+A state directory belongs to a workspace when it is named `.rotari-state` or
+when the `.rotari.toml` beside it names it as `basedir`.
 
-A project's shells have `ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME` set to it, so `rotari show` and the
-like need no `-p`, wherever you `cd`. Give `-p` to reach another project. A state directory's own
-shells have `ROTARI_BASEDIR` set to it and no `ROTARI_PROJECT_NAME`, so commands there pick a project
-as they would anywhere else: from `-p`, a config, or the only project in the state directory. Shells of no project keep what `rotari web` itself has.
+`ROTARI_BASEDIR` and `ROTARI_PROJECT_NAME` are set in a project's shells, so
+`rotari show` needs no `-p`, wherever you `cd`. A state directory's own shells
+have only `ROTARI_BASEDIR`.
 
-**+** opens another shell in a tab of its own, up to eight per project or state directory and 32 in all, and each tab's
-**×** ends its shell. A run's page also has **Open a terminal here** beside its working directory.
-If the directory is gone, the project has no run, or a workspace's `.rotari.toml` cannot be read,
-the shell opens in your home directory and its first line says why. A shell that has started stays where it is when newer runs start.
+**All shells** lists every running shell, with its directory and command. Drag a
+card to another project to move the shell there; a command already running keeps
+the old project. Only bash and zsh with
+[shell integration](#command-blocks-and-shell-integration) can move.
 
-Copy buttons have a send button beside them that types the same thing into the tab being shown, in the
-focused pane if the panel is split, without running it: press Enter in the terminal to run it. A suggested command, such as how to run the queue,
-goes in as one line with its comments and alternatives left out. A value such as a run ID or a path
-goes in as one word, quoted if it needs to be, so it can finish a command you have started typing: in single
-quotes, with any `'` or `\` outside them as `\'` or `\\`, which sh, bash, zsh, tcsh, and fish all read the same
-way. It goes to whatever is running there, such as `vim`. If the project has no shell, the button says so and
-starts none. A log or other text of several lines goes in as pasted text, without colors and up to
-256 KiB, and only where the program takes it as such, such as a recent `bash` or `zsh` prompt or an
-editor; elsewhere each line would run, so the button says so and sends nothing.
+### Typing into a shell
 
-The **Explorer** shows the files where the shell in the pane with the keys is, as an editor's file tree beside its
-terminal. It opens with the panel, as a column at its left wherever the panel is, and the panes make room for it.
-Drag its right edge to change its width, as far as leaves the panes 200 pixels. The icon at the left end of the
-panel's bar closes it and opens it again; the browser remembers whether it is open and how wide. While you drag an
-edge, of the Explorer, the panel, or a pane, the shells are told the new size only when you let go: a shell
-draws its prompt again at each size it hears of, which can leave stray prompt lines, so this keeps it to once.
+Send buttons, **Recent directories**, **Commands**, and the Explorer type into
+the focused pane without pressing Enter. Values are quoted if needed. Send
+buttons type into whatever runs there, such as `vim`; the two lists type only at
+a prompt. Text of several lines (up to 256 KiB) is sent only to a program that
+takes pasted text as such, since elsewhere each line would run.
 
-While **Follow** (the link icon) is on, the tree shows the shell's directory and moves with it: it looks again a
-moment after you press Enter in that pane, every few seconds while the panel is in view, when the pane shows
-another shell, and when you press **Refresh**. **Up** shows the directory above and turns Follow off, so the
-tree stays where you put it while the shell moves on; the line at its foot then says where the shell is, with a
-**Follow** button to go back. You can go up and down anywhere, as the shell can.
+**Recent directories** and **Commands** are kept in memory only, until every
+shell ends.
 
-Click a folder to open or close it, and double-click a file, or press Enter on it, to open it in the Table viewer
-in a new tab; the arrow keys move through the tree. Pointing at a row shows buttons that send its path to the
-terminal, open it in the Table viewer or [in your editor](#opening-files-in-your-editor), and launch a command on it. Right-click offers those, **Open in a new terminal tab**, which starts
-a shell of the terminal's project in that folder (a file's own folder, for a file), **Copy the path**, and **Copy the
-path from here**, relative to the shell's directory. You can also drag a row onto a pane to type its path there. A path goes
-in as the send buttons above send a value: relative to the shell's directory when the file is under it, otherwise
-whole, quoted if it needs to be, and not run until you press Enter. A name with a line break or other control
-character shows it as an escape such as `\n` and is not sent. A name that is not valid UTF-8 shows a
-replacement character and offers nothing, since the page cannot name it back to the server. A folder of more
-than 2,000 entries shows the first 2,000 and offers the rest in the Table viewer, and a folder that cannot be
-read says why. A symbolic link shows where it points, and opens what it points to.
+### Explorer
 
-The Explorer also changes files, as a terminal application's file pane does. **New File** and **New Folder** in
-its head, or in the menu of a row or of the tree's empty part, ask for a name and make an empty file or a folder
-in the folder you chose (a file's own folder, for a file, or the top of the tree). A row's menu also has **Rename**
-(F2), **Delete** (the Delete key), **Cut**, **Copy**, and **Paste** (Ctrl+X, Ctrl+C, Ctrl+V). Drag a row onto a
-folder to move it there; hold it over a closed folder for a moment to open that folder first, or drop it on the
-tree's empty part to move it to the top. Deleting and moving by dragging ask first; deleting a folder says how many
-entries it holds directly and that everything in it goes, and cannot be undone. Nothing ever replaces a file or
-folder of the same name: the Explorer says so instead. A name cannot hold `/`, `\`, or a control character. A
-move between file systems, such as onto another disk, is refused: use `mv` in the shell, which can copy. Copy is
-for files: a copy pasted beside its file is named `name copy.ext`, then `name copy 2.ext`; for a folder, use
-`cp -r` in the shell.
+The tree follows the shell's directory while **Follow** is on.
 
-**Download** in a row's menu saves a file through the browser, or a folder as `name.zip`, made as it is sent, so a
-large folder starts at once and takes as long as it takes; the browser shows its progress. Symbolic links inside it
-are left out, and if a file in it cannot be read, the download fails rather than leaving one out. In Chrome and Edge
-you can also drag a row out of the browser onto your desktop. **Upload...** in the menu of a folder, a file (its
-folder), or the tree's empty part picks files to send there, and you can drop files from your desktop onto a
-folder or the tree, holding them over a closed folder to open it. While a file goes up, the foot of the Explorer
-says which, how much of it has gone, and shows a bar. A file whose name is taken there is not uploaded,
-and the Explorer says so; a folder dropped among files is not uploaded either.
+- Nothing overwrites a file or folder of the same name.
+- Delete cannot be undone.
+- A move to another file system is refused, and folders cannot be copied; use
+  `mv` and `cp -r` in the shell.
+- A folder downloads as a zip without its symbolic links. Folders cannot be
+  uploaded.
+- A name that is not valid UTF-8 offers no actions, and one with a control
+  character cannot be sent to the terminal.
+- A folder shows its first 2,000 entries.
 
-The **Recent directories** icon in the bar, or a click on the path at the top of the Explorer, lists where the
-project's shells have been, newest first, and under **Runs** where the project's last few runs started (on a
-state directory's own pages, its workspace instead). Type to filter, use the arrow keys or the mouse, and choose
-one to type `cd` and the directory into the pane with the keys, quoted if it needs to be; press Enter to go there.
-Nothing is typed while a program such as `vim` or `ssh` runs in the shell, and a note says what runs. Each row can
-also show its directory in the Explorer, open a new tab there, or copy the path. A directory that is no longer there
-is greyed out, as is a run whose directory cannot be read, with the reason.
+### Links in output
 
-Pulldowns under the filter, in **Recent directories** and in **Commands**, pick another state directory (when there is
-more than one) and another project of it, or `(this basedir)` for the shells of its own pages; the list opens at where
-you are. For another place, **Recent directories** shows where its shells have been and where its runs started, and
-**Commands** the commands that its shells ran and that ended, newest first (up to 200, kept in memory until every shell
-ends, and only from shells that mark their commands). Choosing one of those commands types it at the prompt without
-running it, as a directory is typed, or you can copy it; a command with a control character can only be copied.
+Run IDs, job IDs, and paths that exist become links, as do `file://` (OSC 8)
+links and web addresses. A name without a slash is a link only with a line
+number, such as `train.py:12`. Job IDs are looked up in the project's last 20
+runs and its queue. Right-click a path for more actions.
 
-A shell you start by hand inside a tab, such as `zsh` typed at a bash prompt, is followed as the shell you are in: the
-Explorer follows its directory, **Recent directories** records where it goes, and typing at the prompt treats its
-prompt as the prompt. A bash or zsh you start that way marks its commands too, with nothing to set up, so blocks,
-click to move, and Cut work in it. A quoted shell-option value containing spaces stays one argument when rotari
-identifies that shell. A shell inside `tmux`, `screen`, or `ssh` is not followed and shows no marks.
+A relative path is taken from the directory of the prompt (OSC 7) its command
+ran from, so after `cd sub && ls`, paths in `sub` are not found. Paths printed
+by another host over `ssh` are not links when its shell reports its directory.
 
-So that inner shells mark, rotari's bash exports `ZDOTDIR` naming rotari's zsh files for its whole session, and rotari's
-zsh does for a command line starting with `zsh`; both export `PROMPT_COMMAND` with a loader that an inner bash runs.
-A `.bashrc` that appends a hook after that loader can leave the inner bash's first prompt unmarked; putting the
-loader last lets it mark that prompt too.
-A program started from a panel's bash that reads `$ZDOTDIR` therefore sees rotari's directory, and a `tmux` started in
-a panel's shell keeps its shells reading your files through rotari's. rotari keeps those files under your cache
-directory (`~/.cache/rotari/shell-integration`), so that they are there after the server stops. A `.bashrc` that
-sets `PROMPT_COMMAND` rather than adding to it leaves that bash without marks; to mark anyway, add this line to the end
-of `~/.bashrc` (for zsh, to `~/.zshrc`, with `marks.zsh`), which does nothing outside a rotari terminal:
+### Command blocks and shell integration
 
-```bash
-[ -r "$ROTARI_SHELL_INTEGRATION/marks.bash" ] && . "$ROTARI_SHELL_INTEGRATION/marks.bash"
-```
+In bash and zsh, each command's output is a block, with a dot for how it ended:
+point at a command, click its dot, or right-click to copy or fold it, or
+type it again.
+**Open transcript** exports commands and output as Markdown, HTML, or a shell
+script. Blocks and transcripts cover the last 8 MiB the page received.
 
-The list needs no setup in your shell: rotari looks at where each shell is when it is back at its prompt after you
-press Enter, so `cd`, `pushd`, and tools such as `z` all count, and so does where each shell starts. A directory
-changed inside another program, such as a nested shell, `ssh`, or `tmux`, does not. It keeps the last 20
-directories of each project, in memory only, and forgets them all when every shell ends, as when you sign out.
+A command that ends out of sight marks its tab, and one of at least 30 seconds
+also sends a [desktop notification](NOTIFICATIONS.md#terminal-commands).
 
-Run IDs, job IDs, and paths that a shell prints become links when you point at them, as web addresses do, but only
-when they name something: a run of any project of the state directory (of any state directory, in a shell of no
-project), a job of the tab's project in its last 20 runs or its queue, or a file or directory on the server. A nine-digit
-hex word that is no job, such as a git hash, stays text. Click a run or job to open its run page with the job chosen
-(a job only queued opens the project's page); the panel and its shells stay, and Ctrl- or Cmd-click opens a new tab
-instead. Click a directory to open a new terminal tab there, or a file to open it in the Table viewer;
-right-click a path for the menu its row in the Explorer has, with **Show in the Explorer** too. A `:12` or
-`:12:3` after a path is the line, and column, that **Open in VS Code at line 12** in that menu opens
-([Opening files in your editor](#opening-files-in-your-editor)); a name without a slash, such as `train.py:12`, is a link only
-with one. A Python traceback's `File "train.py", line 12` is one link. A relative path is taken from the directory the command that printed it ran in:
-bash and zsh started by rotari say it at each prompt (OSC 7, as other terminals read it), as do fish and many prompts,
-so a path printed before a `cd` still names what it did. A command line that changes directory itself, such as
-`cd sub && ls -d */`, prints relative to where it went, which the shell does not say, so its paths are taken from
-where its prompt was. Output from a shell that says no directory is taken from where the shell is when you point at
-it, and a directory said by another host (after `ssh`) links no paths, since they are that host's. Pointing at a link
-says what it opens.
+rotari starts bash and zsh with its own startup files, which read yours and then
+add marks (OSC 133). Pass `--terminal-shell-integration=false` for plain login
+shells. Other shells have blocks if they send the marks themselves, as fish 4
+does.
 
-A shell whose prompt marks where each prompt, command line, and output start (OSC 133, which VS Code, iTerm2,
-WezTerm, and Windows Terminal also read) has its output shown as one block per command. A dot left of each prompt
-says how its command ended: green for success, red for a failure, grey while it runs, and a ring when the shell gave
-no exit code. Pointing at the dot shows the command, its exit code, and how long it took, for a command that ran
-while the page was open. Failed commands are also marked in red on the scroll bar, and a thin line sets each prompt
-apart from the output before it. The **Commands** icon in the bar lists the pane's commands, newest first, with how
-each ended; type to filter them, and choose one to scroll back to it, or copy its output or command line from its
-row without scrolling. When a command ends in a tab you are not looking at, the tab's bell is red if it failed, and
-pointing at the tab says the command, its exit code, and how long it took; each card in **All shells** says how its
-shell's last command ended. A command that ran at least 30 seconds raises a desktop notification when it ends out of
-sight, under the same toggle as runs' notifications; set which ends and how long in the `[terminal]` section of the
-notification config ([Notifications](NOTIFICATIONS.md#terminal-commands)). Point at a command's prompt or output to show **Copy command** and **Copy output** at the right end of its prompt's
-line, or at the top right of the pane when you have scrolled past that line, so that you can copy or fold a long output
-from anywhere in it. Click in the command line you are typing to move the cursor there, as in an editor; zsh started by rotari
-puts it at the exact character, and other shells get the arrow keys, so in a zsh not started that way a click past the
-typed text may take a zsh-autosuggestions suggestion, as the right arrow would. Alt+click keeps xterm.js's own
-cursor move. Right-click for **Cut**, **Copy**, **Paste**, and **Select all**; while you type a command line, for
-**Move the cursor to text...** (to where what you type next appears in the line), **to the start**, and **to the
-end**; and on a command's output for its
-**Copy command** and **Copy output**. Paths in the command line you are typing are not links, so that a click there
-moves the cursor and a drag selects; Cut works on a selection inside the command line you are typing, and removes
-nothing if the copy fails. Paste asks the browser to read the clipboard, which it may ask you to allow; Ctrl+V (Cmd+V
-on a Mac) always works. Shift+right-click opens the browser's own menu. Clicking a dot offers **Copy
-command**, **Copy output**, **Select output**, and **Type command again**, which types a one-line command at the
-prompt without pressing Enter, only while nothing runs in the shell, as **Recent directories** does.
+- **bash before 4.4** has no marks if your files set a `DEBUG` trap.
+- **Shells started inside a tab:** bash and zsh are marked too, but not inside
+  `tmux`, `screen`, or `ssh`, whose directory changes are not followed either.
+  For this, rotari exports `PROMPT_COMMAND` and `ZDOTDIR` naming its files in
+  `~/.cache/rotari/shell-integration`, so programs that read `$ZDOTDIR` see that
+  directory.
+- **A `.bashrc` that replaces `PROMPT_COMMAND`** leaves an inner bash unmarked.
+  Add this at its end (for zsh, `marks.zsh` in `~/.zshrc`):
 
-A finished command's output longer than 10 lines can be folded, with **Fold** beside its copy buttons, **Fold output**
-on its dot, or **Fold** on its row in **Commands**: its first and last 3 lines stay, with a dim line between them
-saying how many are folded, so that the commands around it come together and the scroll bar is shorter. Click that
-line, or **Unfold**, to bring the output back. Copying a folded output copies all of it. Folds stay while this browser
-tab shows the shell, coming back after switching tabs or following a link; other tabs and browsers see it unfolded.
-The page writes the screen again from the output it has received to fold, so an output must still be in the last
-8 MiB the page has seen, and nothing folds while a full-screen program such as `vim` runs. A setting a folded output
-itself left changed in the terminal, such as a color it never reset, is gone while it is folded.
-
-When you scroll up into a command's output and its prompt goes off the top, a line at the top of the pane keeps
-showing that command, with its dot, so you know what printed what you see; click it to go back to its prompt. It
-covers the pane's first row while it shows. Turn it off, for every pane, with **Keep the command at the top** at
-the end of the pane's right-click menu.
-
-**Open transcript** in the pane's right-click menu (or **Open transcript from here** on a command's dot) opens the
-shell's commands on a page of their own, one card each with how it ended, where it ran, how long it took, and its
-output in color. Filter them, keep the failed ones, uncheck the ones you do not want, choose Markdown, HTML (one file), or Shell
-script (the commands alone, with a `cd` where the directory changed, and the failures marked), and **Download** the
-rest, or **Save on the server…**, which offers the shell's current directory and a file name to change; a file of that
-name is replaced only after you say so, and **Show in the Explorer** shows where it went. The page takes the transcript from the tab that opened it, so it holds what that tab has received (the last
-8 MiB) and nothing goes through the server; **Refresh** takes it again. Blocks are kept
-only in the page, from the output it shows, so they come back after following a link for as much output as is shown
-again. A shell that sends no marks looks as it always did.
-
-bash and zsh mark their commands with nothing to set up: rotari starts them with startup files of its own, which
-read yours as the shell would (bash's `/etc/profile` and the first of `~/.bash_profile`, `~/.bash_login`, and
-`~/.profile`; zsh's `.zshenv`, `.zprofile`, `.zshrc`, and `.zlogin` from your `ZDOTDIR` or home) and then add the
-marks after your own prompt hooks, so a prompt theme such as starship or powerlevel10k keeps its look and its exit
-status. Your files are not changed. bash before 4.4, as macOS ships, gets its marks from a `DEBUG` trap, unless your
-files set one of their own, in which case its prompts get no marks. fish 4 sends the marks itself, and oh-my-posh does with
-its shell integration option on; other shells get no blocks. To start bash and zsh as plain login shells instead,
-pass `--terminal-shell-integration=false`, or set it in a config or the environment as the other terminal options
-are. Any program can print the marks, so a file shown with `cat` can draw false ones; they change only what the page
-shows.
-
-The **Clear** icon empties the tab's screen and scrollback, and what would be shown again after following a
-link. It sends nothing to the shell, so the prompt may not show again until you press Enter. It does nothing
-while a full-screen program such as `vim` runs, and says so.
-
-The panel shows up to four shells at once, such as an editor beside `rotari wait` and a prompt.
-In the bar, the **Split right** icon adds a column of the whole height beside the focused pane's, and the
-**Split down** icon a pane under it. Each shows a shell not yet in a pane, or a new one if there is none, and refuses if the panes
-would get too small. Drag the handles between the panes to change their shares; in a narrow panel they all stack. The
-pane with a colored top edge has the keys, and **Clear** and the send buttons act on it, while **A-**, **A+**, and
-**Maximize** apply to the whole panel.
-
-There is one row of tabs, each outlined. Clicking a tab shows it in the focused pane, whose tab has a darker
-outline, and a dashed tab is in another pane: clicking it makes the two panes change places, since a shell
-cannot be in two. **+** starts a
-shell in the focused pane. The **Close pane** icon closes the focused pane, and its shell keeps running in its tab;
-closing a tab ends its shell, wherever it shows. When a pane's shell ends, the pane moves to a tab not
-in a pane, or closes if there is none. Each browser tab keeps its own panes for each
-project, and gets them back after following a link. A bar too narrow for its tabs and buttons wraps onto more rows.
-
-A tab shows a small triangle while a command runs in its shell's foreground, whether you are looking at it or not,
-with the program's name, such as `1 python3`, after the tab's number or name; a script run by `python` shows `python`, and
-**All shells** has the whole command line. Pointing at the tab says it too. It follows within five seconds, so a short
-command may not show. A shell at its prompt has neither, even with a command left in the background with `&`.
-
-A tab you are not looking at is marked when it prints something, until you show it, and the list marks
-other projects the same way. When a command finishes in a tab you are not looking at, such as a build or a
-training run, the tab and its All shells card show a bell instead, until you show it; a command left running in
-the background with `&` does not count. When a shell in another tab ends, a note says so. Signing out ends every shell, so
-when anything runs in one, a command in front or processes left in the background, **Sign out** first lists those
-shells and what they run, and asks. Closing a tab, or ending shells from All shells or a tab's menu, says how many
-processes run in them and names a few before asking. These update every few
-seconds while the panel is open and the page is in view.
-
-Drag a tab to move it, or right-click it to move it, rename it, close the tabs to its right, close all of
-this project's tabs, or close every shell of every project. All shells offers the last two as well: **End all**
-beside a project's name and **End all shells** at the top. A new tab goes at the right end, and keeps the lowest number free. Names and places last
-as long as their shells.
-
-A web address in the output opens in a new tab when clicked, after the browser asks you with the address shown: a
-program can print any address, so check it before you say yes.
-
-Links that a program prints itself (OSC 8, as `ls --hyperlink`, gcc, and newer tools do) work too, even when their
-text is not the address. Pointing at one shows the address. A `file://` link to a file or directory on the server opens
-as a path in the output does, and right-clicking it gives the same menu; one to another host, or to a path that does
-not exist, opens nothing and says why. A web address asks first, as above. Other kinds, such as `mailto:`, do not
-open; right-click one to copy its address.
-
-**A-** and **A+** change the text size, which the browser remembers.
-
-**Options**, then **Font...**, sets the terminal's font to one installed on the computer the browser runs on, such as a
-Nerd Font for the icons of a prompt, `tmux`, or Neovim. The list has the well-known monospaced fonts found there.
-Chrome and Edge also offer **List installed fonts**, which adds every monospaced font once you allow it, and **Other...**
-takes any name. The default fonts follow the one chosen for characters it lacks. The dialog shows a sample, and says when
-the browser does not seem to have the font or its characters differ in width. A browser may keep fonts you installed
-yourself from pages; then it does not find them. The browser remembers the font, so each browser, and each computer, has its own.
-
-On a Mac, **Options** also has **Use Option as Meta**, for `M-` keys in a shell, `tmux`, or Neovim. It is off at first,
-since Option then no longer types characters, such as the backslash of a Japanese keyboard. The browser remembers it.
-
-**Let programs copy**, also in **Options**, lets programs such as `tmux` and Neovim put text on the clipboard of the
-computer you sit at (OSC 52), through `ssh` too. It is off at first: with it on, anything printed in a terminal can
-replace the clipboard, a file shown with `cat` or a job's log included, so look at what you paste. The panel says each
-time a program copies. It copies at once only in the pane you are using; elsewhere, or when the browser wants a click, it
-offers the text with **Copy**. Text with control characters, or longer than 1 MiB, is not taken. Programs cannot read the
-clipboard. The browser remembers the choice.
-
-- **`tmux`** copies from its copy mode as it is. For programs inside it, add `set -s set-clipboard on` to `~/.tmux.conf`.
-- **Neovim** needs a clipboard that copies this way and does not ask the terminal for its contents. With
-  `vim.g.clipboard = 'osc52'` alone, putting from `+` waits 10 seconds for an answer that does not come. In `init.lua`:
-
-  ```lua
-  local osc52 = require('vim.ui.clipboard.osc52').copy('+')
-  local last = { { '' }, 'v' }
-  local function copy(lines, regtype)
-    last = { lines, regtype }
-    osc52(lines)
-  end
-  local function paste()
-    return last
-  end
-  vim.g.clipboard = {
-    name = 'OSC 52, copy only',
-    copy = { ['+'] = copy, ['*'] = copy },
-    paste = { ['+'] = paste, ['*'] = paste },
-  }
+  ```bash
+  [ -r "$ROTARI_SHELL_INTEGRATION/marks.bash" ] && . "$ROTARI_SHELL_INTEGRATION/marks.bash"
   ```
 
-  Then `"+y`, or any yank with `vim.o.clipboard = 'unnamedplus'`, copies. Putting gives what Neovim last copied; paste
-  other text with the browser's own paste.
+  One that appends a hook after rotari's can leave the first prompt unmarked.
+- Any program can print the marks, so a file shown with `cat` can draw false
+  ones. They change only what the page shows.
 
-The **Maximize** icon gives the panel the whole window, for programs such as `vim`, until you press it
-again, now **Restore**. Each icon's name shows when you point at it.
-The browser remembers it from page to page. Keep the panel small to reach the page's menus and dialogs.
+### Keys, fonts, and clipboard
 
-Opening the panel starts a shell if the project has none. Following a link to another project with
-the panel open starts nothing, so browsing leaves no shells behind; the panel offers to start one.
+- Some keys, such as Ctrl-W, stay with the browser. On a Mac, **Options** >
+  **Use Option as Meta** gives `M-` keys.
+- **Options** > **Font...** uses a font installed on the browser's computer,
+  such as a Nerd Font.
+- Right-click opens the terminal's menu; Shift+right-click the browser's.
+- **Options** > **Let programs copy** lets `tmux`, Neovim, and other programs
+  set your clipboard (OSC 52, up to 1 MiB), through `ssh` too. It is off by
+  default: with it on, anything printed, including a file or a log, can replace
+  the clipboard. Programs cannot read it.
 
-```sh
-export ROTARI_WEB_AUTH_TOKEN=...      # optional; otherwise one is generated and printed
-rotari web --allow-terminal
+For programs inside `tmux`, add `set -s set-clipboard on` to `~/.tmux.conf`. In
+Neovim, `vim.g.clipboard = 'osc52'` alone makes putting from `+` wait 10 seconds
+for an answer that does not come; use this in `init.lua`, with which putting
+gives what Neovim last copied:
+
+```lua
+local osc52 = require('vim.ui.clipboard.osc52').copy('+')
+local last = { { '' }, 'v' }
+local function copy(lines, regtype)
+  last = { lines, regtype }
+  osc52(lines)
+end
+local function paste()
+  return last
+end
+vim.g.clipboard = {
+  name = 'OSC 52, copy only',
+  copy = { ['+'] = copy, ['*'] = copy },
+  paste = { ['+'] = paste, ['*'] = paste },
+}
 ```
 
-- **Who can use it:** anyone who can sign in gets a shell as you, on the host running
-  `rotari web`. A token is always required, and it opens only on a direct `localhost` connection,
-  such as an SSH forward, or over HTTPS. See the
-  [security model](SECURITY.md#the-web-terminal).
-- **Following links:** shells live on the server, so they carry on as you move between pages, and
-  the panel shows recent output again. This includes full-screen programs such as `vim`.
-- **Tabs you are not looking at:** their programs keep running. Switching to one shows up to its
-  last 256 KiB of output again, as following a link does, not its whole scrollback. Each pane keeps
-  up to 10,000 lines, so a replay of shorter lines starts later.
-- **Very fast output:** a page that cannot keep up, usually one out of sight, whose work the browser
-  slows, lets go of the shell once 8 MiB waits to be shown. The program is not slowed. The page
-  comes back to the shell when it is in sight, with only recent output, and says so.
-- **Several browser tabs:** each browser tab shows one shell and remembers which. Two can use
-  different shells at once. If one opens a shell another is using, it takes it, and the other says
-  so and offers to take it back.
-- **When a shell ends:** with its tab's **×** or `exit`, which moves to a neighboring tab of the
-  project.
-- **When all of them end:** when you sign out or when `rotari web` stops, which also ends what is running in
-  their foregrounds. No page needs to stay open. With `--terminal-idle-timeout`, they also end that long after
-  the last `rotari web` page closes; any open page keeps them, even in the background with its panel closed,
-  and a computer that sleeps counts as closing its pages, as does a sign-in that has expired. Use `rotari run`
-  or `tmux` for long work: a run started in the terminal carries on regardless. To keep shells through a
-  disconnect, see [below](#keeping-shells-through-a-disconnect).
-- **Changing the limits,** on the command line, in a config, or in the environment (see
-  [above](#setting-them-in-a-config-or-the-environment)):
+### How long shells last
 
-  | Flag | Default | |
-  | --- | --- | --- |
-  | `--terminal-idle-timeout` | `0` (none) | How long the shells last after the last page closes; `0` for as long as the server. Otherwise at least `2m`. |
-  | `--terminal-max-shells` | `32` | Shells at once. |
-  | `--terminal-max-shells-per-project` | `8` | Shells of one project, or of one state directory's own pages, at once. |
-  | `--terminal-replay-size` | `256KiB` | Recent output kept per shell, up to `64MiB`. More uses more memory. A pane shows at most the last 10,000 lines of it. |
-  | `--terminal-shell` | `$SHELL`, or `/bin/sh` | The shell to run. |
-  | `--terminal-shell-integration` | `true` | Start bash and zsh with rotari's startup files, which read yours and mark commands for blocks. `false` starts them as plain login shells. |
+Shells run on the server, so they carry on as you move between pages, close the
+panel, or disconnect. They end when you close their tab, sign out, or stop
+`rotari web`.
 
-- **Keys:** a browser keeps some keys for itself, such as Ctrl-W, which do not reach the shell.
-- **Behind a reverse proxy:** the proxy must pass WebSocket connections to `/_terminal/ws`.
+- A page that reconnects, or a tab you return to, shows only recent output.
+- A page that cannot keep up lets go of the shell at 8 MiB of pending output and
+  reconnects once in sight. The program is not slowed.
+- Two browser tabs cannot show the same shell; the second takes it, and the
+  first offers to take it back.
+
+| Flag | Default | |
+| --- | --- | --- |
+| `--terminal-idle-timeout` | `0` (none) | End the shells this long after the last page closes; at least `2m`. A sleeping computer or an expired sign-in counts as closed. |
+| `--terminal-max-shells` | `32` | Shells at once. |
+| `--terminal-max-shells-per-project` | `8` | Shells of one project, or of one state directory's own pages, at once. |
+| `--terminal-replay-size` | `256KiB` | Recent output kept in memory per shell, up to `64MiB`. A pane shows at most its last 10,000 lines. |
+| `--terminal-shell` | `$SHELL`, or `/bin/sh` | The shell to run. |
+| `--terminal-shell-integration` | `true` | Mark commands in bash and zsh. |
 
 ### Keeping shells through a disconnect
 
-The shells belong to the `rotari web` process, not to your browser. To have them, and what runs in them,
-outlast a closed laptop, a dropped connection, or a night away, keep that process alive and give it time:
+Shells last as long as the `rotari web` process. To keep them through a closed
+laptop or a dropped connection, press Ctrl-D before you go, or start it detached
+or so that a disconnect detaches it:
 
-1. **Press Ctrl-D before you go,** or start `rotari web` with `--disconnect-action detach` so a dropped
-   connection detaches it, or start it with `--detach`, which starts the server in the background, where it
-   outlives your SSH session, and returns once the server listens (see
-   [Stopping and detaching](#stopping-and-detaching)):
+```sh
+rotari web --detach --allow-terminal
+rotari web --disconnect-action detach --allow-terminal
+```
 
-   ```console
-   $ rotari web --detach --allow-terminal
-   --allow-terminal requires authentication. Sign in with user name "rotari" and this token as the password:
-     3f9c…
-   Set ROTARI_WEB_AUTH_TOKEN to keep one token across restarts.
-   rotari web listening at http://127.0.0.1:8080 in the background (PID 12345)
-   Log: ~/.local/state/rotari/master/web/HOST.log
-   Stop it with: rotari web --shutdown
-   Shells end when the server stops or you sign out.
-   ```
+Leave `--terminal-idle-timeout` unset, or longer than you will be away.
 
-   Close the SSH session; the server, and its shells, keep running. Reach it again through your usual SSH
-   forward.
-2. **Leave `--terminal-idle-timeout` unset,** or longer than you will be away. Unset, shells last as long as the
-   server. With a limit, it counts from the last page closing, so a laptop that sleeps overnight needs more than
-   the night.
+**Finding it again:** run the same command. `--detach` prints the running
+server's URL, or fails naming the options that differ. After an upgrade, it
+notes that the server runs another binary; stop it and start it again to use the
+new one. A generated token is not shown again, so keep it or set
+`ROTARI_WEB_AUTH_TOKEN`.
 
-**Finding it again:** run the same command. While a detached server runs on this host, `--detach` starts no
-other: it prints that server's URL and PID (`already running since ...`), or fails naming the options that
-differ from the running server's and its PID. When that server runs another rotari binary, as after an upgrade,
-it says so; stop it and start it again to use the new one. A token generated at start is not shown again, so keep it, or set
-`ROTARI_WEB_AUTH_TOKEN` before starting to choose your own. There is one detached server per user and host;
-a plain `rotari web` still starts beside it, and says it is there, but its shells are its own.
+**Stopping it:** `rotari web --shutdown`, or **Stop server** in Settings. Both
+end its shells and ask first when anything runs in them; without a terminal,
+`--shutdown` then needs `--yes`.
 
-**Stopping it:** `rotari web --shutdown`, or **Stop server** in the Web UI's Settings menu. Either ends its shells,
-as stopping `rotari web` always does, so either first lists what runs in them and asks. Without a terminal,
-`--shutdown` then needs `--yes`. `--shutdown` returns once the server has stopped, and says so when none was running.
-If the server was killed without a chance to clean up, the next `--detach` starts a new one. Its output goes to the log named above,
-which keeps about 1 MiB and one older `.log.1`. If it cannot start, for example because `--port` is taken,
-`--detach` fails with the reason and the log's path.
-
-Running `rotari web` in `tmux` or `screen` on the host works too, if you prefer.
-
-Even so, signing out, stopping `rotari web`, or restarting the host ends every shell, and a shell shows only
-its last 256 KiB of output (`--terminal-replay-size`), at most 10,000 lines, when you come back. For work that must survive those,
-run it with `rotari run`, or in `tmux` inside the shell.
+Signing out, stopping `rotari web`, or restarting the host ends every shell. For
+work that must survive signing out or a stopped server, use `rotari run`, or
+`tmux` inside the shell.
 
 ## Artifacts
 
@@ -691,25 +331,15 @@ run it with `rotari run`, or in `tmux` inside the shell.
 
 Rotari records the paths each job's definition names (arguments, `--env` and
 matrix values, redirections, and paths in the config files and scripts it
-reads), without running the job. A sentence that mentions a path, such as a
-docstring or log message (spaces inside and a final period), is not taken
-for one. Paths built at runtime are missed; declare
+reads), without running the job. Paths built at runtime are missed; declare
 them with `rotari add --artifact PATH`, which may use
 `$ROTARI_ARRAY_TASK_ID`, `$ROTARI_JOB_DIR`, and the job's variables.
-`rotari show -j JOB --artifacts` lists them in a terminal.
 
-In the Web UI, a job's **Artifacts** button lists them, while the job runs
-too. Files can be previewed (images, audio, video, PDF, NumPy arrays, tables,
-Markdown, common source/config formats, and other text) or downloaded, and
-directories opened. Markdown rendering, syntax highlighting, and PDF previews
-use the same local renderers in the artifact preview and Table viewer.
-Markdown rendering and syntax highlighting stop at 2 MiB and show the source.
-A file of another type, such as one without an extension, has **Open as text**.
-The first row, `.`, is the
-job's working directory, where trackers such as MLflow and Aim write by
-default. The run toolbar's **Files** opens the experiment directory around
-`.rotari-state`, where jobs can share one TensorBoard log directory or
-tracker store.
+A job's **Artifacts** button lists them, also while the job runs, as does
+`rotari show -j JOB --artifacts`. The first row, `.`, is the job's working
+directory. The run toolbar's **Files** opens the experiment directory around
+`.rotari-state`, where jobs can share one TensorBoard log directory or tracker
+store. Markdown rendering and syntax highlighting stop at 2 MiB.
 
 Only files under the job's working directory or the directory holding the
 basedir are served, and only when no other user can write the project's
@@ -718,46 +348,33 @@ state; `--artifact-root DIR` allows more. See
 
 ### Launching commands
 
-With `rotari web --allow-exec`, each row of Artifacts and **Files** has a
-button per command that accepts it: TensorBoard, Jupyter Lab, MLflow, Aim,
-Streamlit, Datasette, marimo, Panel, Gradio, VS Code for the Web, and the commands in your global `launchers.toml`
-(`rotari config --launchers` writes a template). The UI shows what will run
-before **Launch**; a service such as TensorBoard then opens through the Web
-UI's own port, so it needs no extra SSH forward. **Launches** in the top bar
-shows how many are starting, running, or stopping, and lists and stops them.
-Closing the page does not stop a launch; stopping `rotari web` does.
+With `rotari web --allow-exec`, each row of Artifacts and **Files** has a button
+per command that accepts it: TensorBoard, Jupyter Lab, MLflow, Aim, Streamlit,
+Datasette, marimo, Panel, Gradio, VS Code for the Web, and the commands in your
+global `launchers.toml` (`rotari config --launchers` writes a template).
+Services open through the Web UI's own port. With `--allow-terminal` too,
+**Launch here** in the terminal runs one on the shell's directory.
 
-```sh
-export ROTARI_WEB_AUTH_TOKEN=...      # optional; otherwise one is generated and printed
-rotari web --allow-exec
-```
+Closing the page does not stop a launch; stopping it under **Launches** or
+stopping `rotari web` does.
 
-- A token is required even on `127.0.0.1`; sign in with the user name
-  `rotari`.
 - The browser only names a registered command and an artifact; the command
   text comes from `launchers.toml`, which rotari refuses unless no other user
   can write it.
 - Commands run as you, with all your file permissions.
-
-With `--allow-terminal` too, **Launch here** (the play icon) in the terminal's bar runs a command on the directory
-the shell in the pane with the keys is in now, and each All shells card has the same button for its shell: pick a
-command, check what will run, and **Launch**. It is the same as launching on an artifact, with the shell's
-directory as the target. The same dialog lists the **Table viewer** above the commands, even without
-`--allow-exec`: it opens the directory the shell was in when the dialog opened in a new tab, and stays on it
-when the shell moves or ends. The server keeps what such a tab shows only while it runs, and only for the 64 most
-recently used, so after a restart the tab says to open it again from **Launch here**.
-
-Without `--allow-exec`, Artifacts says which commands a restart with it could
-run on the artifact, including built-ins whose program is not installed, or
-why the launcher file would stop it from starting.
 
 See [Launcher commands](CONFIGURATION.md#launcher-commands) and
 [Security model](SECURITY.md#launching-services-and-commands).
 
 ### Opening files in your editor
 
-**Open in VS Code** opens a file or directory of the server in the editor installed on the machine your browser runs on.
-The editor is VS Code until you choose another in **Settings** > **Editor**, and the button then names it:
+**Open in VS Code** opens a server's file or directory in the editor on the
+machine your browser runs on. It is offered for artifacts and files, in the
+terminal, and for paths in a job's **Log**, at their line. The browser hands the
+editor a URL such as `vscode://` and the server runs nothing, so it works on any
+live server, read-only or not. It is not the **VS Code for the Web** launcher.
+
+Choose another editor, or **None** to hide it, in **Settings** > **Editor**:
 
 | Editor | Checked |
 | --- | --- |
@@ -766,33 +383,16 @@ The editor is VS Code until you choose another in **Settings** > **Editor**, and
 | Cursor | not tried; its users report that a file over SSH opens another window each time |
 | Zed | starts and connects over SSH; opening a file there, and its line, not seen yet |
 
-It is beside the launch buttons of Artifacts and **Files**, and, with `--allow-terminal`, on the Explorer's rows
-and in the menu of a path a shell printed, at its line if it has one. The terminal's bar, each card in **All shells**, and
-a pane's right-click menu open the directory the shell is in now. In a job's **Log**, a path that names a file is
-underlined, and a click opens it, at the line printed with it, as in `train.py:12` or a Python traceback. A relative path
-is taken from the job's working directory. Without `--allow-terminal`, only paths whose files **Artifacts** may show are
-underlined. A path is looked for on the server's host, so one from a job on another host is a link only where both have
-it. All of this works on any live server, read-only or not: the browser hands the editor a URL such as `vscode://`, and
-the server runs nothing. A static export does not have it.
+For **Connect over SSH**, give the host name your editor already connects with;
+VS Code may open another window for another name of the same host, and needs its
+Remote - SSH extension. For another port, use a `Host` alias in `~/.ssh/config`.
 
-The first time, it asks for the editor and where it runs:
-
-- **It runs on the same machine as rotari web**, when the server is on your own machine.
-- **Connect over SSH**, when the server is remote and you forward its port. Give the name you use with `ssh` on
-  your machine, such as `lab` for `ssh lab`, or `USER@HOST`. It suggests the server's host name up to the first dot.
-  Use the name your editor already connects with: VS Code may take another name of the same host for another
-  connection, and open another window. VS Code needs its Remote - SSH extension. The editor asks for a password itself
-  if `ssh` needs one; rotari takes none. For another port, use a `Host` alias in `~/.ssh/config`.
-
-Your browser keeps the editor, and the answer for that server; **Settings** > **Editor connection...**, or **Change** in
-the note that appears, changes them. Choose **None** in **Settings** > **Editor** to hide it everywhere in this browser.
-The browser may ask before it opens the editor; tell it to always allow the address you open rotari at. A page is not
-told whether an editor is installed or opened anything, so a wrong name shows as an error in the editor, not here.
-
-VS Code chooses the window: a file usually opens in the window that has its folder open, and a directory in
-the window that has it open, or else in one of its own. A path with a number after a colon, such as `a:12`, is refused,
-since the editor would take the number for a line. This is separate from the **VS Code for the Web** launcher, which runs
-a VS Code of its own in the browser.
+- The page is not told whether the editor opened anything, so a wrong name
+  shows as an error in the editor only.
+- Without `--allow-terminal`, only Log paths whose files **Artifacts** may show
+  are links. They are looked up on the server's host.
+- A path with a number after a colon, such as `a:12`, is refused, since the
+  editor would take it for a line.
 
 ### Experiment trackers
 
@@ -807,120 +407,66 @@ one store per job, or a tracking server.
 
 ### Viewing tables
 
-A table file (`.csv`, `.tsv`, `.jsonl`, `.scp`, and similar), a Markdown or
-script file, a PDF, or a directory has a **Table viewer** button, available without
-`--allow-exec`; with the terminal, **Launch here** opens a shell's directory in it too (see
-[Launching commands](#launching-commands)). It pages through
-delimited and JSON Lines files and offers filters, sorting, and per-column
-statistics (**Describe**) over the whole file. JSON Lines records are one JSON
-value per line: object keys become sorted columns, and arrays or scalar values
-go in a `value` column. Blank lines are skipped; malformed records are shown
-as errors. A cell holding the path of an image, audio, video, or PDF file opens
-it in a pane above the table (the table keeps its height, and the page scrolls),
-with a waveform and spectrogram for audio and for the sound track of video, with grids and scales of time, amplitude,
-and frequency (drag the bar between them to resize the waveform); **Channel** picks one channel of a
-multichannel file to draw and to play from both speakers, or **Mix** to draw
-their mean and play the file as it is. Markdown files use the same safe
-renderer as run reports, with a **Show source** toggle (rendering is limited
-to the first 2 MiB); source and config files supported by the bundled
-Highlight.js build get syntax highlighting, including Python, shell,
-JavaScript, TypeScript, Go, Rust, Java, C/C++, Ruby, JSON, and YAML. PDFs use
-the browser's built-in viewer and can also
-be opened in a new tab. For a
-directory, **Group by stem** puts
-`ref/u1.wav`, `hyp/u1.wav`, and `plots/u1.png` in one row to compare outputs
-and find missing ones. In a directory, clicking any other file shows it in a
-pane, rendering Markdown and highlighting supported source files; PDFs open
-in the browser viewer. Text, source files, and Markdown source show line
-numbers, which a copied selection leaves out. A table file also has **Open table**, which opens it in
-its own viewer in a new tab. A directory row's **→** shows that directory in
-the same window (Ctrl+click opens a new tab), as does `Enter` on the current
-row; the path above the table links
-back to each directory up to the one the viewer was opened on, **↑** (or
-Alt+↑) goes up one level, and the browser's Back returns. Files open in panes
-stay open while you move, so `ref/u1.wav` and `hyp/u1.wav` can be compared
-from their own directories. The URL keeps the view, so a link can be shared.
+The **Table viewer** opens tables (`.csv`, `.tsv`, `.jsonl`, `.scp`, and
+similar), Markdown, scripts, PDFs, and directories, without `--allow-exec`. A
+cell that names an image, audio, video, or PDF file opens it in a pane. Try the
+[demo](https://rotari-dev.github.io/rotari/tableview/), a static snapshot.
 
-Filters include **matches regex** and **does not match regex**, which search a cell
-with [Go's syntax](https://pkg.go.dev/regexp/syntax): `^(alpha|beta)$` selects either
-value of a column, and `(?i)` ignores case. Lookaround and backreferences are not
-available. They see the stored value rather than the formatted one, so a duration
-shown as `1:30` is matched as `90`. All conditions must match.
+- **Filters** must all match. The regex ones use
+  [Go's syntax](https://pkg.go.dev/regexp/syntax), without lookaround or
+  backreferences, and see the stored value: a duration shown as `1:30` is `90`.
+- **Describe** covers every row the filters select. Quartiles and histograms are
+  left out past 10,000,000 numbers, and top values past 10,000 distinct ones.
+- **Export rows** writes the selected rows in the file's own format, or a
+  directory as CSV. Cells are written as they are, so a spreadsheet may read one
+  starting with `=` as a formula.
+- **Group by stem** in a directory puts `ref/u1.wav`, `hyp/u1.wav`, and
+  `plots/u1.png` in one row, to compare outputs and find missing ones.
+- **JSON Lines:** object keys become sorted columns; arrays and scalars go in a
+  `value` column. Malformed records are shown as errors.
+- **Audio and video:** **Channel** picks one channel to draw and play; **Mix**
+  draws their mean and plays the file as it is.
+- **Sharing:** the URL keeps the view.
+- **Another screen:** drag a tab out of the window; allow pop-ups if the browser
+  blocks it.
 
-**Describe** also shows each column's quartiles and most frequent values, and a
-**Histogram** button that opens its distribution in a pane, where you can choose
-10 to 200 bars. Numbers beyond 10,000,000 in the selected rows leave out quartiles
-and histograms, and past 10,000 distinct values a column lists no top values; a filter
-narrows both.
+| Key | |
+| --- | --- |
+| `↑` `↓` | Move between rows; the active pane changes to the new row's file |
+| `←` `→` | Move between the row's cells |
+| `Enter` | Open the framed file, or the directory |
+| `Shift+Enter` | Open all of the row's files side by side |
+| `Space` | Play or pause |
+| `Alt+↑` | Go up one directory |
 
-**Export rows** downloads every row the current filters select, across all pages and
-in the current order, in the file's own format: a delimited file in its separator, a
-JSON Lines file as its original lines, and a directory listing as CSV of what is
-listed. Cells are written as they are, so a spreadsheet may read one starting with
-`=` as a formula, as it would in the source file. A static snapshot has no export.
+Arrow keys stay with a player once you click its controls; click elsewhere to
+get them back.
 
-Each pane has a download button for the file showing.
-
-To use another screen, drag a tab out of the window, or press the pane's **Open in a
-new window**; if the browser blocks it, allow pop-ups for the page. Drag the tab back,
-or press **Back to the table**, to return it. Closing that window closes its files. Row
-moves change the file in the window you last clicked in, and arrow keys work from
-either window.
-
-To go through a table from the keyboard, press `↓` or `↑` to move between rows, in
-the order shown and across pages, and `←` or `→` to move a frame between the row's
-cells. Moving opens nothing. `Enter` opens the framed file, `Shift+Enter` opens all of
-the row's files side by side, and `Space` plays or pauses the framed file, opening it
-if needed. On a directory row, `Enter` shows that directory. Nothing plays on its own.
-
-The file showing in the active pane changes to its column of each new row, and says
-so when that row has no file there. Other panes and hidden tabs stay, so one can be
-kept to compare against; click a pane to make it the one that changes. Click a
-player's controls and the arrow keys stay with it until you click elsewhere.
-
-Try
-it in the [Table viewer demo](https://rotari-dev.github.io/rotari/tableview/),
-an evaluation table whose cells name WAV files; it is a static snapshot
-(below), so filters are off there.
-
-`rotari tableview PATH` opens the same viewer outside any project for a
-delimited or JSON Lines table, a Markdown or script file, a PDF, or a directory:
+`rotari tableview` opens the same viewer outside any project, and with
+`--static-dir` writes a snapshot of one delimited or JSON Lines file:
 
 ```sh
 rotari tableview metadata.csv
 rotari tableview eval/ --port 8090
-```
-
-`rotari tableview --static-dir DIR FILE` writes a snapshot of one delimited or
-JSON Lines table file
-that you can publish or open without a server, as in the
-[demo](https://rotari-dev.github.io/rotari/tableview/). It holds every row
-(at most 10,000) and copies the image, audio, video, and PDF files the cells name (up to 10 MiB
-each, 100 MiB in all), so share it only with readers who may see them.
-Paging, sorting, **Describe** over the whole file, and the panes work;
-filters can be changed only in the live viewer. Delimited tables also keep
-their separator and header row fixed in the snapshot. Markdown, script, and
-PDF previews are available in the live viewer, not as table snapshots. `DIR` is
-replaced.
-
-```sh
 rotari tableview --static-dir site/eval eval/utterances.csv
 ```
+
+A snapshot holds at most 10,000 rows and copies the media files its cells name
+(up to 10 MiB each, 100 MiB in all), so share it only with readers who may see
+them. Its filters are fixed and it has no export. `DIR` is replaced.
 
 ## Static export
 
 `rotari web --static-dir DIR` writes a snapshot you can publish or open
 offline. It contains the raw config sources and saved config snapshots of the
-runs, so share it only with readers you trust, and it holds artifact paths
-only, unless `--static-artifact-contents` copies the files in. History search,
-launching, and control are not available in it. See the
+runs, so share it only with readers you trust. It holds artifact paths only,
+unless `--static-artifact-contents` copies the previewable files in. History
+search, launching, and control are not available in it. See the
 [Security model](SECURITY.md).
 
-Options of the live server, such as `--host`, `--port`, and `--auth-token`,
-are refused with `--static-dir`. An `auth-token` kept in config or
-`ROTARI_WEB_AUTH_TOKEN` is the exception: the export ignores it with a
-warning, since it protects only a live server. The same holds for
-`rotari tableview --static-dir`.
+Options of the live server are refused with `--static-dir`, except that an
+`auth-token` from config or `ROTARI_WEB_AUTH_TOKEN` is ignored with a warning.
+The same holds for `rotari tableview --static-dir`.
 
 ## Related
 
