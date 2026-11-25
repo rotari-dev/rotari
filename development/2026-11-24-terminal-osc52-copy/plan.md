@@ -44,7 +44,7 @@ So `tmux`'s own copying needs no configuration, and one line lets programs insid
 Neovim is not on the machine. From its [documentation](https://neovim.io/doc/user/provider/) and its `osc52.lua` files
 on `master`, of 2026-11-24, with no version stated:
 
-- It prints `ESC ] 52 ; c ; BASE64 ESC \\` for `+` and `p` for `*`, ended by ST.
+- It prints `ESC ] 52 ; c ; BASE64 ESC \` for `+` and `p` for `*`, ended by ST.
 - It uses OSC 52 by itself when nothing else provides a clipboard and the terminal says it can: `52` in its answer to
   `ESC [ c`, or an answer to a query for `Ms`. xterm.js gives neither. `vim.g.clipboard = 'osc52'` makes it, in one
   line.
@@ -130,6 +130,8 @@ Writing the clipboard from OSC 52, for the panes of the panel and its own window
 
 ## Open questions
 
+1. **Telling the user while it is off** (decision 7). Proposed: once per page. The alternative says nothing, and leaves
+   it to the docs.
 2. **What a query gets.** Never answering keeps a Neovim set to `osc52` waiting 10 seconds at each `p` from `+`.
    - **Proposed: answered as empty**, only while the setting is on, and only where a copy would be taken (decision 3 and
      4). It tells nothing of the clipboard, and Neovim goes on at once, pasting nothing. Like any answer, it is typed
@@ -137,6 +139,3 @@ Writing the clipboard from OSC 52, for the panes of the panel and its own window
    - The alternative never answers, and the docs give a Neovim configuration of several lines whose paste does not ask.
 3. **Saying that it can.** Answering Neovim's `Ms` query while the setting is on would make it copy with no
    configuration. Proposed: not at first. It is one more answer, and it depends on how Neovim asks.
-
-1. **Telling the user while it is off** (decision 7). Proposed: once per page. The alternative says nothing, and leaves
-   it to the docs.
