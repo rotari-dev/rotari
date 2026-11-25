@@ -142,7 +142,10 @@ name would open another window.
 12. **The terminal's own menus** (asked for by the user on 2026-11-24) open the
     directory the shell is in now, where the Table viewer is offered: the bar, All
     shells cards, and, as well, a pane's right-click menu.
-13. **Paths on another host.** A path is the server's. Output a shell says came
+13. **Hiding it** (asked for by the user on 2026-11-25). A page cannot learn whether
+    VS Code is installed, and an icon is too small a thing for the first dialog to
+    ask about, so **Show Open in VS Code** in Settings hides it per browser.
+14. **Paths on another host.** A path is the server's. Output a shell says came
     from another host has no path links today, and gets none.
 
 ## Design

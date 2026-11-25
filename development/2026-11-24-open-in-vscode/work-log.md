@@ -84,3 +84,22 @@ Plan: [plan.md](plan.md)
   Prettier, passed. The full suite was not run again for this change. Opening with
   `USER@HOST` has not been tried.
 - **Remaining:** None.
+
+## 2026-11-25 13:40:09 +0900 - `0f2451b4` - Hide it from Settings
+
+- **Change:** **Show Open in VS Code** in Settings, kept per browser: buttons drawn once
+  are hidden by style, menus and logs' links are not offered. WEB-64 and WEB; the page
+  test and `TestTerminalPanel`. A style rule repeated since phase 3 was removed.
+- **Reason:** The user asked for it: the icon is of no use to someone without VS Code,
+  which a page cannot detect.
+- **Plan impact:** Decision 13 was added.
+- **Validation:** `go vet ./...`, the Web UI type check, and `go test` on
+  `internal/webui`, `internal/archtest`, `cmd/rotari`, `conformance`, and
+  `conformance/05-web` passed; the rule was removed after that, and the VS Code and
+  artifact tests passed again. Not run: the other packages, `go test -race`, and
+  pre-commit. Not tried in a real browser.
+- **Remaining:** Microsoft publishes rules for the VS Code name, icon, and "Open in"
+  buttons (code.visualstudio.com/brand). They were only seen in search summaries,
+  which say `Open in VS Code` is the wording, an icon is not to be modified, and the
+  Web version is **VS Code for the Web**. The launcher's name and the `<>` icon await
+  a reading of the page.
