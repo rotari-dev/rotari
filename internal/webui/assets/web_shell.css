@@ -646,30 +646,40 @@ main {
 }
 /* Stop server, above the About section; its selectors outweigh both top bars' toolbar
    buttons, as the About section's do. */
-.settings-vscode {
+.settings-editor {
   padding-top: 8px;
   border-top: 1px solid var(--line-soft);
 }
-.settings-vscode label {
+.settings-editor label {
   display: flex;
   align-items: center;
   gap: 6px;
   color: var(--text-2);
   font-size: 13px;
 }
-.settings-vscode input {
+.settings-editor select,
+.editor-form select {
+  min-width: 0;
+  min-height: 30px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.settings-editor label:has(select) {
+  justify-content: space-between;
+}
+.settings-editor input {
   min-width: 0;
   min-height: 0;
 }
 /* Not shown in this browser, as its Settings say. */
-html[data-vscode-hidden] button.vscode-action {
+html[data-editor-hidden] button.editor-action {
   display: none;
 }
-html[data-vscode-hidden] .log .log-path {
+html[data-editor-hidden] .log .log-path {
   text-decoration: none;
   cursor: auto;
 }
-.settings-panel .settings-vscode button {
+.settings-panel .settings-editor button {
   width: 100%;
   min-height: 0;
   padding: 7px 8px;
@@ -677,7 +687,7 @@ html[data-vscode-hidden] .log .log-path {
   background: transparent;
   text-align: left;
 }
-.settings-panel .settings-vscode button:hover {
+.settings-panel .settings-editor button:hover {
   background: var(--surface-2);
 }
 .settings-stop {
@@ -1011,30 +1021,30 @@ html[data-terminal-window] #terminal-panel {
 .terminal-send-note[hidden] {
   display: none;
 }
-.vscode-note {
+.editor-note {
   overflow-wrap: anywhere;
 }
-.vscode-note button {
+.editor-note button {
   min-height: 0;
   margin-left: 8px;
   padding: 1px 8px;
   font-size: 12px;
 }
-.vscode-form {
+.editor-form {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.vscode-form label {
+.editor-form label {
   display: block;
 }
-.vscode-form .vscode-host {
+.editor-form .editor-host {
   padding-left: 22px;
 }
-.vscode-form p {
+.editor-form p {
   margin: 0;
 }
-.vscode-form p:empty {
+.editor-form p:empty {
   display: none;
 }
 .terminal-resizer {

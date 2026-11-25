@@ -13,7 +13,7 @@ import (
 
 // Live pages offer Open in VS Code, read-only or not, and the server says where an
 // artifact is under the rules of its previews; a static export offers nothing.
-func TestWebOpensArtifactsInVSCode(t *testing.T) {
+func TestWebOpensArtifactsInEditor(t *testing.T) {
 	covers(t, "WEB-64")
 	e := support.NewEnv(t)
 	jobID := support.AddedJobID(t, e.MustRotari("add", "-p", "art", "--", "sh", "-c", "echo x > out.txt"))
@@ -27,7 +27,7 @@ func TestWebOpensArtifactsInVSCode(t *testing.T) {
 	for _, args := range [][]string{nil, {"--allow-control=false"}} {
 		base := e.StartWeb(args...)
 		for _, path := range []string{"/", "/jobs/"} {
-			if page := e.HTTPGet(base + path); page.Status != 200 || strings.Count(page.Body, `id="vscode-connection" data-host="`) != 1 {
+			if page := e.HTTPGet(base + path); page.Status != 200 || strings.Count(page.Body, `id="editor-connection" data-host="`) != 1 {
 				t.Errorf("web %v: %s = %d does not offer VS Code", args, path, page.Status)
 			}
 		}
@@ -40,7 +40,7 @@ func TestWebOpensArtifactsInVSCode(t *testing.T) {
 		}
 		work := listing.WorkingDirectory
 		ask := func(entry, child string) support.HTTPResult {
-			return e.HTTPGet(base + "/api/vscode-target?" + url.Values{"project_name": {"art"}, "run_id": {shown.RunID}, "job_id": {jobID}, "entry": {entry}, "child": {child}}.Encode())
+			return e.HTTPGet(base + "/api/editor-target?" + url.Values{"project_name": {"art"}, "run_id": {shown.RunID}, "job_id": {jobID}, "entry": {entry}, "child": {child}}.Encode())
 		}
 		for _, test := range []struct{ entry, child, path, kind string }{
 			{"0", "", filepath.Join(work, "out.txt"), "file"},
@@ -66,7 +66,7 @@ func TestWebOpensArtifactsInVSCode(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(page), `id="vscode-connection"`) {
+		if strings.Contains(string(page), `id="editor-connection"`) {
 			t.Errorf("the static %s offers VS Code", name)
 		}
 	}

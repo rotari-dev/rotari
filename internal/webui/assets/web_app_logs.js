@@ -16,7 +16,7 @@ async function loadLogChunk(queue, run, job, attemptID, stream, before) {
   if (!response.ok) throw new Error(text.trim() || "HTTP " + response.status);
   return text;
 }
-// Paths in a job's log that name a file open in VS Code, at the line printed
+// Paths in a job's log that name a file open in the editor, at the line printed
 // with them. The lines in view are asked about, and the server says which
 // paths exist; the log stays text otherwise.
 const logLinkAskLimit = 64;
@@ -36,7 +36,7 @@ function showLogOutput(output, text) {
   if (
     !log ||
     log.error ||
-    !window.vscodeOffered() ||
+    !window.editorOffered() ||
     typeof IntersectionObserver === "undefined"
   ) {
     output.textContent = text;
@@ -108,7 +108,7 @@ async function linkLogLines(log, lines) {
       answer = await response.json();
     } catch (error) {
       if (!log.linksFailed && log === selectedLog)
-        window.showVSCodeNote(
+        window.showEditorNote(
           "Paths in this log are not links: " + error.message,
         );
       log.linksFailed = true;
@@ -136,15 +136,14 @@ function linkLogLine(log, { element, line, candidates }) {
     const path = document.createElement("span");
     path.className = "log-path";
     path.textContent = line.slice(start, end);
-    path.title =
-      "Open " +
-      link.path +
-      " in VS Code" +
-      (link.line ? " at line " + link.line : "");
+    window.labelEditorAction(path, {
+      title: "Open " + link.path,
+      after: link.line ? " at line " + link.line : "",
+    });
     path.tabIndex = 0;
     path.setAttribute("role", "link");
     const open = () =>
-      window.openInVSCode({
+      window.openInEditor({
         path: link.path,
         folder: false,
         line: link.line,

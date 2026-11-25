@@ -371,7 +371,7 @@ func (s site) baseHandler() http.Handler {
 		_ = s.reloadBaseDirs()
 		nonce := setPagePolicy(writer)
 		writer.Header().Set(headerContentType, "text/html; charset=utf-8")
-		_, _ = writer.Write([]byte(s.webPage(livePage{nonce: nonce, terminal: s.Terminal != nil, about: s.About, stoppable: s.AllowControl && s.Shutdown != nil, vscode: currentVSCodeConnection()}, "")))
+		_, _ = writer.Write([]byte(s.webPage(livePage{nonce: nonce, terminal: s.Terminal != nil, about: s.About, stoppable: s.AllowControl && s.Shutdown != nil, editor: currentEditorConnection()}, "")))
 	})
 	mux.HandleFunc("/fonts/", serveWebFont)
 	mux.HandleFunc("/web_fonts.css", func(writer http.ResponseWriter, request *http.Request) {
@@ -423,7 +423,7 @@ func (s site) baseHandler() http.Handler {
 		_ = s.reloadBaseDirs()
 		nonce := setPagePolicy(writer)
 		writer.Header().Set(headerContentType, "text/html; charset=utf-8")
-		_, _ = writer.Write([]byte(jobsPage(livePage{nonce: nonce, terminal: s.Terminal != nil, about: s.About, stoppable: s.AllowControl && s.Shutdown != nil, vscode: currentVSCodeConnection(), logout: s.AuthEnabled}, s.currentBasePrefix()+"/", projects, rows, selection, true, s.Notifications, s.notificationSession, s.basedirEntries())))
+		_, _ = writer.Write([]byte(jobsPage(livePage{nonce: nonce, terminal: s.Terminal != nil, about: s.About, stoppable: s.AllowControl && s.Shutdown != nil, editor: currentEditorConnection(), logout: s.AuthEnabled}, s.currentBasePrefix()+"/", projects, rows, selection, true, s.Notifications, s.notificationSession, s.basedirEntries())))
 	})
 	mux.HandleFunc("/jobs", func(writer http.ResponseWriter, request *http.Request) {
 		http.Redirect(writer, request, s.currentBasePrefix()+"/jobs/", http.StatusMovedPermanently)
@@ -772,7 +772,7 @@ func (s site) baseHandler() http.Handler {
 	for path, serve := range map[string]func(string, http.ResponseWriter, *http.Request){
 		"/api/artifact-file": s.serveArtifactFile, "/api/artifact-text": s.serveArtifactText, "/api/artifact-directory": s.serveArtifactDirectory,
 		"/api/artifact-array": s.serveArtifactArray,
-		"/api/vscode-target":  s.serveVSCodeTarget,
+		"/api/editor-target":  s.serveEditorTarget,
 	} {
 		mux.HandleFunc(path, func(writer http.ResponseWriter, request *http.Request) {
 			if request.Method != http.MethodGet && request.Method != http.MethodHead {

@@ -330,29 +330,40 @@ function artifactTypeBadge(type, category) {
     "</span>"
   );
 }
-// artifactVSCodeButton opens the artifact in VS Code, on a live page.
-function artifactVSCodeButton(index, child) {
-  return window.vscodeAvailable()
-    ? ' <button type="button" class="artifact-vscode vscode-action" title="' +
-        esc("Open " + artifactTitle(index, child) + " in VS Code") +
+// artifactEditorButton opens the artifact in the editor, on a live page.
+function artifactEditorButton(index, child) {
+  return window.editorAvailable()
+    ? ' <button type="button" class="artifact-editor editor-action" data-editor-text="Open" data-editor-title="' +
+        esc("Open " + artifactTitle(index, child)) +
+        '" title="' +
+        esc(
+          "Open " + artifactTitle(index, child) + " in " + window.editorName(),
+        ) +
         '" ' +
-        actionAttributes("openArtifactInVSCode", index, child) +
-        ">Open in VS Code</button>"
+        actionAttributes("openArtifactInEditor", index, child) +
+        ">Open in " +
+        esc(window.editorName()) +
+        "</button>"
     : "";
 }
-// openArtifactInVSCode asks the server where the artifact is, under the rules
+// openArtifactInEditor asks the server where the artifact is, under the rules
 // of its previews, and opens that.
-async function openArtifactInVSCode(index, child) {
+async function openArtifactInEditor(index, child) {
   const title = artifactTitle(index, child);
   try {
-    const target = await fetchArtifactJSON("/api/vscode-target", index, child);
-    window.openInVSCode({
+    const target = await fetchArtifactJSON("/api/editor-target", index, child);
+    window.openInEditor({
       path: target.path,
       folder: target.kind === "directory",
     });
   } catch (error) {
-    window.showVSCodeNote(
-      "Cannot open " + title + " in VS Code: " + error.message,
+    window.showEditorNote(
+      "Cannot open " +
+        title +
+        " in " +
+        window.editorName() +
+        ": " +
+        error.message,
     );
   }
 }
@@ -366,7 +377,7 @@ function artifactActionCells(index, child, type) {
     '<td class="artifact-action">' +
     (launchable
       ? artifactLaunchButtons(index, child, type) +
-        artifactVSCodeButton(index, child)
+        artifactEditorButton(index, child)
       : "") +
     '</td><td class="artifact-action">' +
     (type === "file" ? artifactDownloadLink(index, child) : "") +
@@ -392,7 +403,7 @@ function artifactHeader(index, child, type) {
         ">Up</button>"
       : "") +
     artifactLaunchButtons(index, child, type) +
-    artifactVSCodeButton(index, child) +
+    artifactEditorButton(index, child) +
     "</p>"
   );
 }

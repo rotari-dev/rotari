@@ -171,7 +171,7 @@ func TestLogLinksInPage(t *testing.T) {
 	}
 	dir := t.TempDir()
 	live, static := filepath.Join(dir, "live.html"), filepath.Join(dir, "static.html")
-	if err := os.WriteFile(live, []byte(composeWebPage(livePage{nonce: "n", vscode: &vscodeConnection{Host: "srv"}}, nil, false, "", "")), 0o600); err != nil {
+	if err := os.WriteFile(live, []byte(composeWebPage(livePage{nonce: "n", editor: &editorConnection{Host: "srv"}}, nil, false, "", "")), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(static, []byte(composeWebHTML(nil, false, "")), 0o600); err != nil {
@@ -238,7 +238,7 @@ const load = (file) => {
   assert.equal(p.output().textContent, p.text, 'links changed the text');
   // A click and Enter open it, and a click that ends a selection does not.
   const opened = [];
-  p.window.openInVSCode = (target) => opened.push([target.path, target.line, target.column].join(' '));
+  p.window.openInEditor = (target) => opened.push([target.path, target.line, target.column].join(' '));
   p.paths()[1].click();
   p.paths()[2].dispatchEvent(new p.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   p.paths()[0].dispatchEvent(new p.window.KeyboardEvent('keydown', { key: 'a', bubbles: true }));
@@ -275,9 +275,9 @@ const load = (file) => {
   p.text = 'q/a.py:1\nq/b.py:1';
   await p.window.showLog('p', 'r', 'j3', '', 'stdout', 'merge');
   await p.show('a.py');
-  const note = () => p.window.document.querySelector('.vscode-note').textContent;
+  const note = () => p.window.document.querySelector('.editor-note').textContent;
   assert.equal(note(), 'Paths in this log are not links: refused');
-  p.window.document.querySelector('.vscode-note').replaceChildren();
+  p.window.document.querySelector('.editor-note').replaceChildren();
   await p.show('b.py');
   assert.equal(note(), '');
   assert.equal(p.output().textContent, p.text);

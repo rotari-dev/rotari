@@ -51,7 +51,7 @@
     moreArtifactTable: () => moreArtifactTable(),
     moreArtifactText: () => moreArtifactText(),
     openArtifact: (_, args) => openArtifact(...args),
-    openArtifactInVSCode: (_, args) => openArtifactInVSCode(...args),
+    openArtifactInEditor: (_, args) => openArtifactInEditor(...args),
     openMatrixCell: (el) => openMatrixCell(el),
     popupMenuToggled: (el) => popupMenuToggled(el),
     refreshWithBasedirs: () => refreshWithBasedirs(),
@@ -447,7 +447,7 @@ function shellWord(value) {
     sharedAdd,
     launchButton,
     viewerButton,
-    vscodeButton,
+    editorButton,
     dirsButton,
     commandsButton,
     splitRightButton,
@@ -2706,16 +2706,18 @@ function shellWord(value) {
     viewHere.title = "Open the directory this shell is in now in the Table viewer";
     drawIcon(viewHere, explorerIcons.open);
     viewHere.onclick = () => openShellInViewer(shell);
-    const vscodeHere = [];
-    if (window.vscodeAvailable()) {
+    const editorHere = [];
+    if (window.editorAvailable()) {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "vscode-action";
-      button.setAttribute("aria-label", "Open " + label + " in VS Code");
-      button.title = "Open the directory this shell is in now in VS Code";
+      button.className = "editor-action";
+      window.labelEditorAction(button, {
+        label: "Open " + label,
+        title: "Open the directory this shell is in now",
+      });
       drawIcon(button, explorerIcons.editor);
-      button.onclick = () => openShellInVSCode(shell.id);
-      vscodeHere.push(button);
+      button.onclick = () => openShellInEditor(shell.id);
+      editorHere.push(button);
     }
     // Move to another project: a menu of where it can go, as dragging its card does.
     const moveTo = document.createElement("button");
@@ -2744,7 +2746,7 @@ function shellWord(value) {
     };
     const actions = document.createElement("span");
     actions.className = "terminal-overview-actions";
-    actions.append(viewHere, ...vscodeHere, launchHere, moveTo, rename, end);
+    actions.append(viewHere, ...editorHere, launchHere, moveTo, rename, end);
     const item = document.createElement("div");
     item.className = "terminal-overview-item";
     item.append(card, run, tree, actions);
@@ -3999,7 +4001,7 @@ function shellWord(value) {
     closePaneButton.disabled = panes.length < 2;
     launchButton.disabled = focused.shown === null;
     viewerButton.disabled = focused.shown === null;
-    if (vscodeButton) vscodeButton.disabled = focused.shown === null;
+    if (editorButton) editorButton.disabled = focused.shown === null;
     dirsButton.disabled = focused.shown === null;
     commandsButton.disabled = focused.shown === null;
   };
@@ -4377,8 +4379,8 @@ function shellWord(value) {
   const openShellInViewer = (shell) =>
     openTableViewer({ shell: shell.id }, shellName(shell));
   const openInViewer = (path) => openTableViewer({ path }, path);
-  // openShellInVSCode opens the directory a shell is in now.
-  const openShellInVSCode = async (id) => {
+  // openShellInEditor opens the directory a shell is in now.
+  const openShellInEditor = async (id) => {
     const { cwd, cwd_error, error } = await fetchShellJSON(id, "preview");
     // A name that is not UTF-8 comes with U+FFFD in place of what it is.
     const problem =
@@ -4388,10 +4390,13 @@ function shellWord(value) {
       (cwd.includes("\ufffd") && "its name is not valid UTF-8");
     if (problem)
       showNote(
-        "Cannot open the shell's directory in VS Code: " + problem,
+        "Cannot open the shell's directory in " +
+          window.editorName() +
+          ": " +
+          problem,
         6000,
       );
-    else window.openInVSCode({ path: cwd, folder: true });
+    else window.openInEditor({ path: cwd, folder: true });
   };
   // openTableViewer opens the Table viewer on what the request names, a path or a running
   // shell, whose directory is pinned.
@@ -5261,16 +5266,17 @@ function shellWord(value) {
         openPathLaunchDialog(path, folder);
       });
       const buttons = [send, view];
-      if (window.vscodeAvailable()) {
+      if (window.editorAvailable()) {
         const edit = explorerIconButton(
-          "Open in VS Code",
+          "Open in editor",
           explorerIcons.editor,
           (event) => {
             event.stopPropagation();
-            window.openInVSCode({ path, folder });
+            window.openInEditor({ path, folder });
           },
         );
-        edit.classList.add("vscode-action");
+        edit.classList.add("editor-action");
+        window.labelEditorAction(edit, { label: "Open", title: "Open" });
         buttons.push(edit);
       }
       buttons.push(launch);
@@ -5673,13 +5679,14 @@ function shellWord(value) {
   // output, which adds Show in the Explorer.
   const pathChoices = (path, folder, fromLink = null) => [
     ["Open in the Table viewer", () => openInViewer(path), true],
-    ...(window.vscodeOffered()
+    ...(window.editorOffered()
       ? [
           [
-            "Open in VS Code" +
+            "Open in " +
+              window.editorName() +
               (fromLink?.line ? " at line " + fromLink.line : ""),
             () =>
-              window.openInVSCode({
+              window.openInEditor({
                 path,
                 folder,
                 line: fromLink?.line,
@@ -6259,17 +6266,18 @@ function shellWord(value) {
       },
       "Open the directory this pane's shell is in now in the Table viewer, in a new tab",
     );
-    vscodeButton = window.vscodeAvailable()
-      ? iconButton(
-          "Open in VS Code",
-          explorerIcons.editor,
-          () => {
-            if (focused.shown !== null) openShellInVSCode(focused.shown);
-          },
-          "Open the directory this pane's shell is in now in VS Code",
-        )
+    editorButton = window.editorAvailable()
+      ? iconButton("Open in editor", explorerIcons.editor, () => {
+          if (focused.shown !== null) openShellInEditor(focused.shown);
+        })
       : null;
-    vscodeButton?.classList.add("vscode-action");
+    if (editorButton) {
+      editorButton.classList.add("editor-action");
+      window.labelEditorAction(editorButton, {
+        label: "Open",
+        title: "Open the directory this pane's shell is in now",
+      });
+    }
     dirsButton = iconButton(
       "Recent directories",
       icons.recentDirs,
@@ -6339,7 +6347,7 @@ function shellWord(value) {
       "terminal-bar-tools",
       overviewButton,
       viewerButton,
-      ...(vscodeButton ? [vscodeButton] : []),
+      ...(editorButton ? [editorButton] : []),
       launchButton,
       dirsButton,
       commandsButton,
@@ -6929,10 +6937,10 @@ function shellWord(value) {
         ["Copy output", () => copyBlockOutput(pane, block), true],
       );
     }
-    if (window.vscodeOffered())
+    if (window.editorOffered())
       choices.push([
-        "Open in VS Code",
-        () => openShellInVSCode(pane.shown),
+        "Open in " + window.editorName(),
+        () => openShellInEditor(pane.shown),
         pane.shown !== null,
       ]);
     choices.push([

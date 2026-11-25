@@ -193,8 +193,8 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
   [Operations](OPERATIONS.md#shared-filesystem-use).
 - **Artifacts:** preview and download what jobs wrote, open tables, and
   launch TensorBoard and other viewers on it; see [Artifacts](#artifacts).
-- **Open in VS Code:** files and directories in the VS Code on your machine; see
-  [Opening files in VS Code](#opening-files-in-vs-code).
+- **Open in your editor:** files and directories in the VS Code, or another editor, on your machine; see
+  [Opening files in your editor](#opening-files-in-your-editor).
 - **Config:** **Generate config** and **View config** edit one config source at
   a time; see [Configuration](CONFIGURATION.md).
 - **Notifications:** the in-page inbox and optional desktop popups; see
@@ -349,7 +349,7 @@ tree stays where you put it while the shell moves on; the line at its foot then 
 
 Click a folder to open or close it, and double-click a file, or press Enter on it, to open it in the Table viewer
 in a new tab; the arrow keys move through the tree. Pointing at a row shows buttons that send its path to the
-terminal, open it in the Table viewer or [in VS Code](#opening-files-in-vs-code), and launch a command on it. Right-click offers those, **Open in a new terminal tab**, which starts
+terminal, open it in the Table viewer or [in your editor](#opening-files-in-your-editor), and launch a command on it. Right-click offers those, **Open in a new terminal tab**, which starts
 a shell of the terminal's project in that folder (a file's own folder, for a file), **Copy the path**, and **Copy the
 path from here**, relative to the shell's directory. You can also drag a row onto a pane to type its path there. A path goes
 in as the send buttons above send a value: relative to the shell's directory when the file is under it, otherwise
@@ -428,7 +428,7 @@ hex word that is no job, such as a git hash, stays text. Click a run or job to o
 instead. Click a directory to open a new terminal tab there, or a file to open it in the Table viewer;
 right-click a path for the menu its row in the Explorer has, with **Show in the Explorer** too. A `:12` or
 `:12:3` after a path is the line, and column, that **Open in VS Code at line 12** in that menu opens
-([Opening files in VS Code](#opening-files-in-vs-code)); a name without a slash, such as `train.py:12`, is a link only
+([Opening files in your editor](#opening-files-in-your-editor)); a name without a slash, such as `train.py:12`, is a link only
 with one. A Python traceback's `File "train.py", line 12` is one link. A relative path is taken from the directory the command that printed it ran in:
 bash and zsh started by rotari say it at each prompt (OSC 7, as other terminals read it), as do fish and many prompts,
 so a path printed before a `cd` still names what it did. A command line that changes directory itself, such as
@@ -713,34 +713,45 @@ why the launcher file would stop it from starting.
 See [Launcher commands](CONFIGURATION.md#launcher-commands) and
 [Security model](SECURITY.md#launching-services-and-commands).
 
-### Opening files in VS Code
+### Opening files in your editor
 
-**Open in VS Code** opens a file or directory of the server in the VS Code installed on the machine your browser runs
-on. It is beside the launch buttons of Artifacts and **Files**, and, with `--allow-terminal`, on the Explorer's rows
+**Open in VS Code** opens a file or directory of the server in the editor installed on the machine your browser runs on.
+The editor is VS Code until you choose another in **Settings** > **Editor**, and the button then names it:
+
+| Editor | Checked |
+| --- | --- |
+| VS Code | opened over Remote SSH, a file at its line and a directory |
+| VS Code Insiders, VSCodium | not tried; they take VS Code's URLs under schemes of their own. VSCodium needs an SSH extension such as Open Remote - SSH |
+| Cursor | not tried; its users report that a file over SSH opens another window each time |
+| Zed | starts and connects over SSH; opening a file there, and its line, not seen yet |
+
+It is beside the launch buttons of Artifacts and **Files**, and, with `--allow-terminal`, on the Explorer's rows
 and in the menu of a path a shell printed, at its line if it has one. The terminal's bar, each card in **All shells**, and
 a pane's right-click menu open the directory the shell is in now. In a job's **Log**, a path that names a file is
 underlined, and a click opens it, at the line printed with it, as in `train.py:12` or a Python traceback. A relative path
 is taken from the job's working directory. Without `--allow-terminal`, only paths whose files **Artifacts** may show are
 underlined. A path is looked for on the server's host, so one from a job on another host is a link only where both have
-it. It works on any live server, read-only or not: the browser hands VS Code a
-`vscode://` URL, and the server runs nothing. A static export does not have it.
+it. All of this works on any live server, read-only or not: the browser hands the editor a URL such as `vscode://`, and
+the server runs nothing. A static export does not have it.
 
-The first time, it asks where VS Code runs:
+The first time, it asks for the editor and where it runs:
 
-- **VS Code runs on the same machine as rotari web**, when the server is on your own machine.
-- **Connect with Remote SSH**, when the server is remote and you forward its port. Give the name you use with `ssh` on
+- **It runs on the same machine as rotari web**, when the server is on your own machine.
+- **Connect over SSH**, when the server is remote and you forward its port. Give the name you use with `ssh` on
   your machine, such as `lab` for `ssh lab`, or `USER@HOST`. It suggests the server's host name up to the first dot.
-  Use the name your VS Code windows already connect with: VS Code may take another name of the same host for another
-  connection, and open another window. VS Code needs its Remote - SSH extension, and
-  asks for a password itself if `ssh` needs one; rotari takes none. For another port, use a `Host` alias in `~/.ssh/config`.
+  Use the name your editor already connects with: VS Code may take another name of the same host for another
+  connection, and open another window. VS Code needs its Remote - SSH extension. The editor asks for a password itself
+  if `ssh` needs one; rotari takes none. For another port, use a `Host` alias in `~/.ssh/config`.
 
-Your browser keeps the answer for that server; **Settings** > **VS Code connection...**, or **Change** in the note that
-appears, changes it. Clear **Settings** > **Show Open in VS Code** to hide it everywhere in this browser. The browser may ask before it opens VS Code; tell it to always allow the address you open rotari
-at. A page is not told whether VS Code opened anything, so a wrong name shows as an error in VS Code, not here.
+Your browser keeps the editor, and the answer for that server; **Settings** > **Editor connection...**, or **Change** in
+the note that appears, changes them. Clear **Settings** > **Show Open in editor** to hide it everywhere in this browser.
+The browser may ask before it opens the editor; tell it to always allow the address you open rotari at. A page is not
+told whether an editor is installed or opened anything, so a wrong name shows as an error in the editor, not here.
 
 VS Code chooses the window: a file usually opens in the window that has its folder open, and a directory in
-the window that has it open, or else in one of its own. A path with a number after a colon, such as `a:12`, is refused, since VS Code would take the number for a
-line. This is separate from the **VS Code for the Web** launcher, which runs a VS Code of its own in the browser.
+the window that has it open, or else in one of its own. A path with a number after a colon, such as `a:12`, is refused,
+since the editor would take the number for a line. This is separate from the **VS Code for the Web** launcher, which runs
+a VS Code of its own in the browser.
 
 ### Experiment trackers
 

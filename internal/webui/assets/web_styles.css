@@ -1761,7 +1761,7 @@ pre,
   vertical-align: middle;
 }
 .artifact-launchers .launch-viewer,
-.artifact-vscode {
+.artifact-editor {
   min-height: 0;
   padding: 3px 8px;
 }

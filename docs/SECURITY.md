@@ -125,14 +125,16 @@ A static export contains only paths unless it is made with
 can read the export, such as a published site, can then read those files. The
 command reports how many files and bytes it copied.
 
-**Open in VS Code** makes the browser open a `vscode://` URL; the server runs
+**Open in VS Code**, or the editor chosen in Settings, makes the browser open a URL
+of one of five fixed editors, such as `vscode://`; the server runs
 nothing. For an artifact, the server answers its path only where it would serve
 its contents, and for a path in a job's log, whether it is a file only under the
 same directories, unless the terminal is on, where any path may be asked about as
 in a shell. The SSH host in the URL comes from the browser's storage, which a
 launched service, on the same origin, can write; the page refuses one that is
 not a plain `[USER@]HOST`, such as one `ssh` would read as an option. A service
-could still make it another host's name, which VS Code would connect to.
+could still make it another host's name, which the editor would connect to, or
+choose another of the five editors.
 
 `rotari tableview --static-dir` likewise copies the table's rows and the
 image, audio, video, and PDF files its cells name into the snapshot, and

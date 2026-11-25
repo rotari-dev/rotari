@@ -11,11 +11,11 @@ var terminalWindowHTML string
 
 // composeTerminalWindow is the page of the panel in a window of its own: the page
 // frame's script, which builds the panel, and nothing of the application.
-func composeTerminalWindow(nonce string, vscode vscodeConnection) string {
+func composeTerminalWindow(nonce string, editor editorConnection) string {
 	page := strings.NewReplacer("__ROTARI_SHELL_SCRIPT__", pageFrameJS()).Replace(terminalWindowHTML)
 	return strings.NewReplacer(
 		scriptNonceSlot, scriptNonceAttribute(nonce),
-		"__ROTARI_VSCODE__", vscode.attributes(),
+		"__ROTARI_EDITOR__", editor.attributes(),
 		"__ROTARI_ICON_DARK__", faviconDataURL(webFaviconDarkSVG),
 		"__ROTARI_ICON_LIGHT__", faviconDataURL(webFaviconLightSVG),
 	).Replace(page)
@@ -29,5 +29,5 @@ func serveTerminalWindow(writer http.ResponseWriter, request *http.Request) {
 	}
 	nonce := setPagePolicy(writer)
 	writer.Header().Set(headerContentType, "text/html; charset=utf-8")
-	_, _ = writer.Write([]byte(composeTerminalWindow(nonce, *currentVSCodeConnection())))
+	_, _ = writer.Write([]byte(composeTerminalWindow(nonce, *currentEditorConnection())))
 }

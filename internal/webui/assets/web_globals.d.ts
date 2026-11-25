@@ -16,11 +16,16 @@ declare function formatBytes(size: number): string;
 
 // Static-export data that web_static_bootstrap.js puts on the window.
 interface Window {
-  // web_vscode.js, which every page loads first.
-  vscodeAvailable(): boolean;
-  vscodeOffered(): boolean;
-  openInVSCode(target: { path: string; folder?: boolean; line?: number; column?: number }): void;
-  showVSCodeNote(message: string): void;
+  // web_editor.js, which every page loads first.
+  editorAvailable(): boolean;
+  editorOffered(): boolean;
+  openInEditor(target: { path: string; folder?: boolean; line?: number; column?: number }): void;
+  showEditorNote(message: string): void;
+  editorName(): string;
+  labelEditorAction(
+    element: HTMLElement,
+    names: { title?: string; label?: string; text?: string; after?: string },
+  ): void;
   // web_shell.js: the words of a line that may be paths.
   outputPathCandidates(text: string): { text: string; start: number; end: number }[];
   __ROTARI_STATIC_STATE__?: unknown;

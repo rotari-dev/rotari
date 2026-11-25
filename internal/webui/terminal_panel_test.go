@@ -32,7 +32,7 @@ func TestTerminalPanel(t *testing.T) {
 		t.Fatal(err)
 	}
 	terminalWindow := filepath.Join(dir, "window.html")
-	if err := os.WriteFile(terminalWindow, []byte(composeTerminalWindow("page-nonce", vscodeConnection{Host: "srv"})), 0o600); err != nil {
+	if err := os.WriteFile(terminalWindow, []byte(composeTerminalWindow("page-nonce", editorConnection{Host: "srv"})), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	script := `
@@ -3804,10 +3804,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   // A page that offers VS Code has it in the menu, for a file and a folder alike.
   {
     const offer = ex.document.createElement('div');
-    offer.id = 'vscode-connection';
+    offer.id = 'editor-connection';
     ex.document.body.append(offer);
     const opened = [];
-    ex.window.openInVSCode = (target) => opened.push(target);
+    ex.window.openInEditor = (target) => opened.push(target);
     assert.equal(menuOf(exRow('train.yaml'))[1].textContent, 'Open in VS Code');
     menuOf(exRow('train.yaml'))[1].click();
     menuOf(exRow('conf'))[1].click();
@@ -4324,17 +4324,17 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   winTerm.lines = ['run ' + run];
   const [winRun] = await new Promise((resolve) => winTerm.linkProviders[0].provideLinks(1, resolve));
   winRun.activate({});
-  // Its bar and All shells have Open in VS Code beside the Table viewer, as this page offers
+  // Its bar and All shells have Open in VS Code, the editor not chosen yet, beside the Table viewer, as this page offers
   // it, for the directory the shell is in now.
   {
     const vscode = [];
-    lkWin.window.openInVSCode = (target) => vscode.push(target.path + ' ' + target.folder);
+    lkWin.window.openInEditor = (target) => vscode.push(target.path + ' ' + target.folder);
     lkWin.server.cwds = { 1: '/w/p1/sub' };
     const labels = [...lkWin.document.querySelectorAll('.terminal-bar button')].map((each) => each.getAttribute('aria-label'));
     assert.equal(labels[labels.indexOf('Table viewer') + 1], 'Open in VS Code');
-    assert.ok(lkWin.document.querySelector('.terminal-bar [aria-label="Open in VS Code"]').classList.contains('vscode-action'));
+    assert.ok(lkWin.document.querySelector('.terminal-bar [aria-label="Open in VS Code"]').classList.contains('editor-action'));
     // Hidden in Settings, its drawn buttons go by style, and menus do not have it.
-    assert.match(webShellCSS, /html\[data-vscode-hidden\] button\.vscode-action \{\s*display: none;/);
+    assert.match(webShellCSS, /html\[data-editor-hidden\] button\.editor-action \{\s*display: none;/);
     const winViewport = lkWin.document.querySelector('.terminal-viewport');
     const winMenu = () => {
       lkWin.document.querySelector('.terminal-tab-menu')?.remove();
@@ -4342,9 +4342,9 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       return [...lkWin.document.querySelectorAll('.terminal-tab-menu button')].some((each) => each.textContent.includes('VS Code'));
     };
     assert.equal(winMenu(), true);
-    lkWin.document.documentElement.toggleAttribute('data-vscode-hidden', true);
+    lkWin.document.documentElement.toggleAttribute('data-editor-hidden', true);
     assert.equal(winMenu(), false);
-    lkWin.document.documentElement.toggleAttribute('data-vscode-hidden', false);
+    lkWin.document.documentElement.toggleAttribute('data-editor-hidden', false);
     lkWin.document.querySelector('.terminal-tab-menu').remove();
     lkWin.document.querySelector('.terminal-bar [aria-label="Open in VS Code"]').click();
     await wait(20);
@@ -4376,10 +4376,10 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   // The menu opens VS Code at the line, where it is offered.
   {
     const offer = lk.document.createElement('div');
-    offer.id = 'vscode-connection';
+    offer.id = 'editor-connection';
     lk.document.body.append(offer);
     const vscode = [];
-    lk.window.openInVSCode = (target) => vscode.push(target);
+    lk.window.openInEditor = (target) => vscode.push(target);
     const atLine = async (link) => {
       link.hover();
       rightClick();

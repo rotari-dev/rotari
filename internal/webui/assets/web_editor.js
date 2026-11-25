@@ -1,24 +1,38 @@
-// Open in VS Code hands a file or directory of the server to the VS Code installed on the
-// browser's machine, with a vscode:// URL. The server runs nothing. A live page has an
-// element that says the server's host name and what to suggest; a static export has none
-// and offers nothing.
+// Open in EDITOR hands a file or directory of the server to an editor installed on the
+// browser's machine, with a URL of the editor's scheme. The server runs nothing. A live page
+// has an element that says the server's host name and what to suggest; a static export has
+// none and offers nothing.
 //
-// A URL for Remote SSH needs the name the user's own ssh is given for the server, which the
-// server cannot know, so the browser asks once and keeps the answer. One address may be
-// forwarded to different servers, so it is kept per server host name.
+// The editor is the browser's, VS Code until another is chosen. A URL that goes over SSH
+// needs the name the user's own ssh is given for the server, which the server cannot know,
+// so the browser asks once and keeps the answer. One address may be forwarded to different
+// servers, so it is kept per server host name.
 (() => {
-  const keyPrefix = "rotari-vscode-";
-  const connection = () => document.getElementById("vscode-connection");
+  // The editors, the first unless another is chosen. VS Code and those made from it take
+  // one form of URL under schemes of their own. There is no URL of one's own to give: the
+  // storage it would be kept in can be written by a launched service, on the same origin.
+  const editors = [
+    { id: "vscode", name: "VS Code" },
+    { id: "vscode-insiders", name: "VS Code Insiders" },
+    { id: "vscodium", name: "VSCodium" },
+    { id: "cursor", name: "Cursor" },
+    { id: "zed", name: "Zed", zed: true },
+  ];
+  const editorKey = "rotari-editor";
+  const keyPrefix = "rotari-editor-host-";
+  const connection = () => document.getElementById("editor-connection");
   // A live page can offer it, and does unless this browser was told, in Settings, not to.
-  // What is drawn once has the class vscode-action, which the page's style then hides.
-  const hiddenKey = "rotari-vscode-hidden";
+  // What is drawn once has the class editor-action, which the page's style then hides.
+  const hiddenKey = "rotari-editor-hidden";
   const root = document.documentElement;
   const applyHidden = (hidden) => {
-    root.toggleAttribute("data-vscode-hidden", hidden);
-    const shown = document.getElementById("vscode-show");
+    root.toggleAttribute("data-editor-hidden", hidden);
+    const shown = document.getElementById("editor-show");
     if (shown) shown.checked = !hidden;
-    const button = document.getElementById("vscode-connection-button");
-    if (button) button.disabled = hidden;
+    for (const id of ["editor-choice", "editor-connection-button"]) {
+      const control = document.getElementById(id);
+      if (control) control.disabled = hidden;
+    }
   };
   const storedHidden = () => {
     try {
@@ -32,10 +46,71 @@
   window.addEventListener("storage", (event) => {
     if (event.key === hiddenKey || event.key === null)
       applyHidden(storedHidden());
+    if (event.key === editorKey || event.key === null) {
+      readEditor();
+      labelActions();
+    }
   });
-  window.vscodeAvailable = () => Boolean(connection());
-  window.vscodeOffered = () =>
-    window.vscodeAvailable() && !root.hasAttribute("data-vscode-hidden");
+  window.editorAvailable = () => Boolean(connection());
+  window.editorOffered = () =>
+    window.editorAvailable() && !root.hasAttribute("data-editor-hidden");
+
+  // editor is the editor in use, and editorProblem why it is not what was kept.
+  let editor = editors[0];
+  let editorProblem = "";
+  const readEditor = () => {
+    let kept = null;
+    try {
+      kept = localStorage.getItem(editorKey);
+    } catch {}
+    const found = editors.find((each) => each.id === kept);
+    editor = found || editors[0];
+    editorProblem =
+      kept === null || found ? "" : "The kept editor is not one known here.";
+  };
+  // keepEditor uses an editor from now on, and returns why it could not be kept, or "".
+  const keepEditor = (chosen) => {
+    editor = chosen;
+    editorProblem = "";
+    labelActions();
+    try {
+      localStorage.setItem(editorKey, chosen.id);
+      return "";
+    } catch (error) {
+      return error.message;
+    }
+  };
+  // What is drawn once names the editor, and is named again when the editor changes. Its
+  // title, label, and text are what data-editor-title, -label, and -text hold, then "in" the
+  // editor, then, in a title, what data-editor-after holds.
+  const labelAction = (element) => {
+    const { editorTitle, editorLabel, editorText, editorAfter } =
+      element.dataset;
+    const named = (text) => text + " in " + editor.name;
+    if (editorTitle !== undefined)
+      element.title = named(editorTitle) + (editorAfter || "");
+    if (editorLabel !== undefined)
+      element.setAttribute("aria-label", named(editorLabel));
+    if (editorText !== undefined) element.textContent = named(editorText);
+  };
+  const labelActions = () => {
+    for (const element of document.querySelectorAll(
+      "[data-editor-title], [data-editor-label], [data-editor-text]",
+    ))
+      labelAction(element);
+    const chosen = document.getElementById("editor-choice");
+    if (chosen) chosen.value = editor.id;
+  };
+  readEditor();
+  window.editorName = () => editor.name;
+  // labelEditorAction names an element: {title, label, text, after}, as labelAction.
+  window.labelEditorAction = (element, { title, label, text, after }) => {
+    if (title !== undefined) element.dataset.editorTitle = title;
+    if (label !== undefined) element.dataset.editorLabel = label;
+    if (text !== undefined) element.dataset.editorText = text;
+    if (after) element.dataset.editorAfter = after;
+    labelAction(element);
+  };
 
   // nameProblem says why ssh should not be given a name: one starting with "-" would be an
   // option. It is checked at each use, since a launched service, on the same origin, can
@@ -91,7 +166,7 @@
   };
 
   const positive = (value) => Number.isSafeInteger(value) && value > 0;
-  // targetProblem says why a target has no URL. VS Code reads a number after a colon as a
+  // targetProblem says why a target has no URL. Editors read a number after a colon as a
   // line, wherever it is in the path, so a path that has one cannot be named.
   const targetProblem = ({ path, folder, line, column }) => {
     if (typeof path !== "string" || !path.startsWith("/"))
@@ -103,35 +178,49 @@
         .slice(1)
         .some((part) => part.trim() === "" || Number.isFinite(Number(part)))
     )
-      return "VS Code would read the number after the colon in its path as a line";
+      return (
+        editor.name +
+        " would read the number after the colon in its path as a line"
+      );
     if (line === undefined && column === undefined) return "";
     if (folder) return "a directory has no lines";
     if (!positive(line) || (column !== undefined && !positive(column)))
       return "its line or column is not a positive number";
     return "";
   };
-  // vscodeURL is the URL that opens a target under a choice.
-  const vscodeURL = (target, choice) => {
+  // editorURL is the URL that opens a target in the editor under a choice.
+  const editorURL = (target, choice) => {
     const problem =
       targetProblem(target) || (choice.remote ? nameProblem(choice.name) : "");
     if (problem) throw new Error(problem);
     const path = target.path.split("/").map(encodeURIComponent).join("/");
-    // A remote file without a line at its end does not open as a file of the window it
-    // belongs to, so one without a line is opened at its first.
-    const line = target.line ?? (choice.remote && !target.folder ? 1 : 0);
-    const position = line
-      ? ":" + line + (target.column ? ":" + target.column : "")
-      : "";
+    const at = (line) =>
+      line ? ":" + line + (target.column ? ":" + target.column : "") : "";
+    if (editor.zed)
+      return (
+        (choice.remote ? "zed://ssh/" + choice.name : "zed://file") +
+        path +
+        at(target.line)
+      );
+    // A remote path without a line at its end is taken for a directory, so a file without
+    // a line is opened at its first.
     return (
+      editor.id +
       (choice.remote
-        ? "vscode://vscode-remote/ssh-remote+" + choice.name
-        : "vscode://file") +
+        ? "://vscode-remote/ssh-remote+" + choice.name
+        : "://file") +
       path +
-      position +
+      at(target.line ?? (choice.remote && !target.folder ? 1 : 0)) +
       // A directory must not take the place of what a window has open.
       (target.folder ? "?windowId=_blank" : "")
     );
   };
+  // cannotOpen says why a target was not opened.
+  const cannotOpen = (target, reason) =>
+    showNote(
+      "Cannot open " + target.path + " in " + editor.name + ": " + reason + ".",
+      false,
+    );
 
   const element = (tag, className, text) => {
     const made = document.createElement(tag);
@@ -149,7 +238,7 @@
   let note, noteTimer;
   const showNote = (message, changeable) => {
     if (!note) {
-      note = element("div", "terminal-send-note vscode-note");
+      note = element("div", "terminal-send-note editor-note");
       note.setAttribute("role", "status");
       document.body.append(note);
     }
@@ -158,7 +247,7 @@
       note.append(
         button("Change", () => {
           note.hidden = true;
-          window.changeVSCodeConnection();
+          window.changeEditorConnection();
         }),
       );
     note.hidden = false;
@@ -170,12 +259,9 @@
   const open = (target, choice, unkept) => {
     let url;
     try {
-      url = vscodeURL(target, choice);
+      url = editorURL(target, choice);
     } catch (error) {
-      showNote(
-        "Cannot open " + target.path + " in VS Code: " + error.message + ".",
-        false,
-      );
+      cannotOpen(target, error.message);
       return;
     }
     const link = element("a");
@@ -187,7 +273,9 @@
     showNote(
       "Opening " +
         target.path +
-        " in VS Code " +
+        " in " +
+        editor.name +
+        " " +
         (choice.remote
           ? "through SSH host " + choice.name
           : "on this machine") +
@@ -198,17 +286,28 @@
   };
 
   let dialog = null;
-  // showDialog asks where VS Code runs, and then opens the target, if there is one.
+  // fillEditorSelect lists the editors, at the one in use.
+  const fillEditorSelect = (select) => {
+    for (const each of editors) {
+      const option = element("option", "", each.name);
+      option.value = each.id;
+      select.append(option);
+    }
+    select.value = editor.id;
+  };
+  const selectedEditor = (select) =>
+    editors.find((each) => each.id === select.value) || editors[0];
+  // showDialog asks for the editor and where it runs, and then opens the target, if there is one.
   const showDialog = (target, problem) => {
     dialog?.remove();
     const before = document.activeElement;
     const suggested = connection().dataset;
     const { choice: kept } = storedChoice();
     const remoteFirst = kept ? kept.remote : suggested.remote === "true";
-    dialog = element("div", "output-modal terminal-launch-modal vscode-modal");
+    dialog = element("div", "output-modal terminal-launch-modal editor-modal");
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
-    dialog.setAttribute("aria-labelledby", "vscode-dialog-title");
+    dialog.setAttribute("aria-labelledby", "editor-dialog-title");
     const done = () => {
       dialog?.remove();
       dialog = null;
@@ -228,27 +327,32 @@
     const title = element(
       "strong",
       "",
-      target ? "Open in VS Code" : "VS Code connection",
+      target ? "Open in editor" : "Editor connection",
     );
-    title.id = "vscode-dialog-title";
+    title.id = "editor-dialog-title";
     head.append(title);
-    const form = element("form", "vscode-form");
+    const form = element("form", "editor-form");
+    const editorRow = element("label", "editor-which", "Editor ");
+    const which = element("select");
+    fillEditorSelect(which);
+    editorRow.append(which);
+    form.append(editorRow);
     const radio = (label, checked) => {
       const row = element("label");
       const input = element("input");
       input.type = "radio";
-      input.name = "vscode-where";
+      input.name = "editor-where";
       input.checked = checked;
       row.append(input, " " + label);
       form.append(row);
       return input;
     };
     const local = radio(
-      "VS Code runs on the same machine as rotari web",
+      "It runs on the same machine as rotari web",
       !remoteFirst,
     );
-    const remote = radio("Connect with Remote SSH", remoteFirst);
-    const hostRow = element("label", "vscode-host", "SSH host ");
+    const remote = radio("Connect over SSH", remoteFirst);
+    const hostRow = element("label", "editor-host", "SSH host ");
     const name = element("input");
     name.type = "text";
     name.autocomplete = "off";
@@ -260,7 +364,7 @@
       "terminal-launch-hint",
       "The name you use with ssh on the machine this browser runs on, as in ssh " +
         (suggested.name || "HOST") +
-        ", or USER@HOST. VS Code asks for a password if ssh needs one; do not put it here.",
+        ", or USER@HOST. The editor asks for a password if ssh needs one; do not put it here.",
     );
     const says = element("p", "terminal-launch-problem", problem || "");
     says.setAttribute("role", "alert");
@@ -284,17 +388,19 @@
         name.focus();
         return;
       }
-      const unkept = keepChoice(choice);
+      const unkept = keepEditor(selectedEditor(which)) || keepChoice(choice);
       done();
       if (target) open(target, choice, unkept);
       else
         showNote(
           unkept
-            ? "The VS Code connection was not kept: " + unkept + "."
-            : "Open in VS Code now uses " +
+            ? "The choice was not kept: " + unkept + "."
+            : "Files open in " +
+                editor.name +
+                " " +
                 (choice.remote
-                  ? "SSH host " + choice.name
-                  : "VS Code on this machine") +
+                  ? "through SSH host " + choice.name
+                  : "on this machine") +
                 ".",
           false,
         );
@@ -304,28 +410,25 @@
     document.body.append(dialog);
     (remote.checked ? name : accept).focus();
   };
-  window.changeVSCodeConnection = () =>
-    showDialog(null, storedChoice().problem);
-  // openInVSCode opens an absolute path of the server: {path, folder, line, column}.
-  window.openInVSCode = (target) => {
+  window.changeEditorConnection = () =>
+    showDialog(null, editorProblem || storedChoice().problem);
+  // openInEditor opens an absolute path of the server: {path, folder, line, column}.
+  window.openInEditor = (target) => {
     // A path linked in a log before this was hidden is text again.
-    if (!window.vscodeOffered()) return;
+    if (!window.editorOffered()) return;
     const problem = targetProblem(target);
     if (problem) {
-      showNote(
-        "Cannot open " + target.path + " in VS Code: " + problem + ".",
-        false,
-      );
+      cannotOpen(target, problem);
       return;
     }
     const stored = storedChoice();
-    if (stored.choice) open(target, stored.choice, "");
-    else showDialog(target, stored.problem);
+    if (stored.choice && !editorProblem) open(target, stored.choice, "");
+    else showDialog(target, editorProblem || stored.problem);
   };
-  window.showVSCodeNote = (message) => showNote(message, false);
+  window.showEditorNote = (message) => showNote(message, false);
   document.addEventListener("DOMContentLoaded", () => {
-    applyHidden(root.hasAttribute("data-vscode-hidden"));
-    const shown = document.getElementById("vscode-show");
+    applyHidden(root.hasAttribute("data-editor-hidden"));
+    const shown = document.getElementById("editor-show");
     if (shown)
       shown.addEventListener("change", () => {
         const hidden = !shown.checked;
@@ -335,7 +438,7 @@
           else localStorage.removeItem(hiddenKey);
         } catch (error) {
           showNote(
-            "Open in VS Code is " +
+            "Open in editor is " +
               (hidden ? "hidden" : "shown") +
               " on this page only: " +
               error.message,
@@ -343,11 +446,28 @@
           );
         }
       });
-    const settings = document.getElementById("vscode-connection-button");
+    const chosen = document.getElementById("editor-choice");
+    if (chosen) {
+      fillEditorSelect(chosen);
+      chosen.addEventListener("change", () => {
+        const unkept = keepEditor(selectedEditor(chosen));
+        if (unkept)
+          showNote(
+            "Files open in " +
+              editor.name +
+              " on this page only: " +
+              unkept +
+              ".",
+            false,
+          );
+      });
+    }
+    labelActions();
+    const settings = document.getElementById("editor-connection-button");
     if (settings)
       settings.addEventListener("click", () => {
         window.closeSettingsMenu?.();
-        window.changeVSCodeConnection();
+        window.changeEditorConnection();
       });
   });
 })();
