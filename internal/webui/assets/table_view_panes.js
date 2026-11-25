@@ -1089,8 +1089,8 @@ class TabView {
     }
   }
 
-  // showText shows a file a page at a time, rendering Markdown and
-  // highlighting source by its extension.
+  // showText shows a file a page at a time with its line numbers, rendering
+  // Markdown and highlighting source by its extension.
   showText() {
     const markdown =
       this.media.kind === "markdown" ||
@@ -1099,8 +1099,15 @@ class TabView {
       typeof scriptLanguage === "function"
         ? scriptLanguage(this.media.ref)
         : "";
+    const pre = el("pre", { className: "tv-text" });
+    const numbers = el("pre", {
+      className: "tv-line-numbers",
+      "aria-hidden": "true",
+    });
     const text = {
-      pre: el("pre", { className: "tv-text" }),
+      pre,
+      numbers,
+      source: el("div", { className: "tv-source" }, numbers, pre),
       end: 0,
       content: "",
       markdown,
@@ -1113,7 +1120,7 @@ class TabView {
     }
     if (markdown) {
       text.preview = el("div", { className: "tv-markdown markdown-view" });
-      text.pre.hidden = true;
+      text.source.hidden = true;
       text.toggle = el(
         "button",
         {
@@ -1148,7 +1155,7 @@ class TabView {
       ),
       text.status,
       ...(text.preview ? [text.preview] : []),
-      text.pre,
+      text.source,
       text.more,
     );
     this.moreText();
@@ -1159,12 +1166,26 @@ class TabView {
   updateMarkdownPane(text) {
     if (!text.markdown) return;
     text.preview.hidden = !text.rendered;
-    text.pre.hidden = text.rendered;
+    text.source.hidden = text.rendered;
     if (text.rendered) {
       text.preview.innerHTML = renderMarkdown(text.content);
     } else {
       text.pre.textContent = text.content;
+      this.numberLines(text);
     }
+  }
+
+  // numberLines numbers the lines on show. It counts them in the element, not
+  // in the pages read: a page may end inside a line, and markup turns a
+  // carriage return into a line break.
+  numberLines(text) {
+    const shown = text.pre.textContent;
+    let count = shown.split("\n").length;
+    if (shown === "" || shown.endsWith("\n")) count--;
+    text.numbers.textContent = Array.from(
+      { length: count },
+      (_, index) => index + 1,
+    ).join("\n");
   }
 
   async moreText() {
@@ -1209,6 +1230,7 @@ class TabView {
       } else {
         text.pre.append(page.text);
       }
+      if (!text.markdown) this.numberLines(text);
       text.end = page.end;
       text.status.textContent =
         (page.end < page.size

@@ -2116,39 +2116,68 @@ func TestTableViewMovesBetweenDirectoriesInBrowser(t *testing.T) {
 }
 
 // A directory's file that is not media opens as text in the active pane,
-// whatever its name, a page at a time; a binary file says so.
+// whatever its name, a page at a time with its line numbers; a binary file says so.
 func TestTableViewShowsTextFilesInBrowser(t *testing.T) {
 	f := newArtifactFixture(t)
 	long := strings.Repeat("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde\n", 1500)
 	write(t, filepath.Join(f.work, "notes", "README"), "no extension\n")
 	write(t, filepath.Join(f.work, "notes", "config.yaml"), "lr: 0.1\n")
+	write(t, filepath.Join(f.work, "notes", "crlf.yaml"), "a: 1\r\n\r\nb: 2")
+	write(t, filepath.Join(f.work, "notes", "doc.md"), "# Title\n\ntext\n")
+	write(t, filepath.Join(f.work, "notes", "empty"), "")
 	write(t, filepath.Join(f.work, "notes", "long.log"), long)
 	write(t, filepath.Join(f.work, "notes", "model.pt"), "PK\x00\x01torch")
 	runTableViewScript(t, testOptions(f.baseDir, false), f, "wd", "#pattern=notes%2F*&expanded=notes", `
-  await until('files', () => document.querySelectorAll('#tv-table .tv-text-file').length === 4);
+  await until('files', () => document.querySelectorAll('#tv-table .tv-text-file').length === 7);
   const open = name => [...document.querySelectorAll('#tv-table .tv-text-file')].find(button => button.textContent === 'notes/' + name).click();
   const view = () => document.querySelector('.tv-pane-active .tv-tab-view');
   const shown = async (what, check) => { await until(what, () => view() && check(view())); return view(); };
   // The view holds only elements: a part left out must not be written as text.
   const onlyElements = what => {
-    const stray = [...view().querySelector('.tv-text').parentNode.childNodes].filter(node => node.nodeType !== window.Node.ELEMENT_NODE).map(node => node.textContent);
+    const stray = [...view().querySelector('.tv-tab-title').parentNode.childNodes].filter(node => node.nodeType !== window.Node.ELEMENT_NODE).map(node => node.textContent);
     if (stray.length) fail(what + ' stray text', JSON.stringify(stray));
   };
+  // The numbers are outside the text, so that copying or reading it leaves them out.
+  const numbered = (what, want) => {
+    const numbers = view().querySelector('.tv-source > .tv-line-numbers');
+    if (numbers.getAttribute('aria-hidden') !== 'true' || numbers.textContent !== want) fail(what + ' line numbers', JSON.stringify(numbers.textContent.slice(0, 200)));
+  };
+  const upTo = count => Array.from({ length: count }, (_, index) => index + 1).join('\n');
   open('README');
   await shown('README', v => v.querySelector('.tv-text')?.textContent === 'no extension\n');
   if (document.querySelector('.tv-pane-active .tv-tab-kind').textContent !== 'text') fail('tab kind');
   onlyElements('README');
+  numbered('README', '1');
   open('config.yaml');
   await shown('yaml', v => v.textContent.includes('notes/config.yaml') && v.querySelector('.tv-text')?.textContent === 'lr: 0.1\n');
   onlyElements('yaml');
+  numbered('yaml', '1');
+  // A highlighted file without a final newline, with a blank line and CRLF.
+  open('crlf.yaml');
+  await shown('crlf', v => v.querySelector('.tv-text')?.textContent.includes('b: 2'));
+  numbered('crlf', upTo(3));
+  open('empty');
+  await shown('empty', v => v.textContent.includes('notes/empty') && !v.querySelector('.tv-analysis-status').textContent);
+  numbered('empty', '');
+  // Markdown has numbers only as source.
+  open('doc.md');
+  await shown('markdown', v => v.querySelector('.tv-markdown h1'));
+  const source = view().querySelector('.tv-source');
+  if (!source.hidden) fail('rendered Markdown shows its source');
+  [...view().querySelectorAll('button')].find(button => button.textContent === 'Show source').click();
+  if (source.hidden || !view().querySelector('.tv-markdown').hidden) fail('Markdown source hidden');
+  numbered('markdown', upTo(3));
   // A long file loads more on demand.
   open('long.log');
   let v = await shown('first page', v => v.querySelector('.tv-text')?.textContent.length > 0);
   const more = [...v.querySelectorAll('button')].find(button => button.textContent === 'Load more');
   if (!more || more.hidden || v.querySelector('.tv-text').textContent.length >= `+strconv.Itoa(len(long))+`) fail('first page', v.querySelector('.tv-analysis-status').textContent);
+  const firstLines = v.querySelector('.tv-text').textContent.split('\n').length - 1;
+  numbered('first page', upTo(firstLines));
   more.click();
   await shown('second page', v => v.querySelector('.tv-text').textContent.length === `+strconv.Itoa(len(long))+`);
   if (!more.hidden || v.querySelector('.tv-analysis-status').textContent) fail('whole file');
+  numbered('whole file', upTo(1500));
   open('model.pt');
   await shown('binary', v => v.querySelector('.tv-analysis-status').textContent === 'Cannot show as text: binary file: download it instead');
 `)

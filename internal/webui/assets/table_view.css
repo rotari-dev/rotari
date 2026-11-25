@@ -335,14 +335,43 @@ a:hover {
   font-family: var(--font-mono);
   overflow-wrap: anywhere;
 }
-.tv-text {
+/* A text file's line numbers stay at the left as long lines scroll. The line
+   height is fixed, so that a line in a fallback font stays beside its number. */
+.tv-source {
   flex: 1;
   min-height: 0;
-  margin: 0;
+  display: flex;
+  align-items: flex-start;
   overflow: auto;
-  font-family: var(--font-mono);
   font-size: 12px;
+  line-height: 1.5;
+}
+.tv-source[hidden] {
+  display: none;
+}
+.tv-text,
+.tv-line-numbers {
+  flex: none;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: inherit;
+  line-height: inherit;
   white-space: pre;
+}
+.tv-line-numbers {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  margin-right: 10px;
+  padding-right: 8px;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  text-align: right;
+  user-select: none;
+}
+.tv-line-numbers:empty {
+  display: none;
 }
 .tv-highlighted {
   font-family: inherit;

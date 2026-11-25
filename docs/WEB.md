@@ -831,7 +831,8 @@ directory, **Group by stem** puts
 `ref/u1.wav`, `hyp/u1.wav`, and `plots/u1.png` in one row to compare outputs
 and find missing ones. In a directory, clicking any other file shows it in a
 pane, rendering Markdown and highlighting supported source files; PDFs open
-in the browser viewer. A table file also has **Open table**, which opens it in
+in the browser viewer. Text, source files, and Markdown source show line
+numbers, which a copied selection leaves out. A table file also has **Open table**, which opens it in
 its own viewer in a new tab. A directory row's **→** shows that directory in
 the same window (Ctrl+click opens a new tab); the path above the table links
 back to each directory up to the one the viewer was opened on, **↑** (or

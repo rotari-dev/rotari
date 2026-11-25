@@ -1138,7 +1138,9 @@ names its format, and text documents name their preview. The page renders
 Markdown with a source toggle and safely highlights supported source/config
 languages from the local Highlight.js bundle in text panes; rendering and
 highlighting are limited to the first 2 MiB, after which
-the source is shown. PDFs use the browser's inline PDF viewer and also link to a new
+the source is shown. Text panes, highlighted or not, and Markdown source number their
+lines from 1 across the pages loaded, in an element apart from the text that a
+selection leaves out. PDFs use the browser's inline PDF viewer and also link to a new
 tab. Opening a Markdown, script, or PDF file directly shows its content, and
 table row APIs refuse to treat it as a delimited table. The
 page opens a cell's media in tabs of the active pane of panes
