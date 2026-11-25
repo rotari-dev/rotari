@@ -1057,7 +1057,11 @@ html[data-terminal-window] #terminal-panel {
   gap: 8px;
   align-items: center;
 }
-.terminal-font-form input {
+.terminal-font-form label[hidden] {
+  display: none;
+}
+.terminal-font-form input,
+.terminal-font-form select {
   flex: 1;
   min-width: 0;
 }

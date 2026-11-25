@@ -751,30 +751,102 @@ function shellWord(value) {
     (name ? quotedFont(name) + ", " : "") +
     (getComputedStyle(root).getPropertyValue("--font-mono").trim() ||
       "monospace");
-  // fontLooks says what can be told of a font by measuring: that this browser shows it as
-  // it shows a font that does not exist, or that its characters differ in width.
-  const fontLooks = (name) => {
-    const context = name && document.createElement("canvas").getContext("2d");
-    if (!context) return "";
-    const width = (text, family) => {
-      context.font = "32px " + family;
+  // measureFont returns the width of text in a list of families, or null where nothing can
+  // be measured.
+  const measureFont = () => {
+    const context = document.createElement("canvas").getContext("2d");
+    if (!context) return null;
+    return (text, families) => {
+      context.font = "32px " + families;
       return context.measureText(text).width;
     };
-    const generics = ["monospace", "serif", "sans-serif"];
-    const quoted = quotedFont(name);
-    const sample = "mmwwiill10Oo";
-    if (
-      generics.every(
-        (generic) =>
-          width(sample, quoted + ", " + generic) === width(sample, generic),
-      )
-    )
+  };
+  // A font this browser does not have shows as whichever generic font follows it.
+  const fontPresent = (width, name) =>
+    ["monospace", "serif", "sans-serif"].some(
+      (generic) =>
+        width("mmwwiill10Oo", quotedFont(name) + ", " + generic) !==
+        width("mmwwiill10Oo", generic),
+    );
+  const fontMonospaced = (width, name) =>
+    width("iiii", quotedFont(name) + ", serif") ===
+    width("WWWW", quotedFont(name) + ", serif");
+  const fontLooks = (name) => {
+    const width = name && measureFont();
+    if (!width) return "";
+    if (!fontPresent(width, name))
       return "This browser does not seem to have " + name + ".";
-    return width("iiii", quoted + ", monospace") ===
-      width("WWWW", quoted + ", monospace")
+    return fontMonospaced(width, name)
       ? ""
       : name + " is not monospaced, so text will not line up.";
   };
+  // Monospaced fonts people use, of which those this browser has are offered. The page's own
+  // font, IBM Plex Mono, is the default.
+  const knownFonts = () => [
+    ...[
+      "BIZ UDGothic",
+      "Cascadia Code",
+      "Cascadia Mono",
+      "Cica",
+      "Consolas",
+      "Courier New",
+      "DejaVu Sans Mono",
+      "Fira Code",
+      "Fira Mono",
+      "Geist Mono",
+      "Hack",
+      "HackGen Console",
+      "HackGen Console NF",
+      "HackGen35 Console NF",
+      "Inconsolata",
+      "Iosevka",
+      "JetBrains Mono",
+      "Liberation Mono",
+      "Menlo",
+      "MesloLGS NF",
+      "Monaco",
+      "Monaspace Neon",
+      "Moralerspace Neon",
+      "MS Gothic",
+      "Noto Sans Mono",
+      "Noto Sans Mono CJK JP",
+      "Osaka-Mono",
+      "PlemolJP Console",
+      "PlemolJP Console NF",
+      "Ricty Diminished",
+      "Roboto Mono",
+      "SF Mono",
+      "Source Code Pro",
+      "Source Han Code JP",
+      "Ubuntu Mono",
+      "UDEV Gothic",
+      "UDEV Gothic NF",
+      "Victor Mono",
+    ],
+    // Nerd Fonts' own names for the fonts they add icons to.
+    ...[
+      "BlexMono",
+      "CaskaydiaCove",
+      "CaskaydiaMono",
+      "CommitMono",
+      "DejaVuSansM",
+      "FiraCode",
+      "FiraMono",
+      "GeistMono",
+      "Hack",
+      "Inconsolata",
+      "Iosevka",
+      "IosevkaTerm",
+      "JetBrainsMono",
+      "MesloLGL",
+      "MesloLGM",
+      "MesloLGS",
+      "RobotoMono",
+      "SauceCodePro",
+      "UbuntuMono",
+      "VictorMono",
+    ].flatMap((name) => [name + " Nerd Font", name + " Nerd Font Mono"]),
+  ];
   let fontSerial = 0;
   const applyFont = async () => {
     const serial = ++fontSerial;
@@ -842,16 +914,44 @@ function shellWord(value) {
     head.append(title);
     const form = makeElement("form", "terminal-font-form");
     const row = makeElement("label", "", "Font ");
+    const select = makeElement("select");
+    row.append(select);
+    const otherRow = makeElement("label", "", "Name ");
     const input = makeElement("input");
     input.type = "text";
     input.autocomplete = "off";
     input.spellcheck = false;
-    input.value = font.name;
-    row.append(input);
+    otherRow.append(input);
+    const other = makeElement("option", "", "Other...");
+    // fill lists fonts by name, and the chosen one whether it was found or not.
+    const fill = (names, chosen) => {
+      const all = new Set(names);
+      if (chosen) all.add(chosen);
+      const listed = [...all].sort((a, b) => a.localeCompare(b));
+      const option = (name, text) => {
+        const made = makeElement("option", "", text);
+        made.value = name;
+        made.selected = name === chosen;
+        return made;
+      };
+      select.replaceChildren(
+        option("", "Default"),
+        ...listed.map((name) => option(name, name)),
+        other,
+      );
+    };
+    // Other... is told by the option itself, since a font may have any name.
+    const isOther = () => select.selectedOptions[0] === other;
+    const chosenName = () => (isOther() ? input.value.trim() : select.value);
+    const width = measureFont();
+    const found = width
+      ? knownFonts().filter((name) => fontPresent(width, name))
+      : [];
+    fill(found, font.name);
     const hint = makeElement(
       "p",
       "terminal-launch-hint",
-      "The name of one font installed on the computer this browser runs on, such as JetBrainsMono Nerd Font. Empty for the default.",
+      "A font of the computer this browser runs on. Those listed are the ones found here; Other... takes any name.",
     );
     // Text, box drawing, and icons of Powerline and Nerd Fonts.
     const preview = makeElement(
@@ -862,30 +962,75 @@ function shellWord(value) {
     const says = makeElement("p", "terminal-launch-problem", font.problem);
     says.setAttribute("role", "status");
     const look = () => {
-      const name = input.value.trim();
+      otherRow.hidden = !isOther();
+      const name = chosenName();
       const problem = fontProblem(name);
       preview.style.fontFamily = fontFamily(problem ? "" : name);
       says.textContent = problem || fontLooks(name);
     };
     input.oninput = look;
+    select.onchange = () => {
+      look();
+      if (isOther()) input.focus();
+    };
+    otherRow.hidden = true;
+    // Chrome and Edge can list every font, after asking.
+    const listAll = textButton("List installed fonts", async () => {
+      const dialog = launchDialog;
+      listAll.disabled = true;
+      let fonts;
+      let refused = "";
+      try {
+        fonts = await window.queryLocalFonts();
+      } catch (error) {
+        refused = error.message;
+      }
+      if (launchDialog !== dialog) return;
+      listAll.disabled = false;
+      if (!fonts?.length) {
+        says.textContent =
+          "The browser did not list its fonts" +
+          (refused
+            ? ": " + refused
+            : ". Allow it for this site, and try again.");
+        return;
+      }
+      const families = [...new Set(fonts.map((each) => each.family))].filter(
+        (name) => name && !fontProblem(name),
+      );
+      says.textContent = "Looking through " + families.length + " fonts...";
+      const fixed = [];
+      for (const [index, name] of families.entries()) {
+        if (index % 40 === 0) {
+          await new Promise((resolve) => setTimeout(resolve));
+          if (launchDialog !== dialog) return;
+        }
+        if (width && fontMonospaced(width, name)) fixed.push(name);
+      }
+      const typed = isOther();
+      fill([...found, ...fixed], typed ? font.name : chosenName());
+      if (typed) other.selected = true;
+      look();
+      listAll.hidden = true;
+      if (!says.textContent)
+        says.textContent =
+          fixed.length +
+          " monospaced " +
+          (fixed.length === 1 ? "font is" : "fonts are") +
+          " installed, and listed above.";
+      select.focus();
+    });
+    listAll.hidden = !width || typeof window.queryLocalFonts !== "function";
     preview.style.fontFamily = fontFamily();
     if (!font.problem) look();
     const choices = makeElement("div", "terminal-launch-choices");
     const save = makeElement("button", "", "Save");
     save.type = "submit";
-    choices.append(
-      textButton("Use the default", () => {
-        input.value = "";
-        look();
-        input.focus();
-      }),
-      textButton("Cancel", done),
-      save,
-    );
-    form.append(row, hint, preview, says, choices);
+    choices.append(listAll, textButton("Cancel", done), save);
+    form.append(row, otherRow, hint, preview, says, choices);
     form.onsubmit = (event) => {
       event.preventDefault();
-      const name = input.value.trim();
+      const name = chosenName();
       if (fontProblem(name)) {
         look();
         input.focus();
@@ -910,8 +1055,7 @@ function shellWord(value) {
     box.append(head, form);
     launchDialog.append(box);
     document.body.append(launchDialog);
-    input.focus();
-    input.select();
+    select.focus();
   };
   const buildResizer = () => {
     const resizer = document.createElement("div");

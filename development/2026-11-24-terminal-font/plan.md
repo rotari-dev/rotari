@@ -26,12 +26,11 @@ The font of the terminal's panes and of what is drawn to match them (the sticky 
 - Embedding a Nerd Font or any other font, or uploading one.
 - The fonts of the rest of the Web UI, transcripts, and logs.
 - Ligatures, which need another xterm.js addon.
-- Listing the installed fonts: the API is Chrome's alone and asks for a permission.
 - A rotari config or CLI option. A font is on the browser's machine, not the server's, as the text size already shows.
 
 ## Decisions
 
-1. **A font name, kept by the browser.** **Font...** asks for one family name, with a preview line of text, box
+1. **A font name, kept by the browser.** **Font...** asks for one font, with a preview line of text, box
    drawing, and Nerd Font icons.
 2. **Where: an Options button in the panel's bar**, whose menu holds **Font...**. The pane's right-click menu does not
    open while a program takes the mouse, as Neovim does by default and `tmux` when told to, and **Settings** is not on
@@ -45,6 +44,11 @@ The font of the terminal's panes and of what is drawn to match them (the sticky 
 6. **A proportional font is said too**, when `i` and `W` differ in width, since the cells would not fit.
 7. **All panes change at once** and are fitted again, as with the text size, and the shells get the resize.
 8. **When storage is refused**, the font lasts for the page, and a note says so.
+9. **Chosen from a list**, after the user could not be expected to type a name (2026-11-25). Well-known monospaced
+   fonts, Nerd Fonts among them, are looked for by measuring, as for decision 5, and those found are listed. Where the
+   browser has `queryLocalFonts` (Chrome and Edge), **List installed fonts** adds every monospaced one, asking for the
+   permission only on that click. **Other...** takes any name. The list of known names is the page's own, and grows by
+   hand.
 
 ## Design
 

@@ -548,9 +548,11 @@ open; right-click one to copy its address.
 **A-** and **A+** change the text size, which the browser remembers.
 
 **Options**, then **Font...**, sets the terminal's font to one installed on the computer the browser runs on, such as a
-Nerd Font for the icons of a prompt, `tmux`, or Neovim. Give one name; the default fonts follow it for characters it
-lacks. The dialog shows a sample, and says when the browser does not seem to have the font or its characters differ in
-width. The browser remembers the font, so each browser, and each computer, has its own.
+Nerd Font for the icons of a prompt, `tmux`, or Neovim. The list has the well-known monospaced fonts found there.
+Chrome and Edge also offer **List installed fonts**, which adds every monospaced font once you allow it, and **Other...**
+takes any name. The default fonts follow the one chosen for characters it lacks. The dialog shows a sample, and says when
+the browser does not seem to have the font or its characters differ in width. A browser may keep fonts you installed
+yourself from pages; then it does not find them. The browser remembers the font, so each browser, and each computer, has its own.
 
 On a Mac, **Options** also has **Use Option as Meta**, for `M-` keys in a shell, `tmux`, or Neovim. It is off at first,
 since Option then no longer types characters, such as the backslash of a Japanese keyboard. The browser remembers it.

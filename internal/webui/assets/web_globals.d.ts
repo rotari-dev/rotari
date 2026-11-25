@@ -26,6 +26,8 @@ interface Window {
     element: HTMLElement,
     names: { title?: string; label?: string; text?: string; after?: string },
   ): void;
+  // Chrome and Edge only.
+  queryLocalFonts?(): Promise<{ family: string }[]>;
   // web_shell.js: the words of a line that may be paths.
   outputPathCandidates(text: string): { text: string; start: number; end: number }[];
   __ROTARI_STATIC_STATE__?: unknown;

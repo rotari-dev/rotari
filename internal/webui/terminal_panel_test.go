@@ -4745,7 +4745,14 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     [...page.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Font...').click();
     assert.ok(dialogOf(page), 'the font dialog did not open');
   };
+  const selectOf = (page) => dialogOf(page).querySelector('select');
+  const listed = (page) => [...selectOf(page).options].map((option) => option.textContent);
+  const choose = (page, text) => {
+    [...selectOf(page).options].find((option) => option.textContent === text).selected = true;
+    selectOf(page).dispatchEvent(new page.window.Event('change', { bubbles: true }));
+  };
   const type = (page, name) => {
+    choose(page, 'Other...');
     const input = dialogOf(page).querySelector('input');
     input.value = name;
     input.dispatchEvent(new page.window.Event('input', { bubbles: true }));
@@ -4762,8 +4769,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       font: '',
       measureText(text) {
         const families = this.font.replace(/^32px /, '').split(', ').map((name) => name.replace(/^"|"$/g, ''));
-        const known = families.find((name) => ['Mono', 'Sans', 'monospace', 'serif', 'sans-serif'].includes(name));
-        const each = { Mono: () => 21, Sans: (c) => (c === 'i' ? 5 : 30), monospace: () => 20, serif: (c) => (c === 'i' ? 7 : 25), 'sans-serif': (c) => (c === 'i' ? 6 : 26) }[known];
+        const known = families.find((name) => name.includes('Fixed') || ['Mono', 'Sans', 'Hack', 'JetBrainsMono Nerd Font', 'monospace', 'serif', 'sans-serif'].includes(name));
+        const each = { Mono: () => 21, Hack: () => 22, 'JetBrainsMono Nerd Font': () => 23, Sans: (c) => (c === 'i' ? 5 : 30), monospace: () => 20, serif: (c) => (c === 'i' ? 7 : 25), 'sans-serif': (c) => (c === 'i' ? 6 : 26) }[known] || (() => 24);
         return { width: [...text].reduce((sum, c) => sum + each(c), 0) };
       },
     });
@@ -4778,8 +4785,19 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.deepEqual(families(page), ['monospace', 'monospace']);
   // The button opens its menu while a program takes the mouse, as the pane's own menu does not.
   page.terminals[0].modes.mouseTrackingMode = 'any';
-  openFont(page);
+  // Of the fonts known by name, those this browser has are listed.
   measures(page);
+  openFont(page);
+  assert.deepEqual(listed(page), ['Default', 'Hack', 'JetBrainsMono Nerd Font', 'Other...']);
+  assert.equal(selectOf(page).selectedOptions[0].textContent, 'Default');
+  assert.equal(page.document.activeElement, selectOf(page));
+  assert.equal(dialogOf(page).querySelector('input').closest('label').hidden, true, 'a name is asked for before Other...');
+  choose(page, 'Hack');
+  assert.equal(problem(page), '');
+  assert.equal(dialogOf(page).querySelector('.terminal-font-preview').style.fontFamily.replace(/'/g, '"'), '"Hack", monospace');
+  choose(page, 'Other...');
+  assert.equal(dialogOf(page).querySelector('input').closest('label').hidden, false);
+  assert.equal(page.document.activeElement, dialogOf(page).querySelector('input'));
   type(page, 'Mono');
   assert.equal(problem(page), '');
   assert.equal(dialogOf(page).querySelector('.terminal-font-preview').style.fontFamily.replace(/'/g, '"'), '"Mono", monospace');
@@ -4814,8 +4832,8 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(families(page).at(-1), quoted, 'a pane opened later has another font');
   // The default again.
   openFont(page);
-  assert.equal(dialogOf(page).querySelector('input').value, 'Jet "Brains" \\ Mono, x');
-  [...dialogOf(page).querySelectorAll('button')].find((item) => item.textContent === 'Use the default').click();
+  assert.equal(selectOf(page).value, 'Jet "Brains" \\ Mono, x', 'the font in use is not chosen');
+  choose(page, 'Default');
   await save(page);
   assert.equal(page.window.localStorage.getItem('rotari-terminal-font'), null);
   assert.ok(families(page).every((family) => family === 'monospace'));
@@ -4837,7 +4855,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     assert.deepEqual(families(edited), ['monospace'], 'used a bad stored name');
     openFont(edited);
     assert.match(problem(edited), /at most 100|no control/);
-    assert.equal(dialogOf(edited).querySelector('input').value, '');
+    assert.equal(selectOf(edited).value, '');
   }
   // With no canvas to measure with, nothing is claimed of a font.
   const blind = withFont('');
@@ -4846,6 +4864,81 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   openFont(blind);
   type(blind, 'Absent');
   assert.equal(problem(blind), '');
+  assert.deepEqual(listed(blind), ['Default', 'Other...']);
+  // A font picked from the list is kept as it is named.
+  const picking = withFont('');
+  await wait(50);
+  measures(picking);
+  openFont(picking);
+  choose(picking, 'JetBrainsMono Nerd Font');
+  await save(picking);
+  assert.deepEqual(families(picking), ['"JetBrainsMono Nerd Font", monospace']);
+  // A font really named as the last choice is a font.
+  const odd = withFont('Other...');
+  await wait(50);
+  openFont(odd);
+  await save(odd);
+  assert.deepEqual(families(odd), ['"Other...", monospace']);
+
+  // Chrome and Edge can list every font: the monospaced ones are added, once asked for.
+  const listButton = (page) => [...dialogOf(page).querySelectorAll('button')].find((item) => item.textContent === 'List installed fonts');
+  assert.equal((openFont(picking), listButton(picking).hidden), true, 'offered where the browser cannot');
+  const all = withFont('Sans');
+  await wait(50);
+  measures(all);
+  let asked = 0;
+  let answer = async () => [];
+  all.window.queryLocalFonts = () => { asked++; return answer(); };
+  openFont(all);
+  assert.equal(asked, 0, 'asked for the fonts before it was told to');
+  assert.equal(listButton(all).hidden, false);
+  const list = async () => { listButton(all).click(); await wait(30); };
+  await list();
+  assert.match(problem(all), /did not list its fonts\. Allow it/);
+  answer = async () => { throw new Error('not allowed here'); };
+  await list();
+  assert.match(problem(all), /did not list its fonts: not allowed here/);
+  assert.equal(listButton(all).disabled, false);
+  answer = async () => ['Mono', 'Sans', 'Mono', 'Hack', '', 'a\u202eb', 'x'.repeat(101)].map((family) => ({ family }));
+  await list();
+  // Sans is the font in use, and stays though its characters differ in width.
+  assert.deepEqual(listed(all), ['Default', 'Hack', 'JetBrainsMono Nerd Font', 'Mono', 'Sans', 'Other...']);
+  assert.equal(selectOf(all).value, 'Sans');
+  assert.match(problem(all), /Sans is not monospaced/);
+  assert.equal(listButton(all).hidden, true);
+  choose(all, 'Mono');
+  await save(all);
+  assert.deepEqual(families(all), ['"Mono", monospace']);
+  // Only monospaced fonts with usable names are listed, each once.
+  const counted = withFont('');
+  await wait(50);
+  measures(counted);
+  counted.window.queryLocalFonts = async () => ['Fixed B', 'Sans', 'Fixed A', 'Fixed B', '', 'Fixed\u202e', 'Fixed' + 'x'.repeat(100)].map((family) => ({ family }));
+  openFont(counted);
+  listButton(counted).click();
+  await wait(30);
+  assert.deepEqual(listed(counted), ['Default', 'Fixed A', 'Fixed B', 'Hack', 'JetBrainsMono Nerd Font', 'Other...']);
+  assert.equal(problem(counted), '2 monospaced fonts are installed, and listed above.');
+  // What was being typed stays, and a list that comes after the dialog closed is let go.
+  openFont(all);
+  type(all, 'Half');
+  answer = async () => [{ family: 'Mono' }];
+  await list();
+  assert.equal(selectOf(all).selectedOptions[0].textContent, 'Other...');
+  assert.equal(dialogOf(all).querySelector('input').value, 'Half');
+  dialogOf(all).dispatchEvent(new all.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  openFont(all);
+  let come;
+  answer = () => new Promise((resolve) => { come = resolve; });
+  listButton(all).click();
+  dialogOf(all).dispatchEvent(new all.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  openFont(all);
+  const before = listed(all);
+  come([{ family: 'Sans' }]);
+  await wait(30);
+  assert.deepEqual(listed(all), before, 'a list asked for by a closed dialog came to another');
+  assert.equal(listButton(all).disabled, false);
+
   // The font waits for what is loading, and the last choice stands.
   const slow = withFont('');
   await wait(50);
@@ -5283,6 +5376,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   // A font chosen while it shows is its font too.
   [...sk.document.querySelectorAll('.terminal-bar button')].find((item) => item.getAttribute('aria-label') === 'Options').click();
   [...sk.document.querySelectorAll('.terminal-tab-menu button')].find((item) => item.textContent === 'Font...').click();
+  sk.document.querySelector('.terminal-font-form select').lastElementChild.selected = true;
   sk.document.querySelector('.terminal-font-form input').value = 'Mono';
   sk.document.querySelector('.terminal-font-form').dispatchEvent(new sk.window.Event('submit', { bubbles: true, cancelable: true }));
   await wait(10);
