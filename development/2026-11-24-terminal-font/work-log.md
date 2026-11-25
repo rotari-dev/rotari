@@ -17,3 +17,17 @@ Plan: [plan.md](plan.md)
   `go test -race`, pre-commit, the other packages, and `scripts/check.sh`.
 - **Remaining:** the checks by hand, with a real font: nothing here has measured one, since JSDOM has no canvas. The
   Options and Font... parts have not been in a browser.
+
+## 2026-11-25 15:23:53 +0900 - `b6870e87` - The list
+
+- **Change:** the dialog's text box became a list: `knownFonts`, `measureFont`, `fontPresent`, and `fontMonospaced` in
+  `web_shell.js`, **List installed fonts**, and **Other...**. WEB-33's note and WEB.
+- **Reason:** the user could not be expected to type a font's name.
+- **Plan impact:** decision 9; listing the installed fonts is no longer a non-goal.
+- **Validation:** of 16 faults put into the code, 11 were caught at first and three more once the tests were
+  strengthened. Two change nothing that can be seen: a second check that the dialog is still open, and choosing
+  **Other...** again, which the moved option already does in JSDOM. `go vet ./...`, the type check, and `go test` of
+  `internal/webui`, `internal/terminal`, `conformance`, and the terminal tests of `conformance/05-web` passed on
+  `9ddaaf63`; the whole of `conformance/05-web` had passed before that rebase. Not run: the browser tests (no Chrome
+  here), `go test -race`, pre-commit, the other packages, and `scripts/check.sh`.
+- **Remaining:** the checks by hand, above all the measuring and `queryLocalFonts`, which only stand-ins have answered.
