@@ -1069,7 +1069,10 @@ function directoryCell(row, text) {
       childOf(row.directory),
       {
         className: "tv-enter",
-        title: "Open " + row.directory + " here (Enter on its row; Ctrl+click: new tab)",
+        title:
+          "Open " +
+          row.directory +
+          " here (Enter on its row; Ctrl+click: new tab)",
         "aria-label": "Open " + row.directory,
       },
       "→",
