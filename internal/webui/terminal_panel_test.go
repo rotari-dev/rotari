@@ -48,7 +48,7 @@ const ofBasedir = (id, number, basedir = '/b') => ({ id, number, basedir, projec
 // overviewHeadings are All shells' group headings, their lines joined by " / ".
 const overviewHeadings = (root) => [...root.querySelectorAll('.terminal-overview-heading')].map((heading) => [...heading.children].map((line) => line.textContent).join(' / '));
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
-const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/activity', maximized = false, fontSize = '', terminalFont = '', explorer = '', session = {}, holdHere = [], holdLists = false, windowName = '' } = {}) => {
+const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/activity', maximized = false, fontSize = '', terminalFont = '', optionMeta = '', explorer = '', session = {}, holdHere = [], holdLists = false, windowName = '' } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
   // xterm.js parses what it is given later; a test can hold that back.
   // What is written is parsed in order, also what a callback writes, as xterm.js's queue is.
@@ -144,6 +144,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       if (maximized) window.localStorage.setItem('rotari-terminal-maximized', '1');
       if (fontSize) window.localStorage.setItem('rotari-terminal-font-size', fontSize);
       if (terminalFont) window.localStorage.setItem('rotari-terminal-font', terminalFont);
+      if (optionMeta) window.localStorage.setItem('rotari-terminal-option-meta', optionMeta);
       if (explorer) window.localStorage.setItem('rotari-terminal-explorer', explorer);
       for (const [key, value] of Object.entries(session)) window.sessionStorage.setItem(key, value);
       if (windowName) window.name = windowName;
@@ -4862,6 +4863,53 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   loads[0][1]();
   await wait(10);
   assert.deepEqual(families(slow), ['"Other", monospace'], 'an earlier choice won');
+  }
+
+  // Option as Meta: offered on a Mac alone, off unless the browser kept "1", for every pane
+  // and those opened later, also while a program takes the mouse.
+  {
+  const open = async (kept, platform = 'MacIntel') => {
+    const page = load(process.argv[1], { stored: '1', path: '/project/p1', shells: [inProject('1', 1, 'p1'), inProject('2', 2, 'p1')], optionMeta: kept, remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+    Object.defineProperty(page.window.navigator, 'platform', { configurable: true, value: platform });
+    await wait(50);
+    return page;
+  };
+  const metas = (page) => page.terminals.filter((term) => !term.disposed).map((term) => term.options.macOptionIsMeta);
+  const item = (page) => {
+    [...page.document.querySelectorAll('.terminal-bar button')].find((button) => button.getAttribute('aria-label') === 'Options').click();
+    return [...page.document.querySelectorAll('.terminal-tab-menu button')].find((button) => button.textContent === 'Use Option as Meta');
+  };
+  for (const [kept, want] of [['', false], ['1', true], ['0', false], ['true', false], ['11', false]]) {
+    const page = await open(kept);
+    assert.deepEqual(metas(page), [want], 'kept as ' + JSON.stringify(kept));
+    assert.equal(item(page).getAttribute('aria-checked'), String(want));
+  }
+  for (const platform of ['Linux x86_64', 'Win32', 'iPhone', '']) {
+    const page = await open('', platform);
+    assert.equal(item(page), undefined, 'offered on ' + platform);
+  }
+  const page = await open('');
+  page.document.querySelector('[aria-label="Split right"]').click();
+  await wait(30);
+  page.terminals[0].modes.mouseTrackingMode = 'any';
+  const focuses = page.terminals.at(-1).focuses;
+  item(page).click();
+  assert.deepEqual(metas(page), [true, true], 'not every pane changed');
+  assert.ok(page.terminals.at(-1).focuses > focuses, 'the keys did not go back to the terminal');
+  assert.equal(page.window.localStorage.getItem('rotari-terminal-option-meta'), '1');
+  page.document.querySelector('[aria-label="Close pane"]').click();
+  page.document.querySelector('[aria-label="Split right"]').click();
+  await wait(30);
+  assert.deepEqual(metas(page), [true, true], 'a pane opened later does not have it');
+  assert.equal(page.document.querySelector('.terminal-send-note'), null, 'a note with nothing wrong');
+  item(page).click();
+  assert.deepEqual(metas(page), [false, false]);
+  assert.equal(page.window.localStorage.getItem('rotari-terminal-option-meta'), '0');
+  // Not kept: it holds for the page, and the page says so.
+  page.window.Storage.prototype.setItem = () => { throw new Error('refused'); };
+  item(page).click();
+  assert.deepEqual(metas(page), [true, true]);
+  assert.match(page.document.querySelector('.terminal-send-note').textContent, /was not kept/);
   }
 
   // Output waits in the pane's own queue, so that xterm.js is never given more than it can

@@ -2273,7 +2273,8 @@ recent output shows (`TestTerminalPanel`, and in headless Chrome `TestTerminalFa
 **Font...** in the menu of the bar's **Options** button, which opens also while a program takes the mouse, names one font
 of the browser's machine for every pane, before `--font-mono`, kept in the browser's local storage. A name of more than
 100 characters or with control or format characters is refused, also when read from storage, and a name is always
-quoted as a CSS string (`TestTerminalPanel`).
+quoted as a CSS string (`TestTerminalPanel`). **Use Option as Meta** in the same menu, only on a Mac, has Option send Meta
+in every pane; it is off unless local storage has `"1"` (`TestTerminalPanel`).
 `TestTerminalPanelInBrowser` checks the panel in
 headless Chrome.
 

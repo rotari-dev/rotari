@@ -391,6 +391,8 @@ function shellWord(value) {
   // The name of a font installed on the browser's machine, before the page's own.
   const fontKey = "rotari-terminal-font";
   const maxFontName = 100;
+  // "1" has a Mac's Option send Meta, and anything else leaves it typing characters.
+  const optionMetaKey = "rotari-terminal-option-meta";
   const stickyKey = "rotari-terminal-sticky";
   const defaultFontSize = 13;
   const minFontSize = 8;
@@ -787,6 +789,30 @@ function shellWord(value) {
     // Other cells, so another size, which the shells hear of.
     fitPanes();
     for (const pane of panes) if (pane.term) updateSticky(pane);
+  };
+  // Option as Meta: off unless chosen, since with it on, Option types none of the characters
+  // that some layouts have only there, such as the backslash of a Japanese Mac keyboard.
+  let optionMeta = false;
+  try {
+    optionMeta = localStorage.getItem(optionMetaKey) === "1";
+  } catch {}
+  // As xterm.js decides it, so that the choice is offered where it does something.
+  const onMac = () =>
+    ["Macintosh", "MacIntel", "MacPPC", "Mac68K"].includes(navigator.platform);
+  const setOptionMeta = (on) => {
+    optionMeta = on;
+    // xterm.js reads it at each key.
+    for (const pane of panes)
+      if (pane.term) pane.term.options.macOptionIsMeta = on;
+    try {
+      localStorage.setItem(optionMetaKey, on ? "1" : "0");
+    } catch {
+      showNote(
+        "The choice was not kept, as this browser does not let the page store it.",
+        6000,
+      );
+    }
+    focused.term?.focus();
   };
   // openFontDialog asks for the terminal's font, with a line of it to look at.
   const openFontDialog = () => {
@@ -1640,8 +1666,17 @@ function shellWord(value) {
   };
   // What is set for every pane, from the bar, since the pane's own menu does not open while
   // a program takes the mouse.
-  const openOptionsMenu = (event) =>
-    openPanelMenu(event, [["Font...", openFontDialog, true]]);
+  const openOptionsMenu = (event) => {
+    const choices = [["Font...", openFontDialog, true]];
+    if (onMac())
+      choices.push([
+        "Use Option as Meta",
+        () => setOptionMeta(!optionMeta),
+        true,
+        optionMeta,
+      ]);
+    openPanelMenu(event, choices);
+  };
   const openTabMenu = (event, shell) => {
     const inGroup = shells.filter((item) => sameGroup(item, shell));
     const place = inGroup.findIndex((item) => item.id === shell.id);
@@ -8410,6 +8445,7 @@ function shellWord(value) {
       cursorBlink: true,
       fontFamily: fontFamily(),
       fontSize: savedFontSize(),
+      macOptionIsMeta: optionMeta,
       theme: theme(),
       // Blocks' marks are decorations, which xterm.js 5.5 offers only as a proposed API.
       allowProposedApi: true,

@@ -552,6 +552,9 @@ Nerd Font for the icons of a prompt, `tmux`, or Neovim. Give one name; the defau
 lacks. The dialog shows a sample, and says when the browser does not seem to have the font or its characters differ in
 width. The browser remembers the font, so each browser, and each computer, has its own.
 
+On a Mac, **Options** also has **Use Option as Meta**, for `M-` keys in a shell, `tmux`, or Neovim. It is off at first,
+since Option then no longer types characters, such as the backslash of a Japanese keyboard. The browser remembers it.
+
 The **Maximize** icon gives the panel the whole window, for programs such as `vim`, until you press it
 again, now **Restore**. Each icon's name shows when you point at it.
 The browser remembers it from page to page. Keep the panel small to reach the page's menus and dialogs.

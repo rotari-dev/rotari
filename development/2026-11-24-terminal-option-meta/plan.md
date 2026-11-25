@@ -1,7 +1,7 @@
 # Plan: Option as Meta in the Web terminal
 
 Created: 2026-11-24
-Status: Proposed; not started.
+Status: Implemented on 2026-11-25; see [work-log.md](work-log.md). Not done: the checks by hand, and the Keys item.
 Related: [Web terminal](../2026-11-05-web-terminal/plan.md), and the two plans proposed with this one:
 [font](../2026-11-24-terminal-font/plan.md) and [OSC 52 copy](../2026-11-24-terminal-osc52-copy/plan.md)
 
@@ -47,8 +47,9 @@ reads the setting and is used both where a pane opens and where it changes.
 
 - [docs/WEB.md](../../docs/WEB.md): the setting, and the **Keys** item, which names only Ctrl-W today. Chrome on Windows
   and Linux also keeps Ctrl-T and Ctrl-N, which Neovim uses; a Mac keeps the Cmd ones, so Ctrl-W reaches the shell
-  there. What each browser keeps is checked by hand before it is written.
-- A new contract ID, the next free when implemented.
+  there. What each browser keeps is checked by hand before it is written, which has not been done, so the item is as it
+  was.
+- WEB-33's note, and no ID of its own, as for the [font](../2026-11-24-terminal-font/plan.md).
 
 ## Tests and validation
 
