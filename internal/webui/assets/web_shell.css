@@ -650,6 +650,25 @@ main {
   padding-top: 8px;
   border-top: 1px solid var(--line-soft);
 }
+.settings-vscode label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.settings-vscode input {
+  min-width: 0;
+  min-height: 0;
+}
+/* Not shown in this browser, as its Settings say. */
+html[data-vscode-hidden] button.vscode-action {
+  display: none;
+}
+html[data-vscode-hidden] .log .log-path {
+  text-decoration: none;
+  cursor: auto;
+}
 .settings-panel .settings-vscode button {
   width: 100%;
   min-height: 0;

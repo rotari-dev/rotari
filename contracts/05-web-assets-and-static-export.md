@@ -1854,7 +1854,8 @@ asks once where VS Code runs, starting from what the server suggests: Remote SSH
 `SSH_CONNECTION` set, with its host name up to the first dot, and the same machine otherwise. The browser keeps the
 answer under the server's host name, so one server's is not used for another at the same address; without storage or
 a known host name, or with a kept answer that cannot be read or used, it asks again and says why. Settings and the note
-shown after opening change it. The URL is `vscode://file/PATH` for the same machine and
+shown after opening change it. **Show Open in VS Code** in Settings, on at first, hides it in that browser, its other tabs
+and the terminal's window included, for every server at that address: its buttons, menu items, and the links of logs. The URL is `vscode://file/PATH` for the same machine and
 `vscode://vscode-remote/ssh-remote+NAME/PATH` for Remote SSH, each path segment percent-encoded, with `:LINE` or `:LINE:COL` for a
 file that was printed with one, else `:1` after a remote file, which VS Code would otherwise open in place of a window's folder, and `?windowId=_blank` after a
 directory. NAME is checked at every use: letters, digits, `.`, `_`, and `-`, with an optional `USER@`, neither part

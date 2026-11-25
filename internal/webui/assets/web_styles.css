@@ -1765,10 +1765,6 @@ pre,
   min-height: 0;
   padding: 3px 8px;
 }
-.artifact-vscode {
-  min-height: 0;
-  padding: 3px 8px;
-}
 .artifact-type {
   --artifact-type-color: var(--s-off);
   display: inline-block;

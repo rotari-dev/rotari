@@ -9,7 +9,33 @@
 (() => {
   const keyPrefix = "rotari-vscode-";
   const connection = () => document.getElementById("vscode-connection");
-  window.vscodeOffered = () => Boolean(connection());
+  // A live page can offer it, and does unless this browser was told, in Settings, not to.
+  // What is drawn once has the class vscode-action, which the page's style then hides.
+  const hiddenKey = "rotari-vscode-hidden";
+  const root = document.documentElement;
+  const applyHidden = (hidden) => {
+    root.toggleAttribute("data-vscode-hidden", hidden);
+    const shown = document.getElementById("vscode-show");
+    if (shown) shown.checked = !hidden;
+    const button = document.getElementById("vscode-connection-button");
+    if (button) button.disabled = hidden;
+  };
+  const storedHidden = () => {
+    try {
+      return localStorage.getItem(hiddenKey) === "1";
+    } catch {
+      return false;
+    }
+  };
+  applyHidden(storedHidden());
+  // Another tab, or the terminal's window, follows.
+  window.addEventListener("storage", (event) => {
+    if (event.key === hiddenKey || event.key === null)
+      applyHidden(storedHidden());
+  });
+  window.vscodeAvailable = () => Boolean(connection());
+  window.vscodeOffered = () =>
+    window.vscodeAvailable() && !root.hasAttribute("data-vscode-hidden");
 
   // nameProblem says why ssh should not be given a name: one starting with "-" would be an
   // option. It is checked at each use, since a launched service, on the same origin, can
@@ -282,6 +308,8 @@
     showDialog(null, storedChoice().problem);
   // openInVSCode opens an absolute path of the server: {path, folder, line, column}.
   window.openInVSCode = (target) => {
+    // A path linked in a log before this was hidden is text again.
+    if (!window.vscodeOffered()) return;
     const problem = targetProblem(target);
     if (problem) {
       showNote(
@@ -296,6 +324,25 @@
   };
   window.showVSCodeNote = (message) => showNote(message, false);
   document.addEventListener("DOMContentLoaded", () => {
+    applyHidden(root.hasAttribute("data-vscode-hidden"));
+    const shown = document.getElementById("vscode-show");
+    if (shown)
+      shown.addEventListener("change", () => {
+        const hidden = !shown.checked;
+        applyHidden(hidden);
+        try {
+          if (hidden) localStorage.setItem(hiddenKey, "1");
+          else localStorage.removeItem(hiddenKey);
+        } catch (error) {
+          showNote(
+            "Open in VS Code is " +
+              (hidden ? "hidden" : "shown") +
+              " on this page only: " +
+              error.message,
+            false,
+          );
+        }
+      });
     const settings = document.getElementById("vscode-connection-button");
     if (settings)
       settings.addEventListener("click", () => {

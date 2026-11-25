@@ -107,13 +107,14 @@ func TestVSCodeInPage(t *testing.T) {
 const fs = require('fs');
 const assert = require('node:assert/strict');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const load = ({ stored = {}, broken = false, host } = {}) => {
+const load = ({ stored = {}, broken = false, readOnly = false, host } = {}) => {
   let html = fs.readFileSync(process.argv[1], 'utf8');
   if (host !== undefined) html = html.replace('data-host="ks000.example.com"', 'data-host="' + host + '"');
   const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'http://127.0.0.1:8787/', virtualConsole: new VirtualConsole(), beforeParse(window) {
     window.fetch = () => new Promise(() => {});
     window.setInterval = () => 1;
     for (const [key, value] of Object.entries(stored)) window.localStorage.setItem(key, value);
+    if (readOnly) window.Storage.prototype.setItem = () => { throw new Error('storage is full'); };
     if (broken) {
       window.Storage.prototype.getItem = () => { throw new Error('storage is off'); };
       window.Storage.prototype.setItem = () => { throw new Error('storage is off'); };
@@ -217,6 +218,33 @@ for (const options of [{ broken: true }, { host: '' }]) {
     assert.match(p.note(), /The choice was not kept/);
   }
 }
+
+// Settings hides it in this browser, and other tabs follow; nothing opens meanwhile, and
+// showing it again brings it back. One that cannot be kept holds for the page, with a note.
+p = load({ stored: local });
+await new Promise((resolve) => setTimeout(resolve, 20));
+const show = () => p.document.getElementById('vscode-show');
+const hidden = () => [p.window.vscodeOffered(), p.window.vscodeAvailable(), p.document.documentElement.hasAttribute('data-vscode-hidden'), p.document.getElementById('vscode-connection-button').disabled, p.window.localStorage.getItem('rotari-vscode-hidden')];
+assert.deepEqual([show().checked, ...hidden()], [true, true, true, false, false, null]);
+show().click();
+assert.deepEqual(hidden(), [false, true, true, true, '1']);
+p.open({ path: '/w/a.py' });
+assert.deepEqual([p.opened, p.dialog()], [[], null]);
+show().click();
+assert.deepEqual(hidden(), [true, true, false, false, null]);
+p.open({ path: '/w/a.py' });
+assert.equal(p.opened.length, 1);
+p.window.localStorage.setItem('rotari-vscode-hidden', '1');
+p.window.dispatchEvent(new p.window.StorageEvent('storage', { key: 'rotari-vscode-hidden', newValue: '1' }));
+assert.deepEqual([show().checked, ...hidden()], [false, false, true, true, true, '1']);
+p = load({ stored: { ...local, 'rotari-vscode-hidden': '1' } });
+assert.equal(p.window.vscodeOffered(), false);
+await new Promise((resolve) => setTimeout(resolve, 20));
+assert.deepEqual([show().checked, ...hidden()], [false, false, true, true, true, '1']);
+p = load({ readOnly: true });
+await new Promise((resolve) => setTimeout(resolve, 20));
+show().click();
+assert.deepEqual([p.window.vscodeOffered(), p.note()], [false, 'Open in VS Code is hidden on this page only: storage is full']);
 
 // Directories never take a window's place, and every other character is encoded.
 for (const [target, remoteURL, localURL] of [

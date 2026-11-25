@@ -735,7 +735,7 @@ The first time, it asks where VS Code runs:
   asks for a password itself if `ssh` needs one; rotari takes none. For another port, use a `Host` alias in `~/.ssh/config`.
 
 Your browser keeps the answer for that server; **Settings** > **VS Code connection...**, or **Change** in the note that
-appears, changes it. The browser may ask before it opens VS Code; tell it to always allow the address you open rotari
+appears, changes it. Clear **Settings** > **Show Open in VS Code** to hide it everywhere in this browser. The browser may ask before it opens VS Code; tell it to always allow the address you open rotari
 at. A page is not told whether VS Code opened anything, so a wrong name shows as an error in VS Code, not here.
 
 VS Code chooses the window: a file usually opens in the window that has its folder open, and a directory in

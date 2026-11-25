@@ -4332,6 +4332,20 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     lkWin.server.cwds = { 1: '/w/p1/sub' };
     const labels = [...lkWin.document.querySelectorAll('.terminal-bar button')].map((each) => each.getAttribute('aria-label'));
     assert.equal(labels[labels.indexOf('Table viewer') + 1], 'Open in VS Code');
+    assert.ok(lkWin.document.querySelector('.terminal-bar [aria-label="Open in VS Code"]').classList.contains('vscode-action'));
+    // Hidden in Settings, its drawn buttons go by style, and menus do not have it.
+    assert.match(webShellCSS, /html\[data-vscode-hidden\] button\.vscode-action \{\s*display: none;/);
+    const winViewport = lkWin.document.querySelector('.terminal-viewport');
+    const winMenu = () => {
+      lkWin.document.querySelector('.terminal-tab-menu')?.remove();
+      winViewport.dispatchEvent(new lkWin.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+      return [...lkWin.document.querySelectorAll('.terminal-tab-menu button')].some((each) => each.textContent.includes('VS Code'));
+    };
+    assert.equal(winMenu(), true);
+    lkWin.document.documentElement.toggleAttribute('data-vscode-hidden', true);
+    assert.equal(winMenu(), false);
+    lkWin.document.documentElement.toggleAttribute('data-vscode-hidden', false);
+    lkWin.document.querySelector('.terminal-tab-menu').remove();
     lkWin.document.querySelector('.terminal-bar [aria-label="Open in VS Code"]').click();
     await wait(20);
     lkWin.document.querySelector('.terminal-bar [aria-label="All shells"]').click();

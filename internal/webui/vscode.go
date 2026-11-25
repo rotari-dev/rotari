@@ -51,13 +51,14 @@ func (connection vscodeConnection) attributes() string {
 		`" data-remote="` + strconv.FormatBool(connection.Remote) + `"`
 }
 
-// vscodeControl is the Settings menu's VS Code connection.
+// vscodeControl is the Settings menu's choice whether to show Open in VS Code, and its
+// connection.
 func (page livePage) vscodeControl() string {
 	if page.vscode == nil {
 		return ""
 	}
 	return `<div class="settings-vscode" ` + page.vscode.attributes() +
-		`><button id="vscode-connection-button" type="button">VS Code connection...</button></div>`
+		`><label><input id="vscode-show" type="checkbox" checked> Show Open in VS Code</label><button id="vscode-connection-button" type="button">VS Code connection...</button></div>`
 }
 
 // vscodeTarget is the /api/vscode-target response: the path an artifact has on this host, and

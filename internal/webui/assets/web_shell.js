@@ -2707,9 +2707,10 @@ function shellWord(value) {
     drawIcon(viewHere, explorerIcons.open);
     viewHere.onclick = () => openShellInViewer(shell);
     const vscodeHere = [];
-    if (window.vscodeOffered()) {
+    if (window.vscodeAvailable()) {
       const button = document.createElement("button");
       button.type = "button";
+      button.className = "vscode-action";
       button.setAttribute("aria-label", "Open " + label + " in VS Code");
       button.title = "Open the directory this shell is in now in VS Code";
       drawIcon(button, explorerIcons.editor);
@@ -5260,17 +5261,18 @@ function shellWord(value) {
         openPathLaunchDialog(path, folder);
       });
       const buttons = [send, view];
-      if (window.vscodeOffered())
-        buttons.push(
-          explorerIconButton(
-            "Open in VS Code",
-            explorerIcons.editor,
-            (event) => {
-              event.stopPropagation();
-              window.openInVSCode({ path, folder });
-            },
-          ),
+      if (window.vscodeAvailable()) {
+        const edit = explorerIconButton(
+          "Open in VS Code",
+          explorerIcons.editor,
+          (event) => {
+            event.stopPropagation();
+            window.openInVSCode({ path, folder });
+          },
         );
+        edit.classList.add("vscode-action");
+        buttons.push(edit);
+      }
       buttons.push(launch);
       for (const button of buttons) button.tabIndex = -1;
       actions.append(...buttons);
@@ -6257,7 +6259,7 @@ function shellWord(value) {
       },
       "Open the directory this pane's shell is in now in the Table viewer, in a new tab",
     );
-    vscodeButton = window.vscodeOffered()
+    vscodeButton = window.vscodeAvailable()
       ? iconButton(
           "Open in VS Code",
           explorerIcons.editor,
@@ -6267,6 +6269,7 @@ function shellWord(value) {
           "Open the directory this pane's shell is in now in VS Code",
         )
       : null;
+    vscodeButton?.classList.add("vscode-action");
     dirsButton = iconButton(
       "Recent directories",
       icons.recentDirs,

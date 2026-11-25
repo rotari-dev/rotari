@@ -332,8 +332,8 @@ function artifactTypeBadge(type, category) {
 }
 // artifactVSCodeButton opens the artifact in VS Code, on a live page.
 function artifactVSCodeButton(index, child) {
-  return window.vscodeOffered()
-    ? ' <button type="button" class="artifact-vscode" title="' +
+  return window.vscodeAvailable()
+    ? ' <button type="button" class="artifact-vscode vscode-action" title="' +
         esc("Open " + artifactTitle(index, child) + " in VS Code") +
         '" ' +
         actionAttributes("openArtifactInVSCode", index, child) +
