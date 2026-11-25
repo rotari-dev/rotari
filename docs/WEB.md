@@ -131,7 +131,8 @@ the [FAQ](FAQ.md#is-rotari-web-safe-to-expose-beyond-127001).
 - **Notifications:** see
   [Notifications](NOTIFICATIONS.md#browser-notifications).
 - **Stickies:** notes on a page, kept in the state directory, so every browser
-  sees them. They are separate from run notes and change nothing about runs.
+  sees them. They are separate from run notes and change nothing about runs. A
+  read-only server cannot change them, and a static export has none.
   `rotari stickies` lists them from the command line.
 - **Settings:** theme, editor, **Stop server** (with job control), and the
   version and path of the running `rotari`.
