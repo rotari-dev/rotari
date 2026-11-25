@@ -18,3 +18,13 @@ Plan: [plan.md](plan.md)
   on Zed was changed after. Not run: those three, `go test -race`, and pre-commit.
 - **Remaining:** A file opened in Zed, at its line; the other editors, when someone has
   them; and the whole in a browser.
+
+## 2026-11-25 14:32:40 +0900 - `0bfe8e79` - Without VS Code Insiders
+
+- **Change:** VS Code Insiders is out of the list, its tests, WEB-64, WEB, and SECURITY;
+  a browser that kept it is asked again, as for any editor not known.
+- **Reason:** The user found it too rarely used for a place in the list.
+- **Plan impact:** Decision 1 lists four editors.
+- **Validation:** The editor and log link tests of `internal/webui`, `conformance`, and
+  the editor tests of `conformance/05-web` passed. The full suite was not run again.
+- **Remaining:** As above.

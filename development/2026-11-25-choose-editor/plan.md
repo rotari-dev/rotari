@@ -35,7 +35,6 @@ Nothing of Open in VS Code has been released, so names may still change freely.
 | Editor | This machine | Over SSH | Evidence, read on 2026-11-25 |
 | --- | --- | --- | --- |
 | VS Code | `vscode://file/PATH:L:C` | `vscode://vscode-remote/ssh-remote+NAME/PATH:L:C` | its source; SSH tried by the user |
-| VS Code Insiders | `vscode-insiders://`, as VS Code | same | an issue of VS Code's names the scheme |
 | VSCodium | `vscodium://`, as VS Code | same | its `prepare_vscode.sh` sets the scheme; SSH needs an extension such as Open Remote - SSH |
 | Cursor | `cursor://`, as VS Code | same | its forum only; reports that a remote link opens another window each time |
 | Zed | `zed://file/PATH:L:C` | `zed://ssh/NAME/PATH:L:C` | its source (`open_listener.rs`); whether a line is kept over SSH is not certain |
@@ -56,7 +55,8 @@ to add once its URL is known.
 
 ## Decisions
 
-1. **Which editors** (confirmed): the five above. Only VS Code can be tried by the
+1. **Which editors** (confirmed): the four above. VS Code Insiders was among them and
+   went in first; the user then took it out as too rarely used. Only VS Code can be tried by the
    user today. Documentation says which were tried and which follow the editor's
    source or reports, and an editor found not to work is removed, not worked around.
 2. **Where it is chosen** (confirmed): in the dialog that asks for the connection,
@@ -98,7 +98,7 @@ to add once its URL is known.
 
 | Dimension | Values |
 | --- | --- |
-| Editor | each of the five, none kept, unknown in the storage |
+| Editor | each of the four, none kept, unknown in the storage |
 | Target | file with and without a position, directory, each refused name |
 | Connection | same machine, SSH, `USER@HOST`, refused name, storage refused |
 | Place | every place that offers it, drawn before the choice changed, hidden |
