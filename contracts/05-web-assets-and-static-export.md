@@ -1231,7 +1231,10 @@ on the clicked control, so the keys below keep working.
 One cell of the current row is framed: the one clicked, or at first the row's
 first file (or first column). The frame keeps its column as the row moves. `←` and
 `→` move it along the row, stopping at either end, and open nothing. `Enter` opens
-the framed file, and `Shift+Enter` every file the row names, side by side. `Space`
+the framed file, and `Shift+Enter` every file the row names, side by side. On a
+directory row, `Enter` shows that directory in the same window, as its **→** does,
+whichever cell is framed; a held `Enter` goes no further, and a tab that has not yet
+followed to the row keeps its file. `Space`
 plays or pauses the framed file, in its tab or, when it is not open, in a new tab
 of the active pane; playing one pauses the others. On a cell without an audio or
 video file, it plays or pauses the active pane's file. A row change never starts

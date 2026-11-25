@@ -1069,7 +1069,7 @@ function directoryCell(row, text) {
       childOf(row.directory),
       {
         className: "tv-enter",
-        title: "Open " + row.directory + " here (Ctrl+click: new tab)",
+        title: "Open " + row.directory + " here (Enter on its row; Ctrl+click: new tab)",
         "aria-label": "Open " + row.directory,
       },
       "→",
@@ -1140,10 +1140,15 @@ function noteRowTable() {
   if (rowTable !== null && rowTable !== table) {
     view.row = null;
     currentColumn = null;
-    if (pendingFollow) clearTimeout(pendingFollow.timer);
-    pendingFollow = null;
+    dropFollow();
   }
   rowTable = table;
+}
+
+// dropFollow forgets a move the tab has not followed yet.
+function dropFollow() {
+  if (pendingFollow) clearTimeout(pendingFollow.timer);
+  pendingFollow = null;
 }
 
 // currentRow is the current row, if it is on this page.
@@ -1244,7 +1249,7 @@ function releaseTableFocus() {
 // stepToRow makes a row current, and shortly after, the tab follows.
 function stepToRow(row) {
   if (row.number === view.row) return;
-  if (pendingFollow) clearTimeout(pendingFollow.timer);
+  dropFollow();
   setCurrentRow(row);
   pendingFollow = { row, timer: setTimeout(finishFollow, followDelayMs) };
 }
@@ -1409,6 +1414,11 @@ function rowKey(event) {
       if (!files.length) return;
       event.preventDefault();
       if (!event.repeat) openWholeRow(row, files);
+      return;
+    }
+    if (row.directory) {
+      event.preventDefault();
+      if (!event.repeat) moveTo(childOf(row.directory));
       return;
     }
     if (rowFile(row, currentColumn).kind === "notice") return;
@@ -1890,6 +1900,8 @@ function renderPager() {
 // table or document.
 async function loadSource() {
   const sequence = ++loadSequence;
+  // A move not yet followed is in the rows being left.
+  dropFollow();
   rows = null;
   description = null;
   let loaded;

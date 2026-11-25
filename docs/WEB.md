@@ -834,7 +834,8 @@ pane, rendering Markdown and highlighting supported source files; PDFs open
 in the browser viewer. Text, source files, and Markdown source show line
 numbers, which a copied selection leaves out. A table file also has **Open table**, which opens it in
 its own viewer in a new tab. A directory row's **→** shows that directory in
-the same window (Ctrl+click opens a new tab); the path above the table links
+the same window (Ctrl+click opens a new tab), as does `Enter` on the current
+row; the path above the table links
 back to each directory up to the one the viewer was opened on, **↑** (or
 Alt+↑) goes up one level, and the browser's Back returns. Files open in panes
 stay open while you move, so `ref/u1.wav` and `hyp/u1.wav` can be compared
@@ -870,7 +871,7 @@ To go through a table from the keyboard, press `↓` or `↑` to move between ro
 the order shown and across pages, and `←` or `→` to move a frame between the row's
 cells. Moving opens nothing. `Enter` opens the framed file, `Shift+Enter` opens all of
 the row's files side by side, and `Space` plays or pauses the framed file, opening it
-if needed. Nothing plays on its own.
+if needed. On a directory row, `Enter` shows that directory. Nothing plays on its own.
 
 The file showing in the active pane changes to its column of each new row, and says
 so when that row has no file there. Other panes and hidden tabs stay, so one can be

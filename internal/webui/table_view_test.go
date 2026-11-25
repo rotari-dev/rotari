@@ -1206,6 +1206,31 @@ func TestTableViewMovesBetweenDirectoryRowsInBrowser(t *testing.T) {
   await until('expanded', () => link('set/sub/c.wav'));
   if (current() !== '' || fragment().get('row') !== null) fail('row kept after expanding', number, window.location.hash);
 `)
+	// Enter on a directory row shows that directory, whichever cell is framed. The
+	// file on show stays, though the tab had not yet followed to the directory row.
+	runTableViewScript(t, options, f, "wd", "#pattern=set%2F**&expanded=set", rowNavigationHelpers+`
+  const child = () => new window.URLSearchParams(window.location.search).get('child');
+  await until('files', () => link('set/a.wav'));
+  link('set/a.wav').click();
+  await untilShown('set/a.wav');
+  press('ArrowDown');
+  await untilShown('set/b.txt');
+  press('ArrowDown');
+  press('ArrowRight');
+  if (press('Enter', { ctrlKey: true }) || press('Enter', { shiftKey: true }) || press('Enter', { repeat: true }) === false || child() !== null) fail('modified or held Enter moved', window.location.search);
+  if (!press('Enter')) fail('Enter left to the page');
+  press('Enter');
+  await until('set/sub', () => child() === 'set/sub' && link('c.wav'));
+  await wait(300);
+  if (!same(shown(), ['set/b.txt'])) fail('panes changed', shown());
+  if (current() !== '' || child() !== 'set/sub') fail('moved further', current(), child());
+  press('ArrowDown');
+  if (current() !== '1') fail('row after moving', current());
+  press('Enter');
+  await untilShown('set/sub/c.wav');
+  press('ArrowUp', { altKey: true });
+  await until('up', () => child() === 'set' && link('a.wav'));
+`)
 	runTableViewScript(t, options, f, "wd", "#listing=stems&pattern=pair%2F**%2F*.wav&expanded=pair&expanded=pair%2Fhyp&expanded=pair%2Fref&group=parent", rowNavigationHelpers+`
   await until('stems', () => document.querySelector('.tv-open-row'));
   document.querySelector('.tv-open-row').click();
