@@ -1845,7 +1845,7 @@ covered by `TestTerminalReadsAnotherProjectsHistory` (projects) and `TestTermina
 
 **WEB-64** The live application page, Recent jobs page, and terminal window offer **Open in EDITOR**, with job control or
 without it, and a static export does not. EDITOR is VS Code until the browser chooses another, in Settings or the dialog
-below: VS Code Insiders, VSCodium, Cursor, or Zed, and no other; the browser keeps it, its other tabs follow, and what is
+below: VSCodium, Cursor, or Zed, and no other; the browser keeps it, its other tabs follow, and what is
 drawn already is named again. A kept editor that is none of these opens nothing: the dialog asks, with the reason. The
 action opens an absolute path of the server by following a URL of the editor's scheme in the browser; the server runs
 nothing. Where it is: on each file or directory of Artifacts and **Files** and in the title of their previews, and, with
@@ -1860,7 +1860,7 @@ a known host name, or with a kept answer that cannot be read or used, it asks ag
 shown after opening change it. **Show Open in editor** in Settings, on at first, hides the action in that browser, its
 other tabs and the terminal's window included, for every server at that address: its buttons, menu items, and the links of
 logs. The URL is `SCHEME://file/PATH` for the same machine and `SCHEME://vscode-remote/ssh-remote+NAME/PATH` over SSH, with
-SCHEME `vscode`, `vscode-insiders`, `vscodium`, or `cursor`, and for Zed `zed://file/PATH` and `zed://ssh/NAME/PATH`; each
+SCHEME `vscode`, `vscodium`, or `cursor`, and for Zed `zed://file/PATH` and `zed://ssh/NAME/PATH`; each
 path segment is percent-encoded, with `:LINE` or `:LINE:COL` for a file that was printed with one. But for Zed, a file
 over SSH without one has `:1`, which VS Code would otherwise open in place of a window's folder, and a directory has
 `?windowId=_blank`. NAME is checked at every use: letters, digits, `.`, `_`, and `-`, with an optional `USER@`, neither part

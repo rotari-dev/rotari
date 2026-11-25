@@ -13,7 +13,6 @@
   // storage it would be kept in can be written by a launched service, on the same origin.
   const editors = [
     { id: "vscode", name: "VS Code" },
-    { id: "vscode-insiders", name: "VS Code Insiders" },
     { id: "vscodium", name: "VSCodium" },
     { id: "cursor", name: "Cursor" },
     { id: "zed", name: "Zed", zed: true },

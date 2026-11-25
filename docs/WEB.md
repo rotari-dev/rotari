@@ -721,7 +721,7 @@ The editor is VS Code until you choose another in **Settings** > **Editor**, and
 | Editor | Checked |
 | --- | --- |
 | VS Code | opened over Remote SSH, a file at its line and a directory |
-| VS Code Insiders, VSCodium | not tried; they take VS Code's URLs under schemes of their own. VSCodium needs an SSH extension such as Open Remote - SSH |
+| VSCodium | not tried; it takes VS Code's URLs under a scheme of its own, and needs an SSH extension such as Open Remote - SSH |
 | Cursor | not tried; its users report that a file over SSH opens another window each time |
 | Zed | starts and connects over SSH; opening a file there, and its line, not seen yet |
 

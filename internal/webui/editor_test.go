@@ -250,7 +250,7 @@ assert.deepEqual([p.window.editorOffered(), p.note()], [false, 'Open in editor i
 // Each editor's URLs, for a file with and without a place, a directory, and a name with
 // characters to encode; a number after a colon is refused for all of them.
 const targets = [{ path: '/w/a.py', line: 12, column: 3 }, { path: '/w/a.py' }, { path: '/w', folder: true }, { path: '/w/a b#.py', line: 2 }];
-for (const scheme of ['vscode', 'vscode-insiders', 'vscodium', 'cursor']) {
+for (const scheme of ['vscode', 'vscodium', 'cursor']) {
   for (const [stored, start, urls] of [
     [remote('ks000'), scheme + '://vscode-remote/ssh-remote+ks000', ['/w/a.py:12:3', '/w/a.py:1', '/w?windowId=_blank', '/w/a%20b%23.py:2']],
     [local, scheme + '://file', ['/w/a.py:12:3', '/w/a.py', '/w?windowId=_blank', '/w/a%20b%23.py:2']],
@@ -270,7 +270,7 @@ for (const [stored, start] of [[remote('kamo@ks000'), 'zed://ssh/kamo@ks000'], [
 }
 // An editor not known here, as another program may have written, opens nothing: it asks, with
 // the reason, at VS Code, and what is chosen then is kept.
-for (const unknown of ['', 'javascript', 'VSCODE', '__proto__', 'constructor']) {
+for (const unknown of ['', 'javascript', 'VSCODE', 'vscode-insiders', '__proto__', 'constructor']) {
   p = load({ stored: { ...remote('ks000'), 'rotari-editor': unknown } });
   assert.equal(p.window.editorName(), 'VS Code');
   p.open({ path: '/w/a.py' });
@@ -282,7 +282,7 @@ for (const unknown of ['', 'javascript', 'VSCODE', '__proto__', 'constructor']) 
 // The dialog's editor starts at the one in use, and Cancel keeps it.
 p = load({ stored: { 'rotari-editor': 'cursor' } });
 p.open({ path: '/w/a.py' });
-assert.deepEqual([...p.which().options].map((each) => each.textContent), ['VS Code', 'VS Code Insiders', 'VSCodium', 'Cursor', 'Zed']);
+assert.deepEqual([...p.which().options].map((each) => each.textContent), ['VS Code', 'VSCodium', 'Cursor', 'Zed']);
 assert.equal(p.which().value, 'cursor');
 p.which().value = 'zed';
 p.cancel();
@@ -296,7 +296,7 @@ p.window.labelEditorAction(made, { title: 'Open /w/<b>', label: 'Open shell 1', 
 const named = () => [made.title, made.getAttribute('aria-label'), made.textContent, made.children.length];
 assert.deepEqual(named(), ['Open /w/<b> in VS Code at line 3', 'Open shell 1 in VS Code', 'Open in VS Code', 0]);
 const choice = () => p.document.getElementById('editor-choice');
-assert.deepEqual([choice().value, choice().options.length], ['vscode', 5]);
+assert.deepEqual([choice().value, choice().options.length], ['vscode', 4]);
 choice().value = 'cursor';
 choice().dispatchEvent(new p.window.Event('change', { bubbles: true }));
 assert.deepEqual([...named(), p.window.localStorage.getItem('rotari-editor')], ['Open /w/<b> in Cursor at line 3', 'Open shell 1 in Cursor', 'Open in Cursor', 0, 'cursor']);
