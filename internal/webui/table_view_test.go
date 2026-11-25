@@ -2129,11 +2129,18 @@ func TestTableViewShowsTextFilesInBrowser(t *testing.T) {
   const open = name => [...document.querySelectorAll('#tv-table .tv-text-file')].find(button => button.textContent === 'notes/' + name).click();
   const view = () => document.querySelector('.tv-pane-active .tv-tab-view');
   const shown = async (what, check) => { await until(what, () => view() && check(view())); return view(); };
+  // The view holds only elements: a part left out must not be written as text.
+  const onlyElements = what => {
+    const stray = [...view().querySelector('.tv-text').parentNode.childNodes].filter(node => node.nodeType !== window.Node.ELEMENT_NODE).map(node => node.textContent);
+    if (stray.length) fail(what + ' stray text', JSON.stringify(stray));
+  };
   open('README');
   await shown('README', v => v.querySelector('.tv-text')?.textContent === 'no extension\n');
   if (document.querySelector('.tv-pane-active .tv-tab-kind').textContent !== 'text') fail('tab kind');
+  onlyElements('README');
   open('config.yaml');
   await shown('yaml', v => v.textContent.includes('notes/config.yaml') && v.querySelector('.tv-text')?.textContent === 'lr: 0.1\n');
+  onlyElements('yaml');
   // A long file loads more on demand.
   open('long.log');
   let v = await shown('first page', v => v.querySelector('.tv-text')?.textContent.length > 0);

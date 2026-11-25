@@ -1147,7 +1147,7 @@ class TabView {
         text.toggle,
       ),
       text.status,
-      text.preview,
+      ...(text.preview ? [text.preview] : []),
       text.pre,
       text.more,
     );
