@@ -4836,7 +4836,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.match(problem(page), /at most 100 characters/);
   await save(page);
   assert.ok(dialogOf(page), 'a refused name was saved');
-  for (const name of ['a\u0007b', 'a‮b', 'a\ud800b']) {
+  for (const name of ['a\u0007b', 'a\u202eb', 'a\ud800b']) {
     type(page, name);
     assert.match(problem(page), /no control characters/, JSON.stringify(name));
   }
