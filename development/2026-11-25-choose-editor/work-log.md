@@ -28,3 +28,19 @@ Plan: [plan.md](plan.md)
 - **Validation:** The editor and log link tests of `internal/webui`, `conformance`, and
   the editor tests of `conformance/05-web` passed. The full suite was not run again.
 - **Remaining:** As above.
+
+## 2026-11-25 16:10:46 +0900 - `c0e4e4ef` - None in place of the check box
+
+- **Change:** Settings' **Editor** list has **None**, kept as the editor, which hides the
+  action as **Show Open in editor** did; that check box and its key are gone. WEB-64 and
+  WEB; the page test.
+- **Reason:** The user found it odd that the editor's icon alone could be switched off.
+- **Plan impact:** Decision 9 was added.
+- **Validation:** `go vet ./...`, the Web UI type check, Prettier, and `go test` on
+  `internal/webui`, `internal/archtest`, `cmd/rotari`, `conformance`, and
+  `conformance/05-web` passed before the commit was rebased onto `9cb3be47`; after it,
+  the editor, log link, and terminal panel tests of `internal/webui`, `conformance`, and
+  the editor tests of `conformance/05-web` passed. The page test failed, as it should,
+  with the kept None ignored. Not run: the other packages, `go test -race`, and
+  pre-commit. Not tried in a real browser.
+- **Remaining:** As above.
