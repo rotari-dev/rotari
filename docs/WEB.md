@@ -557,6 +557,37 @@ yourself from pages; then it does not find them. The browser remembers the font,
 On a Mac, **Options** also has **Use Option as Meta**, for `M-` keys in a shell, `tmux`, or Neovim. It is off at first,
 since Option then no longer types characters, such as the backslash of a Japanese keyboard. The browser remembers it.
 
+**Let programs copy**, also in **Options**, lets programs such as `tmux` and Neovim put text on the clipboard of the
+computer you sit at (OSC 52), through `ssh` too. It is off at first: with it on, anything printed in a terminal can
+replace the clipboard, a file shown with `cat` or a job's log included, so look at what you paste. The panel says each
+time a program copies. It copies at once only in the pane you are using; elsewhere, or when the browser wants a click, it
+offers the text with **Copy**. Text with control characters, or longer than 1 MiB, is not taken. Programs cannot read the
+clipboard. The browser remembers the choice.
+
+- **`tmux`** copies from its copy mode as it is. For programs inside it, add `set -s set-clipboard on` to `~/.tmux.conf`.
+- **Neovim** needs a clipboard that copies this way and does not ask the terminal for its contents. With
+  `vim.g.clipboard = 'osc52'` alone, putting from `+` waits 10 seconds for an answer that does not come. In `init.lua`:
+
+  ```lua
+  local osc52 = require('vim.ui.clipboard.osc52').copy('+')
+  local last = { { '' }, 'v' }
+  local function copy(lines, regtype)
+    last = { lines, regtype }
+    osc52(lines)
+  end
+  local function paste()
+    return last
+  end
+  vim.g.clipboard = {
+    name = 'OSC 52, copy only',
+    copy = { ['+'] = copy, ['*'] = copy },
+    paste = { ['+'] = paste, ['*'] = paste },
+  }
+  ```
+
+  Then `"+y`, or any yank with `vim.o.clipboard = 'unnamedplus'`, copies. Putting gives what Neovim last copied; paste
+  other text with the browser's own paste.
+
 The **Maximize** icon gives the panel the whole window, for programs such as `vim`, until you press it
 again, now **Restore**. Each icon's name shows when you point at it.
 The browser remembers it from page to page. Keep the panel small to reach the page's menus and dialogs.

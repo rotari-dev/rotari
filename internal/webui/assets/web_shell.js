@@ -393,6 +393,8 @@ function shellWord(value) {
   const maxFontName = 100;
   // "1" has a Mac's Option send Meta, and anything else leaves it typing characters.
   const optionMetaKey = "rotari-terminal-option-meta";
+  // "1" lets programs in the terminal copy to the clipboard, and anything else does not.
+  const programsCopyKey = "rotari-terminal-osc52";
   const stickyKey = "rotari-terminal-sticky";
   const defaultFontSize = 13;
   const minFontSize = 8;
@@ -1819,6 +1821,12 @@ function shellWord(value) {
         true,
         optionMeta,
       ]);
+    choices.push([
+      "Let programs copy",
+      () => setProgramsCopy(!programsCopy),
+      true,
+      programsCopy,
+    ]);
     openPanelMenu(event, choices);
   };
   const openTabMenu = (event, shell) => {
@@ -4820,6 +4828,128 @@ function shellWord(value) {
       showNote("Copy failed: " + error.message, 6000);
       return false;
     }
+  };
+  // Programs copy with OSC 52: 52 ; SELECTION ; BASE64. Anything that prints can send it, so
+  // it is off unless chosen, every copy is shown, and what asks for the clipboard (?) is never
+  // answered. Only live output counts: a replay and a rewrite show old copies again.
+  let programsCopy = false;
+  try {
+    programsCopy = localStorage.getItem(programsCopyKey) === "1";
+  } catch {}
+  const setProgramsCopy = (on) => {
+    programsCopy = on;
+    let kept = true;
+    try {
+      localStorage.setItem(programsCopyKey, on ? "1" : "0");
+    } catch {
+      kept = false;
+    }
+    showNote(
+      (on
+        ? "Programs in the terminal, also on hosts reached with ssh, can now replace what is on the clipboard. They cannot read it."
+        : "Programs in the terminal can no longer copy.") +
+        (kept
+          ? ""
+          : " The choice was not kept, as this browser does not let the page store it."),
+      8000,
+    );
+    focused.term?.focus();
+  };
+  const programCopyLimit = 1024 * 1024;
+  // programCopy reads an OSC 52: the text to copy, why there is none, or that it asks.
+  const programCopy = (data) => {
+    const at = data.indexOf(";");
+    if (at < 0) return { problem: "it is not understood" };
+    const selection = data.slice(0, at);
+    const coded = data.slice(at + 1);
+    if (coded === "?") return { asks: true };
+    if (selection && !selection.includes("c"))
+      return { problem: "it is not for the clipboard" };
+    if (!coded) return { problem: "it has no text" };
+    if (coded.length > Math.ceil(programCopyLimit / 3) * 4)
+      return { problem: "it is longer than 1 MiB" };
+    let text;
+    try {
+      if (!/^[A-Za-z0-9+/]+={0,2}$/.test(coded)) throw new Error();
+      const bytes = Uint8Array.from(atob(coded), (each) => each.charCodeAt(0));
+      text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
+        bytes,
+      );
+    } catch {
+      return { problem: "it is not UTF-8 text in base64" };
+    }
+    // Such as an escape sequence, which could do something where it is pasted.
+    if (/[\0-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/.test(text))
+      return { problem: "it has control characters" };
+    return { text };
+  };
+  let copySerial = 0;
+  let toldOfCopies = false;
+  const characters = (text) => {
+    const count = [...text].length;
+    return (
+      count.toLocaleString("en-US") +
+      (count === 1 ? " character" : " characters")
+    );
+  };
+  // offerCopy leaves a copy that could not be made at once to a click.
+  const offerCopy = (text) => {
+    showNote("A program wants to copy " + characters(text) + ".", 0);
+    clearTimeout(sendNoteTimer);
+    const back = (act) => () => {
+      act();
+      focused.term?.focus();
+    };
+    sendNote.append(
+      textButton(
+        "Copy",
+        back(() => copyText(text, characters(text))),
+      ),
+      textButton(
+        "Dismiss",
+        back(() => (sendNote.hidden = true)),
+      ),
+    );
+  };
+  const takeCopy = async (pane, text) => {
+    const serial = ++copySerial;
+    const here =
+      pane === focused &&
+      !panel.hidden &&
+      !document.hidden &&
+      document.hasFocus();
+    if (!here || !navigator.clipboard?.writeText) {
+      offerCopy(text);
+      return;
+    }
+    let copied = true;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      copied = false;
+    }
+    // A later one has said what became of it.
+    if (serial !== copySerial) return;
+    if (copied) showNote("A program copied " + characters(text) + ".", 2500);
+    else offerCopy(text);
+  };
+  const readProgramCopy = (pane, data) => {
+    // What another shell left to parse is not this one's.
+    if (!pane.blocksLive || pane.waitingToOpen) return true;
+    const { text, problem, asks } = programCopy(data);
+    if (asks) return true;
+    if (!programsCopy) {
+      if (!toldOfCopies && !document.hidden) {
+        toldOfCopies = true;
+        showNote(
+          "A program tried to copy to the clipboard. Let programs copy, in the bar's Options, allows it.",
+          8000,
+        );
+      }
+    } else if (problem)
+      showNote("A program's copy was not taken: " + problem + ".", 6000);
+    else takeCopy(pane, text);
+    return true;
   };
   // Recent directories: where the shells of the focused pane's group have been, and where
   // its project's recent runs started, or its workspace, from the shell's dirs. Choosing
@@ -8612,6 +8742,7 @@ function shellWord(value) {
       readBlockMark(pane, data),
     );
     term.parser.registerOscHandler(7, (data) => readDirMark(pane, data));
+    term.parser.registerOscHandler(52, (data) => readProgramCopy(pane, data));
     term.open(viewport);
     viewport.addEventListener("mousemove", (event) => hoverBlock(pane, event));
     viewport.addEventListener("mouseleave", () => hoverBlock(pane, null));

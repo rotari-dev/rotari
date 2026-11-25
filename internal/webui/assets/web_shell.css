@@ -1024,6 +1024,7 @@ html[data-terminal-window] #terminal-panel {
 .editor-note {
   overflow-wrap: anywhere;
 }
+.terminal-send-note button,
 .editor-note button {
   min-height: 0;
   margin-left: 8px;

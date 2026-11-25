@@ -2276,6 +2276,12 @@ measuring known names, from all of them where the browser can list them and is a
 100 characters or with control or format characters is refused, also when read from storage, and a name is always
 quoted as a CSS string (`TestTerminalPanel`). **Use Option as Meta** in the same menu, only on a Mac, has Option send Meta
 in every pane; it is off unless local storage has `"1"` (`TestTerminalPanel`).
+**Let programs copy** there has the page take OSC 52; it is off unless local storage has `"1"`. Only output that is live
+copies, never a replay, a fold's rewrite, or what another shell left to parse; at most 1 MiB of UTF-8 in base64, with no
+control characters but tab, line feed, and carriage return, for the selection `c` or none. It is written to the clipboard
+only for the focused pane of a page in view with the focus, and is otherwise, or when the browser refuses, offered with a
+button; each is said. Off, the first such copy is told once per page. A query of the clipboard is never answered
+(`TestTerminalPanel`).
 `TestTerminalPanelInBrowser` checks the panel in
 headless Chrome.
 

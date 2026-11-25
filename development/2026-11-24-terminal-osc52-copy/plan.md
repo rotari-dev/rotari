@@ -1,8 +1,9 @@
 # Plan: Copying from programs with OSC 52 in the Web terminal
 
 Created: 2026-11-24
-Status: Proposed. Phase 1 was done on 2026-11-25; see [Phase 1
-results](#phase-1-results). Nothing is implemented.
+Status: Phase 1 was done on 2026-11-25; see [Phase 1 results](#phase-1-results). Implemented on 2026-11-25 as
+the user decided that day: a query is never answered, and a copy while the setting is off is told once per page; see
+[work-log.md](work-log.md). Not done: the checks by hand in browsers.
 Related: [Web terminal](../2026-11-05-web-terminal/plan.md),
 [fast output](../2026-11-24-terminal-flow-control/plan.md), and the two plans proposed with this one:
 [font](../2026-11-24-terminal-font/plan.md) and [Option as Meta](../2026-11-24-terminal-option-meta/plan.md)
@@ -51,16 +52,23 @@ Neovim 0.12.6 (`--clean`, the same answers), on 2026-11-25:
 | The same, `"+p`, nothing answering | Asks with `?`, and goes on only after 10.0 s |
 | The same, answered as empty | Goes on at once, and pastes nothing |
 | The same, answered as empty, `unnamedplus`, `yyp` | Pastes nothing: what Neovim itself yanked cannot be put |
-| A `g:clipboard` that copies by OSC 52 and pastes from the register | Printed on copying. Never asks; `yyp` and `"+p` work |
+| A `g:clipboard` that copies by OSC 52 and pastes what it last copied (in [docs/WEB.md](../../docs/WEB.md)) | Printed on copying. Never asks; `"+yy"+p`, `"*yy"*p`, and `yyp`, `ywP`, and `ddp` with `unnamedplus` work |
+| One that pastes from the unnamed register, as often advised | `unnamedplus` works, but `"+yy"+p` puts nothing |
 | Inside `tmux`, default | Nothing reaches the outside |
 | Inside `tmux`, `set -s set-clipboard on` | Printed, with the selection empty, also for `*` |
 
-tmux and Neovim print it with at most a line of configuration each, so the plan goes on, once open question 2 is
-settled.
+tmux and Neovim print it with at most a line of configuration each, so the plan went on.
 
 ## Scope
 
 Writing the clipboard from OSC 52, for the panes of the panel and its own window.
+
+## What a query gets
+
+Nothing, whatever the setting, as the user decided over two others. Answering as empty makes a put in Neovim do nothing,
+without a word. Answering with what programs last copied in the pane would let a later program, such as a remote host,
+ask for what an earlier one copied. The documentation gives Neovim a configuration that does not ask. Telling Neovim
+that OSC 52 is there, so that it would need no configuration, is left out: it would then ask too.
 
 ## Non-goals
 
@@ -83,7 +91,8 @@ Writing the clipboard from OSC 52, for the panes of the panel and its own window
    copied, and a note with a **Copy** button offers it when the user comes back; only the latest is kept, in memory.
 5. **When the browser refuses**, as those that want a key press or click first do, the same note with **Copy** is shown.
    A success is never reported before the browser says so.
-6. **What is accepted**: the selection empty or containing `c`; standard base64 of valid UTF-8; at most 1 MiB decoded.
+6. **What is accepted**: the selection empty or containing `c`; standard base64 of valid UTF-8; at most 1 MiB decoded;
+   no control characters but tab, line feed, and carriage return, since an escape sequence could act where it is pasted.
    Anything else copies nothing and a note says why. An empty text does not clear the clipboard.
 7. **While it is off**, the first OSC 52 seen live in a page is told once, as a note naming the setting, so that it is
    not a silent failure. Later ones are not.
@@ -113,7 +122,7 @@ Writing the clipboard from OSC 52, for the panes of the panel and its own window
 
 ## Contracts and documentation
 
-- A new contract ID, the next free when implemented.
+- WEB-33's note, and no ID of its own, as for the font.
 - [docs/WEB.md](../../docs/WEB.md): the setting, and how to turn it on in `tmux` and Neovim, checked by hand first.
   [docs/SECURITY.md](../../docs/SECURITY.md): the risk above, that reading is never answered, and what it now says of
   the clipboard.
@@ -131,17 +140,3 @@ Writing the clipboard from OSC 52, for the panes of the panel and its own window
 - `TestTerminalPanel` (JSDOM): each row above, with a clipboard that records, refuses, or is missing. A replay that
   holds OSC 52 and a fold over one must copy nothing, and a query must send nothing to the shell.
 - By hand: a yank in Neovim and a copy in `tmux`, directly and through `ssh`, in Chrome, Firefox, and Safari.
-
-## Open questions
-
-1. **Telling the user while it is off** (decision 7). Proposed: once per page. The alternative says nothing, and leaves
-   it to the docs.
-2. **What a query gets.** Never answering stalls a Neovim set to `osc52` for 10 seconds at each put from `+`. Answering
-   as empty does not stall it, but a put then does nothing, so with `unnamedplus` `yyp` is broken without a word.
-   - **Proposed: never answered, and the docs give the configuration that never asks**, the one in the table that pastes from the register. It is
-     some lines rather than one, and the only one measured under which putting works.
-   - **Answered as empty.** It tells nothing of the clipboard. Like any answer, it is typed into whatever runs.
-   - **Answered with what programs last copied in that pane**, never the clipboard. `yyp` would work with the one line.
-     But a later program, such as a remote host reached by `ssh`, could ask for what an earlier one copied.
-3. **Saying that it can.** Answering Neovim's `Ms` query while the setting is on would make it copy with no
-   configuration. Proposed: not at first. It is one more answer, and it depends on how Neovim asks.

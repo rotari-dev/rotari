@@ -48,7 +48,7 @@ const ofBasedir = (id, number, basedir = '/b') => ({ id, number, basedir, projec
 // overviewHeadings are All shells' group headings, their lines joined by " / ".
 const overviewHeadings = (root) => [...root.querySelectorAll('.terminal-overview-heading')].map((heading) => [...heading.children].map((line) => line.textContent).join(' / '));
 const inProject = (id, number, project, basedir = '/b') => ({ id, number, basedir, project, dir: '/w/' + project, link: '/project/' + encodeURIComponent(project) });
-const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/activity', maximized = false, fontSize = '', terminalFont = '', optionMeta = '', explorer = '', session = {}, holdHere = [], holdLists = false, windowName = '' } = {}) => {
+const load = (file, { opener = null, stubs = true, stored = '', height = '', hidden = false, status = () => 200, shells = [], remembered = '', split = '', place = '', width = '', tight = false, limit = 8, path = '/activity', maximized = false, fontSize = '', terminalFont = '', optionMeta = '', programsCopy = '', explorer = '', session = {}, holdHere = [], holdLists = false, windowName = '' } = {}) => {
   const sockets = [], written = [], terminals = [], requests = [], polls = [], alive = [], aliveTimers = [], pasted = [], fits = [];
   // xterm.js parses what it is given later; a test can hold that back.
   // What is written is parsed in order, also what a callback writes, as xterm.js's queue is.
@@ -144,6 +144,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
       if (maximized) window.localStorage.setItem('rotari-terminal-maximized', '1');
       if (fontSize) window.localStorage.setItem('rotari-terminal-font-size', fontSize);
       if (terminalFont) window.localStorage.setItem('rotari-terminal-font', terminalFont);
+      if (programsCopy) window.localStorage.setItem('rotari-terminal-osc52', programsCopy);
       if (optionMeta) window.localStorage.setItem('rotari-terminal-option-meta', optionMeta);
       if (explorer) window.localStorage.setItem('rotari-terminal-explorer', explorer);
       for (const [key, value] of Object.entries(session)) window.sessionStorage.setItem(key, value);
@@ -5003,6 +5004,201 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   item(page).click();
   assert.deepEqual(metas(page), [true, true]);
   assert.match(page.document.querySelector('.terminal-send-note').textContent, /was not kept/);
+  }
+
+  // Copying from programs (OSC 52): off unless the browser kept "1", only live output of the
+  // pane in use, every copy said, refused ones offered, and a query never answered.
+  {
+  const open = async (kept, shells = [inProject('1', 1, 'p1'), inProject('2', 2, 'p1')]) => {
+    const page = load(process.argv[1], { stored: '1', path: '/project/p1', hidden: true, shells, programsCopy: kept, remembered: ['rotari-terminal-shell:/b:p1', '1'] });
+    await wait(50);
+    page.window.__hidden = false;
+    page.document.dispatchEvent(new page.window.Event('visibilitychange'));
+    await wait(50);
+    page.copied = [];
+    page.window.TextDecoder ||= TextDecoder;
+    Object.defineProperty(page.window.navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => { if (page.refuse) throw new Error('refused'); page.copied.push(text); }, readText: async () => { throw new Error('the clipboard was read'); } } });
+    page.window.document.hasFocus = () => !page.away;
+    page.sockets.at(-1).onopen?.();
+    return page;
+  };
+  const say = (page, text, socket = page.sockets.at(-1)) => socket.onmessage({ data: new TextEncoder().encode(text).buffer });
+  const base64 = (text) => Buffer.from(text).toString('base64');
+  const osc = (text, selection = 'c', end = '\x07') => '\x1b]52;' + selection + ';' + base64(text) + end;
+  const note = (page) => { const shown = page.document.querySelector('.terminal-send-note'); return shown && !shown.hidden ? shown.textContent : ''; };
+  const noteButton = (page, text) => [...page.document.querySelectorAll('.terminal-send-note button')].find((item) => item.textContent === text);
+  const item = (page) => {
+    [...page.document.querySelectorAll('.terminal-bar button')].find((button) => button.getAttribute('aria-label') === 'Options').click();
+    return [...page.document.querySelectorAll('.terminal-tab-menu button')].find((button) => button.textContent === 'Let programs copy');
+  };
+  const live = async (kept) => {
+    const page = await open(kept);
+    page.terminals[0].parses = true;
+    page.terminals[0].lines = [''];
+    say(page, 'replay');
+    await wait(10);
+    return page;
+  };
+
+  // Off: nothing is copied, and it is told once, live, and not for a query.
+  for (const kept of ['', '0', 'true', '11']) {
+    const page = await live(kept);
+    say(page, '\x1b]52;c;?\x07');
+    await wait(10);
+    assert.equal(note(page), '', 'told of a query');
+    say(page, osc('no'));
+    await wait(10);
+    assert.deepEqual(page.copied, [], 'copied with the setting ' + JSON.stringify(kept));
+    assert.match(note(page), /Let programs copy, in the bar's Options/);
+    page.document.querySelector('.terminal-send-note').hidden = true;
+    say(page, osc('no'));
+    await wait(10);
+    assert.equal(note(page), '', 'told twice');
+  }
+  // Turned on and off from the bar, also while a program takes the mouse.
+  const page = await live('');
+  page.terminals[0].modes.mouseTrackingMode = 'any';
+  assert.equal(item(page).getAttribute('aria-checked'), 'false');
+  page.document.dispatchEvent(new page.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  item(page).click();
+  assert.equal(page.window.localStorage.getItem('rotari-terminal-osc52'), '1');
+  assert.match(note(page), /can now replace what is on the clipboard\. They cannot read it\./);
+  for (const [text, selection, end] of [['plain', 'c', '\x07'], ['as tmux does', '', '\x07'], ['as Neovim does\n', 'c', '\x1b\\'], ['日本語 😀\ttab\r\n', 'pc', '\x07'], [String.fromCharCode(0xfeff) + 'mark', 'c', '\x07']]) {
+    say(page, osc(text, selection, end));
+    await wait(10);
+    assert.equal(page.copied.at(-1), text);
+    assert.equal(note(page), 'A program copied ' + [...text].length + ' characters.');
+  }
+  say(page, osc('x'));
+  await wait(10);
+  assert.equal(note(page), 'A program copied 1 character.');
+  // A query is never answered, and nothing is sent to the shell for any of these.
+  const sent = page.sockets.at(-1).sent.length;
+  for (const query of ['\x1b]52;c;?\x07', '\x1b]52;;?\x1b\\', '\x1b]52;p;?\x07']) say(page, query);
+  await wait(10);
+  assert.equal(page.sockets.at(-1).sent.length, sent, 'a query was answered');
+  // What is not taken, and why.
+  const count = page.copied.length;
+  for (const [data, why] of [['c', 'not understood'], ['p;' + base64('x'), 'not for the clipboard'], ['c;', 'has no text'], ['c;!!!!', 'not UTF-8 text in base64'], ['c;' + base64('ok') + ' ', 'not UTF-8'], ['c;A', 'not UTF-8'], ['c;' + Buffer.from([0xff, 0xfe]).toString('base64'), 'not UTF-8'], ['c;' + base64('a\x1b[31mb'), 'control characters'], ['c;' + base64('a\x00b'), 'control characters'], ['c;' + base64('a\u009bb'), 'control characters']]) {
+    say(page, '\x1b]52;' + data + '\x07');
+    await wait(10);
+    assert.ok(note(page).includes("copy was not taken") && note(page).includes(why), data.slice(0, 20) + ': ' + note(page));
+  }
+  assert.equal(page.copied.length, count, 'something refused was copied');
+  // The stand-in does not parse a sequence across pieces, so long ones go to the handler.
+  const given = (text) => page.terminals[0].oscHandlers[52].forEach((handler) => assert.equal(handler('c;' + base64(text)), true));
+  given('x'.repeat(1024 * 1024 + 3));
+  assert.match(note(page), /not taken: it is longer than 1 MiB/);
+  assert.equal(page.copied.length, count);
+  given('x'.repeat(1024 * 1024));
+  await wait(20);
+  assert.equal(page.copied.at(-1).length, 1024 * 1024, '1 MiB was not taken');
+  assert.equal(note(page), 'A program copied 1,048,576 characters.');
+  // Refused by the browser: offered, and copied with a click.
+  page.refuse = true;
+  say(page, osc('later'));
+  await wait(10);
+  assert.match(note(page), /^A program wants to copy 5 characters\./);
+  assert.notEqual(page.copied.at(-1), 'later');
+  page.refuse = false;
+  const focuses = page.terminals[0].focuses;
+  noteButton(page, 'Copy').click();
+  await wait(10);
+  assert.equal(page.copied.at(-1), 'later');
+  assert.equal(note(page), 'Copied 5 characters');
+  assert.ok(page.terminals[0].focuses > focuses, 'the keys did not go back to the terminal');
+  // Away: not copied, and the last is offered when the viewer is back, however long after.
+  for (const away of ['focus', 'hidden panel', 'another pane']) {
+    const before = page.copied.length;
+    if (away === 'focus') page.away = true;
+    if (away === 'hidden panel') page.document.getElementById('terminal-panel').hidden = true;
+    if (away === 'another pane') { page.document.querySelector('[aria-label="Split right"]').click(); await wait(30); }
+    say(page, osc('first'), page.sockets[0]);
+    say(page, osc('second one'), page.sockets[0]);
+    await wait(10);
+    assert.equal(page.copied.length, before, 'copied with the viewer away: ' + away);
+    assert.match(note(page), /wants to copy 10 characters/, away);
+    page.away = false;
+    page.document.getElementById('terminal-panel').hidden = false;
+    noteButton(page, 'Dismiss').click();
+    assert.equal(note(page), '');
+  }
+  // A hidden page is away too.
+  page.document.querySelector('[aria-label="Close pane"]')?.click();
+  const unseen = await live('1');
+  unseen.window.__hidden = true;
+  say(unseen, osc('hidden'));
+  await wait(10);
+  assert.deepEqual(unseen.copied, []);
+  assert.match(note(unseen), /wants to copy 6 characters/);
+  // And is not told of the setting until somebody is there to be told.
+  const untold = await live('');
+  untold.window.__hidden = true;
+  say(untold, osc('hidden'));
+  await wait(10);
+  assert.equal(note(untold), '');
+  untold.window.__hidden = false;
+  say(untold, osc('seen'));
+  await wait(10);
+  assert.match(note(untold), /Let programs copy/);
+  // Off again.
+  item(page).click();
+  assert.equal(page.window.localStorage.getItem('rotari-terminal-osc52'), '0');
+  assert.match(note(page), /can no longer copy/);
+
+  // A slow copy says nothing once a later one has.
+  const slow = await live('1');
+  const waits = [];
+  slow.window.navigator.clipboard.writeText = (text) => new Promise((resolve, reject) => waits.push([resolve, reject]));
+  say(slow, osc('one'));
+  say(slow, osc('three'));
+  waits[1][0]();
+  await wait(10);
+  waits[0][1](new Error('refused'));
+  await wait(10);
+  assert.equal(note(slow), 'A program copied 5 characters.', 'an earlier copy was offered over a later one');
+  // Without a clipboard, it is offered.
+  const none = await live('1');
+  Object.defineProperty(none.window.navigator, 'clipboard', { configurable: true, value: undefined });
+  say(none, osc('text'));
+  await wait(10);
+  assert.match(note(none), /wants to copy 4 characters/);
+
+  // A replay and a rewrite copy nothing, nor does what another shell left; live output after does.
+  const old = await open('1');
+  old.terminals[0].parses = true;
+  old.terminals[0].lines = [''];
+  const numbered = Array.from({ length: 20 }, (_, i) => 'line ' + (i + 1) + '\r\n').join('');
+  say(old, osc('replayed') + '\x1b]133;A\x07$ \x1b]133;B\x07seq 20\r\n\x1b]133;C\x07' + numbered + '\x1b]133;D;0\x07\x1b]133;A\x07$ \x1b]133;B\x07');
+  await wait(10);
+  assert.deepEqual(old.copied, [], 'a replay copied');
+  assert.equal(note(old), '');
+  say(old, osc('live'));
+  await wait(10);
+  assert.deepEqual(old.copied, ['live']);
+  old.document.querySelector('.terminal-pane').terminalPane.blocks[0].decoration.render().querySelector('.terminal-block-mark').click();
+  [...old.document.querySelectorAll('.terminal-tab-menu button')].find((each) => each.textContent === 'Fold output').click();
+  await wait(30);
+  assert.ok(old.terminals[0].lines.some((line) => line.includes('lines folded')), 'the fold was not written');
+  assert.deepEqual(old.copied, ['live'], 'a rewrite copied again');
+  say(old, osc('after the fold'));
+  await wait(10);
+  assert.deepEqual(old.copied, ['live', 'after the fold']);
+  old.parser.held = true;
+  say(old, osc('left behind'));
+  [...[...old.document.querySelectorAll('.terminal-tabs .terminal-tab')][1].children].find((part) => !part.classList.contains('terminal-tab-close')).click();
+  old.parser.release();
+  await wait(30);
+  assert.deepEqual(old.copied, ['live', 'after the fold'], 'another shell copied after a switch');
+
+  // Not kept: it holds for the page, and the page says so.
+  const unkept = await live('');
+  unkept.window.Storage.prototype.setItem = () => { throw new Error('refused'); };
+  item(unkept).click();
+  assert.match(note(unkept), /can now replace.*was not kept/);
+  say(unkept, osc('yes'));
+  await wait(10);
+  assert.deepEqual(unkept.copied, ['yes']);
   }
 
   // Output waits in the pane's own queue, so that xterm.js is never given more than it can

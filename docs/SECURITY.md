@@ -251,6 +251,11 @@ Moving a shell to another project (`POST /_terminal/shells/ID/place`, behind the
 can read and write and removes when it stops; the shell's prompt hook reads it and sets only `ROTARI_` variables,
 assigning their values without running them, so a project or path name cannot run a command there.
 
+**Let programs copy** in the terminal's Options is off unless the browser's user turns it on. Then any program can replace
+the clipboard by printing OSC 52: a job's log, a file shown with `cat`, or a host reached with `ssh`. Text left there
+could be pasted elsewhere and run, so each copy is shown, control characters are refused, and it is taken only from live
+output of the pane in use, or by a click. The clipboard is never read for a program. The server has no part in it.
+
 The transcript page (`/_terminal/transcript`) is served behind the same checks and holds nothing of a shell when it is
 served: it asks the tab that opened it for the transcript by `postMessage`, and each side accepts only the other,
 from the same origin, so another site or window cannot ask for one. Output is shown and saved as text, never as markup,
