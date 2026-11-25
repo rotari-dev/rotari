@@ -1,7 +1,8 @@
 # Plan: Copying from programs with OSC 52 in the Web terminal
 
 Created: 2026-11-24
-Status: Proposed; not started.
+Status: Proposed. Phase 1 was done on 2026-11-25 except that Neovim was read about, not run; see [Phase 1
+results](#phase-1-results). Nothing is implemented.
 Related: [Web terminal](../2026-11-05-web-terminal/plan.md),
 [fast output](../2026-11-24-terminal-flow-control/plan.md), and the two plans proposed with this one:
 [font](../2026-11-24-terminal-font/plan.md) and [Option as Meta](../2026-11-24-terminal-option-meta/plan.md)
@@ -10,8 +11,8 @@ Related: [Web terminal](../2026-11-05-web-terminal/plan.md),
 
 `tmux` and Neovim can copy to the clipboard of the machine in front of the user by printing OSC 52, also through `ssh`.
 The panel ignores it, so a yank in Neovim or `tmux`'s copy mode stays on the server. Selecting with the mouse does not
-replace it: with mouse reporting on, Neovim's default and an option of `tmux`, the program gets the mouse, and a selection across `tmux`
-panes takes in both.
+replace it: with mouse reporting on, Neovim's default and an option of `tmux`, the program gets the mouse, and a
+selection across `tmux` panes takes in both.
 
 ## Today
 
@@ -23,6 +24,35 @@ mark "can at worst put text in front of you".
 
 Anything that can print in a terminal could then replace the clipboard: a file shown with `cat`, a job's log, a remote
 host over `ssh`. Text waiting there can be pasted elsewhere and run. So this is off unless chosen.
+
+## Phase 1 results
+
+tmux 3.2a, the one on the development machine, on 2026-11-25: run with no configuration on a pty with
+`TERM=xterm-256color`, answered as xterm.js 5.5.0 answers (`ESC [ ? 1 ; 2 c`, `ESC [ > 0 ; 276 ; 0 c`).
+
+| What | OSC 52 |
+| --- | --- |
+| Copy mode, and a drag with `mouse on`, with ASCII and UTF-8 | Printed, with the selection empty, ended by BEL |
+| `set-buffer -w` | The same |
+| A program inside `tmux` prints it | Swallowed by default (`set-clipboard external`); printed with `set -s set-clipboard on` |
+| A program inside wraps it for `tmux` | Passed on as it is |
+| `load-buffer -w` of 10,000 bytes | Printed |
+| `load-buffer -w` of 50,000 bytes or more | Not seen. Whether `tmux` drops it, or this harness missed it, is not known |
+
+So `tmux`'s own copying needs no configuration, and one line lets programs inside it copy.
+
+Neovim is not on the machine. From its [documentation](https://neovim.io/doc/user/provider/) and its `osc52.lua` files
+on `master`, of 2026-11-24, with no version stated:
+
+- It prints `ESC ] 52 ; c ; BASE64 ESC \\` for `+` and `p` for `*`, ended by ST.
+- It uses OSC 52 by itself when nothing else provides a clipboard and the terminal says it can: `52` in its answer to
+  `ESC [ c`, or an answer to a query for `Ms`. xterm.js gives neither. `vim.g.clipboard = 'osc52'` makes it, in one
+  line.
+- With it, `p` from `+` or `*` **asks the terminal** (`?`), and waits about 10 seconds, less with Ctrl-C, when nothing
+  answers. That is what decision "never answered" gives a user who adds that line.
+
+tmux and Neovim both print it with at most a line of configuration, so the plan goes on, once open question 2 is
+settled.
 
 ## Scope
 
@@ -99,6 +129,14 @@ Writing the clipboard from OSC 52, for the panes of the panel and its own window
 - By hand: a yank in Neovim and a copy in `tmux`, directly and through `ssh`, in Chrome, Firefox, and Safari.
 
 ## Open questions
+
+2. **What a query gets.** Never answering keeps a Neovim set to `osc52` waiting 10 seconds at each `p` from `+`.
+   - **Proposed: answered as empty**, only while the setting is on, and only where a copy would be taken (decision 3 and
+     4). It tells nothing of the clipboard, and Neovim goes on at once, pasting nothing. Like any answer, it is typed
+     into whatever runs, so never for a replay.
+   - The alternative never answers, and the docs give a Neovim configuration of several lines whose paste does not ask.
+3. **Saying that it can.** Answering Neovim's `Ms` query while the setting is on would make it copy with no
+   configuration. Proposed: not at first. It is one more answer, and it depends on how Neovim asks.
 
 1. **Telling the user while it is off** (decision 7). Proposed: once per page. The alternative says nothing, and leaves
    it to the docs.
