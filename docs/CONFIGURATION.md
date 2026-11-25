@@ -236,7 +236,7 @@ file. For the event settings, fields, and Slack/Teams/Discord setup, see
 ## Launcher commands
 
 `rotari web --allow-exec` can run the built-in services (TensorBoard, Jupyter
-Lab, MLflow, Aim, Streamlit, Datasette, marimo, Panel, Gradio, and VS Code (Web); see
+Lab, MLflow, Aim, Streamlit, Datasette, marimo, Panel, Gradio, and VS Code for the Web; see
 [Built-in services](#built-in-services))
 and the commands `launchers.toml` registers, against a job's artifacts from
 the Web UI (see
@@ -359,15 +359,15 @@ the same name replaces it:
 | marimo | `*.py`, `*.md`, `*.markdown`, and `*.qmd` files, and directories | opens the notebook, other Markdown as a new one (which changes the file only when saved from marimo), or a directory's list of notebooks; requires the launch token (below) |
 | Panel | `*.py` files | runs the app |
 | Gradio | `*.py` files | runs the app; one that sets its own address or port in `launch()` does not work |
-| VS Code (Web) | directories | opens the folder in the browser; needs the `code-cli` program (below) and requires the launch token |
+| VS Code for the Web | directories | opens the folder in the browser; needs the `code-cli` program (below) and requires the launch token |
 
 MLflow is limited to those names because it creates its default experiment, or
 its tables, in whatever it opens. Each was checked through the proxy, including
 Jupyter's kernel and Streamlit's and marimo's WebSocket connections: TensorBoard
 2.21, JupyterLab 4, MLflow 3.17, Aim 3, Streamlit 1.65, Datasette 0.65,
-marimo 0.25, Panel 1.9, Gradio 6.31, and VS Code (Web) 1.145.
+marimo 0.25, Panel 1.9, Gradio 6.31, and VS Code for the Web 1.145.
 
-VS Code (Web) needs the standalone VS Code CLI on `PATH` under the name `code-cli`.
+VS Code for the Web needs the standalone VS Code CLI on `PATH` under the name `code-cli`.
 The `code` in a Remote SSH terminal is a different program without `serve-web`,
 and it comes first on `PATH` there, so the built-in does not use that name. On
 x86-64 Linux, with `~/.local/bin` on `PATH` (for other systems, see the
@@ -384,12 +384,12 @@ Installing it under that name accepts the
 built-in passes `--accept-server-license-terms`. They limit hosting or sharing
 the software for others to use, so check them before you let other people sign
 in to a server that offers it. The first launch downloads the Web server, about
-700 MB; reload the page until the editor opens. VS Code (Web) can run commands as you,
+700 MB; reload the page until the editor opens. VS Code for the Web can run commands as you,
 like Jupyter Lab.
 
 Up to v0.1.32 this built-in was named **VS Code**. An entry of that name in
 `launchers.toml` no longer replaces it and is listed beside it; rename the entry
-to `VS Code (Web)` to replace it.
+to `VS Code for the Web` to replace it.
 
 #### Tokens for services
 
@@ -437,12 +437,12 @@ proxy_headers = { Authorization = "Basic $ROTARI_LAUNCHER_BASIC_AUTH" }
 
 A service that reads its secret only from a file uses
 `$ROTARI_LAUNCHER_TOKEN_FILE`, and a cookie in `proxy_headers` is sent ahead of
-the browser's cookies, which the service still receives. The built-in VS Code (Web)
+the browser's cookies, which the service still receives. The built-in VS Code for the Web
 uses both:
 
 ```toml
 [[launcher]]
-name = "VS Code (Web)"
+name = "VS Code for the Web"
 command = '''code-cli serve-web --host 127.0.0.1 --port "$ROTARI_LAUNCHER_PORT" --server-base-path "$ROTARI_LAUNCHER_BASE_PATH" --connection-token-file "$ROTARI_LAUNCHER_TOKEN_FILE" --accept-server-license-terms --disable-telemetry --default-folder "$ROTARI_LAUNCHER_ARTIFACT"'''
 targets = ["directory"]
 mode = "service"
@@ -451,9 +451,9 @@ proxy_headers = { Cookie = "vscode-tkn=$ROTARI_LAUNCHER_TOKEN" }
 ```
 
 The proxy drops the browser's own `Authorization` header, and the browser never
-sees the token, with one exception: VS Code (Web) puts it in a browser cookie that its
+sees the token, with one exception: VS Code for the Web puts it in a browser cookie that its
 page reads, so other pages served from the same rotari address may be able to
-read it. Launch VS Code (Web) only next to services you trust.
+read it. Launch VS Code for the Web only next to services you trust.
 TensorBoard, MLflow, Aim, Streamlit, Datasette, Panel,
 and Gradio cannot require a token, so another user of the host who finds their port can read what they
 show; launch them only where that is acceptable.

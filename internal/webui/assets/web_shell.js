@@ -6931,7 +6931,7 @@ function shellWord(value) {
     }
     if (window.vscodeOffered())
       choices.push([
-        "Open this directory in VS Code",
+        "Open in VS Code",
         () => openShellInVSCode(pane.shown),
         pane.shown !== null,
       ]);

@@ -142,7 +142,7 @@ reports how many it copied.
 
 Launching is off by default. `rotari web --allow-exec` lets anyone who can
 sign in run the built-in services (TensorBoard, Jupyter Lab, MLflow, Aim,
-Streamlit, Datasette, marimo, Panel, Gradio, VS Code (Web)) and commands registered in your global `launchers.toml`, as you,
+Streamlit, Datasette, marimo, Panel, Gradio, VS Code for the Web) and commands registered in your global `launchers.toml`, as you,
 against the job artifacts the Web UI may serve. See
 [Launching commands](WEB.md#launching-commands).
 
@@ -177,8 +177,8 @@ A launched service also listens on that loopback port, which other users of
 the host can reach directly without rotari's token. A service that can require
 a secret should use the launch's `ROTARI_LAUNCHER_TOKEN`, which the proxy
 presents through `proxy_headers`, as is or as HTTP Basic credentials, and can
-read it from the private `ROTARI_LAUNCHER_TOKEN_FILE`. The built-in Jupyter Lab, marimo, and VS Code (Web) do use the token, so
-what runs code serves only through the proxy. VS Code (Web) also puts the token in a
+read it from the private `ROTARI_LAUNCHER_TOKEN_FILE`. The built-in Jupyter Lab, marimo, and VS Code for the Web do use the token, so
+what runs code serves only through the proxy. VS Code for the Web also puts the token in a
 browser cookie that its page reads, which other pages from the same rotari
 address may be able to read. TensorBoard, MLflow, Aim, Streamlit,
 Datasette, Panel, and Gradio cannot, so another user who finds their port can read what they show.
@@ -264,7 +264,7 @@ while the shell is at its prompt, so a false mark can at worst put text in front
 marks to say how a shell's last command ended, keeping only that, in memory with the shell, so a false `D` can at
 worst ring a false red bell or desktop notification.
 
-Shells outlive their connections, like a launched VS Code (Web) server, so ones left open stay reachable
+Shells outlive their connections, like a launched VS Code for the Web server, so ones left open stay reachable
 to anyone with your session for as long as the server runs, or, with `--terminal-idle-timeout`, until that
 long after the last page closes, and recent
 output is replayed to them. A page left open keeps them for as long as its sign-in lasts, up to 12

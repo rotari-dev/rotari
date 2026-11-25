@@ -4397,7 +4397,7 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
     // A shell's directory opens from the pane's menu, and one that is not known says so.
     const here = async () => {
       rightClick();
-      [...lk.document.querySelectorAll('.terminal-tab-menu button')].find((each) => each.textContent === 'Open this directory in VS Code').click();
+      [...lk.document.querySelectorAll('.terminal-tab-menu button')].find((each) => each.textContent === 'Open in VS Code').click();
       await wait(20);
     };
     // Opening a directory's link above went to its shell; the pane's own is asked.

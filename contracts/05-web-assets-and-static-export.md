@@ -900,7 +900,7 @@ request without `Origin`. Covered by `TestWebLaunchGuardsRequests` in
 [conformance/05-web/launch_test.go](../conformance/05-web/launch_test.go).
 
 **WEB-15** Only the built-in commands (TensorBoard, Jupyter Lab, MLflow, MLflow
-(SQLite), Aim, Streamlit, Datasette, marimo, Panel, Gradio, and VS Code (Web)) and the commands in the global config
+(SQLite), Aim, Streamlit, Datasette, marimo, Panel, Gradio, and VS Code for the Web) and the commands in the global config
 directory's `launchers.toml` (`$XDG_CONFIG_HOME/rotari/launchers.toml`) can
 run; an entry there with a built-in's name replaces it, and a copy of the file in a basedir, project,
 or workspace is never read. `GET /api/launchers` marks a command
@@ -1598,7 +1598,7 @@ text; **Select all**; while a command line is being typed at the prompt (found a
 cursor to text...**, which asks for text and moves the cursor to its next place in the line after the cursor, then
 from the line's start, or says it is not there, **Move the cursor to the start**, and **Move the cursor to the end**
 (past its text, or the cursor if further), each moving it as WEB-50's click does; and, on a command's
-prompt or output (WEB-48), that command's **Copy command** and **Copy output**; where it is offered, **Open this directory in VS Code** (WEB-64);
+prompt or output (WEB-48), that command's **Copy command** and **Copy output**; where it is offered, **Open in VS Code** (WEB-64);
 **Open transcript** (WEB-60), off before the pane has any output; and last, **Keep the command at the top**, checked while the sticky line (WEB-59) is
 on. Implemented in the panel in `web_shell.js`; covered by `TestTerminalPanel` and a step of
 [`TestTerminalPanelInBrowser`](../conformance/05-web/terminal_panel_browser_test.go).

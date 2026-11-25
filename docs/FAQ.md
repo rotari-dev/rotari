@@ -502,7 +502,7 @@ No. The Web UI controls existing runs and edits queues; execution starts through
 ### Can I run a script or viewer on an artifact from the Web UI?
 
 Yes. TensorBoard, Jupyter Lab, MLflow, Aim, Streamlit, Datasette, marimo,
-Panel, Gradio, and VS Code (Web) are built in, and
+Panel, Gradio, and VS Code for the Web are built in, and
 commands you register in your global
 `launchers.toml` appear too, as a button per command in each row of a job's
 Artifacts, of the run page's **Files** view of the directory holding the

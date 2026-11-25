@@ -546,7 +546,7 @@ func TestWebLaunchRunsOnlyRegisteredCommands(t *testing.T) {
 	for _, command := range availability.Commands {
 		names = append(names, command.Name)
 	}
-	builtins := "TensorBoard,Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,Panel,Gradio,VS Code (Web)"
+	builtins := "TensorBoard,Jupyter Lab,MLflow,MLflow (SQLite),Aim,Streamlit,Datasette,marimo,Panel,Gradio,VS Code for the Web"
 	if strings.Join(names, ",") != builtins+",List,Cat,Missing" || !availability.Commands[0].Builtin {
 		t.Fatalf("registered commands = %v", names)
 	}
@@ -559,7 +559,7 @@ func TestWebLaunchRunsOnlyRegisteredCommands(t *testing.T) {
 	if err := json.Unmarshal([]byte(api(e, http.MethodGet, base+"/api/launchers?target=directory:data&target=file:n.txt", "").Body), &matched); err != nil {
 		t.Fatal(err)
 	}
-	if len(matched.Targets) != 2 || strings.Join(matched.Targets[0].Commands, ",") != "TensorBoard,Jupyter Lab,Aim,marimo,VS Code (Web),List" ||
+	if len(matched.Targets) != 2 || strings.Join(matched.Targets[0].Commands, ",") != "TensorBoard,Jupyter Lab,Aim,marimo,VS Code for the Web,List" ||
 		!strings.HasSuffix(strings.Join(matched.Targets[1].Commands, ","), "Cat,Missing") {
 		t.Fatalf("targets = %+v", matched.Targets)
 	}

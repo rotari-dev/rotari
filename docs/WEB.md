@@ -679,7 +679,7 @@ state; `--artifact-root DIR` allows more. See
 
 With `rotari web --allow-exec`, each row of Artifacts and **Files** has a
 button per command that accepts it: TensorBoard, Jupyter Lab, MLflow, Aim,
-Streamlit, Datasette, marimo, Panel, Gradio, VS Code (Web), and the commands in your global `launchers.toml`
+Streamlit, Datasette, marimo, Panel, Gradio, VS Code for the Web, and the commands in your global `launchers.toml`
 (`rotari config --launchers` writes a template). The UI shows what will run
 before **Launch**; a service such as TensorBoard then opens through the Web
 UI's own port, so it needs no extra SSH forward. **Launches** in the top bar
@@ -740,7 +740,7 @@ at. A page is not told whether VS Code opened anything, so a wrong name shows as
 
 VS Code chooses the window: a file usually opens in the window that has its folder open, and a directory in
 the window that has it open, or else in one of its own. A path with a number after a colon, such as `a:12`, is refused, since VS Code would take the number for a
-line. This is separate from the **VS Code (Web)** launcher, which runs a VS Code of its own in the browser.
+line. This is separate from the **VS Code for the Web** launcher, which runs a VS Code of its own in the browser.
 
 ### Experiment trackers
 
