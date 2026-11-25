@@ -64,7 +64,7 @@ func TestHeartbeatReportsFailureOnceAndRecovery(t *testing.T) {
 		messages = append(messages, fmt.Sprintf(format, args...))
 	}
 	runDir := filepath.Join(paths.RunsDir, "run-1")
-	// The run directory does not exist yet, so beats fail until it does.
+	// A file is where the run directory goes, so beats fail until it is gone.
 	if err := os.MkdirAll(paths.RunsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,8 @@ func TestHeartbeatReportsFailureOnceAndRecovery(t *testing.T) {
 		stop()
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(runDir, 0o755); err != nil {
+	// A beat that comes first makes the directory itself.
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
 		stop()
 		t.Fatal(err)
 	}
