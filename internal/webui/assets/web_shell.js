@@ -526,6 +526,7 @@ function shellWord(value) {
     // neither connects nor retries. Browsers make connections to a server wait for
     // each other, and old tabs retrying would hold up the tab in use.
     whenVisible: null,
+    letGo: false, // The page was left while this pane had its shell.
   });
   // What the bar's buttons and sending from the page act on. It exists before the panel
   // does, since a command can wait for the panel to open.
@@ -4297,6 +4298,31 @@ function shellWord(value) {
     const waiting = panes.filter((pane) => pane.whenVisible);
     if (waiting.length) waiting.forEach((pane) => pane.whenVisible());
     else refreshShells();
+  });
+  // The browser may keep a page being left, frozen, for Back, and its connections with it
+  // for seconds. What a shell asked the terminal then would go to a page that cannot answer,
+  // so the page lets go of its shells. Back here, it takes them as an opened page does.
+  window.addEventListener("pagehide", () => {
+    for (const pane of panes) {
+      if (!pane.socket && !pane.waitingToOpen) continue;
+      pane.connectSerial++;
+      pane.waitingToOpen = false;
+      const { socket } = pane;
+      pane.socket = null;
+      socket?.close();
+      pane.queue = emptyQueue();
+      settleSend(pane, "The page was left, so nothing was sent.");
+      showStatus(pane, "Disconnected.");
+      pane.letGo = true;
+    }
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+    for (const pane of panes) {
+      if (!pane.letGo) continue;
+      pane.letGo = false;
+      connect(pane);
+    }
   });
   // percent writes a part of the panel for a style, and place sets where an element goes,
   // keeping half a handle clear of each edge that has a neighbor.

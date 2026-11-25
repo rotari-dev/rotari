@@ -785,6 +785,32 @@ const load = (file, { opener = null, stubs = true, stored = '', height = '', hid
   assert.equal(background.sockets.length, 2, 'a tab did not reconnect when shown');
   assert.match(background.sockets[1].url, /takeover=0/);
 
+  // A page being left lets go of its shells, since the browser may keep it frozen with its
+  // connections open. Back from there, it takes them again as an opened page does, but not
+  // one that another tab had.
+  const kept = load(process.argv[1], { stored: '1', shells: [plain('1', 1)] });
+  await wait(50);
+  const pageEvent = (page, type, persisted) => page.window.dispatchEvent(new page.window.PageTransitionEvent(type, { persisted }));
+  kept.sockets[0].onmessage({ data: new TextEncoder().encode('$ ').buffer });
+  pageEvent(kept, 'pageshow', false);
+  assert.equal(kept.sockets.length, 1, 'connected again as the page loaded');
+  pageEvent(kept, 'pagehide', true);
+  assert.equal(kept.sockets[0].closed, true, 'a page being left kept its connection');
+  kept.sockets[0].onclose({ code: 1005, reason: '' });
+  await wait(1200);
+  assert.equal(kept.sockets.length, 1, 'a page being left reconnected');
+  pageEvent(kept, 'pageshow', true);
+  await wait(20);
+  assert.equal(kept.sockets.length, 2, 'a page shown again did not connect');
+  assert.match(kept.sockets[1].url, /shell=1&/);
+  assert.doesNotMatch(kept.sockets[1].url, /takeover/);
+  kept.sockets[1].onclose({ code: 4001, reason: '' });
+  pageEvent(kept, 'pagehide', true);
+  pageEvent(kept, 'pageshow', true);
+  await wait(20);
+  assert.equal(kept.sockets.length, 2, 'took a shell that another tab had');
+  assert.match(kept.document.querySelector('.terminal-status').textContent, /Another tab has/);
+
   // A sign-in that has gone cannot be retried away: it says so and stops.
   let answer = 200;
   const signedOut = load(process.argv[1], { stored: '1', status: () => answer, shells: [plain('1', 1)] });

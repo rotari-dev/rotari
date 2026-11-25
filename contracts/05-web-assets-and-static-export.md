@@ -1469,7 +1469,9 @@ whose replay begins with output an earlier connection received is first sent a t
 `{"type":"replay","answered":N}`, saying how many bytes that is. The panel answers none of the questions in those bytes
 (such as `ESC [ 6 n`, the cursor's position), nor any when a fold writes the screen again, since the answer would be input
 to whatever runs by then; what is typed meanwhile is sent. It answers a question no connection has received, such as one
-asked before the page first connects (`TestTerminalSaysWhatWasAnsweredBefore`, `TestTerminalPanel`, and in headless Chrome
+asked before the page first connects or with no page open. A page being left closes its connections itself, since a
+browser may keep it frozen, with its connections open and unable to answer, for Back; shown again from there, it connects
+to the shells it had as an opened page does, but not to one that another connection had taken (`TestTerminalSaysWhatWasAnsweredBefore`, `TestTerminalPanel`, and in headless Chrome
 [`TestTerminalAnswersOnceInBrowser`](../conformance/05-web/terminal_answers_browser_test.go)). Covered by
 [`TestTerminalStreamsOutputBurst`](../conformance/05-web/terminal_stream_test.go), `TestSlowReaderMakesTheProgramWait`,
 and `TestProgramsDoNotStallWithNothingAttached`. Connections to different shells do not disturb each

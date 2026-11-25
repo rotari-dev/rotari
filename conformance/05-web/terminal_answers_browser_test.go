@@ -62,7 +62,9 @@ const check = async (page) => {
   await until('the replay', 'location.search === "?again=1" && ' + shown);
   await answered(3, 'after a page change');
   await page.send('Page.navigate', { url: 'about:blank' });
-  await sleep(300);
+  // The page left is kept, frozen, for Back, and must have let go of its shell by then: a
+  // browser keeps such a page's connection for two or three seconds.
+  await sleep(1000);
   writeFileSync(answers + '.away', '');
   await until('a question with no page open', () => existsSync(answers + '.asked'));
   await page.send('Page.navigate', { url: base + '/activity?back=1' });
@@ -75,6 +77,16 @@ const check = async (page) => {
   await page.evaluate('document.querySelector(".xterm-helper-textarea").focus()');
   await page.send('Input.insertText', { text: 'typed' });
   await until('what was typed', () => said().includes('typed'));
+  // Back to a page that the browser kept, which has its shell again.
+  await page.send('Page.navigate', { url: base + '/activity?other=1' });
+  await until('the replay', 'location.search === "?other=1" && ' + shown);
+  const { currentIndex, entries } = await page.send('Page.getNavigationHistory');
+  await page.send('Page.navigateToHistoryEntry', { entryId: entries[currentIndex - 1].id });
+  await until('the shell again after Back', 'location.search === "?last=1" && ' + pane + '.socket?.readyState === WebSocket.OPEN && ' + shown);
+  await answered(4, 'after Back');
+  await page.evaluate('document.querySelector(".xterm-helper-textarea").focus()');
+  await page.send('Input.insertText', { text: 'returned' });
+  await until('what was typed after Back', () => said().includes('returned'));
 };
 await withPage(cdp, base + '/_auth/login?next=/activity', { width: 1280, height: 900, settleMs: 200 }, check).catch((error) => { failure = error.stack || String(error); });
 await close();
